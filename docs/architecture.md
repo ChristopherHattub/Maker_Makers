@@ -93,5 +93,4 @@ These are current behaviors to know about. None are blocking for the static, tru
 - **Export buttons are placeholders.** The viewer's "Export .STL" and "Export .3MF" buttons are disabled and not wired.
 - **Silent scan failures.** Overpass errors are swallowed, so a failed scan looks like an empty one.
 - **Distance check is in degrees.** Deciding which verified listings to include in a scan uses a degree distance, not kilometers.
-- **Data path is not deployed.** `data/` is not copied by the Pages workflow yet. See [deployment.md](deployment.md#what-gets-published).
 - **Featured default differs from the README.** The code features slots 1 to 3 by default. The README tells you to set `featured: true` by hand.

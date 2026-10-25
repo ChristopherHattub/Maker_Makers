@@ -19,8 +19,6 @@
 │   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
 ├── scripts/
 │   └── dev-server.mjs       Zero-dependency static server with live reload
-├── .github/workflows/
-│   └── pages.yml            GitHub Pages deploy workflow
 ├── .claude/
 │   └── launch.json          Preview-server config (runs dev-server.mjs on port 5173)
 ├── docs/                    This documentation
@@ -44,7 +42,7 @@
 | Add a verified printer listing | `data/public-printers.json` |
 | Review an unverified candidate | `data/osm-candidates.json` (move it to the verified file once checked) |
 | Add a featured community model | `js/featured.js` and `assets/thumbnails/featured/` |
-| Change how the site is published | `.github/workflows/pages.yml` |
+| Change how the site is published | Repository **Settings > Pages** (deploy from `main` / root) |
 
 ## Folders that are intentionally empty
 

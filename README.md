@@ -21,8 +21,6 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 ├── programs/             # Standalone HTML generator programs
 ├── scripts/
 │   └── dev-server.mjs    # Zero-dependency live-reload dev server
-├── .github/workflows/
-│   └── pages.yml         # GitHub Pages deploy workflow
 └── .nojekyll             # Tells Pages to serve files as-is
 ```
 
@@ -55,8 +53,8 @@ Always use relative paths (no leading `/`) so the site works both locally and un
 ## Deploying to GitHub Pages
 
 1. Create a GitHub repository and push this project to its `main` branch.
-2. In the repository, open **Settings > Pages** and set **Source** to **GitHub Actions**.
-3. Every push to `main` then deploys the site through `.github/workflows/pages.yml`. You can also run the workflow by hand from the **Actions** tab.
+2. In the repository, open **Settings > Pages** and set **Source** to **Deploy from a branch**, then choose branch `main` and folder `/ (root)`.
+3. Every push to `main` then republishes the site automatically.
 
 ## License
 

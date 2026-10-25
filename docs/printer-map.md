@@ -110,6 +110,6 @@ If nothing is found, the map shows the full verified list with the status "NO PU
 ## Known issues
 
 - Live OSM results are inserted into popups and cards without escaping. A `website` tag containing a `javascript:` URL would become a link. See [architecture.md](architecture.md#known-issues).
-- Both JSON files are loaded from `data/`, which the deploy workflow copies.
+- Both JSON files are loaded from `data/`, which Pages publishes along with the rest of the repo root.
 - The Dover PDF policy could not be read during verification; its service page was checked instead.
 - The 0.45-degree match is a rough distance, not kilometers.

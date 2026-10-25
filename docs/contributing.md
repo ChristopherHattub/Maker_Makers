@@ -49,8 +49,7 @@ Thanks for helping with Maker Makers. The project is small on purpose: plain fil
 
 **Changing the deploy**
 
-- [ ] Any new top-level runtime folder added to the `cp` line in `.github/workflows/pages.yml`
-- [ ] A test run from the **Actions** tab, or a push to a branch that exercises it
+- [ ] Live site checked after the push (Pages republishes from `main` root)
 
 ## Licensing
 
