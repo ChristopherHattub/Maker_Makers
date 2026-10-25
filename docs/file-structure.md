@@ -13,7 +13,7 @@
 │   ├── public-printers.json Verified printer listings (solid dots, directory)
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
 ├── assets/
-│   └── thumbnails/          Slot thumbnail images (currently only .gitkeep)
+│   └── thumbnails/          Slot thumbnail images (ghost-builder.svg, ...)
 │       └── featured/        Featured Community Models thumbnails (in progress)
 ├── programs/                Generator pages (ghost-builder.html, ...)
 │   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
@@ -47,7 +47,7 @@
 
 ## Folders that are intentionally empty
 
-`assets/thumbnails/` contains only the featured placeholders for now. Slot 1 points at `programs/ghost-builder.html`, which has no thumbnail yet, so its socket shows the empty crosshair until one is added. The other slots have no `programUrl` or `thumbnailUrl`, so they render as empty sockets.
+`assets/thumbnails/` holds the slot thumbnails (`ghost-builder.svg` for slot 1) and the featured placeholders in `featured/`. Slot 1 points at `programs/ghost-builder.html` and its thumbnail. The other slots have no `programUrl` or `thumbnailUrl`, so they render as empty sockets.
 
 ## Files not to commit
 
