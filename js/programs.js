@@ -17,6 +17,7 @@ const PROGRAMS = Array.from({ length: 40 }, (_, index) => {
 Object.assign(PROGRAMS[0], {
   title: 'Ghost Builder',
   category: 'SPOOKY // FIGURES',
+  thumbnailUrl: 'assets/thumbnails/ghost-builder.svg',
   programUrl: 'programs/ghost-builder.html',
   description: 'Parametric ghost with folds, arms, a face and embossed stamps. Paint parts in the Color tool and export .STL or .3MF with colors.'
 });

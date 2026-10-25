@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0d2b59"/>
+  <path d="M0 50H400M0 100H400M0 150H400M0 200H400M0 250H400M50 0V300M100 0V300M150 0V300M200 0V300M250 0V300M300 0V300M350 0V300" stroke="#00e5ff" stroke-opacity="0.08"/>
+  <ellipse cx="200" cy="262" rx="90" ry="10" fill="#06152d" stroke="#00e5ff" stroke-opacity="0.35"/>
+  <path d="M200 40C160 40 138 72 138 116V206C138 214 146 218 152 212L158 206L166 216L174 206L182 214L190 206H210L218 214L226 206L234 216L242 206L248 212C254 218 262 214 262 206V116C262 72 240 40 200 40Z" fill="#eef7ff" fill-opacity="0.92" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M116 150C104 146 100 130 110 122C118 116 130 124 132 134L138 150Z" fill="#eef7ff" fill-opacity="0.92" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M284 150C296 146 300 130 290 122C282 116 270 124 268 134L262 150Z" fill="#eef7ff" fill-opacity="0.92" stroke="#00e5ff" stroke-width="2"/>
+  <ellipse cx="177" cy="118" rx="10" ry="14" fill="#0d2b59"/>
+  <ellipse cx="223" cy="118" rx="10" ry="14" fill="#0d2b59"/>
+  <ellipse cx="200" cy="170" rx="13" ry="16" fill="#0d2b59"/>
+  <path d="M200 58L203.5 66.5L212.5 67L205.5 72.5L208 81L200 76L192 81L194.5 72.5L187.5 67L196.5 66.5Z" fill="#c084fc" stroke="#ffffff" stroke-width="1.2"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7">
+    <path d="M300 60H340V100"/>
+    <path d="M60 60H100M60 60V100"/>
+  </g>
+  <text x="200" y="290" text-anchor="middle" font-family="Courier New, monospace" font-size="11" fill="#00e5ff" fill-opacity="0.8" letter-spacing="2">MM-001 GHOST BUILDER</text>
+</svg>
