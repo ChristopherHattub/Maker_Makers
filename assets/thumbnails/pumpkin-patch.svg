@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0d2b59"/>
+  <path d="M0 50H400M0 100H400M0 150H400M0 200H400M0 250H400M50 0V300M100 0V300M150 0V300M200 0V300M250 0V300M300 0V300M350 0V300" stroke="#00e5ff" stroke-opacity="0.08"/>
+  <ellipse cx="200" cy="254" rx="100" ry="10" fill="#06152d" stroke="#00e5ff" stroke-opacity="0.35"/>
+  <path d="M198 78C196 62 206 50 224 46" fill="none" stroke="#bbf7d0" stroke-width="12" stroke-linecap="round"/>
+  <path d="M200 86C150 70 100 98 100 160C100 218 148 252 200 252C252 252 300 218 300 160C300 98 250 70 200 86Z" fill="#fdba74" fill-opacity="0.95" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M200 86C172 106 160 140 160 170C160 210 176 240 200 252C224 240 240 210 240 170C240 140 228 106 200 86Z" fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7"/>
+  <path d="M200 86C178 112 130 130 128 176C128 216 160 240 200 252M200 86C222 112 270 130 272 176C272 216 240 240 200 252" fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.45"/>
+  <path d="M258 140L261 148L270 149L263 154L265 163L258 158L251 163L253 154L246 149L255 148Z" fill="#c084fc" stroke="#ffffff" stroke-width="1.2"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7">
+    <path d="M300 60H340V100"/>
+    <path d="M60 60H100M60 60V100"/>
+  </g>
+  <text x="200" y="290" text-anchor="middle" font-family="Courier New, monospace" font-size="11" fill="#00e5ff" fill-opacity="0.8" letter-spacing="2">MM-002 PUMPKIN PATCH</text>
+</svg>

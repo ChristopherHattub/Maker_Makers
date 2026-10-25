@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-002 Pumpkin Patch // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Pumpkin Patch: parameters, presets, palette and geometry. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Topology: closed manifold lathe surface (bottom pole -> rings -> top pole). Built once.
+      // -----------------------------------------------------------------------
+      var R_SEG = 240;   // Angular segments around the body
+      var B_RINGS = 3;   // Concentric rings on the flat base
+      var M_RINGS = 72;  // Rings along the belly
+      var T_RINGS = 8;   // Rings dipping into the stem hollow
+      var TOTAL_RINGS = B_RINGS + M_RINGS + T_RINGS;
+      var C_RINGS = 28;  // Rings of the inner cavity
+      var S_RINGS = 40;  // Rings along the stem
+      var S_SEG = 40;    // Segments around the stem
+      var BODY_TOPO = buildTopology(TOTAL_RINGS, R_SEG, false);
+      var TOP_SPLIT = 3 * R_SEG + (B_RINGS + M_RINGS - 1) * 6 * R_SEG;
+      var CAVITY_TOPO = buildTopology(C_RINGS, R_SEG, true);
+      var STEM_TOPO = buildTopology(S_RINGS, S_SEG, false);
+
+      function buildTopology(rings, seg, inverted) {
+        var indices = [];
+        var topPole = 1 + rings * seg;
+        function rs(r) { return 1 + r * seg; }
+        function tri(a, b, c) { if (inverted) indices.push(a, c, b); else indices.push(a, b, c); }
+        for (var j = 0; j < seg; j++) tri(0, rs(0) + (j + 1) % seg, rs(0) + j);
+        for (var r = 0; r < rings - 1; r++) {
+          for (var k = 0; k < seg; k++) {
+            var nk = (k + 1) % seg;
+            tri(rs(r) + k, rs(r) + nk, rs(r + 1) + nk);
+            tri(rs(r) + k, rs(r + 1) + nk, rs(r + 1) + k);
+          }
+        }
+        for (var m = 0; m < seg; m++) tri(rs(rings - 1) + m, rs(rings - 1) + (m + 1) % seg, topPole);
+        return new Uint32Array(indices);
+      }
+
+      function expand(topoAll, pos, shade, name, group, from, to) {
+        var topo = topoAll.subarray(from || 0, to === undefined ? topoAll.length : to);
+        var n = topo.length;
+        var out = new Float32Array(n * 3);
+        var sh = new Float32Array(n);
+        for (var i = 0; i < n; i++) {
+          var v = topo[i];
+          out[i * 3] = pos[v * 3];
+          out[i * 3 + 1] = pos[v * 3 + 1];
+          out[i * 3 + 2] = pos[v * 3 + 2];
+          sh[i] = shade ? shade[v] : 0;
+        }
+        var mesh = { name: name, positions: out };
+        if (group) mesh.smoothGroup = group;
+        return mesh;
+      }
+
+      function smoothstep(e0, e1, x) {
+        var t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+        return t * t * (3 - 2 * t);
+      }
+
+      // Seamless 3D value noise (-1..1), deterministic from the seed.
+      function hash3(ix, iy, iz, seed) {
+        var h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(iz, 1274126177) ^ Math.imul(seed, 2147483647);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        h = h ^ (h >>> 16);
+        return ((h >>> 0) / 4294967295) * 2 - 1;
+      }
+      function noise3(x, y, z, seed) {
+        var ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+        var fx = x - ix, fy = y - iy, fz = z - iz;
+        var ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+        function l(a, b, t) { return a + (b - a) * t; }
+        var c00 = l(hash3(ix, iy, iz, seed), hash3(ix + 1, iy, iz, seed), ux);
+        var c10 = l(hash3(ix, iy + 1, iz, seed), hash3(ix + 1, iy + 1, iz, seed), ux);
+        var c01 = l(hash3(ix, iy, iz + 1, seed), hash3(ix + 1, iy, iz + 1, seed), ux);
+        var c11 = l(hash3(ix, iy + 1, iz + 1, seed), hash3(ix + 1, iy + 1, iz + 1, seed), ux);
+        return l(l(c00, c10, uy), l(c01, c11, uy), uz);
+      }
+
+      // -----------------------------------------------------------------------
+      // Pumpkin body
+      // -----------------------------------------------------------------------
+      var PHI0 = -Math.PI / 2 + 0.55; // flat base meets the belly here
+      var PHI1 = Math.PI / 2 - 0.7;   // belly meets the stem hollow here
+      var S0 = Math.sin(PHI0);
+      var S1 = Math.sin(PHI1);
+
+      // Ideal (smooth) profile for a ring: kind 'd' disc, 'b' belly, 't' top hollow; f runs 0..1 inside its region.
+      function profile(kind, f, g) {
+        if (kind === 'd') return { r: g.rBase * f, y: 0, env: 0.35, w: 0 };
+        if (kind === 'b') {
+          var phi = PHI0 + f * (PHI1 - PHI0);
+          return {
+            r: g.R * Math.pow(Math.cos(phi), 0.75),
+            y: g.H * (Math.sin(phi) - S0) / (S1 - S0),
+            env: 0.35 + 0.65 * smoothstep(0, 0.3, f),
+            w: f
+          };
+        }
+        return { r: g.rTop * (1 - f), y: g.H - g.dimple * (1 - (1 - f) * (1 - f)), env: 1, w: 1 };
+      }
+
+      function radiusAt(pr, theta, g, p) {
+        var th = theta + g.ribTwist * pr.w;
+        var crest = Math.pow(0.5 + 0.5 * Math.cos(g.ribs * th), p.ribSharp);
+        var r = pr.r * (1 - g.ribFrac * (1 - crest) * pr.env);
+        var tex = smoothstep(0, 10, pr.r);
+        var x = r * Math.sin(theta), z = r * Math.cos(theta);
+        if (p.ridgeAmp > 0) r += p.ridgeAmp * Math.cos(p.ridgeCount * theta) * tex;
+        if (p.bumpAmp > 0) {
+          var k = 1 / p.bumpSize;
+          var n = noise3(x * k, pr.y * k, z * k, p.bumpSeed) + 0.5 * noise3(x * k * 2.1 + 7, pr.y * k * 2.1, z * k * 2.1, p.bumpSeed + 11);
+          r += p.bumpAmp * n * 0.67 * tex;
+        }
+        return Math.max(r, 0);
+      }
+
+      function setupGeo(p) {
+        var R = p.diameter / 2;
+        var rBase = R * Math.pow(Math.cos(PHI0), 0.75);
+        var rTop = R * Math.pow(Math.cos(PHI1), 0.75);
+        return {
+          R: R, H: p.diameter * p.squash / 100, rBase: rBase, rTop: rTop, dimple: p.dimple,
+          ribs: Math.round(p.ribs), ribFrac: Math.min(0.5, p.ribDepth / R),
+          ribTwist: (p.ribTwist * Math.PI) / 180
+        };
+      }
+
+      function buildBody(p, g) {
+        var vc = 2 + TOTAL_RINGS * R_SEG;
+        var pos = new Float32Array(vc * 3);
+        for (var i = 0; i < TOTAL_RINGS; i++) {
+          var kind, f;
+          if (i < B_RINGS) { kind = 'd'; f = (i + 1) / (B_RINGS + 1); }
+          else if (i < B_RINGS + M_RINGS) { kind = 'b'; f = (i - B_RINGS) / (M_RINGS - 1); }
+          else { kind = 't'; f = (i - B_RINGS - M_RINGS + 1) / (T_RINGS + 1); }
+          var pr = profile(kind, f, g);
+          for (var j = 0; j < R_SEG; j++) {
+            var theta = (j / R_SEG) * Math.PI * 2;
+            var r = radiusAt(pr, theta, g, p);
+            var v = 1 + i * R_SEG + j;
+            pos[v * 3] = r * Math.sin(theta);
+            pos[v * 3 + 1] = pr.y;
+            pos[v * 3 + 2] = r * Math.cos(theta);
+          }
+        }
+        var top = 1 + TOTAL_RINGS * R_SEG;
+        pos[top * 3 + 1] = g.H - g.dimple;
+        return pos;
+      }
+
+      // Sealed inner cavity (reversed winding), offset by the wall thickness.
+      function buildCavity(p, g, wall) {
+        var vc = 2 + C_RINGS * R_SEG;
+        var pos = new Float32Array(vc * 3);
+        var ceil = g.H - g.dimple - Math.max(wall, 2.4);
+        for (var i = 0; i < C_RINGS; i++) {
+          var f = i / (C_RINGS - 1);
+          var pr = profile('b', f, g);
+          var y = wall + (pr.y / g.H) * (ceil - wall);
+          for (var j = 0; j < R_SEG; j++) {
+            var theta = (j / R_SEG) * Math.PI * 2;
+            var r = Math.max(1.0, radiusAt(pr, theta, g, p) - wall);
+            var v = 1 + i * R_SEG + j;
+            pos[v * 3] = r * Math.sin(theta);
+            pos[v * 3 + 1] = y;
+            pos[v * 3 + 2] = r * Math.cos(theta);
+          }
+        }
+        pos[1] = wall;
+        var top = 1 + C_RINGS * R_SEG;
+        pos[top * 3 + 1] = ceil;
+        return pos;
+      }
+
+      // Curved, tapered, fluted stem standing in the hollow, sunk 1.2 mm into the body.
+      function buildStem(p, g) {
+        var vc = 2 + S_RINGS * S_SEG;
+        var pos = new Float32Array(vc * 3);
+        var L = p.stemHeight;
+        var beta = (p.stemBend * Math.PI) / 180;
+        var psi = (p.stemDirection * Math.PI) / 180;
+        var dx = Math.cos(psi), dz = Math.sin(psi);
+        var twist = (p.stemTwist * Math.PI) / 180;
+        var baseY = g.H - g.dimple - 1.2;
+        var rBase = p.stemThickness / 2;
+        var flutes = Math.round(p.stemFlutes);
+        function centre(s) {
+          var a = beta * s, k = beta > 0.001 ? L / beta : 0;
+          var h = beta > 0.001 ? k * Math.sin(a) : L * s;
+          var o = beta > 0.001 ? k * (1 - Math.cos(a)) : 0;
+          return [o * dx, baseY + h, o * dz, a];
+        }
+        for (var i = 0; i < S_RINGS; i++) {
+          var s = i / (S_RINGS - 1);
+          var c = centre(s), a = c[3];
+          var e1 = [Math.cos(a) * dx, -Math.sin(a), Math.cos(a) * dz];
+          var e2 = [-dz, 0, dx];
+          var rr = rBase * (1 - (p.stemTaper / 100) * s) + p.stemFlare * Math.exp(-s * L / 3.5);
+          for (var j = 0; j < S_SEG; j++) {
+            var phi = (j / S_SEG) * Math.PI * 2;
+            var rho = rr * (1 + (flutes > 0 ? 0.1 * Math.cos(flutes * phi + twist * s) : 0));
+            var sn = Math.sin(phi) * rho, cs = Math.cos(phi) * rho;
+            var v = 1 + i * S_SEG + j;
+            pos[v * 3] = c[0] + sn * e1[0] + cs * e2[0];
+            pos[v * 3 + 1] = c[1] + sn * e1[1] + cs * e2[1];
+            pos[v * 3 + 2] = c[2] + sn * e1[2] + cs * e2[2];
+          }
+        }
+        var b = centre(0), t = centre(1);
+        pos[0] = b[0]; pos[1] = b[1]; pos[2] = b[2];
+        var top = 1 + S_RINGS * S_SEG;
+        pos[top * 3] = t[0]; pos[top * 3 + 1] = t[1]; pos[top * 3 + 2] = t[2];
+        return pos;
+      }
+
+      // -----------------------------------------------------------------------
+      // Stamps: embossed 2D shapes on the body surface
+      // -----------------------------------------------------------------------
+      var STAMP_NAMES = { star: 'Star', moon: 'Moon', bat: 'Bat', bolt: 'Bolt' };
+      var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
+      var stampType = 'star';
+
+      function isPumpkinSurface(name) { return name === 'body'; }
+
+      // Stamp outline as 2D points, radius r. Used for the 3D stamp and for the picture on its button.
+      function stampOutline(type, r) {
+        var pts = [];
+        var i;
+        if (type === 'star') {
+          for (i = 0; i < 10; i++) {
+            var angle = (i * Math.PI) / 5 + Math.PI / 2;
+            var rad = i % 2 === 0 ? r : r * 0.44;
+            pts.push([Math.cos(angle) * rad, Math.sin(angle) * rad]);
+          }
+        } else if (type === 'moon') {
+          var segs = 28;
+          for (i = 0; i <= segs; i++) {
+            var ang = -Math.PI * 0.72 + (i / segs) * (Math.PI * 1.44);
+            pts.push([Math.cos(ang) * r, Math.sin(ang) * r]);
+          }
+          for (i = segs; i >= 0; i--) {
+            var ang2 = -Math.PI * 0.54 + (i / segs) * (Math.PI * 1.08);
+            pts.push([r * 0.38 + Math.cos(ang2) * (r * 0.78), Math.sin(ang2) * (r * 0.82)]);
+          }
+        } else {
+          var coords = type === 'bat' ? [
+            [0.0, 0.32], [0.12, 0.56], [0.20, 0.28], [0.52, 0.50], [0.82, 0.42], [1.00, 0.08], [0.74, -0.05],
+            [0.58, -0.32], [0.36, -0.18], [0.20, -0.44], [0.0, -0.58], [-0.20, -0.44], [-0.36, -0.18],
+            [-0.58, -0.32], [-0.74, -0.05], [-1.00, 0.08], [-0.82, 0.42], [-0.52, 0.50], [-0.20, 0.28], [-0.12, 0.56]
+          ] : [
+            [0.18, 0.95], [-0.52, 0.06], [-0.04, 0.06], [-0.26, -0.95], [0.54, -0.04], [0.06, -0.04]
+          ];
+          coords.forEach(function (pt) { pts.push([pt[0] * r, pt[1] * r]); });
+        }
+        return pts;
+      }
+
+      function stampShape(type, size) {
+        var shape = new window.THREE.Shape();
+        stampOutline(type, size * 0.5).forEach(function (pt, i) {
+          if (i === 0) shape.moveTo(pt[0], pt[1]);
+          else shape.lineTo(pt[0], pt[1]);
+        });
+        shape.closePath();
+        return shape;
+      }
+
+      // Small inline picture of a stamp for its button. SVG y points down, so flip y.
+      function stampIcon(type) {
+        var points = stampOutline(type, 1).map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ');
+        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><polygon points="' + points + '"/></svg>';
+      }
+
+      // Stamp mesh in model space. It sits 1.8 mm into the surface and 1.5 mm proud of it.
+      function stampPositions(stamp) {
+        var THREE = window.THREE;
+        var geo = new THREE.ExtrudeGeometry(stampShape(stamp.type, stamp.size), {
+          depth: 3.3, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.30, bevelSegments: 2, curveSegments: 16
+        });
+        geo.rotateZ(((stamp.rotation || 0) * Math.PI) / 180); // spin around the surface normal
+        geo.translate(0, 0, -1.8);
+
+        var normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
+        var upVec = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+        var tangentX = new THREE.Vector3().crossVectors(upVec, normal).normalize();
+        var tangentY = new THREE.Vector3().crossVectors(normal, tangentX).normalize();
+        var quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangentX, tangentY, normal));
+        var matrix = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(stamp.point), quat, new THREE.Vector3(1, 1, 1));
+
+        var flat = geo.toNonIndexed();
+        flat.applyMatrix4(matrix);
+        return flat.attributes.position.array.slice();
+      }
+
+      // -----------------------------------------------------------------------
+      // Generator contract
+      // -----------------------------------------------------------------------
+      var DEFAULTS = {
+        diameter: 90, squash: 80, dimple: 6,
+        ribs: 10, ribDepth: 6, ribSharp: 0.6, ribTwist: 0,
+        ridgeAmp: 0.35, ridgeCount: 36, bumpAmp: 0.5, bumpSize: 9, bumpSeed: 7,
+        stemHeight: 24, stemThickness: 11, stemTaper: 25, stemBend: 35, stemDirection: 30, stemTwist: 90, stemFlutes: 5, stemFlare: 3,
+        wall: 0, stampSize: 12, stampRotation: 0
+      };
+      function preset(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-002',
+        category: 'SPOOKY // HARVEST',
+        title: 'Pumpkin Patch',
+        fileName: 'Halloween_Pumpkin',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#fb923c',
+        palette: [
+          { name: 'Pumpkin Orange', color: '#fb923c' },
+          { name: 'Vine Green', color: '#86efac' },
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Sunny Yellow', color: '#fde047' },
+          { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' },
+          { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { body: 'Pumpkin body', top: 'Stem hollow', cavity: 'Hollow inside', stem: 'Stem', detail: 'Stamp' },
+        printSettings: {
+          material: 'PLA',
+          nozzle: 0.4,
+          layerHeight: 0.2,
+          infill: 12,
+          walls: 3,
+          topLayers: 5,
+          bottomLayers: 4,
+          supports: false,
+          brim: 0,
+          notes: 'Prints upright on its wide flat base. No supports needed unless the stem leans past about 60 degrees; the hollow option bridges its ceiling.'
+        },
+
+        parameters: [
+          { group: 'Size & shape', key: 'diameter', label: 'Pumpkin width', unit: ' mm', min: 50, max: 130, step: 1, value: 90 },
+          { group: 'Size & shape', key: 'squash', label: 'Squash (squat ↔ tall)', unit: '%', min: 55, max: 120, step: 1, value: 80 },
+          { group: 'Size & shape', key: 'dimple', label: 'Top dimple depth', unit: ' mm', min: 0, max: 14, step: 0.5, value: 6 },
+          { group: 'Ribs', key: 'ribs', label: 'Number of ribs', unit: '', min: 5, max: 20, step: 1, value: 10 },
+          { group: 'Ribs', key: 'ribDepth', label: 'Rib depth (groove)', unit: ' mm', min: 0, max: 14, step: 0.5, value: 6 },
+          { group: 'Ribs', key: 'ribSharp', label: 'Rib shape (puffy ↔ pinched)', unit: '', min: 0.3, max: 2, step: 0.1, value: 0.6 },
+          { group: 'Ribs', key: 'ribTwist', label: 'Rib twist (swirl)', unit: '°', min: -60, max: 60, step: 5, value: 0,
+            format: function (v) { return (v > 0 ? '+' : '') + v + '°'; } },
+          { group: 'Texture', key: 'ridgeAmp', label: 'Fine ridges (depth)', unit: ' mm', min: 0, max: 1.2, step: 0.05, value: 0.35 },
+          { group: 'Texture', key: 'ridgeCount', label: 'Fine ridge count', unit: '', min: 12, max: 60, step: 2, value: 36 },
+          { group: 'Texture', key: 'bumpAmp', label: 'Bumpiness (warts)', unit: ' mm', min: 0, max: 3, step: 0.1, value: 0.5 },
+          { group: 'Texture', key: 'bumpSize', label: 'Bump size', unit: ' mm', min: 4, max: 24, step: 1, value: 9 },
+          { group: 'Texture', key: 'bumpSeed', label: 'Bump pattern (seed)', unit: '', min: 1, max: 99, step: 1, value: 7 },
+          { group: 'Stem', key: 'stemHeight', label: 'Stem height', unit: ' mm', min: 8, max: 50, step: 1, value: 24 },
+          { group: 'Stem', key: 'stemThickness', label: 'Stem thickness', unit: ' mm', min: 6, max: 22, step: 0.5, value: 11 },
+          { group: 'Stem', key: 'stemTaper', label: 'Stem taper (thinner tip)', unit: '%', min: 0, max: 70, step: 5, value: 25 },
+          { group: 'Stem', key: 'stemFlare', label: 'Stem base flare', unit: ' mm', min: 0, max: 8, step: 0.5, value: 3 },
+          { group: 'Stem', key: 'stemBend', label: 'Stem bend (curve)', unit: '°', min: 0, max: 120, step: 5, value: 35 },
+          { group: 'Stem', key: 'stemDirection', label: 'Bend direction', unit: '°', min: 0, max: 355, step: 5, value: 30 },
+          { group: 'Stem', key: 'stemTwist', label: 'Stem twist (spiral grooves)', unit: '°', min: 0, max: 360, step: 10, value: 90 },
+          { group: 'Stem', key: 'stemFlutes', label: 'Stem grooves', unit: '', min: 0, max: 8, step: 1, value: 5 },
+          { group: 'Inside', key: 'wall', label: 'Hollow wall (saves filament)', unit: ' mm', min: 0, max: 6, step: 0.4, value: 0,
+            format: function (v) { return v < 1.2 ? 'Solid' : v + ' mm'; } },
+          { group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
+          { group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
+        ],
+
+        presets: [
+          preset('Classic pumpkin', {}),
+          preset('Tall gourd', { diameter: 70, squash: 110, ribs: 12, ribDepth: 4, stemHeight: 30, stemBend: 50, stemTwist: 180 }),
+          preset('Squat fairy-tale', { diameter: 110, squash: 62, ribs: 8, ribDepth: 10, dimple: 10, stemHeight: 18, stemThickness: 14, stemBend: 20 }),
+          preset('Warty swirl', { ribs: 13, ribDepth: 5, ribTwist: 35, bumpAmp: 1.6, bumpSize: 7, ridgeAmp: 0.2, stemBend: 70, stemTwist: 240 }),
+          preset('Hollow lantern', { wall: 2.4 }),
+          preset('Default pumpkin', {})
+        ],
+
+        // Generator-specific panel: stamp shape choice and undo/clear.
+        mount: function (container, api) {
+          var h = function (tag, attrs, text) {
+            var node = document.createElement(tag);
+            Object.keys(attrs || {}).forEach(function (k) {
+              if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+              else node.setAttribute(k, attrs[k]);
+            });
+            if (text) node.textContent = text;
+            return node;
+          };
+
+          container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamp shape (click the pumpkin to place)'));
+          var chips = h('div', { class: 'mm-icon-chips' });
+          var shapeButtons = {};
+          ['star', 'moon', 'bat', 'bolt'].forEach(function (type) {
+            var btn = h('button', {
+              class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType),
+              onclick: function () {
+                stampType = type;
+                Object.keys(shapeButtons).forEach(function (k) { shapeButtons[k].setAttribute('aria-pressed', String(k === type)); });
+                api.toast('Selected ' + STAMP_NAMES[type] + ' stamp. Click the pumpkin to place it.');
+              }
+            });
+            btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
+            shapeButtons[type] = btn;
+            chips.appendChild(btn);
+          });
+          container.appendChild(chips);
+
+          var count = h('p', { class: 'mm-note' }, '0 stamps placed');
+          var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+            if (!stamps.length) return;
+            stamps.pop();
+            api.rebuild();
+            api.toast('Removed last stamp');
+          } }, 'Undo last stamp');
+          var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+            if (!stamps.length) return;
+            stamps = [];
+            api.rebuild();
+            api.toast('Cleared all stamps');
+          } }, 'Clear stamps');
+          container.appendChild(count);
+          container.appendChild(h('div', { class: 'mm-export-row' }, null));
+          container.lastChild.appendChild(undo);
+          container.lastChild.appendChild(clear);
+
+          // Keep the count in sync after every rebuild.
+          var refresh = function () {
+            count.textContent = stamps.length + (stamps.length === 1 ? ' stamp placed' : ' stamps placed');
+            undo.disabled = stamps.length === 0;
+            clear.disabled = stamps.length === 0;
+          };
+          this._refresh = refresh;
+          refresh();
+        },
+
+        build: function (p, api) {
+          var g = setupGeo(p);
+          var meshes = [];
+          var wall = p.wall >= 1.2 ? p.wall : 0;
+          // The stem hollow is its own mesh so the Color tool can paint it separately.
+          var bodyPos = buildBody(p, g);
+          meshes.push(expand(BODY_TOPO, bodyPos, null, 'body', 'pumpkin', 0, TOP_SPLIT));
+          meshes.push(expand(BODY_TOPO, bodyPos, null, 'top', 'pumpkin', TOP_SPLIT));
+          if (wall) meshes.push(expand(CAVITY_TOPO, buildCavity(p, g, wall), null, 'cavity', 'pumpkin'));
+          meshes.push(expand(STEM_TOPO, buildStem(p, g), null, 'stem'));
+          stamps.forEach(function (stamp) {
+            meshes.push({ name: 'detail', positions: stampPositions(stamp) });
+          });
+          if (this._refresh) this._refresh();
+          return meshes;
+        },
+
+        onHover: function (hit, api) {
+          if (!hit || !isPumpkinSurface(hit.meshName) || hit.point.y <= 4) {
+            api.setPreview(null);
+            return;
+          }
+          api.setPreview({
+            positions: stampPositions({
+              type: stampType,
+              size: api.params.stampSize,
+              rotation: api.params.stampRotation,
+              point: hit.point.toArray(),
+              normal: hit.normal.toArray()
+            })
+          });
+        },
+
+        onPick: function (hit, api) {
+          if (!isPumpkinSurface(hit.meshName)) return;
+          if (hit.point.y < 4) {
+            api.toast('Tip: stamp higher up on the pumpkin!');
+            return;
+          }
+          stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
+          api.rebuild();
+          api.toast('Stamped ' + STAMP_NAMES[stampType] + ' (+1.5 mm)');
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
