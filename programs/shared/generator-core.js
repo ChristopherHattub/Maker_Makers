@@ -79,6 +79,47 @@
     ]);
   }
 
+  // Collapsible section used for every control group.
+  function accordion(title, body, open) {
+    var d = el('details', { class: 'mm-acc' }, [
+      el('summary', { class: 'mm-acc-title', text: title }),
+      el('div', { class: 'mm-acc-body' }, [body])
+    ]);
+    if (open) d.setAttribute('open', '');
+    return d;
+  }
+
+  // Phone layout: the handle above the tabs drags the viewport height (CSS var --mm-vp), a tap toggles big model / big controls.
+  function setupSheetHandle(main, handle) {
+    var startY = 0, startH = 0, moved = false, dragging = false;
+    function clamp(h) {
+      var total = main.clientHeight;
+      return Math.max(Math.round(total * 0.18), Math.min(Math.round(total * 0.82), h));
+    }
+    function setHeight(h) { main.style.setProperty('--mm-vp', clamp(h) + 'px'); }
+    handle.addEventListener('pointerdown', function (e) {
+      dragging = true; moved = false;
+      startY = e.clientY;
+      startH = main.querySelector('.mm-viewport').getBoundingClientRect().height;
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      if (Math.abs(e.clientY - startY) > 4) moved = true;
+      if (moved) setHeight(startH + (e.clientY - startY));
+    });
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      if (!moved) {
+        var h = main.querySelector('.mm-viewport').getBoundingClientRect().height;
+        setHeight(h > main.clientHeight * 0.6 ? main.clientHeight * 0.4 : main.clientHeight * 0.8);
+      }
+    }
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
   // Builds the whole page from the config so every generator looks the same.
   function buildShell() {
     var header = el('header', { class: 'mm-gen-header' }, [
@@ -104,16 +145,26 @@
     var fileInput = el('input', { id: 'mm-file-name', type: 'text', maxlength: '60', value: cfg.fileName || 'Model', spellcheck: 'false' });
     var footer = el('div', { class: 'mm-panel-footer' }, [
       el('div', { class: 'mm-stats', id: 'mm-stats', text: 'Geometry ready' }),
-      el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
       el('div', { class: 'mm-export-row' }, [
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: exportStl }),
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF', onclick: export3mf })
       ]),
-      el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: downloadStandalone }),
-      disclaimerBlock()
+      el('button', { class: 'mm-btn mm-footer-toggle', type: 'button', text: 'More: file name, standalone, disclaimer', 'aria-expanded': 'false', onclick: function (e) {
+        var open = footer.classList.toggle('is-expanded');
+        e.currentTarget.setAttribute('aria-expanded', String(open));
+      } }),
+      el('div', { class: 'mm-footer-extra' }, [
+        el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
+        el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: downloadStandalone }),
+        disclaimerBlock()
+      ])
     ]);
 
+    // Phone sheet handle: drag to resize the viewport/sheet split, tap to flip between big model and big controls.
+    var sheetHandle = el('div', { class: 'mm-sheet-handle', role: 'separator', 'aria-label': 'Drag to resize the 3D view', title: 'Drag to resize, tap to toggle' }, [el('span', { class: 'mm-sheet-grip' })]);
+
     var panel = el('aside', { class: 'mm-panel' }, [
+      sheetHandle,
       el('div', { class: 'mm-tabs', role: 'tablist' }, [tabModel, tabColor, tabPrint]),
       modelBody,
       colorBody,
@@ -134,6 +185,7 @@
     ]);
 
     var main = el('main', { class: 'mm-main' }, [panel, viewport]);
+    setupSheetHandle(main, sheetHandle);
     document.body.appendChild(header);
     document.body.appendChild(main);
 
@@ -154,15 +206,12 @@
   function renderParametricPanel() {
     var presetsRow = null;
     if (cfg.presets && cfg.presets.length) {
-      presetsRow = el('div', { class: 'mm-group' }, [
-        el('h3', { class: 'mm-group-title', text: 'Presets' }),
-        el('div', { class: 'mm-chips' }, cfg.presets.map(function (preset) {
-          return el('button', { class: 'mm-chip', type: 'button', text: preset.label, onclick: function () {
-            setParams(preset.values);
-            toast('Loaded "' + preset.label + '"');
-          } });
-        }))
-      ]);
+      presetsRow = accordion('Presets', el('div', { class: 'mm-chips' }, cfg.presets.map(function (preset) {
+        return el('button', { class: 'mm-chip', type: 'button', text: preset.label, onclick: function () {
+          setParams(preset.values);
+          toast('Loaded "' + preset.label + '"');
+        } });
+      })), false);
     }
 
     var groups = [];
@@ -176,16 +225,23 @@
       group.items.push(p);
     });
 
-    var sections = groups.map(function (group) {
-      return el('div', { class: 'mm-group' }, [
-        el('h3', { class: 'mm-group-title', text: group.name }),
-        el('div', {}, group.items.map(sliderFor))
-      ]);
+    // First group opens by default (cfg.openGroups can list names instead); the rest start collapsed.
+    var sections = groups.map(function (group, i) {
+      var open = cfg.openGroups ? cfg.openGroups.indexOf(group.name) >= 0 : i === 0;
+      return accordion(group.name, el('div', {}, group.items.map(sliderFor)), open);
     });
 
     dom.modelBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Parametric controls' }));
-    dom.modelBody.appendChild(el('div', { class: 'mm-group' }, [
-      el('h3', { class: 'mm-group-title', text: 'View' }),
+    if (presetsRow) dom.modelBody.appendChild(presetsRow);
+    sections.forEach(function (s) { dom.modelBody.appendChild(s); });
+
+    // Generator-specific extras (for example the Ghost Builder stamp tools).
+    var extras = el('div', { id: 'mm-extras' });
+    if (typeof cfg.mount === 'function') {
+      dom.modelBody.appendChild(accordion(cfg.extrasTitle || 'Stamps & tools', extras, false));
+      cfg.mount(extras, api);
+    }
+    dom.modelBody.appendChild(accordion('View', el('div', {}, [
       el('div', { class: 'mm-chips', id: 'mm-view-modes' }, VIEW_MODES.map(function (mode) {
         return el('button', {
           class: 'mm-chip', type: 'button', text: mode.label, title: mode.hint,
@@ -194,14 +250,8 @@
         });
       })),
       el('p', { class: 'mm-note', text: 'Wireframe shows the triangles the model is built from. It is only a view; exports are unchanged.' })
-    ]));
-    if (presetsRow) dom.modelBody.appendChild(presetsRow);
-    sections.forEach(function (s) { dom.modelBody.appendChild(s); });
+    ]), false));
 
-    // Generator-specific extras (for example the Ghost Builder stamp tools).
-    var extras = el('div', { class: 'mm-group', id: 'mm-extras' });
-    dom.modelBody.appendChild(extras);
-    if (typeof cfg.mount === 'function') cfg.mount(extras, api);
   }
 
   var sliderRefs = {};

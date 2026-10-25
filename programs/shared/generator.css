@@ -432,33 +432,121 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
   transform: translate(-50%, 0);
 }
 
-/* ---------- Responsive ---------- */
+/* ---------- Accordion sections ---------- */
+.mm-acc {
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--bp-cyan-dim);
+  background: rgba(6, 21, 45, 0.45);
+}
+
+.mm-acc-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.8rem;
+  color: var(--bp-cyan);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.mm-acc-title::-webkit-details-marker { display: none; }
+.mm-acc-title::after { content: '+'; font-size: 1.1rem; line-height: 1; }
+.mm-acc[open] > .mm-acc-title::after { content: '\2212'; }
+.mm-acc[open] > .mm-acc-title { border-bottom: 1px dashed var(--bp-cyan-dim); }
+.mm-acc-body { padding: 0.8rem 0.8rem 0.1rem; }
+
+/* Phone-only pieces are hidden on desktop. */
+.mm-sheet-handle, .mm-footer-toggle { display: none; }
+
+.mm-stage canvas, .mm-stage { touch-action: none; }
+.mm-slider input[type="range"] { touch-action: pan-y; }
+.mm-panel-body { overscroll-behavior: contain; }
+
+/* ---------- Responsive: phone / narrow ---------- */
+/* The viewport is pinned to the top; the panel is a sheet below it with its own scroll,
+   so sliders and the model are on screen together and the page itself never scrolls. */
 @media (max-width: 860px) {
   body.mm-gen {
-    overflow: auto;
-    height: auto;
-    min-height: 100%;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
   }
+
+  .mm-gen-header { margin: 0.4rem 0.4rem 0; padding: 0.4rem 0.7rem; gap: 0.4rem; }
+  .mm-gen-title { margin: 0; font-size: 1.05rem; }
+  .mm-gen-id { font-size: 0.66rem; }
+  .mm-gen-actions .mm-btn--green, .mm-gen-actions .mm-btn--amber { display: none; }
+  .mm-gen-actions { flex-wrap: nowrap; width: auto; }
+  .mm-gen-actions .mm-btn { flex: 0 0 auto; padding: 0.35rem 0.6rem; font-size: 0.7rem; }
 
   .mm-main {
+    --mm-vp: 40%;
     grid-template-columns: 1fr;
+    grid-template-rows: var(--mm-vp) minmax(0, 1fr);
+    gap: 0.4rem;
+    margin: 0.4rem;
   }
 
-  .mm-viewport {
-    min-height: 60vh;
-    order: -1;
-  }
+  .mm-viewport { order: -1; min-height: 0; }
 
-  .mm-panel-body {
-    overflow: visible;
+  .mm-overlay--tl { display: none; }
+  .mm-section-title { display: none; }
+
+  .mm-sheet-handle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 22px;
+    flex: 0 0 22px;
+    cursor: ns-resize;
+    touch-action: none;
+    border-bottom: 1px solid var(--bp-cyan-dim);
   }
+  .mm-sheet-grip { width: 44px; height: 4px; border-radius: 2px; background: var(--bp-cyan); opacity: 0.7; }
+
+  .mm-tab { padding: 0.65rem 0.3rem; font-size: 0.72rem; }
+  .mm-panel-body { padding: 0.6rem; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+  .mm-panel-footer { padding: 0.4rem 0.6rem; gap: 0.3rem; }
+  .mm-panel-footer .mm-export-row .mm-btn { padding: 0.45rem 0.4rem; }
+  .mm-stats { font-size: 0.68rem; }
+  .mm-footer-toggle { display: inline-flex; padding: 0.3rem; font-size: 0.66rem; border-width: 1px; border-color: var(--bp-cyan-dim); color: var(--bp-muted); }
+  .mm-footer-extra { display: none; gap: 0.55rem; max-height: 30vh; overflow-y: auto; }
+  .mm-panel-footer.is-expanded .mm-footer-extra { display: grid; }
+  .mm-disclaimer-body { max-height: none; }
+
+  /* Large touch targets for sliders and chips. */
+  .mm-slider { margin-bottom: 0.7rem; }
+  .mm-slider-head { font-size: 0.86rem; }
+  .mm-slider input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 36px;
+    background: transparent;
+  }
+  .mm-slider input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: var(--bp-cyan-dim); border-radius: 3px; }
+  .mm-slider input[type="range"]::-moz-range-track { height: 6px; background: var(--bp-cyan-dim); border-radius: 3px; }
+  .mm-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 28px; height: 28px; margin-top: -11px;
+    border-radius: 50%; background: var(--bp-cyan); border: 3px solid var(--bp-bg-deep);
+  }
+  .mm-slider input[type="range"]::-moz-range-thumb {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--bp-cyan); border: 3px solid var(--bp-bg-deep);
+  }
+  .mm-chip { padding: 0.6rem 0.75rem; }
+  .mm-acc-title { padding: 0.8rem; }
 }
 
 @media (max-width: 480px) {
-  .mm-gen-title { font-size: 1.15rem; }
-  .mm-overlay--tl { display: none; }
-  .mm-gen-actions { width: 100%; }
-  .mm-gen-actions .mm-btn { flex: 1 1 100%; }
+  .mm-gen-title { font-size: 0.95rem; }
+  .mm-view-buttons { bottom: 0.4rem; right: 0.4rem; }
+  .mm-overlay--tr { top: 0.4rem; right: 0.4rem; font-size: 0.64rem; }
 }
 
 /* Icon buttons: a row of pictures with a label, for example the stamp shapes. */

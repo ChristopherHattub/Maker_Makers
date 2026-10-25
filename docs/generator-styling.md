@@ -205,7 +205,8 @@ The engine applies these. A generator should not restyle the page.
 - **Viewport.** Right column. Orbit by dragging. The top-left hint and the top-right size readout (`X x Y x Z MM`) are fixed. *Front* and *Iso* sit at the bottom right.
 - **Colors and fonts.** Blueprint palette from `css/styles.css`: deep navy background, cyan for lines and active states, green and amber for the two secondary actions. Monospace font throughout.
 - **Build plate.** A 160 mm square plate, drawn for every generator, so a model's size is easy to judge.
-- **Phone width.** Below 860 px the viewport moves above the panel. The page scrolls; it never scrolls sideways.
+- **Accordion sections.** Every slider group (by its `group` name), the Presets, the generator's `mount()` extras (titled `cfg.extrasTitle`, default "Stamps & tools") and the View switch are collapsible `<details class="mm-acc">` sections. The first parameter group is open by default; set `openGroups: ['Shape', 'Ribs']` in the config to open others. Order slider groups so the most-used one comes first.
+- **Phone width (860 px and below).** The page never scrolls. The viewport is pinned to the top (40% of the height) and the panel becomes a sheet below it: a drag handle (drag to resize, tap to flip between big model and big controls), a fixed tab bar (Parametric / Color tool / Print), the scrolling controls, and a footer that always shows the triangle count and the two export buttons. File name, standalone download and disclaimer sit behind the footer's "More" button. Sliders get 36 px touch targets, the canvas uses `touch-action: none` so orbit gestures never scroll the page, and the header shrinks to a single line with only *Back to grid*. Nothing scrolls sideways.
 
 Do not add colors, fonts or layout rules inside a generator page. If a generator needs a new style, add it to `shared/generator.css` so every generator gets it.
 
@@ -215,7 +216,8 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 
 | Class | Use |
 | --- | --- |
-| `mm-group` / `mm-group-title` | A labelled section. |
+| `mm-group` / `mm-group-title` | A labelled block inside your `mount()` container (which is already inside an accordion section). |
+| `mm-acc` / `mm-acc-title` / `mm-acc-body` | A collapsible section (`<details>` with a `<summary>`), if you need another one. |
 | `mm-note` | Small explanatory text. |
 | `mm-chips` / `mm-chip` | A row of toggle chips. Set `aria-pressed="true"` on the active one. |
 | `mm-icon-chips` / `mm-icon-chip` | A row of picture buttons: an inline `<svg>` (filled with the accent color) above a short label. Use these when choices are shapes. Set `aria-pressed="true"` on the active one. |

@@ -111,7 +111,7 @@ So, to make a feature independently paintable:
 Every generator shows the engine's footer disclaimer (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together.
 
 
-Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool, footer with triangle count, file name, exports and standalone download. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Below 860 px the viewport goes above the panel; no sideways scroll. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
+Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool, footer with triangle count, file name, exports and standalone download. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders and always-visible export buttons; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
 
 ## Verification checklist (live preview)
 
@@ -127,6 +127,6 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] Export .STL and .3MF download and open (STL size ~ 84 + 50 x triangles bytes; model sits on the bed; 3MF has the colors; the zip lists `Metadata/Slic3r_PE.config`, `project_settings.config`, `print-settings.txt` with your `printSettings`).
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] The collapsed "Disclaimer" block shows under the panel footer buttons (engine-provided; never remove or override it in a generator page) and expands to readable text.
-- [ ] Phone width (resize to 375): no horizontal scroll, controls usable.
+- [ ] Phone width (resize to 375x667 and 390x844): no page scroll or horizontal scroll, model visible above the sliders, sheet handle drags, export buttons visible, accordion sections open/close.
 - [ ] Slot listing: title, category, description render as plain text; thumbnail not cropped badly.
 - [ ] `git status`: only your files staged and committed.
