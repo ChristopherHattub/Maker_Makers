@@ -68,8 +68,7 @@
     'You print at your own risk. Check every model and setting before printing, supervise prints, and follow your printer and material safety guidance. Slicer and printer compatibility is not guaranteed.',
     'To the fullest extent permitted by law, the site owner is not liable for failed prints, malfunctions, damage to printers or materials, wasted material, injury, property damage, or any other loss arising from use of this site.',
     'Community map and printer listings are third-party and often unverified. They are not endorsed. Check each location\'s own rules and fees.',
-    'You are responsible for the legality of what you print and for having the right to print it.',
-    'This is not legal advice.'
+    'You are responsible for the legality of what you print and for having the right to print it.'
   ];
 
   function disclaimerBlock() {

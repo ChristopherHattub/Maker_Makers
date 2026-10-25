@@ -22,7 +22,3 @@ To the fullest extent permitted by law, the site owner and contributors are not 
 ## Community map and printer listings
 
 Printer and makerspace listings come from community and third-party sources. Many are unverified. Listings are not endorsed or guaranteed to be accurate, available or current. Check each location's own rules, hours, fees and policies before you go.
-
-## Not legal advice
-
-Nothing here is legal advice.

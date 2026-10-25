@@ -236,7 +236,7 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 
 ## Footer disclaimer
 
-The engine adds a collapsed "Disclaimer" block under the panel footer buttons of every generator (and so in the standalone download, which has no external links). A generator page must not add or remove it. The text lives in `DISCLAIMER_SHORT` / `DISCLAIMER_ITEMS` in `generator-core.js`, and is mirrored in `index.html` (`#site-disclaimer`) and in [`DISCLAIMER.md`](../DISCLAIMER.md). Edit all three together. It is a best-effort draft and not legal advice; a lawyer should review it for the owner's jurisdiction. Styles are `.mm-disclaimer*` in `shared/generator.css`.
+The engine adds a collapsed "Disclaimer" block under the panel footer buttons of every generator (and so in the standalone download, which has no external links). A generator page must not add or remove it. The text lives in `DISCLAIMER_SHORT` / `DISCLAIMER_ITEMS` in `generator-core.js`, and is mirrored in `index.html` (`#site-disclaimer`) and in [`DISCLAIMER.md`](../DISCLAIMER.md). Edit all three together. It is a best-effort draft and not legal advice (the visible text does not say so); a lawyer should review it for the owner's jurisdiction. Styles are `.mm-disclaimer*` in `shared/generator.css`.
 
 ## Limits
 
