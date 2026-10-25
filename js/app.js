@@ -191,12 +191,24 @@ function openProgram(progId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function downloadStandaloneHTML() {
+// Shared generators load programs/shared/*. Inline those files so the download works offline.
+async function downloadStandaloneHTML() {
   if (!activeProgram.programUrl) return;
+  const pageUrl = new URL(activeProgram.programUrl, location.href);
+  const page = await fetch(pageUrl).then(r => r.text());
+  const [css, core] = await Promise.all([
+    fetch(new URL('shared/generator.css', pageUrl)).then(r => r.text()),
+    fetch(new URL('shared/generator-core.js', pageUrl)).then(r => r.text())
+  ]);
+  const inlined = page
+    .replace(/<link rel="stylesheet" href="shared\/generator\.css"\s*\/?>/, () => `<style>\n${css}\n</style>`)
+    .replace(/<script src="shared\/generator-core\.js"><\/script>/, () => `<script>\n${core}\n</script>`);
+  const url = URL.createObjectURL(new Blob([inlined], { type: 'text/html' }));
   const a = document.createElement('a');
-  a.href = activeProgram.programUrl;
+  a.href = url;
   a.download = `${activeProgram.id}-generator.html`;
   a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 /*************************************************************************

@@ -452,6 +452,7 @@ body.mm-gen {
 
 @media (max-width: 480px) {
   .mm-gen-title { font-size: 1.15rem; }
+  .mm-overlay--tl { display: none; }
   .mm-gen-actions { width: 100%; }
   .mm-gen-actions .mm-btn { flex: 1 1 100%; }
 }

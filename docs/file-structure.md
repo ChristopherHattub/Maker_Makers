@@ -15,7 +15,8 @@
 ├── assets/
 │   └── thumbnails/          Slot thumbnail images (currently only .gitkeep)
 │       └── featured/        Featured Community Models thumbnails (in progress)
-├── programs/                Standalone generator HTML files (currently only .gitkeep)
+├── programs/                Generator pages (ghost-builder.html, ...)
+│   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
 ├── scripts/
 │   └── dev-server.mjs       Zero-dependency static server with live reload
 ├── .github/workflows/
@@ -46,7 +47,7 @@
 
 ## Folders that are intentionally empty
 
-`programs/` and `assets/thumbnails/` contain only `.gitkeep` so that Git tracks them. The slots in `js/programs.js` have no `programUrl` or `thumbnailUrl` yet, so the site renders as empty sockets until files are added.
+`assets/thumbnails/` contains only the featured placeholders for now. Slot 1 points at `programs/ghost-builder.html`, which has no thumbnail yet, so its socket shows the empty crosshair until one is added. The other slots have no `programUrl` or `thumbnailUrl`, so they render as empty sockets.
 
 ## Files not to commit
 

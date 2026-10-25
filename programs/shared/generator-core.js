@@ -16,7 +16,8 @@
 
   var NEUTRAL_MODEL_COLOR = '#cbd5e1'; // Parametric tab: neutral matte, no paint colors
   var CAVITY_SHADE = 0.82;             // How dark a fully shaded vertex gets (0..1)
-  var CREASE_COS = Math.cos(35 * Math.PI / 180); // Faces turning more than 35 degrees are separate parts
+  var CREASE_COS = Math.cos(50 * Math.PI / 180); // Faces turning more than 50 degrees are separate parts
+  var MIN_PART_TRIS = 60;              // Smaller islands merge into the neighbor they touch most
   var PAINT_MATCH_MM = 40;             // Max distance to re-attach a saved paint after a rebuild
   var PALETTE = cfg.palette || [{ name: 'Bone White', color: '#f1f5f9' }];
   var DEFAULT_COLOR = cfg.defaultColor || PALETTE[0].color;
@@ -259,10 +260,25 @@
     toast('Paint cleared');
   }
 
+  // The part of the same kind closest to a saved centroid, if it is near enough.
+  function nearestPart(kind, centroid) {
+    var best = null;
+    var bestDist = PAINT_MATCH_MM;
+    parts.forEach(function (part) {
+      if (part.kind !== kind) return;
+      var d = distance(part.centroid, centroid);
+      if (d < bestDist) {
+        bestDist = d;
+        best = part;
+      }
+    });
+    return best;
+  }
+
   // Paints are stored by part centroid, so they survive slider rebuilds.
   function paintPart(part, color) {
     paints = paints.filter(function (p) {
-      return !(p.kind === part.kind && distance(p.centroid, part.centroid) < PAINT_MATCH_MM);
+      return nearestPart(p.kind, p.centroid) !== part;
     });
     paints.push({ kind: part.kind, centroid: part.centroid.slice(), color: color });
     part.color = color;
@@ -472,6 +488,8 @@
 
       var edgeOwner = new Map();
       var vertexCount = weldCount(ids);
+      var pairA = [];
+      var pairB = [];
       for (var f = 0; f < triCount; f++) {
         for (var e = 0; e < 3; e++) {
           var u = ids[f * 3 + e];
@@ -481,6 +499,8 @@
           if (other === undefined) {
             edgeOwner.set(edgeKey, f);
           } else {
+            pairA.push(f);
+            pairB.push(other);
             // abs(): a face wound the other way is still the same surface. Degenerate
             // (zero-area) faces have no normal, so they always join their neighbor.
             var dot = normals[f * 3] * normals[other * 3] + normals[f * 3 + 1] * normals[other * 3 + 1] + normals[f * 3 + 2] * normals[other * 3 + 2];
@@ -491,6 +511,28 @@
           }
         }
       }
+
+      // Merge tiny islands (jagged faces around the eyes and mouth) into the largest neighbor.
+      var sizeOfRoot = new Int32Array(triCount);
+      for (var s = 0; s < triCount; s++) sizeOfRoot[find(s)]++;
+      var bestNeighbor = new Map();
+      function considerMerge(small, big) {
+        if (sizeOfRoot[small] >= MIN_PART_TRIS) return;
+        var current = bestNeighbor.get(small);
+        if (current === undefined || sizeOfRoot[big] > sizeOfRoot[current]) bestNeighbor.set(small, big);
+      }
+      for (var p = 0; p < pairA.length; p++) {
+        var pa = find(pairA[p]);
+        var pb = find(pairB[p]);
+        if (pa !== pb) {
+          considerMerge(pa, pb);
+          considerMerge(pb, pa);
+        }
+      }
+      bestNeighbor.forEach(function (big, small) {
+        var r1 = find(small), r2 = find(big);
+        if (r1 !== r2) parent[r1] = r2;
+      });
 
       var partOfRoot = new Map();
       var partOfTri = new Int32Array(triCount);
@@ -536,14 +578,8 @@
 
     // Re-attach saved paints to the parts they were made on.
     paints.forEach(function (paint) {
-      var best = null;
-      var bestDist = PAINT_MATCH_MM;
-      parts.forEach(function (part) {
-        if (part.kind !== paint.kind) return;
-        var d = distance(part.centroid, paint.centroid);
-        if (d < bestDist) { bestDist = d; best = part; }
-      });
-      if (best) best.color = paint.color;
+      var match = nearestPart(paint.kind, paint.centroid);
+      if (match) match.color = paint.color;
     });
     return parts;
   }
@@ -554,9 +590,11 @@
     return max + 1;
   }
 
+  // Largest part of a mesh gets the mesh name; the rest are numbered.
   function labelFor(kind, index, triangleCount) {
     var name = cfg.partNames && cfg.partNames[kind] ? cfg.partNames[kind] : kind;
-    return name + ' ' + (index + 1) + ' · ' + triangleCount.toLocaleString() + ' tris';
+    var label = index === 0 ? name : 'Part ' + (index + 1);
+    return label + ' · ' + triangleCount.toLocaleString() + ' tris';
   }
 
   // Writes the colors for the current tab. Parametric shows the neutral model; Color shows paint.
@@ -958,7 +996,7 @@
       ]).then(function (sources) {
         var inlined = html
           .replace(/<link rel="stylesheet" href="shared\/generator\.css"\s*\/?>/, function () { return '<style>\n' + sources[0] + '\n</style>'; })
-          .replace(/<script src="shared\/generator-core\.js"><\/script>/, function () { return '<script>\n' + sources[1] + '\n</script>'; });
+          .replace(/<script src="shared\/generator-core\.js"><\/script>/, function () { return '<script>\n' + sources[1] + '\n<\/script>'; });
         saveBlob(new Blob([inlined], { type: 'text/html' }), slug(cfg.title) + '-generator.html');
         toast('Saved standalone generator');
       });

@@ -35,17 +35,17 @@ A slot is treated as **active** when it has a `programUrl`:
 
 The viewer reads `programUrl` directly, so a slot can have a title and thumbnail before its program is ready.
 
-## The standalone generator contract
+## The generator contract
 
-A generator is a single HTML file that runs on its own. The site does not pass it any data and does not read anything back. In practice:
+A generator is a page in `programs/` that loads the shared engine. The page holds only its own config (parameters, presets, palette and geometry). The layout, viewport, Parametric and Color tabs, and exports all come from `programs/shared/`. The full contract is in [generator-styling.md](generator-styling.md). In practice:
 
-- Put it in `programs/` (for example `programs/honeycomb-hook.html`).
-- It is loaded in an `<iframe>` in the viewer. Its own sliders and export controls appear inside that frame.
-- It must work with no server, no build step, and no external data it cannot fetch itself.
-- Its "Download Program (.HTML)" button downloads the file by linking to `programUrl` with a `download` attribute. The file name becomes `SLOT-NN-generator.html`.
-- The two "Export .STL / .3MF" buttons in the viewer are placeholders. They are disabled and not wired to anything; exporting happens inside the generator.
+- Put the page in `programs/` (for example `programs/ghost-builder.html`) and load `programs/shared/generator.css` and `programs/shared/generator-core.js`.
+- It is loaded in an `<iframe>` in the viewer. Its sliders, Color tool and export buttons appear inside that frame.
+- It must work with no server and no build step. It can fetch three.js from its CDN, and nothing else.
+- The viewer's "Download Program (.HTML)" button, and the generator's own "Download standalone .html generator" button, both save one self-contained file. The shared files are inlined into it.
+- The two "Export .STL / .3MF" buttons in the viewer are placeholders. Exporting happens inside the generator.
 
-Use relative paths only, such as `programs/honeycomb-hook.html`, never a path starting with `/`. Relative paths work locally and under a GitHub Pages project URL.
+Use relative paths only, such as `programs/ghost-builder.html`, never a path starting with `/`. Relative paths work locally and under a GitHub Pages project URL.
 
 ## Adding a generator
 

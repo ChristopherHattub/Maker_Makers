@@ -13,7 +13,8 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | --- | --- |
 | [architecture.md](architecture.md) | How the page, scripts and screens fit together, state, and external services |
 | [file-structure.md](file-structure.md) | Every file in the repo and what it is for |
-| [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the standalone generator contract, and how to add a generator |
+| [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the generator contract, and how to add a generator |
+| [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, the Color tool, exports, and the visual rules |
 | [featured-carousel.md](featured-carousel.md) | The auto-rotating Featured Generator carousel and the Featured Community Models strip |
 | [printer-map.md](printer-map.md) | The printer radar: data, search, GPS, and how to add a printer |
 | [development.md](development.md) | Running the site locally and the live-reload dev server |
