@@ -119,7 +119,7 @@ Use `api.THREE` for three.js helpers (geometry, matrices). A common pattern for 
 
 ## Parametric and Color tabs
 
-The panel has two tabs. Only one is shown at a time.
+The panel has three tabs: Parametric, Color tool and Print. Only one is shown at a time.
 
 **Parametric** starts with a **View** switch (engine-owned, every generator gets it): *Solid*, *Wireframe* (only the triangle edges the model is built from) and *Solid + edges* (shaded model with the edges on top). It is a display mode only; exports are unchanged, and the Color tab always shows the solid so painting stays readable. Below it are presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
 
@@ -159,7 +159,7 @@ Both model exports apply the same transform: Y-up becomes Z-up (`x, y, z` become
 
 ### Print settings in the 3MF
 
-A generator can declare recommended slicer settings. Without `printSettings` the 3MF carries none.
+The **Print** tab (engine-owned) lets the user edit slicer settings: material, nozzle, layer height, infill, walls, top/bottom layers, brim, speed (0 = slicer default) and supports. Each field starts at the generator's recommended value from `printSettings`, and "Reset to recommended" restores it. The .3MF export writes whatever is set in the tab at that moment. Settings are not saved between page loads. Without `printSettings` the tab starts from the engine defaults, so every 3MF carries settings.
 
 ```js
 printSettings: {
@@ -170,7 +170,7 @@ printSettings: {
 }
 ```
 
-Every field is optional; the defaults are PLA, 0.4 mm nozzle, 0.2 mm layers, 15% infill, 3 walls, 5 top / 4 bottom layers, no supports, no brim. The export writes the same values in four places:
+Every field is optional (`notes` is shown under the fields and written to the summary); the defaults are PLA, 0.4 mm nozzle, 0.2 mm layers, 15% infill, 3 walls, 5 top / 4 bottom layers, no supports, no brim. The export writes the same values in four places:
 
 | Where | What | Read by |
 | --- | --- | --- |

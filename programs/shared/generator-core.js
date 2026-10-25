@@ -78,6 +78,8 @@
     var tabModel = el('button', { class: 'mm-tab', type: 'button', id: 'mm-tab-model', 'aria-selected': 'true', text: 'Parametric', onclick: function () { setTab('model'); } });
     var tabColor = el('button', { class: 'mm-tab', type: 'button', id: 'mm-tab-color', 'aria-selected': 'false', text: 'Color tool', onclick: function () { setTab('color'); } });
 
+    var tabPrint = el('button', { class: 'mm-tab', type: 'button', id: 'mm-tab-print', 'aria-selected': 'false', text: 'Print', onclick: function () { setTab('print'); } });
+    var printBody = el('div', { id: 'mm-body-print', class: 'mm-panel-body', hidden: '' });
     var modelBody = el('div', { id: 'mm-body-model', class: 'mm-panel-body' });
     var colorBody = el('div', { id: 'mm-body-color', class: 'mm-panel-body', hidden: '' });
 
@@ -93,9 +95,10 @@
     ]);
 
     var panel = el('aside', { class: 'mm-panel' }, [
-      el('div', { class: 'mm-tabs', role: 'tablist' }, [tabModel, tabColor]),
+      el('div', { class: 'mm-tabs', role: 'tablist' }, [tabModel, tabColor, tabPrint]),
       modelBody,
       colorBody,
+      printBody,
       footer
     ]);
 
@@ -115,7 +118,7 @@
     document.body.appendChild(header);
     document.body.appendChild(main);
 
-    return { modelBody: modelBody, colorBody: colorBody, stage: stage, tabModel: tabModel, tabColor: tabColor };
+    return { modelBody: modelBody, colorBody: colorBody, printBody: printBody, stage: stage, tabModel: tabModel, tabColor: tabColor, tabPrint: tabPrint };
   }
 
   var dom = buildShell();
@@ -183,6 +186,63 @@
   }
 
   var sliderRefs = {};
+
+  // Print settings tab: editable copy of the generator's recommended settings (cfg.printSettings).
+  // The 3MF export writes whatever is set here.
+  var printSettings = printSettingsFor(cfg.printSettings);
+  var PRINT_FIELDS = [
+    { key: 'material', label: 'Material', type: 'select', options: ['PLA', 'PETG', 'ABS', 'ASA', 'TPU'] },
+    { key: 'nozzle', label: 'Nozzle', type: 'select', options: [0.2, 0.4, 0.6, 0.8], unit: ' mm' },
+    { key: 'layerHeight', label: 'Layer height', type: 'range', min: 0.08, max: 0.4, step: 0.04, unit: ' mm' },
+    { key: 'infill', label: 'Infill', type: 'range', min: 0, max: 100, step: 5, unit: '%' },
+    { key: 'walls', label: 'Walls (perimeters)', type: 'range', min: 1, max: 8, step: 1 },
+    { key: 'topLayers', label: 'Top layers', type: 'range', min: 0, max: 12, step: 1 },
+    { key: 'bottomLayers', label: 'Bottom layers', type: 'range', min: 0, max: 12, step: 1 },
+    { key: 'brim', label: 'Brim width (0 = none)', type: 'range', min: 0, max: 10, step: 1, unit: ' mm' },
+    { key: 'speed', label: 'Print speed (0 = slicer default)', type: 'range', min: 0, max: 300, step: 10, unit: ' mm/s' },
+    { key: 'supports', label: 'Supports', type: 'check' }
+  ];
+
+  function renderPrintPanel() {
+    dom.printBody.innerHTML = '';
+    dom.printBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Print settings' }));
+    dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'Recommended slicer settings for this model. They are saved inside the exported .3MF; your slicer may or may not use them.' }));
+    var group = el('div', { class: 'mm-group' });
+    PRINT_FIELDS.forEach(function (f) {
+      if (f.type === 'range') {
+        var out = el('span', { class: 'mm-slider-value', text: '' });
+        var show = function () { out.textContent = (Number(printSettings[f.key]) || 0) + (f.unit || ''); };
+        var input = el('input', {
+          type: 'range', min: String(f.min), max: String(f.max), step: String(f.step), 'aria-label': f.label,
+          oninput: function () { printSettings[f.key] = Number(input.value); show(); }
+        });
+        input.value = String(printSettings[f.key] || 0);
+        show();
+        group.appendChild(el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: f.label }), out]), input]));
+      } else if (f.type === 'select') {
+        var sel = el('select', { 'aria-label': f.label, onchange: function () {
+          printSettings[f.key] = typeof f.options[0] === 'number' ? Number(sel.value) : sel.value;
+        } }, f.options.map(function (o) { return el('option', { value: String(o), text: o + (f.unit || '') }); }));
+        sel.value = String(printSettings[f.key]);
+        if (sel.value !== String(printSettings[f.key])) {
+          sel.appendChild(el('option', { value: String(printSettings[f.key]), text: printSettings[f.key] + (f.unit || '') }));
+          sel.value = String(printSettings[f.key]);
+        }
+        group.appendChild(el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: f.label })]), sel]));
+      } else {
+        var box = el('input', { type: 'checkbox', 'aria-label': f.label, onchange: function () { printSettings[f.key] = box.checked; } });
+        box.checked = !!printSettings[f.key];
+        group.appendChild(el('label', { class: 'mm-check' }, [box, document.createTextNode(f.label)]));
+      }
+    });
+    dom.printBody.appendChild(group);
+    if (printSettings.notes) dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'Note: ' + printSettings.notes }));
+    dom.printBody.appendChild(el('button', { class: 'mm-btn mm-btn--block', type: 'button', text: 'Reset to recommended', onclick: function () {
+      printSettings = printSettingsFor(cfg.printSettings);
+      renderPrintPanel();
+      toast('Print settings reset');
+    } }));
+  }
 
   function sliderFor(p) {
     var output = el('span', { class: 'mm-slider-value', text: formatParam(p, params[p.key]) });
@@ -813,7 +873,7 @@
     var dx = e.clientX - downAt.x;
     var dy = e.clientY - downAt.y;
     if (dx * dx + dy * dy > 36) dragged = true;
-    if (activeTab !== 'color' && typeof cfg.onHover === 'function') {
+    if (activeTab === 'model' && typeof cfg.onHover === 'function') {
       cfg.onHover(pickAt(e.clientX, e.clientY), api);
     }
   });
@@ -831,7 +891,7 @@
       else toast('Click a part of the model to paint it');
       return;
     }
-    if (typeof cfg.onPick === 'function') cfg.onPick(hit, api);
+    if (activeTab === 'model' && typeof cfg.onPick === 'function') cfg.onPick(hit, api);
   });
 
   // ---------------------------------------------------------------------------
@@ -841,22 +901,24 @@
 
   // Crosshair only where a click places something. Painting uses a pointer, plain orbiting a grab hand.
   function updateCursor() {
-    var cursor = activeTab === 'color' ? 'pointer' : (typeof cfg.onPick === 'function' ? 'crosshair' : 'grab');
+    var cursor = activeTab === 'color' ? 'pointer' : activeTab === 'print' ? 'grab' : (typeof cfg.onPick === 'function' ? 'crosshair' : 'grab');
     renderer.domElement.style.cursor = cursor;
   }
 
   function setTab(tab) {
     activeTab = tab;
     var isColor = tab === 'color';
-    dom.tabModel.setAttribute('aria-selected', String(!isColor));
+    dom.tabModel.setAttribute('aria-selected', String(tab === 'model'));
     dom.tabColor.setAttribute('aria-selected', String(isColor));
-    dom.modelBody.hidden = isColor;
+    dom.tabPrint.setAttribute('aria-selected', String(tab === 'print'));
+    dom.modelBody.hidden = tab !== 'model';
     dom.colorBody.hidden = !isColor;
+    dom.printBody.hidden = tab !== 'print';
     $('mm-hint').textContent = isColor
       ? 'Click a part to paint it'
       : 'Drag or touch-swipe to orbit 3D mesh';
     // Placement tools (stamps) belong to the Parametric tab: clear their preview and cursor here.
-    if (isColor && typeof cfg.onHover === 'function') cfg.onHover(null, api);
+    if (tab !== 'model' && typeof cfg.onHover === 'function') cfg.onHover(null, api);
     updateCursor();
     if (isColor) ensureParts();
     refreshColors();
@@ -967,7 +1029,7 @@
       return '<base name="' + c + '" displaycolor="' + c + '"/>';
     }).join('');
 
-    var ps = printSettingsFor(cfg.printSettings);
+    var ps = printSettings;
     var modelXml = '<?xml version="1.0" encoding="UTF-8"?>' +
       '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
       '<metadata name="Title">' + escapeXml(cfg.title) + '</metadata>' +
@@ -1010,14 +1072,13 @@
   }
 
   // Recommended print settings declared by the generator (cfg.printSettings), with defaults.
-  // Returns null when the generator declares none, and the 3MF then carries no settings.
+  // Generators that declare none get these defaults.
   function printSettingsFor(raw) {
-    if (!raw) return null;
     var ps = {
       layerHeight: 0.2, infill: 15, walls: 3, topLayers: 5, bottomLayers: 4,
       supports: false, brim: 0, material: 'PLA', nozzle: 0.4, notes: ''
     };
-    Object.keys(raw).forEach(function (k) { ps[k] = raw[k]; });
+    Object.keys(raw || {}).forEach(function (k) { ps[k] = raw[k]; });
     return ps;
   }
 
@@ -1218,6 +1279,7 @@
   function init() {
     renderParametricPanel();
     renderColorPanel();
+    renderPrintPanel();
     updateCursor();
     handleResize();
     rebuild();

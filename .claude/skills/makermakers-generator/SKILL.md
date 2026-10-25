@@ -37,7 +37,7 @@ Sources of truth (read them before changing anything, they may have moved on sin
 | `code`, `category`, `title`, `fileName` | Required. `fileName` is the default export name; the engine strips spaces/symbols. |
 | `palette` | Required `[{ name, color }]`. Use **eight** entries (two tidy rows). Pastel/matte, printable filament-like colors with friendly names (Ghost Builder: Bone White, Glow Mint, Pumpkin Matte...). Include one dark and one light. |
 | `defaultColor` | Optional; defaults to first palette entry. |
-| `printSettings` | Recommended slicer settings written into the .3MF (`material`, `nozzle`, `layerHeight`, `infill`, `walls`, `topLayers`, `bottomLayers`, `supports`, `brim`, optional `speed`, `notes`). Always set it with values right for the model (supports/brim if it has overhangs or a small base). Slicer import is untested; do not claim it works. |
+| `printSettings` | Recommended slicer settings written into the .3MF (`material`, `nozzle`, `layerHeight`, `infill`, `walls`, `topLayers`, `bottomLayers`, `supports`, `brim`, optional `speed`, `notes`). Seeds the engine's **Print** tab (users can edit every value there; the export writes their edits). Always set it with values right for the model (supports/brim if it has overhangs or a small base). Slicer import is untested; do not claim it works. |
 | `partNames` | Mesh name -> label, e.g. `{ body: 'Ghost body', face: 'Eyes & mouth', detail: 'Stamp' }`. Every mesh name you return should have one. |
 | `parameters` | `{ group, key, label, unit, min, max, step, value, format? }`. `unit` includes its leading space (`' mm'`) or is `'°'`/`'%'`. Plain-word group names (engine upper-cases them). Sensible defaults that already look good. |
 | `presets` | `[{ label, values }]`, values override only some keys. Include a "Default ..." preset that restores everything, including non-visual params. |
@@ -120,6 +120,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
+- [ ] Print tab shows your `printSettings` as defaults, edits change the 3MF, Reset restores them.
 - [ ] Export .STL and .3MF download and open (STL size ~ 84 + 50 x triangles bytes; model sits on the bed; 3MF has the colors; the zip lists `Metadata/Slic3r_PE.config`, `project_settings.config`, `print-settings.txt` with your `printSettings`).
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] Phone width (resize to 375): no horizontal scroll, controls usable.
