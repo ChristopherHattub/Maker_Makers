@@ -19,6 +19,11 @@
   var CREASE_COS = Math.cos(50 * Math.PI / 180); // Faces turning more than 50 degrees are separate parts
   var MIN_PART_TRIS = 200;             // Smaller islands merge into the neighbor they touch most
   var PAINT_MATCH_MM = 40;             // Max distance to re-attach a saved paint after a rebuild
+  var VIEW_MODES = [
+    { id: 'solid', label: 'Solid', hint: 'Normal shaded model' },
+    { id: 'wire', label: 'Wireframe', hint: 'Only the triangle edges the model is built from' },
+    { id: 'edges', label: 'Solid + edges', hint: 'Shaded model with the triangle edges drawn on top' }
+  ];
   var PALETTE = cfg.palette || [{ name: 'Bone White', color: '#f1f5f9' }];
   var DEFAULT_COLOR = cfg.defaultColor || PALETTE[0].color;
 
@@ -157,6 +162,17 @@
     });
 
     dom.modelBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Parametric controls' }));
+    dom.modelBody.appendChild(el('div', { class: 'mm-group' }, [
+      el('h3', { class: 'mm-group-title', text: 'View' }),
+      el('div', { class: 'mm-chips', id: 'mm-view-modes' }, VIEW_MODES.map(function (mode) {
+        return el('button', {
+          class: 'mm-chip', type: 'button', text: mode.label, title: mode.hint,
+          'aria-pressed': String(mode.id === viewMode),
+          onclick: function () { setViewMode(mode.id); }
+        });
+      })),
+      el('p', { class: 'mm-note', text: 'Wireframe shows the triangles the model is built from. It is only a view; exports are unchanged.' })
+    ]));
     if (presetsRow) dom.modelBody.appendChild(presetsRow);
     sections.forEach(function (s) { dom.modelBody.appendChild(s); });
 
@@ -358,8 +374,12 @@
   scene.add(modelGroup);
   var previewGroup = new T.Group();
   scene.add(previewGroup);
+  var wireGroup = new T.Group();
+  scene.add(wireGroup);
+  var viewMode = 'solid';
 
   var modelMaterial = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.03, vertexColors: true });
+  var wireMaterial = new T.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.9 });
   var previewMaterial = new T.MeshBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.55 });
   var modelMeshes = []; // THREE.Mesh per build output entry, in the same order
   var modelData = [];   // build output: { name, positions, shade }
@@ -403,6 +423,34 @@
     refreshColors();
     renderPartList();
     updateStats();
+    rebuildWire();
+  }
+
+  // View modes: 'solid', 'wire' (triangle edges only) and 'edges' (solid with edges on top).
+  // The wire lines are only built while a mode needs them. Painting always shows the solid.
+  function effectiveViewMode() {
+    return activeTab === 'color' ? 'solid' : viewMode;
+  }
+
+  function rebuildWire() {
+    wireGroup.children.slice().forEach(function (line) { wireGroup.remove(line); line.geometry.dispose(); });
+    var mode = effectiveViewMode();
+    modelMeshes.forEach(function (mesh) { mesh.visible = mode !== 'wire'; });
+    modelMaterial.polygonOffset = mode === 'edges';
+    modelMaterial.polygonOffsetFactor = 1;
+    modelMaterial.polygonOffsetUnits = 1;
+    if (mode === 'solid') return;
+    modelMeshes.forEach(function (mesh) {
+      wireGroup.add(new T.LineSegments(new T.WireframeGeometry(mesh.geometry), wireMaterial));
+    });
+    wireMaterial.opacity = mode === 'edges' ? 0.45 : 0.9;
+  }
+
+  function setViewMode(mode) {
+    viewMode = mode;
+    var chips = document.querySelectorAll('#mm-view-modes .mm-chip');
+    VIEW_MODES.forEach(function (m, i) { chips[i].setAttribute('aria-pressed', String(m.id === mode)); });
+    rebuildWire();
   }
 
   // Meshes with the same `smoothGroup` are shaded as one surface, so splitting a surface into
@@ -813,6 +861,7 @@
     if (isColor) ensureParts();
     refreshColors();
     renderPartList();
+    rebuildWire();
   }
 
   var toastTimer = null;
@@ -918,8 +967,12 @@
       return '<base name="' + c + '" displaycolor="' + c + '"/>';
     }).join('');
 
+    var ps = printSettingsFor(cfg.printSettings);
     var modelXml = '<?xml version="1.0" encoding="UTF-8"?>' +
       '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
+      '<metadata name="Title">' + escapeXml(cfg.title) + '</metadata>' +
+      '<metadata name="Designer">Maker Makers</metadata>' +
+      (ps ? '<metadata name="Description">' + escapeXml(printNote(ps)) + '</metadata>' : '') +
       '<resources>' +
       '<basematerials id="1">' + baseXml + '</basematerials>' +
       '<object id="2" name="' + escapeXml(safeFileName($('mm-file-name').value)) + '" type="model" pid="1" pindex="0">' +
@@ -931,20 +984,95 @@
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>' +
+      '<Default Extension="config" ContentType="text/plain"/>' +
+      '<Default Extension="txt" ContentType="text/plain"/>' +
+      '<Default Extension="json" ContentType="application/json"/>' +
       '</Types>';
     var rels = '<?xml version="1.0" encoding="UTF-8"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>' +
       '</Relationships>';
 
-    var zip = makeZip([
+    var files = [
       { name: '[Content_Types].xml', data: utf8(contentTypes) },
       { name: '_rels/.rels', data: utf8(rels) },
       { name: '3D/3dmodel.model', data: utf8(modelXml) }
-    ]);
+    ];
+    if (ps) {
+      files.push({ name: 'Metadata/Slic3r_PE.config', data: utf8(prusaConfig(ps)) });
+      files.push({ name: 'Metadata/project_settings.config', data: utf8(JSON.stringify(bambuConfig(ps), null, 2)) });
+      files.push({ name: 'Metadata/print-settings.txt', data: utf8(printNote(ps) + '\n') });
+    }
+    var zip = makeZip(files);
     var name = safeFileName($('mm-file-name').value);
     saveBlob(new Blob([zip], { type: 'application/octet-stream' }), name + '.3mf');
-    toast('Saved ' + name + '.3mf with colors');
+    toast('Saved ' + name + '.3mf with colors' + (ps ? ' and print settings' : ''));
+  }
+
+  // Recommended print settings declared by the generator (cfg.printSettings), with defaults.
+  // Returns null when the generator declares none, and the 3MF then carries no settings.
+  function printSettingsFor(raw) {
+    if (!raw) return null;
+    var ps = {
+      layerHeight: 0.2, infill: 15, walls: 3, topLayers: 5, bottomLayers: 4,
+      supports: false, brim: 0, material: 'PLA', nozzle: 0.4, notes: ''
+    };
+    Object.keys(raw).forEach(function (k) { ps[k] = raw[k]; });
+    return ps;
+  }
+
+  function printNote(ps) {
+    var lines = [
+      'Recommended print settings for ' + cfg.title + ' (Maker Makers)',
+      'Material: ' + ps.material,
+      'Nozzle: ' + ps.nozzle + ' mm',
+      'Layer height: ' + ps.layerHeight + ' mm',
+      'Infill: ' + ps.infill + '%',
+      'Walls: ' + ps.walls,
+      'Top / bottom layers: ' + ps.topLayers + ' / ' + ps.bottomLayers,
+      'Supports: ' + (ps.supports ? 'yes' : 'no'),
+      'Brim: ' + (ps.brim ? ps.brim + ' mm' : 'none')
+    ];
+    if (ps.speed) lines.push('Print speed: ' + ps.speed + ' mm/s');
+    if (ps.notes) lines.push(ps.notes);
+    return lines.join('\n');
+  }
+
+  // PrusaSlicer-style project config ("; key = value" lines, keys as in a PrusaSlicer .ini).
+  function prusaConfig(ps) {
+    var lines = [
+      ['layer_height', ps.layerHeight],
+      ['perimeters', ps.walls],
+      ['top_solid_layers', ps.topLayers],
+      ['bottom_solid_layers', ps.bottomLayers],
+      ['fill_density', ps.infill + '%'],
+      ['support_material', ps.supports ? 1 : 0],
+      ['brim_width', ps.brim || 0],
+      ['filament_type', ps.material],
+      ['nozzle_diameter', ps.nozzle]
+    ];
+    if (ps.speed) lines.push(['perimeter_speed', ps.speed], ['infill_speed', ps.speed]);
+    return lines.map(function (l) { return '; ' + l[0] + ' = ' + l[1]; }).join('\n') + '\n';
+  }
+
+  // Bambu Studio / OrcaSlicer-style project settings (JSON, keys as in their process/filament presets).
+  function bambuConfig(ps) {
+    var cfgOut = {
+      layer_height: String(ps.layerHeight),
+      wall_loops: String(ps.walls),
+      top_shell_layers: String(ps.topLayers),
+      bottom_shell_layers: String(ps.bottomLayers),
+      sparse_infill_density: ps.infill + '%',
+      enable_support: ps.supports ? '1' : '0',
+      brim_width: String(ps.brim || 0),
+      filament_type: [ps.material],
+      nozzle_diameter: [String(ps.nozzle)]
+    };
+    if (ps.speed) {
+      cfgOut.outer_wall_speed = String(ps.speed);
+      cfgOut.sparse_infill_speed = String(ps.speed);
+    }
+    return cfgOut;
   }
 
   function escapeXml(text) {

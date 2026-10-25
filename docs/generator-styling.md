@@ -56,6 +56,7 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `defaultColor` | no | Paint color used for parts with no paint. Defaults to the first palette entry. |
 | `palette` | yes | `[{ name, color }]`. Shown as swatches in the Color tool. Eight entries lay out as two rows. |
 | `partNames` | no | Maps a mesh name to a label, for example `{ body: 'Ghost body', detail: 'Stamp' }`. |
+| `printSettings` | no | Recommended print settings, written into the .3MF. See [Print settings](#print-settings-in-the-3mf). |
 | `parameters` | yes | The sliders. See below. |
 | `presets` | no | `[{ label, values }]`. Each preset sets some parameters. |
 | `build(params, api)` | yes | Returns the mesh list. See [build()](#build-params-api). |
@@ -120,7 +121,7 @@ Use `api.THREE` for three.js helpers (geometry, matrices). A common pattern for 
 
 The panel has two tabs. Only one is shown at a time.
 
-**Parametric** shows presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
+**Parametric** starts with a **View** switch (engine-owned, every generator gets it): *Solid*, *Wireframe* (only the triangle edges the model is built from) and *Solid + edges* (shaded model with the edges on top). It is a display mode only; exports are unchanged, and the Color tab always shows the solid so painting stays readable. Below it are presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
 
 Placement tools belong to the Parametric tab. In the Color tab the engine does not call `onHover` or `onPick`, clears any preview, and uses a pointer cursor (a crosshair in the Parametric tab when the generator has `onPick`). A generator does not need to handle this itself.
 
@@ -155,6 +156,30 @@ Paint resets when the page reloads. The engine does not save it.
 The file name is the `File name` field in the panel footer, which starts from `fileName`.
 
 Both model exports apply the same transform: Y-up becomes Z-up (`x, y, z` becomes `x, -z, y`), and the lowest point sits on the bed. Keep this in mind when you compare an export with the viewport.
+
+### Print settings in the 3MF
+
+A generator can declare recommended slicer settings. Without `printSettings` the 3MF carries none.
+
+```js
+printSettings: {
+  material: 'PLA', nozzle: 0.4, layerHeight: 0.2, infill: 15, walls: 3,
+  topLayers: 5, bottomLayers: 4, supports: false, brim: 0,
+  speed: 60,          // optional, mm/s
+  notes: 'Prints upright on its flat base.' // optional, free text
+}
+```
+
+Every field is optional; the defaults are PLA, 0.4 mm nozzle, 0.2 mm layers, 15% infill, 3 walls, 5 top / 4 bottom layers, no supports, no brim. The export writes the same values in four places:
+
+| Where | What | Read by |
+| --- | --- | --- |
+| `3D/3dmodel.model` `<metadata name="Description">` | Human-readable summary (also `Title`, `Designer`) | Anything that shows 3MF metadata (standard 3MF field) |
+| `Metadata/Slic3r_PE.config` | `; key = value` lines using PrusaSlicer option names | Meant for PrusaSlicer project import |
+| `Metadata/project_settings.config` | JSON using Bambu Studio / OrcaSlicer option names | Meant for Bambu Studio / OrcaSlicer |
+| `Metadata/print-settings.txt` | The same summary as plain text | People: rename the file to `.zip` and open it |
+
+**Not tested.** These file names and keys follow what those slicers write themselves, but no slicer import was tried. Treat the settings as a recommendation: a slicer may ignore them, apply only some, or keep the user's own profile (Bambu Studio in particular may expect a full project and only read the model). The text summary and the Description metadata are the dependable part.
 
 ## Standalone download
 
@@ -212,5 +237,6 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 
 - Paint is not saved. Reloading the page clears it.
 - Part detection uses fixed thresholds. A very coarse mesh can split into more or fewer parts than expected. Use a finer mesh for parts that must be painted separately.
+- 3MF print settings are metadata only and slicer support is untested (see above).
 - 3MF colors are per triangle. Slicers that ignore per-triangle colors will show the base color only.
 - `build()` runs on every slider move. Keep it fast: a few tens of thousands of triangles rebuild comfortably. Much larger models will feel slow.
