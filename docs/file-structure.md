@@ -28,6 +28,7 @@
 ├── .gitignore               OS, editor, node_modules, .env and tmp/ entries
 ├── .nojekyll                Tells GitHub Pages to serve files as-is
 ├── package.json             Two npm scripts (dev, serve); no dependencies
+├── DISCLAIMER.md            Full "as is" disclaimer (draft, needs legal review)
 ├── README.md                Project overview and short how-tos
 └── LICENSE                  Placeholder; no license chosen yet
 ```

@@ -515,3 +515,27 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 }
 
 .mm-check input { accent-color: var(--bp-cyan); }
+
+/* Footer disclaimer (inside the panel footer) */
+.mm-disclaimer {
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--bp-muted);
+}
+
+.mm-disclaimer summary {
+  cursor: pointer;
+  list-style-position: inside;
+  overflow-wrap: anywhere;
+}
+
+.mm-disclaimer-body {
+  max-height: 28vh;
+  overflow-y: auto;
+  margin-top: 0.4rem;
+  padding-right: 0.3rem;
+}
+
+.mm-disclaimer-body p {
+  margin: 0 0 0.45rem;
+}

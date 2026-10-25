@@ -231,7 +231,12 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 5. Add `presets` if the model has recognisable settings.
 6. Add `mount`, `onHover` and `onPick` only if the user needs to place things on the model.
 7. Add a slot entry in `js/programs.js`, pointing `programUrl` at the page (see [generator-registry.md](generator-registry.md)).
-8. Open the page in the preview. Check that the Color tool lists sensible parts, that paint survives a slider change, that the STL and 3MF open, and that the standalone download runs.
+8. Do nothing for the footer disclaimer: the engine adds it.
+9. Open the page in the preview. Check that the Color tool lists sensible parts, that paint survives a slider change, that the STL and 3MF open, and that the standalone download runs.
+
+## Footer disclaimer
+
+The engine adds a collapsed "Disclaimer" block under the panel footer buttons of every generator (and so in the standalone download, which has no external links). A generator page must not add or remove it. The text lives in `DISCLAIMER_SHORT` / `DISCLAIMER_ITEMS` in `generator-core.js`, and is mirrored in `index.html` (`#site-disclaimer`) and in [`DISCLAIMER.md`](../DISCLAIMER.md). Edit all three together. It is a best-effort draft and not legal advice; a lawyer should review it for the owner's jurisdiction. Styles are `.mm-disclaimer*` in `shared/generator.css`.
 
 ## Limits
 

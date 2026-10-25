@@ -61,6 +61,25 @@
     return cleaned || cfg.fileName || 'Model';
   }
 
+  // Footer disclaimer. Keep in sync with DISCLAIMER.md and the #site-disclaimer block in index.html.
+  var DISCLAIMER_SHORT = 'Provided as is, with no warranty. You print at your own risk.';
+  var DISCLAIMER_ITEMS = [
+    'Everything here (models, exports, recommended print settings, the printer map) is provided "as is" and "as available", without warranty of any kind, express or implied, including merchantability and fitness for a particular purpose.',
+    'You print at your own risk. Check every model and setting before printing, supervise prints, and follow your printer and material safety guidance. Slicer and printer compatibility is not guaranteed.',
+    'To the fullest extent permitted by law, the site owner is not liable for failed prints, malfunctions, damage to printers or materials, wasted material, injury, property damage, or any other loss arising from use of this site.',
+    'Community map and printer listings are third-party and often unverified. They are not endorsed. Check each location\'s own rules and fees.',
+    'You are responsible for the legality of what you print and for having the right to print it.',
+    'This is not legal advice.'
+  ];
+
+  function disclaimerBlock() {
+    var items = DISCLAIMER_ITEMS.map(function (t) { return el('p', { text: t }); });
+    return el('details', { class: 'mm-disclaimer' }, [
+      el('summary', { text: 'Disclaimer: ' + DISCLAIMER_SHORT }),
+      el('div', { class: 'mm-disclaimer-body' }, items)
+    ]);
+  }
+
   // Builds the whole page from the config so every generator looks the same.
   function buildShell() {
     var header = el('header', { class: 'mm-gen-header' }, [
@@ -91,7 +110,8 @@
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: exportStl }),
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF', onclick: export3mf })
       ]),
-      el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: downloadStandalone })
+      el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: downloadStandalone }),
+      disclaimerBlock()
     ]);
 
     var panel = el('aside', { class: 'mm-panel' }, [

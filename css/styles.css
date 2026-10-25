@@ -403,6 +403,28 @@ header {
   text-overflow: ellipsis;
 }
 
+.site-disclaimer {
+  max-width: 760px;
+  margin: 0.9rem auto 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--bp-muted);
+  text-align: left;
+}
+
+.site-disclaimer summary {
+  cursor: pointer;
+  text-align: center;
+}
+
+.site-disclaimer-body {
+  margin-top: 0.5rem;
+}
+
+.site-disclaimer-body p {
+  margin: 0 0 0.45rem;
+}
+
 @media (max-width: 1100px) {
   .featured-strip { --featured-visible: 3.5; }
 }
