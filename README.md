@@ -14,6 +14,8 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 ├── js/
 │   ├── programs.js       # Slot registry (the 40 generator slots)
 │   └── app.js            # Grid, carousel, viewer, idea queue, printer map
+├── data/
+│   └── public-printers.json  # Verified printer listings: name, coordinates, source, verified date
 ├── assets/
 │   └── thumbnails/       # Slot thumbnail images
 ├── programs/             # Standalone HTML generator programs
@@ -23,6 +25,8 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 │   └── pages.yml         # GitHub Pages deploy workflow
 └── .nojekyll             # Tells Pages to serve files as-is
 ```
+
+Full documentation lives in [docs/](docs/README.md).
 
 ## Running locally with live reload
 
@@ -44,7 +48,7 @@ npm run serve -- --port 8080
 
 1. Put the generator's standalone HTML file in `programs/`, for example `programs/honeycomb-hook.html`.
 2. Put its thumbnail in `assets/thumbnails/`.
-3. In `js/programs.js`, fill in that slot's `title`, `category`, `thumbnailUrl` and `programUrl` using relative paths such as `programs/honeycomb-hook.html`. Set `featured: true` to show it in the carousel.
+3. In `js/programs.js`, fill in that slot's `title`, `category`, `thumbnailUrl` and `programUrl` using relative paths such as `programs/honeycomb-hook.html`. Slots 1 to 3 are featured by default; set `featured: false` to hide a slot from the carousel, or `featured: true` to feature a later slot.
 
 Always use relative paths (no leading `/`) so the site works both locally and under a GitHub Pages project URL like `https://<user>.github.io/<repo>/`.
 

@@ -325,6 +325,92 @@ header {
   box-shadow: 0 0 8px var(--bp-cyan);
 }
 
+/* Featured Community Models Strip (5.5 items visible, half item hints at scroll) */
+.featured-strip {
+  --featured-gap: 1rem;
+  --featured-visible: 5.5;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 2.75rem;
+  border: 1px solid var(--bp-cyan-dim);
+  background: rgba(6, 21, 45, 0.6);
+  padding: 1rem;
+}
+
+.featured-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.featured-track {
+  display: flex;
+  gap: var(--featured-gap);
+}
+
+.featured-card {
+  flex: 0 0 calc((100% - 5 * var(--featured-gap)) / var(--featured-visible));
+  display: flex;
+  flex-direction: column;
+  background: var(--bp-bg-main);
+  border: 1px solid var(--machinery-border);
+  text-decoration: none;
+  color: var(--bp-white);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.featured-card:hover {
+  border-color: var(--bp-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
+}
+
+.featured-thumb {
+  aspect-ratio: 4 / 3;
+  background: var(--bp-bg-deep);
+  overflow: hidden;
+  position: relative;
+}
+
+.featured-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.featured-thumb .socket-empty-bay {
+  height: 100%;
+  justify-content: center;
+}
+
+.featured-card-label {
+  border-top: 1px dashed var(--bp-cyan-dim);
+  padding: 0.4rem 0.5rem;
+  min-width: 0;
+}
+
+.featured-card-label h4 {
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.featured-card-label span {
+  font-size: 0.6rem;
+  color: rgba(0, 229, 255, 0.5);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1100px) {
+  .featured-strip { --featured-visible: 3.5; }
+}
+
+@media (max-width: 680px) {
+  .featured-strip { --featured-visible: 1.5; --featured-gap: 0.75rem; }
+}
+
 /* Built-in Square Machinery Frame for Swappable Thumbnails (BLANK STATE) */
 .machinery-frame {
   aspect-ratio: 1 / 1;
@@ -894,4 +980,19 @@ footer {
   .export-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* Unverified OSM candidates: dimmer dots and a checkbox label in the map bar */
+.bp-map-dot-candidate {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.candidate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--bp-cyan);
+  cursor: pointer;
 }

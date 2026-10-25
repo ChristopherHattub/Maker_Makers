@@ -202,71 +202,30 @@ function downloadStandaloneHTML() {
 /*************************************************************************
  * 5. 100% FREE, PRECISE-COORDINATE PUBLIC 3D PRINTER RADAR MAP
  *************************************************************************/
-const DOVER_NH_PRINTERS = [
-  {
-    name: 'Dover Public Library Makerspace',
-    type: 'PUBLIC LIBRARY // STL SUBMISSION',
-    lat: 43.1932,
-    lng: -70.8755,
-    address: '73 Locust St, Dover, NH 03820',
-    equipment: 'Ultimaker 2+ (PLA Filament, $1.50/oz, max 8" build)',
-    access: 'Public .STL file submission via online form or email.',
-    url: 'https://www.dover.nh.gov/government/city-operations/library/services/makerspace/3d-print.html'
-  },
-  {
-    name: 'UNH CEPS Makerspace (Kingsbury Hall)',
-    type: 'UNIVERSITY MAKERSPACE',
-    lat: 43.1336,
-    lng: -70.9352,
-    address: '33 Academic Way, Durham, NH 03824',
-    equipment: 'Bambu Lab X1 Carbon, Formlabs 3+ & 4L Resin Printers, 3D Scanner',
-    access: 'Open to UNH students/staff & community collaboration inquiries.',
-    url: 'https://ceps.unh.edu/about/ceps-makerspace'
-  },
-  {
-    name: 'Portsmouth Public Library Lab',
-    type: 'PUBLIC LIBRARY // 3D PRINTING',
-    lat: 43.0722,
-    lng: -70.7596,
-    address: '175 Parrott Ave, Portsmouth, NH 03801',
-    equipment: 'FDM 3D Printers & Digital Fabrication Tools',
-    access: 'Public library cardholders & community workshops.',
-    url: 'https://www.cityofportsmouth.com/library'
-  },
-  {
-    name: 'Port City Makerspace',
-    type: 'COMMUNITY MAKERSPACE',
-    lat: 43.0745,
-    lng: -70.7712,
-    address: '68 Morning St, Portsmouth, NH 03801',
-    equipment: 'FDM & SLA 3D Printers, Laser Cutters, CNC, Wood/Metal Shop',
-    access: 'Public day passes, memberships, and open shop hours.',
-    url: 'https://www.portcitymakerspace.com/'
-  },
-  {
-    name: 'Somersworth Public Library',
-    type: 'LOCAL LIBRARY HUB',
-    lat: 43.2592,
-    lng: -70.8675,
-    address: '25 Main St, Somersworth, NH 03878',
-    equipment: 'Community Maker & Technology Services',
-    access: 'Local public access 10 mins north of Dover 03820.',
-    url: 'https://www.somersworthnh.gov/library'
-  },
-  {
-    name: 'MakeIt Labs (Nashua NH Regional Hub)',
-    type: 'NH LARGEST MAKERSPACE',
-    lat: 42.7654,
-    lng: -71.4676,
-    address: '25 Crown St, Nashua, NH 03060',
-    equipment: 'Multi-printer 3D Printing Lab, Rapid Prototyping & CNC',
-    access: 'Public memberships, classes, and open house tours.',
-    url: 'https://www.makeitlabs.com/'
+// Verified listings live in data/public-printers.json (name, coordinates, source, verified date).
+// Unverified OpenStreetMap candidates live in data/osm-candidates.json and are shown only when toggled on.
+let PUBLIC_PRINTERS = [];
+let CANDIDATE_PRINTERS = [];
+
+async function loadJSON(url) {
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch (e) {
+    return [];
   }
-];
+}
+
+async function loadPublicPrinters() {
+  PUBLIC_PRINTERS = await loadJSON('data/public-printers.json');
+  CANDIDATE_PRINTERS = await loadJSON('data/osm-candidates.json');
+  document.getElementById('candidate-count').textContent = CANDIDATE_PRINTERS.length;
+  return PUBLIC_PRINTERS;
+}
 
 let leafletMap = null;
 let markersLayer = null;
+let candidatesLayer = null;
 let userMarker = null;
 
 function showPrinterMapScreen() {
@@ -282,8 +241,10 @@ function showPrinterMapScreen() {
   }, 120);
 }
 
+const NORTH_AMERICA_VIEW = { center: [48.5, -100], zoom: 3 };
+
 function initLeafletMap() {
-  leafletMap = L.map('printer-map').setView([43.1932, -70.8755], 12);
+  leafletMap = L.map('printer-map').setView(NORTH_AMERICA_VIEW.center, NORTH_AMERICA_VIEW.zoom);
 
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
@@ -292,7 +253,29 @@ function initLeafletMap() {
   }).addTo(leafletMap);
 
   markersLayer = L.layerGroup().addTo(leafletMap);
-  renderPrinterLocations(DOVER_NH_PRINTERS);
+  candidatesLayer = L.layerGroup();
+  renderPrinterLocations(PUBLIC_PRINTERS);
+}
+
+// Popup for one location. Entries with verified === false get an unverified notice.
+function printerPopupHTML(loc) {
+  const unverifiedNotice = loc.verified === false
+    ? `<p><strong>UNVERIFIED:</strong> Found on OpenStreetMap. Print-submission policy and cost are not confirmed; check with the site before submitting.</p>`
+    : '';
+  return `
+    <div class="bp-popup">
+      <h3>${loc.name}</h3>
+      <p><strong>TYPE:</strong> ${loc.type}</p>
+      <p><strong>ADDRESS:</strong> ${loc.address}</p>
+      ${loc.equipment ? `<p><strong>EQUIPMENT:</strong> ${loc.equipment}</p>` : ''}
+      ${loc.access ? `<p><strong>PUBLIC ACCESS:</strong> ${loc.access}</p>` : ''}
+      ${loc.fee ? `<p><strong>COST:</strong> ${loc.fee}</p>` : ''}
+      ${loc.verifiedDate ? `<p><strong>VERIFIED:</strong> ${loc.verifiedDate} · <a href="${loc.url}" target="_blank" rel="noopener noreferrer">${loc.source}</a></p>` : ''}
+      ${unverifiedNotice}
+      ${loc.checked ? `<p><strong>CHECK LOG:</strong> ${loc.checked}</p>` : ''}
+      ${loc.url ? `<a class="popup-link" href="${loc.url}" target="_blank" rel="noopener noreferrer">&#8599; Visit Website / Submit STL</a>` : ''}
+    </div>
+  `;
 }
 
 function renderPrinterLocations(locations) {
@@ -313,16 +296,7 @@ function renderPrinterLocations(locations) {
   listEl.innerHTML = '';
 
   locations.forEach((loc, idx) => {
-    const popupHTML = `
-      <div class="bp-popup">
-        <h3>${loc.name}</h3>
-        <p><strong>TYPE:</strong> ${loc.type}</p>
-        <p><strong>ADDRESS:</strong> ${loc.address}</p>
-        <p><strong>EQUIPMENT:</strong> ${loc.equipment}</p>
-        <p><strong>PUBLIC ACCESS:</strong> ${loc.access}</p>
-        <a class="popup-link" href="${loc.url}" target="_blank" rel="noopener noreferrer">&#8599; Visit Website / Submit STL</a>
-      </div>
-    `;
+    const popupHTML = printerPopupHTML(loc);
 
     const marker = L.marker([loc.lat, loc.lng], { icon: dotIcon })
       .bindPopup(popupHTML)
@@ -331,7 +305,7 @@ function renderPrinterLocations(locations) {
     const card = document.createElement('div');
     card.className = 'printer-card';
     card.innerHTML = `
-      <span class="badge">${loc.type}</span>
+      <span class="badge">${loc.type}${loc.free === true ? ' // FREE' : loc.free === false ? ' // PAID' : ''}</span>
       <h4>${loc.name}</h4>
       <p>${loc.address}</p>
       <p style="color: var(--bp-cyan);">${loc.equipment}</p>
@@ -349,16 +323,49 @@ function renderPrinterLocations(locations) {
   });
 }
 
-function centerOnDoverNH() {
+// Unverified candidates are drawn on their own layer, off unless the toggle is checked.
+let showCandidates = false;
+
+function renderCandidateMarkers() {
+  if (!candidatesLayer) return;
+  candidatesLayer.clearLayers();
+  if (!showCandidates) return;
+
+  const candidateIcon = L.divIcon({
+    className: '',
+    html: '<div class="bp-map-dot bp-map-dot-candidate"></div>',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+
+  CANDIDATE_PRINTERS.forEach(loc => {
+    L.marker([loc.lat, loc.lng], { icon: candidateIcon })
+      .bindPopup(printerPopupHTML(loc))
+      .addTo(candidatesLayer);
+  });
+}
+
+function toggleCandidates(on) {
+  showCandidates = on;
   if (!leafletMap) return;
-  document.getElementById('map-status-tag').textContent = 'SECTOR: DOVER, NH 03820 (VERIFIED SEACOAST HUBS)';
-  leafletMap.flyTo([43.1932, -70.8755], 12, { duration: 1 });
-  renderPrinterLocations(DOVER_NH_PRINTERS);
+  if (on) {
+    candidatesLayer.addTo(leafletMap);
+  } else {
+    leafletMap.removeLayer(candidatesLayer);
+  }
+  renderCandidateMarkers();
+}
+
+function resetToNorthAmerica() {
+  if (!leafletMap) return;
+  document.getElementById('map-status-tag').textContent = 'SECTOR: US & CANADA (VERIFIED LISTINGS)';
+  leafletMap.flyTo(NORTH_AMERICA_VIEW.center, NORTH_AMERICA_VIEW.zoom, { duration: 1 });
+  renderPrinterLocations(PUBLIC_PRINTERS);
 }
 
 function locateUserGPS() {
   if (!navigator.geolocation) {
-    centerOnDoverNH();
+    resetToNorthAmerica();
     return;
   }
   document.getElementById('map-status-tag').textContent = 'ACQUIRING GPS TELEMETRY...';
@@ -368,8 +375,8 @@ function locateUserGPS() {
       await scanGlobalPrintersNear(latitude, longitude, 'YOUR GPS LOCATION');
     },
     () => {
-      document.getElementById('map-status-tag').textContent = 'GPS UNAVAILABLE IN SANDBOX // SHOWING DOVER, NH 03820';
-      centerOnDoverNH();
+      document.getElementById('map-status-tag').textContent = 'GPS UNAVAILABLE IN SANDBOX // SHOWING US & CANADA';
+      resetToNorthAmerica();
     },
     { enableHighAccuracy: true, timeout: 8000 }
   );
@@ -384,14 +391,14 @@ async function searchLocationWorldwide() {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
     const data = await res.json();
     if (!data || data.length === 0) {
-      document.getElementById('map-status-tag').textContent = 'LOCATION NOT FOUND // SHOWING DOVER, NH 03820';
+      document.getElementById('map-status-tag').textContent = 'LOCATION NOT FOUND // SHOWING US & CANADA';
       return;
     }
     const lat = parseFloat(data[0].lat);
     const lon = parseFloat(data[0].lon);
     await scanGlobalPrintersNear(lat, lon, data[0].display_name.split(',')[0].toUpperCase());
   } catch (e) {
-    centerOnDoverNH();
+    resetToNorthAmerica();
   }
 }
 
@@ -404,8 +411,7 @@ async function scanGlobalPrintersNear(lat, lng, label) {
     icon: L.divIcon({ className: '', html: '<div class="bp-user-dot"></div>', iconSize: [18, 18] })
   }).addTo(leafletMap).bindPopup(`<div class="bp-popup"><h3>SCAN ORIGIN</h3><p>${label}</p></div>`);
 
-  const distFromDover = Math.hypot(lat - 43.1932, lng - (-70.8755));
-  let combinedResults = distFromDover < 0.45 ? [...DOVER_NH_PRINTERS] : [];
+  let combinedResults = PUBLIC_PRINTERS.filter(loc => Math.hypot(lat - loc.lat, lng - loc.lng) < 0.45);
 
   document.getElementById('map-status-tag').textContent = `SCANNING MAKERSPACES & LIBRARIES NEAR ${label}...`;
 
@@ -444,7 +450,8 @@ async function scanGlobalPrintersNear(lat, lng, label) {
         address: [tags['addr:housenumber'], tags['addr:street'], tags['addr:city'], tags['addr:postcode']].filter(Boolean).join(' ') || `Coords: ${elLat.toFixed(4)}, ${elLon.toFixed(4)}`,
         equipment: isMaker ? 'Public 3D Printers / Rapid Prototyping Gear' : 'Public Library Tech Center — Call/Check link for .STL queue',
         access: 'Click website link below for submission hours & filament policies.',
-        url: website
+        url: website,
+        verified: false
       };
     }).filter(item => item.lat && item.lng);
 
@@ -458,8 +465,8 @@ async function scanGlobalPrintersNear(lat, lng, label) {
   } catch (err) {}
 
   if (combinedResults.length === 0) {
-    combinedResults = DOVER_NH_PRINTERS;
-    document.getElementById('map-status-tag').textContent = `NO PUBLIC HUBS DETECTED IN SECTOR // SHOWING DOVER, NH 03820`;
+    combinedResults = PUBLIC_PRINTERS;
+    document.getElementById('map-status-tag').textContent = `NO PUBLIC HUBS DETECTED IN SECTOR // SHOWING US & CANADA`;
   } else {
     document.getElementById('map-status-tag').textContent = `SECTOR SCAN COMPLETE: ${combinedResults.length} HUBS NEAR ${label}`;
   }
@@ -467,4 +474,51 @@ async function scanGlobalPrintersNear(lat, lng, label) {
   renderPrinterLocations(combinedResults);
 }
 
+function createFeaturedCardHTML(model) {
+  const visual = model.thumbnailUrl
+    ? `<img src="${model.thumbnailUrl}" alt="${model.title}" loading="lazy">`
+    : `<div class="socket-empty-bay"><div class="crosshair"></div><span>[ NO THUMBNAIL ]</span></div>`;
+
+  return `
+    <a class="featured-card" href="${model.url || '#'}" title="${model.title}">
+      <div class="featured-thumb">${visual}</div>
+      <div class="featured-card-label">
+        <h4>${model.title}</h4>
+        <span>BY ${model.creator} // ${model.generator}</span>
+      </div>
+    </a>
+  `;
+}
+
+function initFeaturedStrip() {
+  const strip = document.getElementById('featured-strip');
+  const track = document.getElementById('featured-track');
+  track.innerHTML = FEATURED_MODELS.map(createFeaturedCardHTML).join('');
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion || FEATURED_MODELS.length < 2) return;
+
+  let paused = false;
+  strip.addEventListener('mouseenter', () => { paused = true; });
+  strip.addEventListener('mouseleave', () => { paused = false; });
+  strip.addEventListener('focusin', () => { paused = true; });
+  strip.addEventListener('focusout', () => { paused = false; });
+
+  setInterval(() => {
+    if (paused) return;
+    const cards = track.children;
+    const step = cards[1].offsetLeft - cards[0].offsetLeft;
+    const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 2;
+    strip.scrollTo({ left: atEnd ? 0 : strip.scrollLeft + step, behavior: 'smooth' });
+  }, 3500);
+}
+
+loadPublicPrinters().then(() => {
+  if (leafletMap) {
+    renderPrinterLocations(PUBLIC_PRINTERS);
+    renderCandidateMarkers();
+  }
+});
+
 initSplash();
+initFeaturedStrip();
