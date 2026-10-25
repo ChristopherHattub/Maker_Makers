@@ -86,7 +86,8 @@ Name the groups with plain words. The engine upper-cases them.
 {
   name: 'body',                    // Used for part labels and for onPick/onHover hit.meshName
   positions: Float32Array,         // Triangles, non-indexed: 9 numbers per triangle, in mm
-  shade: Float32Array              // Optional. One value 0..1 per vertex (3 per triangle). 1 darkens the vertex (cavities).
+  shade: Float32Array,             // Optional. One value 0..1 per vertex (3 per triangle). 1 darkens the vertex (cavities).
+  smoothGroup: 'ghost'             // Optional. Entries with the same value are lit as one surface (no seam between them).
 }
 ```
 
@@ -96,6 +97,8 @@ Coordinates:
 - Units are millimetres.
 - Do not put the model on the bed yourself. The engine moves the lowest point to `z = 0` on export.
 - Write triangles, not indexed geometry. Shared vertices are welded by the engine (to 0.001 mm) when it smooths normals and finds parts.
+
+Split a surface into several entries when part of it should be painted on its own (the Ghost Builder puts the eyes and mouth in a `face` entry). Give the entries the same `smoothGroup` so the lighting has no seam where they meet. The part list shows each entry's parts separately.
 
 Build from `params` only. Anything the model depends on should be a parameter or part of the config closure, so the same inputs always give the same mesh.
 
@@ -119,6 +122,8 @@ The panel has two tabs. Only one is shown at a time.
 
 **Parametric** shows presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
 
+Placement tools belong to the Parametric tab. In the Color tab the engine does not call `onHover` or `onPick`, clears any preview, and uses a pointer cursor (a crosshair in the Parametric tab when the generator has `onPick`). A generator does not need to handle this itself.
+
 **Color tool** shows the palette, a custom color picker, and the list of parts. Colors appear only in this tab. Click the model to paint the part under the cursor, or click a part in the list.
 
 ### How parts are found
@@ -126,7 +131,7 @@ The panel has two tabs. Only one is shown at a time.
 The engine splits each mesh into parts, so the user can paint a whole body, a detail, or a stamp in one click:
 
 1. Two triangles that share an edge join the same part, unless the surface turns more than **50°** across that edge.
-2. Parts with fewer than **60 triangles** are merged into the neighboring part they touch most. This stops jagged cut-out faces from becoming single-triangle parts.
+2. Parts with fewer than **200 triangles** are merged into the neighboring part they touch most. This stops jagged cut-out faces from becoming single-triangle parts.
 3. Each mesh is treated separately, so a stamp sitting on the body is its own part even when it overlaps it.
 
 The largest part of a mesh is named by `partNames`. The others are numbered `Part 2`, `Part 3`, and so on. Every label shows its triangle count.
@@ -188,6 +193,7 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 | `mm-group` / `mm-group-title` | A labelled section. |
 | `mm-note` | Small explanatory text. |
 | `mm-chips` / `mm-chip` | A row of toggle chips. Set `aria-pressed="true"` on the active one. |
+| `mm-icon-chips` / `mm-icon-chip` | A row of picture buttons: an inline `<svg>` (filled with the accent color) above a short label. Use these when choices are shapes. Set `aria-pressed="true"` on the active one. |
 | `mm-btn` (with `mm-btn--green`, `--amber`, `--solid`, `--block`) | Buttons. |
 | `mm-export-row` | Two equal columns. |
 

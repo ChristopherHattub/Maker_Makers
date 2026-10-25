@@ -460,3 +460,36 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
   .mm-gen-actions { width: 100%; }
   .mm-gen-actions .mm-btn { flex: 1 1 100%; }
 }
+
+/* Icon buttons: a row of pictures with a label, for example the stamp shapes. */
+.mm-icon-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.mm-icon-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.55rem 0.2rem;
+  border: 1px solid var(--bp-cyan-dim);
+  background: rgba(6, 21, 45, 0.7);
+  color: var(--bp-white);
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mm-icon-chip svg {
+  width: 36px;
+  height: 36px;
+  fill: var(--bp-cyan);
+}
+
+.mm-icon-chip:hover { border-color: var(--bp-cyan); }
+.mm-icon-chip[aria-pressed="true"] { border-color: var(--bp-cyan); background: rgba(0, 229, 255, 0.18); }

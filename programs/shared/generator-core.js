@@ -17,7 +17,7 @@
   var NEUTRAL_MODEL_COLOR = '#cbd5e1'; // Parametric tab: neutral matte, no paint colors
   var CAVITY_SHADE = 0.82;             // How dark a fully shaded vertex gets (0..1)
   var CREASE_COS = Math.cos(50 * Math.PI / 180); // Faces turning more than 50 degrees are separate parts
-  var MIN_PART_TRIS = 60;              // Smaller islands merge into the neighbor they touch most
+  var MIN_PART_TRIS = 200;             // Smaller islands merge into the neighbor they touch most
   var PAINT_MATCH_MM = 40;             // Max distance to re-attach a saved paint after a rebuild
   var PALETTE = cfg.palette || [{ name: 'Bone White', color: '#f1f5f9' }];
   var DEFAULT_COLOR = cfg.defaultColor || PALETTE[0].color;
@@ -383,10 +383,11 @@
     modelData = output;
 
     modelMeshes.forEach(function (m) { modelGroup.remove(m); m.geometry.dispose(); });
-    modelMeshes = output.map(function (entry) {
+    var normalsFor = groupedNormals(output);
+    modelMeshes = output.map(function (entry, entryIndex) {
       var geometry = new T.BufferGeometry();
       geometry.setAttribute('position', new T.BufferAttribute(entry.positions, 3));
-      geometry.setAttribute('normal', new T.BufferAttribute(smoothNormals(entry.positions), 3));
+      geometry.setAttribute('normal', new T.BufferAttribute(normalsFor[entryIndex], 3));
       geometry.setAttribute('color', new T.BufferAttribute(new Float32Array(entry.positions.length), 3));
       geometry.computeBoundingSphere();
       var mesh = new T.Mesh(geometry, modelMaterial);
@@ -402,6 +403,35 @@
     refreshColors();
     renderPartList();
     updateStats();
+  }
+
+  // Meshes with the same `smoothGroup` are shaded as one surface, so splitting a surface into
+  // two entries (for example to paint a region on its own) leaves no seam in the lighting.
+  function groupedNormals(entries) {
+    var groups = {};
+    entries.forEach(function (entry, i) {
+      var key = entry.smoothGroup || ('mesh-' + i);
+      (groups[key] = groups[key] || []).push(i);
+    });
+    var normalsFor = [];
+    Object.keys(groups).forEach(function (key) {
+      var members = groups[key];
+      var total = 0;
+      members.forEach(function (i) { total += entries[i].positions.length; });
+      var merged = new Float32Array(total);
+      var offset = 0;
+      members.forEach(function (i) {
+        merged.set(entries[i].positions, offset);
+        offset += entries[i].positions.length;
+      });
+      var normals = smoothNormals(merged);
+      offset = 0;
+      members.forEach(function (i) {
+        normalsFor[i] = normals.slice(offset, offset + entries[i].positions.length);
+        offset += entries[i].positions.length;
+      });
+    });
+    return normalsFor;
   }
 
   // Smooth vertex normals for non-indexed triangles: vertices at the same position share a normal.
@@ -438,13 +468,16 @@
     return [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
   }
 
-  // Returns one id per vertex. Vertices at the same position (to 0.001 mm) share an id.
+  // Returns one id per vertex. Vertices at the same position (to 0.01 mm) share an id.
   function weldIds(positions) {
     var count = positions.length / 3;
     var ids = new Uint32Array(count);
     var map = new Map();
     for (var i = 0; i < count; i++) {
-      var key = Math.round(positions[i * 3] * 1000) + ',' + Math.round(positions[i * 3 + 1] * 1000) + ',' + Math.round(positions[i * 3 + 2] * 1000);
+      // Pack three 16-bit grid coordinates (0.01 mm) into one number: much faster than a string key.
+      var key = (Math.round(positions[i * 3] * 100) + 32768) * 4294967296 +
+        (Math.round(positions[i * 3 + 1] * 100) + 32768) * 65536 +
+        (Math.round(positions[i * 3 + 2] * 100) + 32768);
       var id = map.get(key);
       if (id === undefined) {
         id = map.size;
@@ -732,7 +765,7 @@
     var dx = e.clientX - downAt.x;
     var dy = e.clientY - downAt.y;
     if (dx * dx + dy * dy > 36) dragged = true;
-    if (typeof cfg.onHover === 'function') {
+    if (activeTab !== 'color' && typeof cfg.onHover === 'function') {
       cfg.onHover(pickAt(e.clientX, e.clientY), api);
     }
   });
@@ -758,6 +791,12 @@
   // ---------------------------------------------------------------------------
   var activeTab = 'model';
 
+  // Crosshair only where a click places something. Painting uses a pointer, plain orbiting a grab hand.
+  function updateCursor() {
+    var cursor = activeTab === 'color' ? 'pointer' : (typeof cfg.onPick === 'function' ? 'crosshair' : 'grab');
+    renderer.domElement.style.cursor = cursor;
+  }
+
   function setTab(tab) {
     activeTab = tab;
     var isColor = tab === 'color';
@@ -768,6 +807,9 @@
     $('mm-hint').textContent = isColor
       ? 'Click a part to paint it'
       : 'Drag or touch-swipe to orbit 3D mesh';
+    // Placement tools (stamps) belong to the Parametric tab: clear their preview and cursor here.
+    if (isColor && typeof cfg.onHover === 'function') cfg.onHover(null, api);
+    updateCursor();
     if (isColor) ensureParts();
     refreshColors();
     renderPartList();
@@ -1048,6 +1090,7 @@
   function init() {
     renderParametricPanel();
     renderColorPanel();
+    updateCursor();
     handleResize();
     rebuild();
     centerCamera('front');

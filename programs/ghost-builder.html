@@ -19,9 +19,10 @@
       // Topology: one closed manifold surface, bottom pole -> flat base rings ->
       // vertical body and dome rings -> top pole. Built once.
       // -----------------------------------------------------------------------
-      var R_SEG = 96;      // Angular segments around the perimeter
-      var B_RINGS = 8;     // Concentric rings on the flat bottom
-      var H_SEG = 76;      // Vertical rings from the base to the dome apex
+      var R_SEG = 160;     // Angular segments around the perimeter
+      var B_RINGS = 3;     // Concentric rings on the flat bottom
+      var H_SEG = 110;     // Vertical rings from the base to the dome apex
+      var FRONT_BIAS = 0.5; // 0..1. Packs the angular segments toward the face so the eyes and mouth are smooth
       var TOTAL_RINGS = B_RINGS + H_SEG;
       var TOPOLOGY = buildTopology();
 
@@ -55,6 +56,12 @@
       function smoothstep(edge0, edge1, x) {
         var t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
         return t * t * (3 - 2 * t);
+      }
+
+      // Quintic ease: zero slope and curvature at both ends, so cut-outs blend into the surface with no ridge.
+      function smootherstep(edge0, edge1, x) {
+        var t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+        return t * t * t * (t * (t * 6 - 15) + 10);
       }
 
       function baseProfileRadius(u) {
@@ -93,10 +100,10 @@
           var rx = 2.95;
           var ry = 4.15;
           var dist = Math.sqrt((lx * lx) / (rx * rx) + (ly * ly) / (ry * ry));
-          if (dist < 1.22) {
-            var factor = smoothstep(1.22, 0.55, dist);
+          if (dist < 1.3) {
+            var factor = smootherstep(1.3, 0.3, dist);
             totalDepth = Math.max(totalDepth, 3.8 * factor);
-            darkness = Math.max(darkness, smoothstep(1.05, 0.72, dist));
+            darkness = Math.max(darkness, smootherstep(1.3, 0.45, dist));
           }
         }
 
@@ -108,10 +115,10 @@
         var normY = Math.abs(faceY - mouthCenterY) / mouthRy;
         var exponent = 2.0 + (1.0 - tMouth) * 1.6;
         var mDist = Math.pow(Math.pow(normX, exponent) + Math.pow(normY, exponent), 1.0 / exponent);
-        if (mDist < 1.22) {
-          var mf = smoothstep(1.22, 0.55, mDist);
+        if (mDist < 1.3) {
+          var mf = smootherstep(1.3, 0.3, mDist);
           totalDepth = Math.max(totalDepth, (2.8 + 1.4 * tMouth) * mf);
-          darkness = Math.max(darkness, smoothstep(1.05, 0.72, mDist));
+          darkness = Math.max(darkness, smootherstep(1.3, 0.45, mDist));
         }
         return { depth: totalDepth, darkness: darkness };
       }
@@ -121,6 +128,7 @@
         var vertexCount = 2 + TOTAL_RINGS * R_SEG;
         var pos = new Float32Array(vertexCount * 3);
         var shade = new Float32Array(vertexCount);
+        var hollow = new Float32Array(vertexCount);
 
         var heightScale = p.height;
         var foldAmp = p.folds;
@@ -140,7 +148,9 @@
 
           for (var j = 0; j < R_SEG; j++) {
             var vIdx = 1 + r * R_SEG + j;
-            var theta = (j / R_SEG) * Math.PI * 2;
+            // theta = s - bias * sin(s): angle steps are smallest at the front (s = 0)
+            var sAngle = (j / R_SEG) * Math.PI * 2;
+            var theta = sAngle - FRONT_BIAS * Math.sin(sAngle);
 
             var primaryWave = Math.sin(rippleFreq * theta);
             var secondaryWave = 0.22 * Math.cos((rippleFreq * 2) * theta + 0.6);
@@ -181,6 +191,7 @@
             pos[vIdx * 3 + 1] = vy;
             pos[vIdx * 3 + 2] = vz;
             shade[vIdx] = hollowDarkness;
+            hollow[vIdx] = hollowDepth;
           }
         }
 
@@ -189,49 +200,70 @@
         pos[topIdx * 3 + 1] = heightScale;
         pos[topIdx * 3 + 2] = swoopMm;
 
-        var out = new Float32Array(TOPOLOGY.length * 3);
-        var outShade = new Float32Array(TOPOLOGY.length);
-        for (var i = 0; i < TOPOLOGY.length; i++) {
-          var v = TOPOLOGY[i];
-          out[i * 3] = pos[v * 3];
-          out[i * 3 + 1] = pos[v * 3 + 1];
-          out[i * 3 + 2] = pos[v * 3 + 2];
-          outShade[i] = shade[v];
+        // Triangles touching an eye or the mouth go in their own mesh, so the Color tool can paint
+        // the cut-outs separately even though their walls are smooth.
+        var triTotal = TOPOLOGY.length / 3;
+        var isFace = new Uint8Array(triTotal);
+        var faceCount = 0;
+        for (var t = 0; t < triTotal; t++) {
+          if (hollow[TOPOLOGY[t * 3]] > 0.02 || hollow[TOPOLOGY[t * 3 + 1]] > 0.02 || hollow[TOPOLOGY[t * 3 + 2]] > 0.02) {
+            isFace[t] = 1;
+            faceCount++;
+          }
         }
-        return { name: 'body', positions: out, shade: outShade };
+
+        function pack(name, wanted, count) {
+          var out = new Float32Array(count * 9);
+          var outShade = new Float32Array(count * 3);
+          var n = 0;
+          for (var tri = 0; tri < triTotal; tri++) {
+            if (isFace[tri] !== wanted) continue;
+            for (var k = 0; k < 3; k++) {
+              var v = TOPOLOGY[tri * 3 + k];
+              out[n * 3] = pos[v * 3];
+              out[n * 3 + 1] = pos[v * 3 + 1];
+              out[n * 3 + 2] = pos[v * 3 + 2];
+              outShade[n] = shade[v];
+              n++;
+            }
+          }
+          return { name: name, smoothGroup: 'ghost', positions: out, shade: outShade };
+        }
+
+        var meshes = [pack('body', 0, triTotal - faceCount)];
+        if (faceCount) meshes.push(pack('face', 1, faceCount));
+        return meshes;
       }
 
       // -----------------------------------------------------------------------
       // Stamps: embossed 2D shapes on the body surface
       // -----------------------------------------------------------------------
-      var STAMP_NAMES = { star: 'Star', moon: 'Crescent moon', bat: 'Bat', bolt: 'Lightning bolt' };
-      var stamps = []; // { type, size, point: [x, y, z], normal: [x, y, z] }
+      var STAMP_NAMES = { star: 'Star', moon: 'Moon', bat: 'Bat', bolt: 'Bolt' };
+      var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
       var stampType = 'star';
 
-      function stampShape(type, size) {
-        var shape = new window.THREE.Shape();
-        var r = size * 0.5;
+      function isGhostSurface(name) { return name === 'body' || name === 'face'; }
+
+      // Stamp outline as 2D points, radius r. Used for the 3D stamp and for the picture on its button.
+      function stampOutline(type, r) {
+        var pts = [];
         var i;
         if (type === 'star') {
           for (i = 0; i < 10; i++) {
             var angle = (i * Math.PI) / 5 + Math.PI / 2;
             var rad = i % 2 === 0 ? r : r * 0.44;
-            if (i === 0) shape.moveTo(Math.cos(angle) * rad, Math.sin(angle) * rad);
-            else shape.lineTo(Math.cos(angle) * rad, Math.sin(angle) * rad);
+            pts.push([Math.cos(angle) * rad, Math.sin(angle) * rad]);
           }
-          shape.closePath();
         } else if (type === 'moon') {
           var segs = 28;
           for (i = 0; i <= segs; i++) {
             var ang = -Math.PI * 0.72 + (i / segs) * (Math.PI * 1.44);
-            if (i === 0) shape.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
-            else shape.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
+            pts.push([Math.cos(ang) * r, Math.sin(ang) * r]);
           }
           for (i = segs; i >= 0; i--) {
             var ang2 = -Math.PI * 0.54 + (i / segs) * (Math.PI * 1.08);
-            shape.lineTo(r * 0.38 + Math.cos(ang2) * (r * 0.78), Math.sin(ang2) * (r * 0.82));
+            pts.push([r * 0.38 + Math.cos(ang2) * (r * 0.78), Math.sin(ang2) * (r * 0.82)]);
           }
-          shape.closePath();
         } else {
           var coords = type === 'bat' ? [
             [0.0, 0.32], [0.12, 0.56], [0.20, 0.28], [0.52, 0.50], [0.82, 0.42], [1.00, 0.08], [0.74, -0.05],
@@ -240,13 +272,25 @@
           ] : [
             [0.18, 0.95], [-0.52, 0.06], [-0.04, 0.06], [-0.26, -0.95], [0.54, -0.04], [0.06, -0.04]
           ];
-          coords.forEach(function (pt, idx) {
-            if (idx === 0) shape.moveTo(pt[0] * r, pt[1] * r);
-            else shape.lineTo(pt[0] * r, pt[1] * r);
-          });
-          shape.closePath();
+          coords.forEach(function (pt) { pts.push([pt[0] * r, pt[1] * r]); });
         }
+        return pts;
+      }
+
+      function stampShape(type, size) {
+        var shape = new window.THREE.Shape();
+        stampOutline(type, size * 0.5).forEach(function (pt, i) {
+          if (i === 0) shape.moveTo(pt[0], pt[1]);
+          else shape.lineTo(pt[0], pt[1]);
+        });
+        shape.closePath();
         return shape;
+      }
+
+      // Small inline picture of a stamp for its button. SVG y points down, so flip y.
+      function stampIcon(type) {
+        var points = stampOutline(type, 1).map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ');
+        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><polygon points="' + points + '"/></svg>';
       }
 
       // Stamp mesh in model space. It sits 1.8 mm into the surface and 1.5 mm proud of it.
@@ -255,6 +299,7 @@
         var geo = new THREE.ExtrudeGeometry(stampShape(stamp.type, stamp.size), {
           depth: 3.3, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.30, bevelSegments: 2, curveSegments: 16
         });
+        geo.rotateZ(((stamp.rotation || 0) * Math.PI) / 180); // spin around the surface normal
         geo.translate(0, 0, -1.8);
 
         var normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
@@ -289,7 +334,7 @@
           { name: 'Shadow Black', color: '#334155' },
           { name: 'Sunny Yellow', color: '#fde047' }
         ],
-        partNames: { body: 'Ghost body', detail: 'Stamp' },
+        partNames: { body: 'Ghost body', face: 'Eyes & mouth', detail: 'Stamp' },
 
         parameters: [
           { group: 'Ghost body & sheet folds', key: 'height', label: 'Ghost height', unit: ' mm', min: 55, max: 125, step: 1, value: 85 },
@@ -302,14 +347,15 @@
             format: function (v) { return (v > 0 ? '+' : '') + v + '°'; } },
           { group: 'Face', key: 'mouthSize', label: 'Mouth size (line ↔ open "O")', unit: '%', min: 0, max: 100, step: 2, value: 50,
             format: function (v) { return v === 0 ? 'Flat line' : v + '% open "O"'; } },
-          { group: 'Stamps', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 }
+          { group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
+          { group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
         ],
 
         presets: [
           { label: 'Friendly ghost', values: { height: 85, folds: 4.5, ripples: 6, swoop: 3, twist: 0, armReach: 8, eyeSlant: -10, mouthSize: 56 } },
           { label: 'Spooky cyclone', values: { height: 102, folds: 7.5, ripples: 9, swoop: 8, twist: 65, armReach: 11, eyeSlant: 22, mouthSize: 84 } },
           { label: 'Surprised swooper', values: { height: 78, folds: 6, ripples: 5, swoop: 15, twist: -25, armReach: 13, eyeSlant: 14, mouthSize: 40 } },
-          { label: 'Default ghost', values: { height: 85, folds: 4.5, ripples: 6, swoop: 4, twist: 0, armReach: 7, eyeSlant: 0, mouthSize: 50, stampSize: 12 } }
+          { label: 'Default ghost', values: { height: 85, folds: 4.5, ripples: 6, swoop: 4, twist: 0, armReach: 7, eyeSlant: 0, mouthSize: 50, stampSize: 12, stampRotation: 0 } }
         ],
 
         // Generator-specific panel: stamp shape choice and undo/clear.
@@ -324,18 +370,19 @@
             return node;
           };
 
-          container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamps (click the ghost to place)'));
-          var chips = h('div', { class: 'mm-chips' });
+          container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamp shape (click the ghost to place)'));
+          var chips = h('div', { class: 'mm-icon-chips' });
           var shapeButtons = {};
           ['star', 'moon', 'bat', 'bolt'].forEach(function (type) {
             var btn = h('button', {
-              class: 'mm-chip', type: 'button', 'aria-pressed': String(type === stampType),
+              class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType),
               onclick: function () {
                 stampType = type;
                 Object.keys(shapeButtons).forEach(function (k) { shapeButtons[k].setAttribute('aria-pressed', String(k === type)); });
                 api.toast('Selected ' + STAMP_NAMES[type] + ' stamp. Click the ghost to place it.');
               }
-            }, STAMP_NAMES[type]);
+            });
+            btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
             shapeButtons[type] = btn;
             chips.appendChild(btn);
           });
@@ -370,17 +417,16 @@
         },
 
         build: function (p, api) {
-          var meshes = [buildBody(p)];
+          var meshes = buildBody(p);
           stamps.forEach(function (stamp) {
-            var size = p.stampSize;
-            meshes.push({ name: 'detail', positions: stampPositions({ type: stamp.type, size: size, point: stamp.point, normal: stamp.normal }) });
+            meshes.push({ name: 'detail', positions: stampPositions(stamp) });
           });
           if (this._refresh) this._refresh();
           return meshes;
         },
 
         onHover: function (hit, api) {
-          if (!hit || hit.meshName !== 'body' || hit.point.y <= 4) {
+          if (!hit || !isGhostSurface(hit.meshName) || hit.point.y <= 4) {
             api.setPreview(null);
             return;
           }
@@ -388,6 +434,7 @@
             positions: stampPositions({
               type: stampType,
               size: api.params.stampSize,
+              rotation: api.params.stampRotation,
               point: hit.point.toArray(),
               normal: hit.normal.toArray()
             })
@@ -395,12 +442,12 @@
         },
 
         onPick: function (hit, api) {
-          if (hit.meshName !== 'body') return;
+          if (!isGhostSurface(hit.meshName)) return;
           if (hit.point.y < 4) {
             api.toast('Tip: stamp higher up on the ghost body!');
             return;
           }
-          stamps.push({ type: stampType, size: api.params.stampSize, point: hit.point.toArray(), normal: hit.normal.toArray() });
+          stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
           api.rebuild();
           api.toast('Stamped ' + STAMP_NAMES[stampType] + ' (+1.5 mm)');
         }
