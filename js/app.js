@@ -255,6 +255,30 @@ function initLeafletMap() {
   markersLayer = L.layerGroup().addTo(leafletMap);
   candidatesLayer = L.layerGroup();
   renderPrinterLocations(PUBLIC_PRINTERS);
+  centerMapOnUser();
+}
+
+// On first open, zoom to the visitor's position if they allow it. If permission
+// is denied or the position is unavailable, the North America view stays put.
+function centerMapOnUser() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      placeUserMarker(latitude, longitude, 'YOUR LOCATION');
+      leafletMap.flyTo([latitude, longitude], 11, { duration: 1.2 });
+      document.getElementById('map-status-tag').textContent = 'SECTOR: YOUR LOCATION (VERIFIED LISTINGS)';
+    },
+    () => {},
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+  );
+}
+
+function placeUserMarker(lat, lng, label) {
+  if (userMarker) leafletMap.removeLayer(userMarker);
+  userMarker = L.marker([lat, lng], {
+    icon: L.divIcon({ className: '', html: '<div class="bp-user-dot"></div>', iconSize: [18, 18] })
+  }).addTo(leafletMap).bindPopup(`<div class="bp-popup"><h3>SCAN ORIGIN</h3><p>${label}</p></div>`);
 }
 
 // Popup for one location. Entries with verified === false get an unverified notice.
@@ -406,10 +430,7 @@ async function scanGlobalPrintersNear(lat, lng, label) {
   if (!leafletMap) initLeafletMap();
   leafletMap.flyTo([lat, lng], 13, { duration: 1 });
 
-  if (userMarker) leafletMap.removeLayer(userMarker);
-  userMarker = L.marker([lat, lng], {
-    icon: L.divIcon({ className: '', html: '<div class="bp-user-dot"></div>', iconSize: [18, 18] })
-  }).addTo(leafletMap).bindPopup(`<div class="bp-popup"><h3>SCAN ORIGIN</h3><p>${label}</p></div>`);
+  placeUserMarker(lat, lng, label);
 
   let combinedResults = PUBLIC_PRINTERS.filter(loc => Math.hypot(lat - loc.lat, lng - loc.lng) < 0.45);
 
