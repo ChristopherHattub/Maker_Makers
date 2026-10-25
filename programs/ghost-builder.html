@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-001 Ghost Builder // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Ghost Builder: parameters, presets, palette and geometry. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Topology: one closed manifold surface, bottom pole -> flat base rings ->
+      // vertical body and dome rings -> top pole. Built once.
+      // -----------------------------------------------------------------------
+      var R_SEG = 96;      // Angular segments around the perimeter
+      var B_RINGS = 8;     // Concentric rings on the flat bottom
+      var H_SEG = 76;      // Vertical rings from the base to the dome apex
+      var TOTAL_RINGS = B_RINGS + H_SEG;
+      var TOPOLOGY = buildTopology();
+
+      function buildTopology() {
+        var indices = [];
+        var bottomPoleIdx = 0;
+        var topPoleIdx = 1 + TOTAL_RINGS * R_SEG;
+        function ringStart(r) { return 1 + r * R_SEG; }
+
+        for (var j = 0; j < R_SEG; j++) {
+          var nextJ = (j + 1) % R_SEG;
+          indices.push(bottomPoleIdx, ringStart(0) + nextJ, ringStart(0) + j);
+        }
+        for (var r = 0; r < TOTAL_RINGS - 1; r++) {
+          var r0 = ringStart(r);
+          var r1 = ringStart(r + 1);
+          for (var k = 0; k < R_SEG; k++) {
+            var nk = (k + 1) % R_SEG;
+            indices.push(r0 + k, r0 + nk, r1 + nk);
+            indices.push(r0 + k, r1 + nk, r1 + k);
+          }
+        }
+        var lastRing = ringStart(TOTAL_RINGS - 1);
+        for (var m = 0; m < R_SEG; m++) {
+          var nm = (m + 1) % R_SEG;
+          indices.push(lastRing + m, lastRing + nm, topPoleIdx);
+        }
+        return new Uint32Array(indices);
+      }
+
+      function smoothstep(edge0, edge1, x) {
+        var t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
+      }
+
+      function baseProfileRadius(u) {
+        var baseR = 26.0;     // 52 mm base diameter
+        var shoulderR = 17.5;
+        var domeStart = 0.66;
+        if (u <= domeStart) {
+          var t = u / domeStart;
+          return baseR + (shoulderR - baseR) * (0.75 * t + 0.25 * t * t);
+        }
+        var td = (u - domeStart) / (1.0 - domeStart);
+        return shoulderR * Math.cos(td * (Math.PI * 0.5));
+      }
+
+      // Eyes and mouth as hollow cut-outs on the front face. Returns cut depth and darkness.
+      function faceHollow(theta, u, heightScale, eyeSlantDeg, mouthSizePct) {
+        if (Math.cos(theta) <= 0.15) return { depth: 0, darkness: 0 };
+
+        var faceRadius = baseProfileRadius(u);
+        var faceX = faceRadius * Math.sin(theta);
+        var faceY = u * heightScale;
+        var totalDepth = 0;
+        var darkness = 0;
+
+        var eyeCenterY = 0.70 * heightScale;
+        var eyeSpacingX = 6.2;
+        var slantRad = (eyeSlantDeg * Math.PI) / 180;
+        for (var side = -1; side <= 1; side += 2) {
+          var dx = faceX - side * eyeSpacingX;
+          var dy = faceY - eyeCenterY;
+          var rotAngle = -side * slantRad;
+          var cosA = Math.cos(rotAngle);
+          var sinA = Math.sin(rotAngle);
+          var lx = dx * cosA - dy * sinA;
+          var ly = dx * sinA + dy * cosA;
+          var rx = 2.95;
+          var ry = 4.15;
+          var dist = Math.sqrt((lx * lx) / (rx * rx) + (ly * ly) / (ry * ry));
+          if (dist < 1.22) {
+            var factor = smoothstep(1.22, 0.55, dist);
+            totalDepth = Math.max(totalDepth, 3.8 * factor);
+            darkness = Math.max(darkness, smoothstep(1.05, 0.72, dist));
+          }
+        }
+
+        var tMouth = mouthSizePct / 100.0;
+        var mouthCenterY = 0.53 * heightScale;
+        var mouthRx = 5.8 - 0.8 * tMouth;
+        var mouthRy = 1.15 + 5.0 * tMouth;
+        var normX = Math.abs(faceX) / mouthRx;
+        var normY = Math.abs(faceY - mouthCenterY) / mouthRy;
+        var exponent = 2.0 + (1.0 - tMouth) * 1.6;
+        var mDist = Math.pow(Math.pow(normX, exponent) + Math.pow(normY, exponent), 1.0 / exponent);
+        if (mDist < 1.22) {
+          var mf = smoothstep(1.22, 0.55, mDist);
+          totalDepth = Math.max(totalDepth, (2.8 + 1.4 * tMouth) * mf);
+          darkness = Math.max(darkness, smoothstep(1.05, 0.72, mDist));
+        }
+        return { depth: totalDepth, darkness: darkness };
+      }
+
+      // Body positions and per-vertex shade, expanded to one triangle list.
+      function buildBody(p) {
+        var vertexCount = 2 + TOTAL_RINGS * R_SEG;
+        var pos = new Float32Array(vertexCount * 3);
+        var shade = new Float32Array(vertexCount);
+
+        var heightScale = p.height;
+        var foldAmp = p.folds;
+        var rippleFreq = Math.round(p.ripples);
+        var swoopMm = p.swoop;
+        var twistRad = (p.twist * Math.PI) / 180;
+        var armReachMm = p.armReach;
+
+        for (var r = 0; r < TOTAL_RINGS; r++) {
+          var isBottomDisc = r < B_RINGS;
+          var discFrac = isBottomDisc ? (r + 1) / B_RINGS : 1.0;
+          var u = isBottomDisc ? 0.0 : (r - (B_RINGS - 1)) / H_SEG;
+          var profileR = baseProfileRadius(u);
+          var foldEnv = Math.pow(Math.max(0, 1.0 - u / 0.68), 1.55);
+          var localTwist = twistRad * Math.pow(u, 1.15);
+          var localSwoopZ = swoopMm * Math.pow(u, 1.85);
+
+          for (var j = 0; j < R_SEG; j++) {
+            var vIdx = 1 + r * R_SEG + j;
+            var theta = (j / R_SEG) * Math.PI * 2;
+
+            var primaryWave = Math.sin(rippleFreq * theta);
+            var secondaryWave = 0.22 * Math.cos((rippleFreq * 2) * theta + 0.6);
+            var waveOffset = foldAmp * (primaryWave + secondaryWave) * foldEnv;
+
+            // Upward-angled arm stubs on both sides
+            var armRadial = 0;
+            var armLiftY = 0;
+            if (!isBottomDisc && armReachMm > 0.01) {
+              var sinAbs = Math.abs(Math.sin(theta));
+              var sideFactor = Math.pow(Math.max(0, (sinAbs - 0.72) / 0.28), 2.1);
+              if (sideFactor > 0) {
+                var armU = (u - 0.34) / 0.28;
+                if (armU > 0 && armU < 1) {
+                  var vEnv = Math.sin(armU * Math.PI) * smoothstep(0.0, 0.38, armU);
+                  armRadial = armReachMm * sideFactor * vEnv;
+                  armLiftY = armRadial * (0.45 + 0.45 * armU);
+                }
+              }
+            }
+
+            var hollowDepth = 0;
+            var hollowDarkness = 0;
+            if (!isBottomDisc && u > 0.40 && u < 0.86) {
+              var face = faceHollow(theta, u, heightScale, p.eyeSlant, p.mouthSize);
+              hollowDepth = face.depth;
+              hollowDarkness = face.darkness;
+            }
+
+            var effectiveR = Math.max(0.4, (profileR + waveOffset + armRadial - hollowDepth) * discFrac);
+            var twistedTheta = theta + localTwist;
+            var vx = effectiveR * Math.sin(twistedTheta);
+            var vz = effectiveR * Math.cos(twistedTheta) + localSwoopZ * discFrac;
+            var vy = isBottomDisc ? 0.0 : (u * heightScale + armLiftY);
+            if (vy < 0) vy = 0;
+
+            pos[vIdx * 3] = vx;
+            pos[vIdx * 3 + 1] = vy;
+            pos[vIdx * 3 + 2] = vz;
+            shade[vIdx] = hollowDarkness;
+          }
+        }
+
+        // Top apex pole
+        var topIdx = 1 + TOTAL_RINGS * R_SEG;
+        pos[topIdx * 3 + 1] = heightScale;
+        pos[topIdx * 3 + 2] = swoopMm;
+
+        var out = new Float32Array(TOPOLOGY.length * 3);
+        var outShade = new Float32Array(TOPOLOGY.length);
+        for (var i = 0; i < TOPOLOGY.length; i++) {
+          var v = TOPOLOGY[i];
+          out[i * 3] = pos[v * 3];
+          out[i * 3 + 1] = pos[v * 3 + 1];
+          out[i * 3 + 2] = pos[v * 3 + 2];
+          outShade[i] = shade[v];
+        }
+        return { name: 'body', positions: out, shade: outShade };
+      }
+
+      // -----------------------------------------------------------------------
+      // Stamps: embossed 2D shapes on the body surface
+      // -----------------------------------------------------------------------
+      var STAMP_NAMES = { star: 'Star', moon: 'Crescent moon', bat: 'Bat', bolt: 'Lightning bolt' };
+      var stamps = []; // { type, size, point: [x, y, z], normal: [x, y, z] }
+      var stampType = 'star';
+
+      function stampShape(type, size) {
+        var shape = new window.THREE.Shape();
+        var r = size * 0.5;
+        var i;
+        if (type === 'star') {
+          for (i = 0; i < 10; i++) {
+            var angle = (i * Math.PI) / 5 + Math.PI / 2;
+            var rad = i % 2 === 0 ? r : r * 0.44;
+            if (i === 0) shape.moveTo(Math.cos(angle) * rad, Math.sin(angle) * rad);
+            else shape.lineTo(Math.cos(angle) * rad, Math.sin(angle) * rad);
+          }
+          shape.closePath();
+        } else if (type === 'moon') {
+          var segs = 28;
+          for (i = 0; i <= segs; i++) {
+            var ang = -Math.PI * 0.72 + (i / segs) * (Math.PI * 1.44);
+            if (i === 0) shape.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
+            else shape.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
+          }
+          for (i = segs; i >= 0; i--) {
+            var ang2 = -Math.PI * 0.54 + (i / segs) * (Math.PI * 1.08);
+            shape.lineTo(r * 0.38 + Math.cos(ang2) * (r * 0.78), Math.sin(ang2) * (r * 0.82));
+          }
+          shape.closePath();
+        } else {
+          var coords = type === 'bat' ? [
+            [0.0, 0.32], [0.12, 0.56], [0.20, 0.28], [0.52, 0.50], [0.82, 0.42], [1.00, 0.08], [0.74, -0.05],
+            [0.58, -0.32], [0.36, -0.18], [0.20, -0.44], [0.0, -0.58], [-0.20, -0.44], [-0.36, -0.18],
+            [-0.58, -0.32], [-0.74, -0.05], [-1.00, 0.08], [-0.82, 0.42], [-0.52, 0.50], [-0.20, 0.28], [-0.12, 0.56]
+          ] : [
+            [0.18, 0.95], [-0.52, 0.06], [-0.04, 0.06], [-0.26, -0.95], [0.54, -0.04], [0.06, -0.04]
+          ];
+          coords.forEach(function (pt, idx) {
+            if (idx === 0) shape.moveTo(pt[0] * r, pt[1] * r);
+            else shape.lineTo(pt[0] * r, pt[1] * r);
+          });
+          shape.closePath();
+        }
+        return shape;
+      }
+
+      // Stamp mesh in model space. It sits 1.8 mm into the surface and 1.5 mm proud of it.
+      function stampPositions(stamp) {
+        var THREE = window.THREE;
+        var geo = new THREE.ExtrudeGeometry(stampShape(stamp.type, stamp.size), {
+          depth: 3.3, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.30, bevelSegments: 2, curveSegments: 16
+        });
+        geo.translate(0, 0, -1.8);
+
+        var normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
+        var upVec = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+        var tangentX = new THREE.Vector3().crossVectors(upVec, normal).normalize();
+        var tangentY = new THREE.Vector3().crossVectors(normal, tangentX).normalize();
+        var quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangentX, tangentY, normal));
+        var matrix = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(stamp.point), quat, new THREE.Vector3(1, 1, 1));
+
+        var flat = geo.toNonIndexed();
+        flat.applyMatrix4(matrix);
+        return flat.attributes.position.array.slice();
+      }
+
+      // -----------------------------------------------------------------------
+      // Generator contract
+      // -----------------------------------------------------------------------
+      window.MM_GENERATOR = {
+        code: 'MM-001',
+        category: 'SPOOKY // FIGURES',
+        title: 'Ghost Builder',
+        fileName: 'Spooky_Ghost',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#f1f5f9',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' },
+          { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' },
+          { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { body: 'Ghost body', detail: 'Stamp' },
+
+        parameters: [
+          { group: 'Ghost body & sheet folds', key: 'height', label: 'Ghost height', unit: ' mm', min: 55, max: 125, step: 1, value: 85 },
+          { group: 'Ghost body & sheet folds', key: 'folds', label: 'Spooky folds (wave depth)', unit: ' mm', min: 0, max: 10, step: 0.5, value: 4.5 },
+          { group: 'Ghost body & sheet folds', key: 'ripples', label: 'Fabric ripples (wave count)', unit: ' waves', min: 3, max: 12, step: 1, value: 6 },
+          { group: 'Ghost body & sheet folds', key: 'swoop', label: 'Swoop (forward lean)', unit: ' mm', min: -18, max: 18, step: 1, value: 4 },
+          { group: 'Ghost body & sheet folds', key: 'twist', label: 'Phantom twist (swirl)', unit: '°', min: -110, max: 110, step: 5, value: 0 },
+          { group: 'Ghost body & sheet folds', key: 'armReach', label: 'Arm reach (upward stubs)', unit: ' mm', min: 0, max: 16, step: 0.5, value: 7 },
+          { group: 'Face', key: 'eyeSlant', label: 'Eye slant (cute ↔ fierce)', unit: '°', min: -35, max: 35, step: 1, value: 0,
+            format: function (v) { return (v > 0 ? '+' : '') + v + '°'; } },
+          { group: 'Face', key: 'mouthSize', label: 'Mouth size (line ↔ open "O")', unit: '%', min: 0, max: 100, step: 2, value: 50,
+            format: function (v) { return v === 0 ? 'Flat line' : v + '% open "O"'; } },
+          { group: 'Stamps', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 }
+        ],
+
+        presets: [
+          { label: 'Friendly ghost', values: { height: 85, folds: 4.5, ripples: 6, swoop: 3, twist: 0, armReach: 8, eyeSlant: -10, mouthSize: 56 } },
+          { label: 'Spooky cyclone', values: { height: 102, folds: 7.5, ripples: 9, swoop: 8, twist: 65, armReach: 11, eyeSlant: 22, mouthSize: 84 } },
+          { label: 'Surprised swooper', values: { height: 78, folds: 6, ripples: 5, swoop: 15, twist: -25, armReach: 13, eyeSlant: 14, mouthSize: 40 } },
+          { label: 'Default ghost', values: { height: 85, folds: 4.5, ripples: 6, swoop: 4, twist: 0, armReach: 7, eyeSlant: 0, mouthSize: 50, stampSize: 12 } }
+        ],
+
+        // Generator-specific panel: stamp shape choice and undo/clear.
+        mount: function (container, api) {
+          var h = function (tag, attrs, text) {
+            var node = document.createElement(tag);
+            Object.keys(attrs || {}).forEach(function (k) {
+              if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+              else node.setAttribute(k, attrs[k]);
+            });
+            if (text) node.textContent = text;
+            return node;
+          };
+
+          container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamps (click the ghost to place)'));
+          var chips = h('div', { class: 'mm-chips' });
+          var shapeButtons = {};
+          ['star', 'moon', 'bat', 'bolt'].forEach(function (type) {
+            var btn = h('button', {
+              class: 'mm-chip', type: 'button', 'aria-pressed': String(type === stampType),
+              onclick: function () {
+                stampType = type;
+                Object.keys(shapeButtons).forEach(function (k) { shapeButtons[k].setAttribute('aria-pressed', String(k === type)); });
+                api.toast('Selected ' + STAMP_NAMES[type] + ' stamp. Click the ghost to place it.');
+              }
+            }, STAMP_NAMES[type]);
+            shapeButtons[type] = btn;
+            chips.appendChild(btn);
+          });
+          container.appendChild(chips);
+
+          var count = h('p', { class: 'mm-note' }, '0 stamps placed');
+          var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+            if (!stamps.length) return;
+            stamps.pop();
+            api.rebuild();
+            api.toast('Removed last stamp');
+          } }, 'Undo last stamp');
+          var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+            if (!stamps.length) return;
+            stamps = [];
+            api.rebuild();
+            api.toast('Cleared all stamps');
+          } }, 'Clear stamps');
+          container.appendChild(count);
+          container.appendChild(h('div', { class: 'mm-export-row' }, null));
+          container.lastChild.appendChild(undo);
+          container.lastChild.appendChild(clear);
+
+          // Keep the count in sync after every rebuild.
+          var refresh = function () {
+            count.textContent = stamps.length + (stamps.length === 1 ? ' stamp placed' : ' stamps placed');
+            undo.disabled = stamps.length === 0;
+            clear.disabled = stamps.length === 0;
+          };
+          this._refresh = refresh;
+          refresh();
+        },
+
+        build: function (p, api) {
+          var meshes = [buildBody(p)];
+          stamps.forEach(function (stamp) {
+            var size = p.stampSize;
+            meshes.push({ name: 'detail', positions: stampPositions({ type: stamp.type, size: size, point: stamp.point, normal: stamp.normal }) });
+          });
+          if (this._refresh) this._refresh();
+          return meshes;
+        },
+
+        onHover: function (hit, api) {
+          if (!hit || hit.meshName !== 'body' || hit.point.y <= 4) {
+            api.setPreview(null);
+            return;
+          }
+          api.setPreview({
+            positions: stampPositions({
+              type: stampType,
+              size: api.params.stampSize,
+              point: hit.point.toArray(),
+              normal: hit.normal.toArray()
+            })
+          });
+        },
+
+        onPick: function (hit, api) {
+          if (hit.meshName !== 'body') return;
+          if (hit.point.y < 4) {
+            api.toast('Tip: stamp higher up on the ghost body!');
+            return;
+          }
+          stamps.push({ type: stampType, size: api.params.stampSize, point: hit.point.toArray(), normal: hit.normal.toArray() });
+          api.rebuild();
+          api.toast('Stamped ' + STAMP_NAMES[stampType] + ' (+1.5 mm)');
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
