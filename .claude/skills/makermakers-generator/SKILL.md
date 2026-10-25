@@ -87,17 +87,17 @@ So, to make a feature independently paintable:
 
 ## Slot and thumbnail
 
-`js/programs.js` builds 40 blank slots with `Array.from`. Activate one by adding an `Object.assign(PROGRAMS[n - 1], {...})` block under the existing one (slot 1 = Ghost Builder is the model to follow; never edit `id`/`slot`):
+`js/programs.js` has a `GENERATORS` list; the grid builds `PROGRAMS` from it and adds rows automatically (at least 40 sockets, any slot number works). Activate a slot by appending an entry to `GENERATORS` (slot 1 = Ghost Builder is the model to follow):
 
 ```js
-// Slot 2: Honeycomb Hook.
-Object.assign(PROGRAMS[1], {
+{
+  slot: 2,
   title: 'Honeycomb Hook',
   category: 'HOOKS & WALL STORAGE',
   thumbnailUrl: 'assets/thumbnails/honeycomb-hook.svg',
   programUrl: 'programs/honeycomb-hook.html',
   description: 'One sentence of what it makes, the main knobs, and that parts can be painted and exported as .STL or .3MF.'
-});
+}
 ```
 
 - Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. `featured` defaults to true for slots 1-3 only; change deliberately.
