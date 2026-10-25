@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>MAKER MAKERS // Parametric CAD, STL Foundry & Public Printer Radar</title>
+  <!-- Leaflet Map CSS (Free & Open Source, No API Key) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- TOP BLUEPRINT BAR -->
+  <header>
+    <div class="brand-block" onclick="showSplashScreen()">
+      <div class="brand-logo"><span>MM</span></div>
+      <div class="brand-title">
+        <h1>Maker Makers</h1>
+        <p>DWG NO. MM-4010 // PARAMETRIC STL & .3MF FOUNDRY</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn" onclick="showSplashScreen()">
+        &#9638; 4x10 Grid
+      </button>
+      <button class="btn btn-green" onclick="showPrinterMapScreen()">
+        &#8982; Local 3D Printers Map
+      </button>
+      <button class="btn btn-amber" onclick="toggleIdeaModal(true)">
+        &#10010; Submit Generator Idea
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- ==================== 1. SPLASH SCREEN (ALL BLANK SLOTS) ==================== -->
+    <section id="splash-screen">
+      <div class="section-banner">
+        <h2><span>[01]</span> Featured Generator Modules</h2>
+        <span class="meta-tag">STATUS: STANDBY // MARK SLOTS FEATURED=TRUE WHEN READY</span>
+      </div>
+
+      <div class="carousel-wrapper" id="featured-carousel">
+        <div class="carousel-track" id="carousel-track"></div>
+        <div class="carousel-controls">
+          <button class="btn" onclick="moveCarousel(-1)">&#9664; PREV SLOT</button>
+          <div class="carousel-dots" id="carousel-dots"></div>
+          <button class="btn" onclick="moveCarousel(1)">NEXT SLOT &#9654;</button>
+        </div>
+      </div>
+
+      <div class="section-banner">
+        <h2><span>[02]</span> Master Machinery Bay (4 x 10 Blank Matrix)</h2>
+        <span class="meta-tag">40 EMPTY MACHINERY SOCKETS READY FOR SWAPPABLE THUMBNAILS & HTML PROGRAMS</span>
+      </div>
+
+      <div class="program-grid-4x10" id="program-grid"></div>
+    </section>
+
+    <!-- ==================== 2. PROGRAM VIEWER WORKSPACE (BLANK SHELL) ==================== -->
+    <section id="viewer-screen">
+      <div class="viewer-topbar">
+        <div>
+          <span id="viewer-code" style="color: var(--bp-cyan); font-size: 0.75rem;">SLOT-01</span>
+          <h2 id="viewer-title" style="letter-spacing: 1.5px; text-transform: uppercase;">UNASSIGNED MODULE</h2>
+        </div>
+        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+          <button class="btn btn-green" onclick="showPrinterMapScreen()">
+            &#8982; Local 3D Printers Map
+          </button>
+          <button class="btn btn-amber" id="btn-dl-html" onclick="downloadStandaloneHTML()" disabled>
+            &#11015; Download Program (.HTML)
+          </button>
+          <button class="btn" onclick="showSplashScreen()">
+            &#10006; Back to 4x10 Grid
+          </button>
+        </div>
+      </div>
+
+      <div class="viewer-workspace">
+        <div class="control-panel">
+          <div>
+            <div class="section-banner" style="margin-bottom: 0.9rem;">
+              <h2 style="font-size: 0.92rem;">Program Controls</h2>
+            </div>
+            <div class="empty-controls-placeholder">
+              <strong>[ NO GENERATOR LOADED ]</strong>
+              <p style="margin-top: 0.5rem;">
+                This slot is currently empty. When you attach an <code>.html</code> generator file to this slot, its custom sliders and parameters will appear inside the workspace.
+              </p>
+            </div>
+          </div>
+
+          <div class="export-bay">
+            <div style="font-size: 0.74rem; color: var(--bp-cyan-dim);">
+              STATUS // AWAITING MODULE UPLOAD
+            </div>
+            <div class="export-row">
+              <button class="btn btn-primary" disabled>&#11015; Export .STL</button>
+              <button class="btn btn-primary" disabled>&#11015; Export .3MF</button>
+            </div>
+            <button class="btn btn-amber" style="width: 100%;" disabled>&#11015; Download Standalone .HTML</button>
+          </div>
+        </div>
+
+        <div class="viewport-stage">
+          <div class="empty-stage-box" id="empty-stage-message">
+            <div style="color: var(--bp-cyan); font-size: 0.75rem; margin-bottom: 0.4rem;" id="stage-slot-tag">
+              MACHINERY SOCKET // SLOT-01
+            </div>
+            <h3 style="margin-bottom: 0.6rem; letter-spacing: 1px;">EMPTY GENERATOR BAY</h3>
+            <p style="font-size: 0.82rem; color: #9ec3e6;">
+              Ready for your standalone HTML STL generator program. Set <code>programUrl</code> and <code>thumbnailUrl</code> in the <code>PROGRAMS</code> array to activate this bay.
+            </p>
+          </div>
+          <iframe id="external-program-iframe" title="Custom HTML Generator"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 3. PUBLIC 3D PRINTER RADAR MAP ==================== -->
+    <section id="map-screen">
+      <div class="section-banner">
+        <h2><span>[03]</span> Public 3D Printer & Makerspace Radar</h2>
+        <span class="meta-tag" id="map-status-tag">100% FREE KEYLESS RADAR // DEFAULT: DOVER, NH 03820</span>
+      </div>
+
+      <div class="map-controls-bar">
+        <button class="btn btn-green" onclick="locateUserGPS()">
+          &#9673; Use My GPS Location
+        </button>
+        <button class="btn" onclick="centerOnDoverNH()">
+          &#8982; Reset to Dover, NH (03820)
+        </button>
+        <input type="text" id="map-search-input" class="bp-input" placeholder="Search any City, State, or ZIP worldwide (e.g., 03820, Boston, London)..." onkeydown="if(event.key==='Enter') searchLocationWorldwide()">
+        <button class="btn btn-primary" onclick="searchLocationWorldwide()">Scan Sector</button>
+        <button class="btn" onclick="showSplashScreen()">&#10006; Back to Grid</button>
+      </div>
+
+      <div class="map-layout">
+        <div class="printer-directory">
+          <div style="border-bottom: 1px solid var(--bp-cyan); padding-bottom: 0.5rem; margin-bottom: 0.75rem; display:flex; justify-content:space-between;">
+            <strong style="font-size: 0.85rem; color: var(--bp-cyan);">DETECTED PUBLIC HUBS</strong>
+            <span id="hub-count" style="font-size: 0.75rem; color: var(--bp-amber);">6 ACTIVE</span>
+          </div>
+          <div class="printer-list" id="printer-list"></div>
+        </div>
+
+        <div class="map-frame-container">
+          <div id="printer-map"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== 4. SUBMIT GENERATOR IDEA MODAL ==================== -->
+  <div class="modal-backdrop" id="idea-modal" onclick="if(event.target===this) toggleIdeaModal(false)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <span style="font-size: 0.7rem; color: var(--bp-amber);">FORM DWG // REQ-GEN-IDEA</span>
+          <h3 style="letter-spacing: 1px;">SUBMIT NEW STL GENERATOR IDEA</h3>
+        </div>
+        <button class="btn" onclick="toggleIdeaModal(false)">&#10006;</button>
+      </div>
+
+      <form id="idea-form" onsubmit="handleIdeaSubmit(event)">
+        <div class="form-field">
+          <label for="idea-title">GENERATOR TITLE *</label>
+          <input type="text" id="idea-title" required placeholder="e.g., Parametric Honeycomb Wall Storage Hook">
+        </div>
+        <div class="form-field">
+          <label for="idea-desc">DESCRIPTION & CUSTOMIZABLE PARAMETERS *</label>
+          <textarea id="idea-desc" required placeholder="Describe what the STL program should generate and which dimensions users should be able to customize..."></textarea>
+        </div>
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap;">
+          <button type="button" class="btn" onclick="exportIdeasJSON()">&#11015; Export Queue (.JSON)</button>
+          <button type="submit" class="btn btn-primary">&#10004; Submit Blueprint Spec</button>
+        </div>
+      </form>
+
+      <div class="submitted-ideas-log">
+        <strong style="font-size: 0.75rem; color: var(--bp-cyan);">SUBMITTED GENERATOR REQUEST QUEUE:</strong>
+        <div id="ideas-log-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    MAKER MAKERS // 100% FREE KEYLESS MAP & BLUEPRINT CAD FOUNDRY // DOVER, NH 03820
+  </footer>
+
+  <!-- Leaflet JS (Open Source, No API Key Required) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="js/programs.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
