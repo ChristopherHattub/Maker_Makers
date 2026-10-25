@@ -6,7 +6,7 @@
 ├── css/
 │   └── styles.css           All site styles (blueprint theme, grid, carousel, map, modal)
 ├── js/
-│   ├── programs.js          PROGRAMS: the 40-slot registry
+│   ├── programs.js          GENERATORS list and the PROGRAMS slot array built from it
 │   ├── featured.js          FEATURED_MODELS: Featured Community Models data (in progress)
 │   └── app.js               Rendering, carousel, viewer, idea queue, printer map
 ├── data/

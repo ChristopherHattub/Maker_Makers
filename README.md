@@ -12,7 +12,7 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 ├── css/
 │   └── styles.css        # All site styles
 ├── js/
-│   ├── programs.js       # Slot registry (the 40 generator slots)
+│   ├── programs.js       # Slot registry (generators; the grid grows with it)
 │   └── app.js            # Grid, carousel, viewer, idea queue, printer map
 ├── data/
 │   └── public-printers.json  # Verified printer listings: name, coordinates, source, verified date

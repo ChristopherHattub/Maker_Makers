@@ -159,12 +159,50 @@ function hideAllScreens() {
   document.getElementById('map-screen').style.display = 'none';
 }
 
-function showSplashScreen() {
-  hideAllScreens();
-  document.getElementById('splash-screen').style.display = 'block';
+// Navigation is driven by the URL hash so the browser Back and Forward buttons work:
+// '' = generators grid, '#/generator/SLOT-01' = viewer, '#/map' = printer map.
+function goTo(hash) {
+  if (location.hash === hash || (!hash && !location.hash)) {
+    renderRoute();
+  } else {
+    location.hash = hash;
+  }
 }
 
-function openProgram(progId) {
+function renderRoute() {
+  const hash = location.hash;
+  const genMatch = hash.match(/^#\/generator\/(.+)$/);
+  if (genMatch && PROGRAMS.some(p => p.id === decodeURIComponent(genMatch[1]))) {
+    renderProgram(decodeURIComponent(genMatch[1]));
+  } else if (hash === '#/map') {
+    renderPrinterMap();
+  } else {
+    renderSplash();
+  }
+}
+
+function showSplashScreen() { goTo(''); }
+function openProgram(progId) { goTo(`#/generator/${encodeURIComponent(progId)}`); }
+function showPrinterMapScreen() { goTo('#/map'); }
+
+// Assigning iframe.src adds a browser history entry, which would make Back reload the frame
+// instead of leaving the generator. location.replace swaps the frame without one.
+function setFrameUrl(iframe, url) {
+  try {
+    iframe.contentWindow.location.replace(new URL(url, location.href).href);
+  } catch (e) {
+    iframe.src = url;
+  }
+}
+
+function renderSplash() {
+  hideAllScreens();
+  document.getElementById('splash-screen').style.display = 'block';
+  const iframe = document.getElementById('external-program-iframe');
+  if (iframe) setFrameUrl(iframe, 'about:blank');
+}
+
+function renderProgram(progId) {
   activeProgram = PROGRAMS.find(p => p.id === progId) || PROGRAMS[0];
 
   hideAllScreens();
@@ -182,11 +220,11 @@ function openProgram(progId) {
   if (activeProgram.programUrl) {
     emptyMsg.style.display = 'none';
     iframe.style.display = 'block';
-    iframe.src = activeProgram.programUrl;
+    setFrameUrl(iframe, activeProgram.programUrl);
     dlBtn.disabled = false;
   } else {
     iframe.style.display = 'none';
-    iframe.src = 'about:blank';
+    setFrameUrl(iframe, 'about:blank');
     emptyMsg.style.display = 'block';
     dlBtn.disabled = true;
   }
@@ -242,7 +280,7 @@ let markersLayer = null;
 let candidatesLayer = null;
 let userMarker = null;
 
-function showPrinterMapScreen() {
+function renderPrinterMap() {
   hideAllScreens();
   document.getElementById('map-screen').style.display = 'block';
 
@@ -557,3 +595,5 @@ loadPublicPrinters().then(() => {
 
 initSplash();
 initFeaturedStrip();
+window.addEventListener('hashchange', renderRoute);
+renderRoute();

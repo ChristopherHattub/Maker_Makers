@@ -2,7 +2,7 @@
 
 Maker Makers is a static website with two jobs:
 
-1. **Generator showcase.** A 4 x 10 grid of "machinery sockets" where parametric STL / 3MF generators (standalone HTML programs) are attached, previewed, and downloaded.
+1. **Generator showcase.** A grid of "machinery sockets" (four columns, as many rows as there are slots) where parametric STL / 3MF generators (standalone HTML programs) are attached, previewed, and downloaded.
 2. **Public printer radar.** A free, keyless Leaflet map of public 3D printers and makerspaces, with GPS and worldwide search.
 
 There is no build step and no dependencies. The site is plain HTML, CSS and JavaScript.

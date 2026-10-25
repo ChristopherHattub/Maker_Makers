@@ -559,8 +559,8 @@ header {
   display: block;
 }
 
-/* 4 x 10 Grid Layout (40 Blank Slots) */
-.program-grid-4x10 {
+/* Generators grid (4 columns, rows grow with the slot count) */
+.program-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1.35rem;
@@ -931,7 +931,7 @@ footer {
 }
 
 @media (max-width: 1100px) {
-  .program-grid-4x10 {
+  .program-grid {
     grid-template-columns: repeat(3, 1fr);
   }
   .carousel-slide, .viewer-workspace, .map-layout {
@@ -975,7 +975,7 @@ footer {
   .container {
     padding: 1rem;
   }
-  .program-grid-4x10 {
+  .program-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.85rem;
   }

@@ -1,6 +1,6 @@
 # Featured Carousels
 
-The home screen has two rotating or scrolling strips above the 4 x 10 grid. They are different features with different data.
+The home screen has two rotating or scrolling strips above the generators grid. They are different features with different data.
 
 | Strip | Data | Status |
 | --- | --- | --- |

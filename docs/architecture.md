@@ -10,7 +10,7 @@ index.html
  ├── <main>
  │    ├── [01] Featured Generator carousel        ─┐
  │    ├── [01B] Featured Community Models strip     │  #splash-screen
- │    └── [02] 4 x 10 machinery grid               ┘
+ │    └── [02] generators grid (grows)               ┘
  │    ├── #viewer-screen   generator viewer (iframe + controls)
  │    └── #map-screen      printer radar (Leaflet + directory list)
  ├── Idea modal (#idea-modal)
@@ -31,7 +31,7 @@ Only one screen is visible at a time. `hideAllScreens()` sets `display: none` on
 
 | Function | Shows | Notes |
 | --- | --- | --- |
-| `showSplashScreen()` | Splash (carousel + grid) | Also reached from the brand block and the "4x10 Grid" button |
+| `showSplashScreen()` | Splash (carousel + grid) | Also reached from the brand block and the "Generators" button |
 | `openProgram(id)` | Viewer | Looks up the slot by id, then loads `programUrl` into the iframe or shows the empty-bay message |
 | `showPrinterMapScreen()` | Printer map | Creates the Leaflet map on first open, otherwise calls `invalidateSize()` |
 

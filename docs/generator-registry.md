@@ -1,15 +1,15 @@
 # Generator Registry
 
-The site has 40 generator slots. They are defined in one array, `PROGRAMS`, in [`js/programs.js`](../js/programs.js).
+The generators grid has at least 40 slots and grows without limit. Generators are listed in `GENERATORS` in [`js/programs.js`](../js/programs.js), which builds the `PROGRAMS` array the site uses.
 
 ## The slot shape
 
-`programs.js` builds the array with `Array.from({ length: 40 }, ...)`. Each entry looks like this:
+The grid always shows at least `MIN_SLOTS` (40) sockets, four per row. It adds rows automatically: the slot count is the highest filled slot plus one spare row, rounded up to a full row. Add a generator with slot 41 and a new row appears; the page just scrolls further down. Each `PROGRAMS` entry looks like this:
 
 ```js
 {
   id: 'SLOT-01',          // Generated: 'SLOT-' + two-digit slot number. Do not change.
-  slot: 1,                // Generated: 1 to 40. Shown as "#1" on the socket.
+  slot: 1,                // Generated: 1 upward. Shown as "#1" on the socket.
   title: '',              // Name shown on the socket and in the viewer
   category: '',           // Short label under the title, e.g. "HOOKS & WALL STORAGE"
   featured: index < 3,    // true puts the slot in the Featured Generator carousel
@@ -19,7 +19,7 @@ The site has 40 generator slots. They are defined in one array, `PROGRAMS`, in [
 }
 ```
 
-Only `title`, `category`, `thumbnailUrl`, `programUrl`, `description` and `featured` are meant to be edited. Keep `id` and `slot` as generated.
+Each `GENERATORS` entry sets `slot` plus any of these fields. Only `title`, `category`, `thumbnailUrl`, `programUrl`, `description` and `featured` are meant to be edited. `id` is generated from `slot`.
 
 **Default featured slots.** The code sets `featured: index < 3`, so slots 1 to 3 are featured out of the box, even though the README says to set `featured: true` by hand. To feature a different slot, change its `featured` value. To stop featuring a slot, set it to `false`.
 
@@ -51,24 +51,26 @@ Use relative paths only, such as `programs/ghost-builder.html`, never a path sta
 
 1. Copy the generator's HTML file into `programs/`, for example `programs/honeycomb-hook.html`.
 2. Add its thumbnail to `assets/thumbnails/`, for example `assets/thumbnails/honeycomb-hook.png`.
-3. Fill in the slot in `js/programs.js`. The file has no per-slot data yet: all 40 entries come from one `Array.from` call, and every slot is blank. So give slot 4 its values by replacing its generated object with a literal entry, keeping `id` and `slot` matching the position:
+3. Add an entry to the `GENERATORS` list in `js/programs.js` with the next free `slot` number. Any slot number works, including past 40; the grid gets a new row by itself:
 
    ```js
    {
-     id: 'SLOT-04',
      slot: 4,
      title: 'Honeycomb Wall Hook',
      category: 'HOOKS & WALL STORAGE',
-     featured: false,
      thumbnailUrl: 'assets/thumbnails/honeycomb-hook.png',
      programUrl: 'programs/honeycomb-hook.html',
      description: 'Parametric wall hook with adjustable hole count, spacing and wall thickness.'
    }
    ```
 
-   If you fill many slots, consider moving the data into a plain list of overrides, so the generator function stays unchanged.
+   Fields you leave out stay blank (`featured` defaults to true for slots 1 to 3 only).
 
 4. Run `npm run dev` and open the slot to check the thumbnail, the viewer, and the download button. See [development.md](development.md).
+
+## Navigation
+
+The URL hash tracks the screen, so the browser Back and Forward buttons work: no hash is the generators grid, `#/generator/SLOT-01` is a generator, `#/map` is the printer map. Back from a generator returns to the grid. The generator iframe is swapped with `location.replace` so it adds no history entries of its own.
 
 ## Notes
 
