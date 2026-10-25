@@ -169,7 +169,9 @@ function openProgram(progId) {
 
   hideAllScreens();
   document.getElementById('viewer-screen').style.display = 'block';
-  document.getElementById('viewer-code').textContent = `${activeProgram.id} // ${activeProgram.category || 'EMPTY BAY'}`;
+  document.getElementById('viewer-screen').classList.toggle('has-program', Boolean(activeProgram.programUrl));
+  const code = `MM-${String(activeProgram.slot).padStart(3, '0')}`;
+  document.getElementById('viewer-code').textContent = `${code} // ${activeProgram.category || 'EMPTY BAY'}`;
   document.getElementById('viewer-title').textContent = activeProgram.title || 'UNASSIGNED MODULE';
   document.getElementById('stage-slot-tag').textContent = `MACHINERY SOCKET // ${activeProgram.id}`;
 

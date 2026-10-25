@@ -115,6 +115,14 @@
 
   var dom = buildShell();
 
+  // Inside the site's viewer the page header already shows the title and the three buttons,
+  // so the generator hides its own header and fills the frame.
+  try {
+    if (window.self !== window.top) document.body.classList.add('mm-framed');
+  } catch (e) {
+    document.body.classList.add('mm-framed');
+  }
+
   // Parametric controls, grouped in the order the generator declares them.
   function renderParametricPanel() {
     var presetsRow = null;

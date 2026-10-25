@@ -73,6 +73,10 @@ body.mm-gen {
   gap: 0.5rem;
 }
 
+/* Embedded in the site viewer: the site header is the only header, and the editor fills the frame. */
+body.mm-gen.mm-framed .mm-gen-header { display: none; }
+body.mm-gen.mm-framed .mm-main { margin: 0; }
+
 /* ---------- Buttons ---------- */
 .mm-btn {
   font-family: inherit;

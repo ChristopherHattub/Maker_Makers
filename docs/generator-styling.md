@@ -170,6 +170,7 @@ Keep these rules so the bundling stays correct:
 The engine applies these. A generator should not restyle the page.
 
 - **Header.** The id and category on top, the title below it. Three buttons on the right: *Find local printer for this STL* (green), *Download program (.html)* (amber), and *Back to grid*.
+- **Inside the site viewer.** The viewer's own top bar already shows the id, title and the same three buttons, so a generator loaded in the viewer hides its header and fills the frame. The engine adds `mm-framed` to `<body>` when the page is in an iframe. The viewer hides its empty placeholder panel for any slot that has a `programUrl` (the `has-program` class in `css/styles.css`). Opened on its own, the generator keeps its header.
 - **Panel.** Left column, 380 px wide on desktop. Two tabs at the top. Footer with the triangle count, file name, export buttons, and the standalone download. Button text wraps, so long labels never overflow.
 - **Viewport.** Right column. Orbit by dragging. The top-left hint and the top-right size readout (`X x Y x Z MM`) are fixed. *Front* and *Iso* sit at the bottom right.
 - **Colors and fonts.** Blueprint palette from `css/styles.css`: deep navy background, cyan for lines and active states, green and amber for the two secondary actions. Monospace font throughout.
