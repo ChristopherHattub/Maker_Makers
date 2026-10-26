@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MM-002 Pumpkin Patch // Maker Makers</title>
+  <title>MM-002 Pumpkin Plotter // Maker Makers</title>
   <link rel="stylesheet" href="shared/generator.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body class="mm-gen">
   <script>
-    // Pumpkin Patch: parameters, presets, palette and geometry. The page layout, the viewport,
+    // Pumpkin Plotter: parameters, presets, palette and geometry. The page layout, the viewport,
     // the Color tool and the exports come from shared/generator-core.js.
     (function () {
       'use strict';
@@ -18,10 +18,10 @@
       // -----------------------------------------------------------------------
       // Topology: closed manifold lathe surface (bottom pole -> rings -> top pole). Built once.
       // -----------------------------------------------------------------------
-      var R_SEG = 240;   // Angular segments around the body
+      var R_SEG = 320;   // Angular segments around the body
       var B_RINGS = 3;   // Concentric rings on the flat base
-      var M_RINGS = 72;  // Rings along the belly
-      var T_RINGS = 8;   // Rings dipping into the stem hollow
+      var M_RINGS = 96;  // Rings along the belly
+      var T_RINGS = 20;  // Rings over the crown and into the stem hollow
       var TOTAL_RINGS = B_RINGS + M_RINGS + T_RINGS;
       var C_RINGS = 28;  // Rings of the inner cavity
       var S_RINGS = 40;  // Rings along the stem
@@ -93,23 +93,28 @@
       // Pumpkin body
       // -----------------------------------------------------------------------
       var PHI0 = -Math.PI / 2 + 0.55; // flat base meets the belly here
-      var PHI1 = Math.PI / 2 - 0.7;   // belly meets the stem hollow here
+      var PHI_J = Math.PI / 2 - 0.6;  // belly hands over to the crown (and stem hollow) here
       var S0 = Math.sin(PHI0);
-      var S1 = Math.sin(PHI1);
 
-      // Ideal (smooth) profile for a ring: kind 'd' disc, 'b' belly, 't' top hollow; f runs 0..1 inside its region.
-      function profile(kind, f, g) {
+      function smootherstep(x) {
+        var t = Math.max(0, Math.min(1, x));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      }
+      // One continuous rounded curve from the base up to the crown, so there is no hard shoulder edge.
+      function domeY(phi, g) { return g.H * (Math.sin(phi) - S0) / (1 - S0); }
+      function domeR(phi, g) { return g.R * Math.pow(Math.max(Math.cos(phi), 0), 0.75); }
+
+      // Ideal (smooth) profile for a ring: kind 'd' disc, 'b' belly, 't' crown. f runs 0..1 inside its region.
+      // phiEnd stops the belly early (the hollow's inner shell follows it).
+      function profile(kind, f, g, phiEnd) {
         if (kind === 'd') return { r: g.rBase * f, y: 0, env: 0.35, w: 0 };
         if (kind === 'b') {
-          var phi = PHI0 + f * (PHI1 - PHI0);
-          return {
-            r: g.R * Math.pow(Math.cos(phi), 0.75),
-            y: g.H * (Math.sin(phi) - S0) / (S1 - S0),
-            env: 0.35 + 0.65 * smoothstep(0, 0.3, f),
-            w: f
-          };
+          var phi = PHI0 + f * ((phiEnd === undefined ? PHI_J : phiEnd) - PHI0);
+          return { r: domeR(phi, g), y: domeY(phi, g), env: 0.35 + 0.65 * smoothstep(0, 0.3, f), w: f };
         }
-        return { r: g.rTop * (1 - f), y: g.H - g.dimple * (1 - (1 - f) * (1 - f)), env: 1, w: 1 };
+        var ph = PHI_J + f * (Math.PI / 2 - PHI_J);
+        // The dimple eases in from the crown with zero slope at both ends.
+        return { r: domeR(ph, g), y: domeY(ph, g) - g.dimple * smootherstep(f), env: 1, w: 1 };
       }
 
       function radiusAt(pr, theta, g, p) {
@@ -130,9 +135,8 @@
       function setupGeo(p) {
         var R = p.diameter / 2;
         var rBase = R * Math.pow(Math.cos(PHI0), 0.75);
-        var rTop = R * Math.pow(Math.cos(PHI1), 0.75);
         return {
-          R: R, H: p.diameter * p.squash / 100, rBase: rBase, rTop: rTop, dimple: p.dimple,
+          R: R, H: p.diameter * p.squash / 100, rBase: rBase, dimple: p.dimple,
           ribs: Math.round(p.ribs), ribFrac: Math.min(0.5, p.ribDepth / R),
           ribTwist: (p.ribTwist * Math.PI) / 180
         };
@@ -161,15 +165,18 @@
         return pos;
       }
 
-      // Sealed inner cavity (reversed winding), offset by the wall thickness.
-      function buildCavity(p, g, wall) {
+      // Sealed inner cavity (reversed winding), offset by the wall thickness. It follows the belly and stops under the crown.
+      function buildCavity(p, g, wall, carver) {
         var vc = 2 + C_RINGS * R_SEG;
         var pos = new Float32Array(vc * 3);
-        var ceil = g.H - g.dimple - Math.max(wall, 2.4);
+        var phiC = PHI_J - 0.15;
+        var yEnd = domeY(phiC, g);
+        var ceil = Math.min(yEnd - Math.max(wall, 2.4), g.H - g.dimple - Math.max(wall, 2.4));
+        ceil = Math.max(ceil, wall + 2);
         for (var i = 0; i < C_RINGS; i++) {
           var f = i / (C_RINGS - 1);
-          var pr = profile('b', f, g);
-          var y = wall + (pr.y / g.H) * (ceil - wall);
+          var pr = profile('b', f, g, phiC);
+          var y = wall + (pr.y / yEnd) * (ceil - wall);
           for (var j = 0; j < R_SEG; j++) {
             var theta = (j / R_SEG) * Math.PI * 2;
             var r = Math.max(1.0, radiusAt(pr, theta, g, p) - wall);
@@ -182,6 +189,7 @@
         pos[1] = wall;
         var top = 1 + C_RINGS * R_SEG;
         pos[top * 3 + 1] = ceil;
+        if (carver) carver.apply(pos, true);
         return pos;
       }
 
@@ -233,7 +241,7 @@
       var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
       var stampType = 'star';
 
-      function isPumpkinSurface(name) { return name === 'body'; }
+      function isPumpkinSurface(name) { return name === 'body' || name === 'top' || name === 'carved'; }
 
       // Stamp outline as 2D points, radius r. Used for the 3D stamp and for the picture on its button.
       function stampOutline(type, r) {
@@ -270,7 +278,7 @@
 
       function stampShape(type, size) {
         var shape = new window.THREE.Shape();
-        stampOutline(type, size * 0.5).forEach(function (pt, i) {
+        (CARVE_NAMES[type] ? carveOutline(type, size * 0.5) : stampOutline(type, size * 0.5)).forEach(function (pt, i) {
           if (i === 0) shape.moveTo(pt[0], pt[1]);
           else shape.lineTo(pt[0], pt[1]);
         });
@@ -305,15 +313,193 @@
         return flat.attributes.position.array.slice();
       }
 
+
+      // -----------------------------------------------------------------------
+      // Carving: jack-o-lantern shapes pressed into the surface as smooth pockets
+      // -----------------------------------------------------------------------
+      var CARVE_NAMES = {
+        eyeTri: 'Triangle eye', eyeRound: 'Round eye', eyeAngry: 'Angry eye', eyeDiamond: 'Diamond eye',
+        nose: 'Nose', smile: 'Smile', toothy: 'Toothy mouth', star: 'Star'
+      };
+      var CARVE_TYPES = Object.keys(CARVE_NAMES);
+      var CARVE_RAMP = 2.0;  // mm of smooth wall around each cut
+      var carves = [];       // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z], poly, reach }
+      var carveType = 'eyeTri';
+      var refreshCarveUI = null;
+
+      // Carve outline as 2D points (counter-clockwise), half-width r.
+      function carveOutline(type, r) {
+        var pts = [];
+        var i, x, n;
+        if (type === 'star') return stampOutline('star', r);
+        if (type === 'eyeRound') {
+          for (i = 0; i < 32; i++) pts.push([Math.cos(i / 32 * Math.PI * 2) * r, Math.sin(i / 32 * Math.PI * 2) * r]);
+          return pts;
+        }
+        if (type === 'smile') {
+          n = 24;
+          for (i = 0; i <= n; i++) { x = -1 + 2 * i / n; pts.push([x, 0.75 * x * x - 0.8]); }
+          for (i = n; i >= 0; i--) { x = -1 + 2 * i / n; pts.push([x, 0.75 * x * x - 0.8 + 0.05 + 0.42 * Math.pow(1 - x * x, 0.7)]); }
+        } else if (type === 'toothy') {
+          n = 8;
+          var top = [], bottom = [];
+          for (i = 0; i <= n; i++) {
+            x = -1 + 2 * i / n;
+            var base = 0.5 * x * x;
+            top.push([x, base - 0.1 + (i % 2 === 0 ? 0 : 0.3)]);
+            bottom.push([x, base - 0.62 + (i % 2 === 0 ? 0.3 : 0)]);
+          }
+          pts = bottom.concat(top.reverse());
+        } else {
+          var table = {
+            eyeTri: [[-1, -0.8], [1, -0.8], [0, 0.9]],
+            eyeAngry: [[-1, -0.7], [1, -0.7], [1, 0.55]],
+            eyeDiamond: [[0, 1], [-0.7, 0], [0, -1], [0.7, 0]],
+            nose: [[0, 0.9], [-0.9, -0.7], [0, -0.35], [0.9, -0.7]]
+          };
+          pts = table[type];
+        }
+        return pts.map(function (pt) { return [pt[0] * r, pt[1] * r]; });
+      }
+
+      function carveIcon(type) {
+        var points = carveOutline(type, 1).map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ');
+        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><polygon points="' + points + '"/></svg>';
+      }
+
+      // Signed distance from (x, y) to a polygon in mm: negative inside.
+      function polyDist(poly, x, y) {
+        var d = Infinity, inside = false;
+        for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          var ax = poly[j][0], ay = poly[j][1], bx = poly[i][0], by = poly[i][1];
+          var ex = bx - ax, ey = by - ay, wx = x - ax, wy = y - ay;
+          var t = Math.max(0, Math.min(1, (wx * ex + wy * ey) / (ex * ex + ey * ey || 1)));
+          var dx = wx - ex * t, dy = wy - ey * t;
+          d = Math.min(d, dx * dx + dy * dy);
+          if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+        }
+        d = Math.sqrt(d);
+        return inside ? -d : d;
+      }
+
+      function addCarve(type, size, rotation, point, normal) {
+        var poly = carveOutline(type, size / 2);
+        var reach = 0;
+        poly.forEach(function (pt) { reach = Math.max(reach, Math.sqrt(pt[0] * pt[0] + pt[1] * pt[1])); });
+        carves.push({ type: type, size: size, rotation: rotation, point: point, normal: normal, poly: poly, reach: reach + CARVE_RAMP });
+      }
+
+      // Point on the ideal surface at angle theta (0 = front, +z) and height fraction yFrac, with its outward normal.
+      function surfacePoint(g, theta, yFrac) {
+        var y = yFrac * g.H, lo = PHI0, hi = Math.PI / 2;
+        for (var i = 0; i < 40; i++) {
+          var mid = (lo + hi) / 2;
+          if (domeY(mid, g) < y) lo = mid; else hi = mid;
+        }
+        var r = domeR(lo, g);
+        var pt = [r * Math.sin(theta), y, r * Math.cos(theta)];
+        var nx = pt[0], ny = pt[1] - g.H * 0.45, nz = pt[2];
+        var len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        return { point: pt, normal: [nx / len, ny / len, nz / len] };
+      }
+
+      // Classic jack-o-lantern face on the front, scaled to the current pumpkin.
+      function placeFace(p) {
+        var g = setupGeo(p);
+        carves = [];
+        function put(type, theta, yFrac, size, rot) {
+          var sp = surfacePoint(g, theta, yFrac);
+          addCarve(type, size, rot, sp.point, sp.normal);
+        }
+        put('eyeTri', -0.42, 0.66, g.R * 0.34, 0);
+        put('eyeTri', 0.42, 0.66, g.R * 0.34, 0);
+        put('nose', 0, 0.52, g.R * 0.2, 0);
+        put('toothy', 0, 0.34, g.R * 0.95, 0);
+      }
+
+      // Builds the displacement for the current carves, or null when there are none.
+      // apply(pos, isInner) pulls vertices toward the pumpkin's centre; the shell keeps its thickness because
+      // the hollow's inner surface is pulled by the same amount. carver.mask (0..1 per vertex) is set for the outer shell.
+      function makeCarver(p, g) {
+        if (!carves.length) return null;
+        var cy = g.H * 0.45;
+        var depth = p.carveDepth;
+        var frames = carves.map(function (c) {
+          var n = c.normal, nl = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) || 1;
+          n = [n[0] / nl, n[1] / nl, n[2] / nl];
+          var up = Math.abs(n[1]) > 0.92 ? [0, 0, 1] : [0, 1, 0];
+          var tx = [up[1] * n[2] - up[2] * n[1], up[2] * n[0] - up[0] * n[2], up[0] * n[1] - up[1] * n[0]];
+          var tl = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1] + tx[2] * tx[2]) || 1;
+          tx = [tx[0] / tl, tx[1] / tl, tx[2] / tl];
+          var ty = [n[1] * tx[2] - n[2] * tx[1], n[2] * tx[0] - n[0] * tx[2], n[0] * tx[1] - n[1] * tx[0]];
+          var a = (c.rotation * Math.PI) / 180;
+          return { c: c, n: n, tx: tx, ty: ty, cos: Math.cos(a), sin: Math.sin(a), near: 0.5 * c.size + 16 };
+        });
+        var carver = { mask: null };
+        carver.apply = function (pos, inner) {
+          var count = pos.length / 3;
+          var mask = inner ? null : new Float32Array(count);
+          for (var v = 0; v < count; v++) {
+            var x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
+            var m = 0;
+            for (var k = 0; k < frames.length; k++) {
+              var f = frames[k], c = f.c;
+              var dx = x - c.point[0], dy = y - c.point[1], dz = z - c.point[2];
+              var dn = dx * f.n[0] + dy * f.n[1] + dz * f.n[2];
+              if (dn > f.near || dn < -f.near) continue;
+              var u = dx * f.tx[0] + dy * f.tx[1] + dz * f.tx[2];
+              var w = dx * f.ty[0] + dy * f.ty[1] + dz * f.ty[2];
+              if (u * u + w * w > c.reach * c.reach) continue;
+              var sd = polyDist(c.poly, u * f.cos + w * f.sin, -u * f.sin + w * f.cos);
+              if (sd < CARVE_RAMP) m = Math.max(m, smootherstep(-sd / CARVE_RAMP));
+            }
+            if (mask) mask[v] = m;
+            if (m > 0) {
+              var ey = y - cy, len = Math.sqrt(x * x + ey * ey + z * z) || 1;
+              var disp = depth * m / len;
+              pos[v * 3] = x - x * disp;
+              pos[v * 3 + 1] = y - ey * disp;
+              pos[v * 3 + 2] = z - z * disp;
+            }
+          }
+          if (!inner) carver.mask = mask;
+        };
+        return carver;
+      }
+
+      // Body surface as triangles, split into the main body, the stem hollow and the carved cut-outs (own colour part).
+      function expandBody(pos, mask) {
+        var tris = BODY_TOPO.length / 3, cat = new Uint8Array(tris), counts = [0, 0, 0], t;
+        for (t = 0; t < tris; t++) {
+          var c = t * 3 >= TOP_SPLIT ? 1 : 0;
+          if (mask && (mask[BODY_TOPO[t * 3]] + mask[BODY_TOPO[t * 3 + 1]] + mask[BODY_TOPO[t * 3 + 2]]) / 3 > 0.5) c = 2;
+          cat[t] = c;
+          counts[c]++;
+        }
+        var out = [new Float32Array(counts[0] * 9), new Float32Array(counts[1] * 9), new Float32Array(counts[2] * 9)];
+        var at = [0, 0, 0];
+        for (t = 0; t < tris; t++) {
+          var arr = out[cat[t]], o = at[cat[t]];
+          for (var k = 0; k < 3; k++) {
+            var v = BODY_TOPO[t * 3 + k];
+            arr[o++] = pos[v * 3]; arr[o++] = pos[v * 3 + 1]; arr[o++] = pos[v * 3 + 2];
+          }
+          at[cat[t]] = o;
+        }
+        var names = ['body', 'top', 'carved'], meshes = [];
+        for (var i = 0; i < 3; i++) if (counts[i]) meshes.push({ name: names[i], positions: out[i], smoothGroup: 'pumpkin' });
+        return meshes;
+      }
+
       // -----------------------------------------------------------------------
       // Generator contract
       // -----------------------------------------------------------------------
       var DEFAULTS = {
-        diameter: 90, squash: 80, dimple: 6,
+        diameter: 90, squash: 80, dimple: 8,
         ribs: 10, ribDepth: 6, ribSharp: 0.6, ribTwist: 0,
         ridgeAmp: 0.35, ridgeCount: 36, bumpAmp: 0.5, bumpSize: 9, bumpSeed: 7,
         stemHeight: 24, stemThickness: 11, stemTaper: 25, stemBend: 35, stemDirection: 30, stemTwist: 90, stemFlutes: 5, stemFlare: 3,
-        wall: 0, stampSize: 12, stampRotation: 0
+        wall: 0, stampSize: 12, stampRotation: 0, carveSize: 16, carveRotation: 0, carveDepth: 4
       };
       function preset(label, over) {
         var values = {};
@@ -325,8 +511,8 @@
       window.MM_GENERATOR = {
         code: 'MM-002',
         category: 'SPOOKY // HARVEST',
-        title: 'Pumpkin Patch',
-        fileName: 'Halloween_Pumpkin',
+        title: 'Pumpkin Plotter',
+        fileName: 'Pumpkin_Plotter',
         printerLink: '../index.html#map-screen',
         defaultColor: '#fb923c',
         palette: [
@@ -339,7 +525,7 @@
           { name: 'Phantom Ice', color: '#93c5fd' },
           { name: 'Shadow Black', color: '#334155' }
         ],
-        partNames: { body: 'Pumpkin body', top: 'Stem hollow', cavity: 'Hollow inside', stem: 'Stem', detail: 'Stamp' },
+        partNames: { body: 'Pumpkin body', top: 'Stem hollow', carved: 'Carved cut-outs', cavity: 'Hollow inside', stem: 'Stem', detail: 'Stamp' },
         printSettings: {
           material: 'PLA',
           nozzle: 0.4,
@@ -356,7 +542,7 @@
         parameters: [
           { group: 'Size & shape', key: 'diameter', label: 'Pumpkin width', unit: ' mm', min: 50, max: 130, step: 1, value: 90 },
           { group: 'Size & shape', key: 'squash', label: 'Squash (squat ↔ tall)', unit: '%', min: 55, max: 120, step: 1, value: 80 },
-          { group: 'Size & shape', key: 'dimple', label: 'Top dimple depth', unit: ' mm', min: 0, max: 14, step: 0.5, value: 6 },
+          { group: 'Size & shape', key: 'dimple', label: 'Top dimple depth', unit: ' mm', min: 0, max: 14, step: 0.5, value: 8 },
           { group: 'Ribs', key: 'ribs', label: 'Number of ribs', unit: '', min: 5, max: 20, step: 1, value: 10 },
           { group: 'Ribs', key: 'ribDepth', label: 'Rib depth (groove)', unit: ' mm', min: 0, max: 14, step: 0.5, value: 6 },
           { group: 'Ribs', key: 'ribSharp', label: 'Rib shape (puffy ↔ pinched)', unit: '', min: 0.3, max: 2, step: 0.1, value: 0.6 },
@@ -378,7 +564,10 @@
           { group: 'Inside', key: 'wall', label: 'Hollow wall (saves filament)', unit: ' mm', min: 0, max: 6, step: 0.4, value: 0,
             format: function (v) { return v < 1.2 ? 'Solid' : v + ' mm'; } },
           { group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
-          { group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
+          { group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 },
+          { tab: 'carve', group: 'Carve size & depth', key: 'carveSize', label: 'Cut-out size (width)', unit: ' mm', min: 8, max: 60, step: 1, value: 16 },
+          { tab: 'carve', group: 'Carve size & depth', key: 'carveRotation', label: 'Cut-out rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 },
+          { tab: 'carve', group: 'Carve size & depth', key: 'carveDepth', label: 'Carve depth (all cuts)', unit: ' mm', min: 1, max: 12, step: 0.5, value: 4 }
         ],
 
         presets: [
@@ -389,6 +578,104 @@
           preset('Hollow lantern', { wall: 2.4 }),
           preset('Default pumpkin', {})
         ],
+
+        // Carve tab: choose a jack-o-lantern shape, tap the pumpkin to cut it in.
+        tabs: [{
+          id: 'carve',
+          label: 'Carve',
+          hint: 'Tap the pumpkin to carve the selected shape',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Shape (tap the pumpkin to carve it)'));
+            var chips = h('div', { class: 'mm-icon-chips' });
+            var shapeButtons = {};
+            CARVE_TYPES.forEach(function (type) {
+              var btn = h('button', {
+                class: 'mm-icon-chip', type: 'button', title: CARVE_NAMES[type], 'aria-pressed': String(type === carveType),
+                onclick: function () {
+                  carveType = type;
+                  Object.keys(shapeButtons).forEach(function (k) { shapeButtons[k].setAttribute('aria-pressed', String(k === type)); });
+                  api.toast('Selected ' + CARVE_NAMES[type] + '. Tap the pumpkin to carve it.');
+                }
+              });
+              btn.innerHTML = carveIcon(type) + '<span>' + CARVE_NAMES[type] + '</span>';
+              shapeButtons[type] = btn;
+              chips.appendChild(btn);
+            });
+            container.appendChild(chips);
+
+            var face = h('button', { class: 'mm-btn mm-btn--green mm-btn--block', type: 'button', onclick: function () {
+              placeFace(api.params);
+              api.rebuild();
+              api.toast('Carved a classic jack-o-lantern face');
+            } }, 'Auto jack-o-lantern face');
+            container.appendChild(face);
+
+            var count = h('p', { class: 'mm-note' }, '0 cut-outs');
+            count.style.marginTop = '0.8rem';
+            var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!carves.length) return;
+              carves.pop();
+              api.rebuild();
+              api.toast('Removed last cut-out');
+            } }, 'Undo last cut');
+            var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!carves.length) return;
+              carves = [];
+              api.rebuild();
+              api.toast('Cleared all cut-outs');
+            } }, 'Clear cuts');
+            var row = h('div', { class: 'mm-export-row' });
+            row.appendChild(undo);
+            row.appendChild(clear);
+            container.appendChild(count);
+            container.appendChild(row);
+            container.appendChild(h('p', { class: 'mm-note' }, 'Cuts are smooth pockets pressed into the surface. Turn on Hollow wall (Parametric, Inside) and the inner shell follows each cut so the wall keeps its thickness. Paint the cut-outs in the Color tool.'));
+
+            refreshCarveUI = function () {
+              count.textContent = carves.length + (carves.length === 1 ? ' cut-out' : ' cut-outs');
+              undo.disabled = carves.length === 0;
+              clear.disabled = carves.length === 0;
+            };
+            refreshCarveUI();
+          },
+          onHover: function (hit, api) {
+            if (!hit || !isPumpkinSurface(hit.meshName) || hit.point.y <= 6) {
+              api.setPreview(null);
+              return;
+            }
+            api.setPreview({
+              positions: stampPositions({
+                type: carveType,
+                size: api.params.carveSize,
+                rotation: api.params.carveRotation,
+                point: hit.point.toArray(),
+                normal: hit.normal.toArray()
+              })
+            });
+          },
+          onPick: function (hit, api) {
+            if (!isPumpkinSurface(hit.meshName)) return;
+            if (hit.point.y <= 6) {
+              api.toast('Tip: carve higher up on the pumpkin!');
+              return;
+            }
+            addCarve(carveType, api.params.carveSize, api.params.carveRotation, hit.point.toArray(), hit.normal.toArray());
+            api.rebuild();
+            api.toast('Carved ' + CARVE_NAMES[carveType]);
+          }
+        }],
+
+        // For the printability check script: put a face on the pumpkin before building.
+        testSetup: function (p) { placeFace(p); },
 
         // Generator-specific panel: stamp shape choice and undo/clear.
         mount: function (container, api) {
@@ -452,16 +739,18 @@
           var g = setupGeo(p);
           var meshes = [];
           var wall = p.wall >= 1.2 ? p.wall : 0;
-          // The stem hollow is its own mesh so the Color tool can paint it separately.
+          var carver = makeCarver(p, g);
+          // The stem hollow and the carved cut-outs are their own meshes so the Color tool can paint them separately.
           var bodyPos = buildBody(p, g);
-          meshes.push(expand(BODY_TOPO, bodyPos, null, 'body', 'pumpkin', 0, TOP_SPLIT));
-          meshes.push(expand(BODY_TOPO, bodyPos, null, 'top', 'pumpkin', TOP_SPLIT));
-          if (wall) meshes.push(expand(CAVITY_TOPO, buildCavity(p, g, wall), null, 'cavity', 'pumpkin'));
+          if (carver) carver.apply(bodyPos, false);
+          expandBody(bodyPos, carver && carver.mask).forEach(function (m) { meshes.push(m); });
+          if (wall) meshes.push(expand(CAVITY_TOPO, buildCavity(p, g, wall, carver), null, 'cavity', 'pumpkin'));
           meshes.push(expand(STEM_TOPO, buildStem(p, g), null, 'stem'));
           stamps.forEach(function (stamp) {
             meshes.push({ name: 'detail', positions: stampPositions(stamp) });
           });
           if (this._refresh) this._refresh();
+          if (refreshCarveUI) refreshCarveUI();
           return meshes;
         },
 

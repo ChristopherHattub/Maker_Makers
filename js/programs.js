@@ -11,15 +11,15 @@ const GENERATORS = [
     category: 'SPOOKY // FIGURES',
     thumbnailUrl: 'assets/thumbnails/ghost-builder.svg',
     programUrl: 'programs/ghost-builder.html',
-    description: 'Parametric ghost with folds, arms, a face and embossed stamps. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric ghost with folds, arms, a face and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL or .3MF with colors.'
   },
   {
     slot: 2,
-    title: 'Pumpkin Patch',
+    title: 'Pumpkin Plotter',
     category: 'SPOOKY // HARVEST',
-    thumbnailUrl: 'assets/thumbnails/pumpkin-patch.svg',
-    programUrl: 'programs/pumpkin-patch.html',
-    description: 'Parametric pumpkin with adjustable ribs, texture, a curly stem, an optional hollow inside and embossed stamps. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    thumbnailUrl: 'assets/thumbnails/pumpkin-plotter.svg',
+    programUrl: 'programs/pumpkin-plotter.html',
+    description: 'Parametric pumpkin with adjustable ribs, texture, a curly stem, an optional hollow inside and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL or .3MF with colors.'
   }
 ];
 

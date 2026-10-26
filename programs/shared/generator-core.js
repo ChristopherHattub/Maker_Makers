@@ -163,14 +163,24 @@
     // Phone sheet handle: drag to resize the viewport/sheet split, tap to flip between big model and big controls.
     var sheetHandle = el('div', { class: 'mm-sheet-handle', role: 'separator', 'aria-label': 'Drag to resize the 3D view', title: 'Drag to resize, tap to toggle' }, [el('span', { class: 'mm-sheet-grip' })]);
 
+    // Optional generator tabs (cfg.tabs), shown right after Parametric.
+    var extraTabs = (cfg.tabs || []).map(function (t) {
+      return {
+        id: t.id, cfg: t,
+        btn: el('button', { class: 'mm-tab', type: 'button', id: 'mm-tab-' + t.id, 'aria-selected': 'false', text: t.label, onclick: function () { setTab(t.id); } }),
+        body: el('div', { id: 'mm-body-' + t.id, class: 'mm-panel-body', hidden: '' })
+      };
+    });
+
     var panel = el('aside', { class: 'mm-panel' }, [
       sheetHandle,
-      el('div', { class: 'mm-tabs', role: 'tablist' }, [tabModel, tabColor, tabPrint]),
-      modelBody,
+      el('div', { class: 'mm-tabs', role: 'tablist' }, [tabModel].concat(extraTabs.map(function (t) { return t.btn; }), [tabColor, tabPrint])),
+      modelBody
+    ].concat(extraTabs.map(function (t) { return t.body; }), [
       colorBody,
       printBody,
       footer
-    ]);
+    ]));
 
     var stage = el('div', { class: 'mm-stage', id: 'mm-stage' });
     var viewport = el('section', { class: 'mm-viewport' }, [
@@ -189,7 +199,7 @@
     document.body.appendChild(header);
     document.body.appendChild(main);
 
-    return { modelBody: modelBody, colorBody: colorBody, printBody: printBody, stage: stage, tabModel: tabModel, tabColor: tabColor, tabPrint: tabPrint };
+    return { extraTabs: extraTabs, modelBody: modelBody, colorBody: colorBody, printBody: printBody, stage: stage, tabModel: tabModel, tabColor: tabColor, tabPrint: tabPrint };
   }
 
   var dom = buildShell();
@@ -216,6 +226,7 @@
 
     var groups = [];
     cfg.parameters.forEach(function (p) {
+      if (p.tab) return; // belongs to a generator tab (cfg.tabs)
       var groupName = p.group || 'Parameters';
       var group = groups.filter(function (g) { return g.name === groupName; })[0];
       if (!group) {
@@ -237,6 +248,7 @@
 
     // Generator-specific extras (for example the Ghost Builder stamp tools).
     var extras = el('div', { id: 'mm-extras' });
+    renderExtraTabs();
     if (typeof cfg.mount === 'function') {
       dom.modelBody.appendChild(accordion(cfg.extrasTitle || 'Stamps & tools', extras, false));
       cfg.mount(extras, api);
@@ -252,6 +264,30 @@
       el('p', { class: 'mm-note', text: 'Wireframe shows the triangles the model is built from. It is only a view; exports are unchanged.' })
     ]), false));
 
+  }
+
+  // Generator tabs: the tab's own controls (mount) first, then its sliders (parameters with tab: id) as open sections.
+  function renderExtraTabs() {
+    dom.extraTabs.forEach(function (t) {
+      var box = el('div', { class: 'mm-group' });
+      t.body.appendChild(box);
+      if (typeof t.cfg.mount === 'function') t.cfg.mount(box, api);
+      var groups = [];
+      cfg.parameters.forEach(function (p) {
+        if (p.tab !== t.id) return;
+        var name = p.group || 'Settings';
+        var group = groups.filter(function (g) { return g.name === name; })[0];
+        if (!group) { group = { name: name, items: [] }; groups.push(group); }
+        group.items.push(p);
+      });
+      groups.forEach(function (g) { t.body.appendChild(accordion(g.name, el('div', {}, g.items.map(sliderFor)), true)); });
+    });
+  }
+
+  function tabHandlers() {
+    if (activeTab === 'model') return cfg;
+    var t = dom.extraTabs.filter(function (x) { return x.id === activeTab; })[0];
+    return t ? t.cfg : null;
   }
 
   var sliderRefs = {};
@@ -942,13 +978,13 @@
     var dx = e.clientX - downAt.x;
     var dy = e.clientY - downAt.y;
     if (dx * dx + dy * dy > 36) dragged = true;
-    if (activeTab === 'model' && typeof cfg.onHover === 'function') {
-      cfg.onHover(pickAt(e.clientX, e.clientY), api);
-    }
+    var h = tabHandlers();
+    if (h && typeof h.onHover === 'function') h.onHover(pickAt(e.clientX, e.clientY), api);
   });
 
   renderer.domElement.addEventListener('pointerleave', function () {
     if (typeof cfg.onHover === 'function') cfg.onHover(null, api);
+    dom.extraTabs.forEach(function (t) { if (typeof t.cfg.onHover === 'function') t.cfg.onHover(null, api); });
   });
 
   renderer.domElement.addEventListener('pointerup', function (e) {
@@ -960,7 +996,8 @@
       else toast('Click a part of the model to paint it');
       return;
     }
-    if (activeTab === 'model' && typeof cfg.onPick === 'function') cfg.onPick(hit, api);
+    var picker = tabHandlers();
+    if (picker && typeof picker.onPick === 'function') picker.onPick(hit, api);
   });
 
   // ---------------------------------------------------------------------------
@@ -970,7 +1007,8 @@
 
   // Crosshair only where a click places something. Painting uses a pointer, plain orbiting a grab hand.
   function updateCursor() {
-    var cursor = activeTab === 'color' ? 'pointer' : activeTab === 'print' ? 'grab' : (typeof cfg.onPick === 'function' ? 'crosshair' : 'grab');
+    var tool = tabHandlers();
+    var cursor = activeTab === 'color' ? 'pointer' : activeTab === 'print' ? 'grab' : (tool && typeof tool.onPick === 'function' ? 'crosshair' : 'grab');
     renderer.domElement.style.cursor = cursor;
   }
 
@@ -983,11 +1021,17 @@
     dom.modelBody.hidden = tab !== 'model';
     dom.colorBody.hidden = !isColor;
     dom.printBody.hidden = tab !== 'print';
+    dom.extraTabs.forEach(function (t) {
+      t.btn.setAttribute('aria-selected', String(t.id === tab));
+      t.body.hidden = t.id !== tab;
+    });
+    var current = tabHandlers();
     $('mm-hint').textContent = isColor
       ? 'Click a part to paint it'
-      : 'Drag or touch-swipe to orbit 3D mesh';
-    // Placement tools (stamps) belong to the Parametric tab: clear their preview and cursor here.
+      : (current && current.hint) || 'Drag or touch-swipe to orbit 3D mesh';
+    // Placement tools (stamps, carving) belong to their own tab: clear their preview and cursor here.
     if (tab !== 'model' && typeof cfg.onHover === 'function') cfg.onHover(null, api);
+    dom.extraTabs.forEach(function (t) { if (t.id !== tab && typeof t.cfg.onHover === 'function') t.cfg.onHover(null, api); });
     updateCursor();
     if (isColor) ensureParts();
     refreshColors();

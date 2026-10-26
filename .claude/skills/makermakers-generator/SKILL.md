@@ -20,6 +20,10 @@ Sources of truth (read them before changing anything, they may have moved on sin
 6. **Verify live** with the checklist at the end. Do not report done without opening it in the preview.
 7. **Docs**: update `docs/generator-registry.md` / `docs/file-structure.md` if they describe the slot list or thumbnails. Commit only your own files (other work may be in the tree: stage by path, never `git add -A`).
 
+## Mobile layout is mandatory and engine-owned
+
+Every generator, new or existing, **must** use the shared phone layout from `generator-core.js` / `generator.css`: pinned viewport on top (40%), resizable bottom sheet below with sticky tabs, accordion slider sections, large touch sliders, export buttons always visible, no page scroll. Never write generator-specific mobile CSS, never override the sheet or tab bar, and never make a generator's controls scroll the page. A generator that uses the engine as described here gets it automatically; if a control looks wrong on a phone, fix it in `shared/generator.css` for everyone. Always verify at 375x667 and 390x844 before finishing.
+
 ## Page rules (the standalone bundler depends on these)
 
 - `<body class="mm-gen">`.
@@ -41,6 +45,8 @@ Sources of truth (read them before changing anything, they may have moved on sin
 | `partNames` | Mesh name -> label, e.g. `{ body: 'Ghost body', face: 'Eyes & mouth', detail: 'Stamp' }`. Every mesh name you return should have one. |
 | `parameters` | `{ group, key, label, unit, min, max, step, value, format? }`. `unit` includes its leading space (`' mm'`) or is `'°'`/`'%'`. Plain-word group names (engine upper-cases them). Sensible defaults that already look good. |
 | `presets` | `[{ label, values }]`, values override only some keys. Include a "Default ..." preset that restores everything, including non-visual params. |
+| `tabs` | Optional extra editor tabs shown after Parametric: `[{ id, label, hint, mount(container, api), onHover(hit, api), onPick(hit, api) }]`. `hint` replaces the viewport hint while the tab is open; `onHover`/`onPick` work like the generator-level ones but only fire in that tab. Sliders for the tab go in `parameters` with `tab: '<id>'` (rendered as open accordion sections under the tab's `mount` content). Pumpkin Plotter's Carve tab is the example. |
+| `testSetup(params)` | Optional, used by `check-mesh.mjs`: set up closure state (stamps, carves) so the check covers it. |
 | `mount(container, api)` | Only for generator-only controls; use classes `mm-group`/`mm-group-title`, `mm-note`, `mm-chips`/`mm-chip`, `mm-btn` (`--green --amber --solid --block`), `mm-export-row`, `mm-icon-chips`/`mm-icon-chip`. |
 | `onHover(hit, api)` / `onPick(hit, api)` | Placement tools. `hit` = `{ point, normal (THREE.Vector3), meshName, part }` or null on hover. `onPick` fires only in the Parametric tab. |
 | `printerLink` | Optional; default is right. |
@@ -111,7 +117,7 @@ So, to make a feature independently paintable:
 Every generator shows the engine's footer disclaimer (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together.
 
 
-Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool, footer with triangle count, file name, exports and standalone download. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders and always-visible export buttons; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
+Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool, footer with triangle count, file name, exports and standalone download. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Optional generator tabs (`tabs`, see Config) sit after Parametric. Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders and always-visible export buttons; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
 
 ## Verification checklist (live preview)
 

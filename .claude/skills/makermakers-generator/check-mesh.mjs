@@ -26,6 +26,7 @@ if (presetLabel) {
   Object.assign(params, preset.values);
 }
 const api = { params, THREE: undefined, rebuild() {}, setParams() {}, setPreview() {}, toast() {}, centerCamera() {} };
+if (typeof cfg.testSetup === 'function') cfg.testSetup(params); // optional: place stamps/cuts so they are checked too
 const meshes = cfg.build.call(cfg, params, api);
 
 const EPS = 0.001; // same weld tolerance as the engine
