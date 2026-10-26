@@ -20,6 +20,14 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/pumpkin-plotter.svg',
     programUrl: 'programs/pumpkin-plotter.html',
     description: 'Parametric pumpkin with adjustable ribs, texture, a curly stem, an optional hollow inside and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 5,
+    title: 'Witch Hat',
+    category: 'SPOOKY // HEADWEAR',
+    thumbnailUrl: 'assets/thumbnails/witch-hat.svg',
+    programUrl: 'programs/witch-hat.html',
+    description: 'Parametric witch hat with adjustable cone height, swoop, lean and floppy tip, a curled or wavy brim, a raised hat band and a flat solid or hollow underside. Paint parts in the Color tool and export .STL or .3MF with colors.'
   }
 ];
 

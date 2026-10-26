@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0d2b59"/>
+  <path d="M0 50H400M0 100H400M0 150H400M0 200H400M0 250H400M50 0V300M100 0V300M150 0V300M200 0V300M250 0V300M300 0V300M350 0V300" stroke="#00e5ff" stroke-opacity="0.08"/>
+  <ellipse cx="200" cy="254" rx="130" ry="12" fill="#06152d" stroke="#00e5ff" stroke-opacity="0.35"/>
+  <path d="M232 52C262 44 282 56 280 76C270 66 256 64 244 70C236 98 226 150 222 200L178 200C180 150 190 98 220 62Z" fill="#e2e8f0" fill-opacity="0.95" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M180 188C186 194 214 194 220 188L222 204C214 210 186 210 178 204Z" fill="#c084fc" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M178 200L222 200C262 204 312 218 312 232C312 248 260 256 200 256C140 256 88 248 88 232C88 218 138 204 178 200Z" fill="#e2e8f0" fill-opacity="0.95" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M196 90C192 130 188 170 186 196M210 80C208 120 205 160 203 196" fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.45"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7">
+    <path d="M300 60H340V100"/>
+    <path d="M60 60H100M60 60V100"/>
+  </g>
+  <text x="200" y="290" text-anchor="middle" font-family="Courier New, monospace" font-size="11" fill="#00e5ff" fill-opacity="0.8" letter-spacing="2">MM-005 WITCH'S HAT</text>
+</svg>
