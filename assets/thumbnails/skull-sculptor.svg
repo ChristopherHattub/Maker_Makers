@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0d2b59"/>
+  <path d="M0 50H400M0 100H400M0 150H400M0 200H400M0 250H400M50 0V300M100 0V300M150 0V300M200 0V300M250 0V300M300 0V300M350 0V300" stroke="#00e5ff" stroke-opacity="0.08"/>
+  <ellipse cx="200" cy="254" rx="100" ry="10" fill="#06152d" stroke="#00e5ff" stroke-opacity="0.35"/>
+  <path d="M200 40C128 40 96 94 100 146C102 176 118 192 136 202V236C136 246 144 252 154 252H246C256 252 264 246 264 236V202C282 192 298 176 300 146C304 94 272 40 200 40Z" fill="#f1f5f9" fill-opacity="0.95" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M132 136C132 112 152 104 170 112C186 120 190 142 184 158C176 172 152 174 140 162C134 156 132 146 132 136Z" fill="#06152d" stroke="#00e5ff" stroke-width="1.5"/>
+  <path d="M268 136C268 112 248 104 230 112C214 120 210 142 216 158C224 172 248 174 260 162C266 156 268 146 268 136Z" fill="#06152d" stroke="#00e5ff" stroke-width="1.5"/>
+  <path d="M200 164L188 192L200 186L212 192Z" fill="#06152d" stroke="#00e5ff" stroke-width="1.5"/>
+  <rect x="158" y="208" width="84" height="30" rx="8" fill="#06152d" stroke="#00e5ff" stroke-width="1.5"/>
+  <path d="M170 208V238M184 208V238M198 208V238M212 208V238M226 208V238M240 208V238" stroke="#f1f5f9" stroke-width="2" stroke-opacity="0.7"/>
+  <path d="M158 223H242" stroke="#c084fc" stroke-width="2"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7">
+    <path d="M300 60H340V100"/>
+    <path d="M60 60H100M60 60V100"/>
+  </g>
+  <text x="200" y="290" text-anchor="middle" font-family="Courier New, monospace" font-size="11" fill="#00e5ff" fill-opacity="0.8" letter-spacing="2">MM-007 SKULL SCULPTOR</text>
+</svg>

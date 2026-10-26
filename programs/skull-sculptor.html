@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-007 Skull Sculptor // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Skull Sculptor: parameters, presets, palette and geometry. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Topology: closed manifold lathe-style surface (bottom pole -> rings -> top pole). Built once.
+      // -----------------------------------------------------------------------
+      var SEG = 288;      // Angular segments around the skull
+      var B_RINGS = 3;    // Concentric rings on the flat base
+      var D_RINGS = 118;  // Rings up the dome
+      var TOTAL_RINGS = B_RINGS + D_RINGS;
+      var TOPO = buildTopology(TOTAL_RINGS, SEG);
+      var SIN = new Float32Array(SEG), COS = new Float32Array(SEG);
+      for (var si = 0; si < SEG; si++) { SIN[si] = Math.sin(si / SEG * Math.PI * 2); COS[si] = Math.cos(si / SEG * Math.PI * 2); }
+
+      function buildTopology(rings, seg) {
+        var indices = [];
+        var topPole = 1 + rings * seg;
+        function rs(r) { return 1 + r * seg; }
+        for (var j = 0; j < seg; j++) indices.push(0, rs(0) + (j + 1) % seg, rs(0) + j);
+        for (var r = 0; r < rings - 1; r++) {
+          for (var k = 0; k < seg; k++) {
+            var nk = (k + 1) % seg;
+            indices.push(rs(r) + k, rs(r) + nk, rs(r + 1) + nk);
+            indices.push(rs(r) + k, rs(r + 1) + nk, rs(r + 1) + k);
+          }
+        }
+        for (var m = 0; m < seg; m++) indices.push(rs(rings - 1) + m, rs(rings - 1) + (m + 1) % seg, topPole);
+        return new Uint32Array(indices);
+      }
+
+      function smoothstep(e0, e1, x) {
+        var t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+        return t * t * (3 - 2 * t);
+      }
+      function smootherstep(x) {
+        var t = Math.max(0, Math.min(1, x));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      }
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function sgnpow(v, e) { return (v < 0 ? -1 : 1) * Math.pow(Math.abs(v), e); }
+
+      // -----------------------------------------------------------------------
+      // Skull surface
+      // -----------------------------------------------------------------------
+      var PHI0 = -Math.PI / 2 + 0.7; // flat base meets the jaw here
+      var S0 = Math.sin(PHI0);
+
+      function setupGeo(p) {
+        return {
+          W: p.skullWidth, D: p.skullDepth, H: p.skullHeight,
+          dome: p.dome, jawW: p.jawWidth / 100, jawD: p.jawDepth / 100,
+          cheek: p.cheek / (p.skullWidth / 2), square: p.faceFlat / 100
+        };
+      }
+      function phiAt(k) { return PHI0 + (Math.PI / 2 - PHI0) * (k / D_RINGS); }
+      function yAt(phi, g) { return g.H * (Math.sin(phi) - S0) / (1 - S0); }
+
+      // Horizontal position (x, z) of the surface at height phi and angle theta (0 = front, +z).
+      function shapeXZ(phi, theta, g) {
+        var h = (Math.sin(phi) - S0) / (1 - S0);
+        var prof = Math.pow(Math.max(Math.cos(phi), 0), g.dome);
+        var jb = smoothstep(0.02, 0.62, h);
+        var gh = (h - 0.45) / 0.13;
+        var wx = g.jawW + (1 - g.jawW) * jb + g.cheek * Math.exp(-0.5 * gh * gh);
+        var wz = g.jawD + (1 - g.jawD) * smoothstep(0.02, 0.7, h);
+        var n = 2 + g.square * 2.4 * (1 - smoothstep(0.5, 0.9, h));
+        var e = 2 / n;
+        return [g.W / 2 * prof * wx * sgnpow(Math.sin(theta), e), g.D / 2 * prof * wz * sgnpow(Math.cos(theta), e)];
+      }
+
+      // Z of the ideal surface in front at (x, y): used to seat the teeth.
+      function surfaceZ(x, y, g) {
+        var lo = PHI0, hi = Math.PI / 2, i;
+        for (i = 0; i < 40; i++) { var mid = (lo + hi) / 2; if (yAt(mid, g) < y) lo = mid; else hi = mid; }
+        var phi = lo, a = 0, b = Math.PI / 2;
+        if (Math.abs(x) >= Math.abs(shapeXZ(phi, b, g)[0])) return shapeXZ(phi, b, g)[1];
+        for (i = 0; i < 40; i++) { var m2 = (a + b) / 2; if (Math.abs(shapeXZ(phi, m2, g)[0]) < Math.abs(x)) a = m2; else b = m2; }
+        return shapeXZ(phi, (a + b) / 2, g)[1];
+      }
+
+      function buildBase(g) {
+        var vc = 2 + TOTAL_RINGS * SEG;
+        var pos = new Float32Array(vc * 3);
+        var i, j, v, xz;
+        for (i = 0; i < TOTAL_RINGS; i++) {
+          var y = 0, f = 1, phi = PHI0;
+          if (i < B_RINGS) f = (i + 1) / (B_RINGS + 1);
+          else { phi = phiAt(i - B_RINGS); y = yAt(phi, g); }
+          for (j = 0; j < SEG; j++) {
+            var theta = j / SEG * Math.PI * 2;
+            xz = shapeXZ(phi, theta, g);
+            v = 1 + i * SEG + j;
+            pos[v * 3] = xz[0] * f;
+            pos[v * 3 + 1] = y;
+            pos[v * 3 + 2] = xz[1] * f;
+          }
+        }
+        pos[(1 + TOTAL_RINGS * SEG) * 3 + 1] = g.H;
+        return pos;
+      }
+
+      // -----------------------------------------------------------------------
+      // Face features: eye sockets, nose cavity and mouth pressed in as smooth pockets
+      // -----------------------------------------------------------------------
+      var NOSE_POLY = [[0, 0.95], [-0.95, -0.8], [-0.3, -0.5], [0, -0.85], [0.3, -0.5], [0.95, -0.8]];
+
+      function polyDist(poly, x, y) {
+        var d = Infinity, inside = false;
+        for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          var ax = poly[j][0], ay = poly[j][1], bx = poly[i][0], by = poly[i][1];
+          var ex = bx - ax, ey = by - ay, wx = x - ax, wy = y - ay;
+          var t = clamp((wx * ex + wy * ey) / (ex * ex + ey * ey || 1), 0, 1);
+          var dx = wx - ex * t, dy = wy - ey * t;
+          d = Math.min(d, dx * dx + dy * dy);
+          if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+        }
+        d = Math.sqrt(d);
+        return inside ? -d : d;
+      }
+
+      function rampFor(depth) { return 1.2 + depth * 0.35; }
+
+      // Mouth geometry in the front plane (mm): centre line, half sizes, corner radius and the teeth to place.
+      function mouthGeo(p) {
+        var hw = p.mouthWidth / 2, hh = p.mouthHeight / 2;
+        var round = hh * p.mouthRound / 100;
+        var inner = Math.max(2, hw - round * 0.55 - 1);
+        var rows = Math.round(p.teethRows);
+        var n = Math.round(p.toothCount);
+        var geo = { hw: hw, hh: hh, round: round, y: p.mouthY / 100 * p.skullHeight, curve: p.mouthCurve, inner: inner, teeth: [] };
+        geo.cy = function (u) { var t = u / hw; return geo.y + p.mouthCurve * t * t; };
+        if (n < 1) return geo;
+        var base = p.toothLen / 100 * 2 * hh / rows;
+        var gap = p.toothGap;
+        var maxH = 2 * hh * 0.97;
+        function add(row, c, wf, hm, pointy) {
+          var pitch = inner * 2 / n;
+          var w = Math.max(1.2, pitch * wf - gap);
+          var h = clamp(base * hm, 1.2, maxH);
+          var u = c * inner;
+          geo.teeth.push({ row: row, u: u, w: w, h: h, point: pointy === undefined ? p.toothPoint / 100 : pointy });
+        }
+        for (var row = 0; row < rows; row++) {
+          var up = row === 0;
+          if (p.toothStyle === 3) { // buck teeth: two big upper front teeth only
+            if (up) { add(0, -0.17, n * 0.17, 1.15); add(0, 0.17, n * 0.17, 1.15); }
+            continue;
+          }
+          for (var i = 0; i < n; i++) {
+            var c = -1 + (2 * i + 1) / n;
+            var hm = 1, wf = 1, pointy;
+            if (p.toothStyle === 1 && up && Math.abs(c) < 1.01 / n) continue; // gap tooth
+            if (p.toothStyle === 2) { // fangs
+              hm = 0.5;
+              if (Math.abs(Math.abs(c) - 0.6) < 1.01 / n * 0.99 && up) { hm = 1.75; pointy = 1; }
+            }
+            if (p.toothStyle === 4) { // zigzag saw
+              hm = (i + row) % 2 === 0 ? 1 : 0.55;
+              pointy = 1;
+            }
+            if (p.toothStyle === 5) { // broken teeth
+              if ((up && i % 3 === 1) || (!up && i % 4 === 2)) continue;
+              hm = 0.65 + 0.35 * (((i * 7 + row * 3) % 5) / 4);
+            }
+            add(row, c, wf, hm, pointy);
+          }
+        }
+        return geo;
+      }
+
+      // Applies the sockets to the base positions. Returns per-vertex masks for splitting parts.
+      function applyFeatures(pos, p, g, mg) {
+        var vc = pos.length / 3;
+        var eyeM = new Float32Array(vc), noseM = new Float32Array(vc), mouthM = new Float32Array(vc);
+        var cy = g.H * 0.5;
+        var eyeY = p.eyeY / 100 * g.H;
+        var eyes = [-1, 1].map(function (s) {
+          var left = s < 0;
+          var size = p.eyeSize * (left ? p.eyeLeftSize / 100 : 1);
+          var a = size / 2, b = a * p.eyeHeight / 100;
+          var ang = s * (p.eyeTilt + (left ? p.eyeLeftTilt : 0)) * Math.PI / 180;
+          return { cx: s * p.eyeSpacing / 2, cy: eyeY + (left ? p.eyeLeftShift : 0), a: a, b: b, cos: Math.cos(ang), sin: Math.sin(ang), n: p.eyeShape, ramp: rampFor(p.eyeDepth) };
+        });
+        var noseW = p.noseSize / 2 * p.noseWide / 100, noseH = p.noseSize / 2 * 1.25;
+        var noseY = p.noseY / 100 * g.H;
+        var noseRamp = rampFor(p.noseDepth), mouthRamp = rampFor(p.mouthDepth);
+        var browY = eyeY + p.eyeSize * p.eyeHeight / 200 + 2.5;
+        var browSu = p.eyeSize * 0.75;
+        var mx = mg.hw + mouthRamp, my0 = mg.y - mg.hh - Math.abs(mg.curve) - mouthRamp, my1 = mg.y + mg.hh + Math.abs(mg.curve) + mouthRamp;
+        for (var v = 0; v < vc; v++) {
+          var x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
+          if (z <= 0 || y < 4) continue;
+          var ex = x, ey = y - cy, ez = z;
+          var len = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
+          var out = 0, d = 0, k, m;
+          if (p.brow > 0 && y > eyeY - 2) {
+            for (k = 0; k < 2; k++) {
+              var du = (x - eyes[k].cx) / browSu, dw = (y - browY) / 3.6;
+              out += p.brow * Math.exp(-0.5 * (du * du + dw * dw));
+            }
+          }
+          // Eyes
+          for (k = 0; k < 2; k++) {
+            var e = eyes[k];
+            var u = x - e.cx, w = y - e.cy;
+            if (Math.abs(u) > e.a + e.ramp + 6 || Math.abs(w) > e.b + e.ramp + 6) {
+              if (Math.abs(u) > (Math.max(e.a, e.b)) * 1.5 + e.ramp + 6) continue;
+            }
+            var lu = u * e.cos + w * e.sin, lw = -u * e.sin + w * e.cos;
+            var q = Math.pow(Math.pow(Math.abs(lu) / e.a, e.n) + Math.pow(Math.abs(lw) / e.b, e.n), 1 / e.n);
+            var sd = (q - 1) * Math.min(e.a, e.b) - e.ramp * 0.6;
+            if (sd < e.ramp) { m = smootherstep(-sd / e.ramp); if (m > eyeM[v]) eyeM[v] = m; }
+          }
+          if (eyeM[v] > 0) d = Math.max(d, eyeM[v] * p.eyeDepth);
+          // Nose
+          if (Math.abs(x) < noseW + noseRamp + 2 && Math.abs(y - noseY) < noseH + noseRamp + 2) {
+            var nsd = polyDist(NOSE_POLY, x / noseW, (y - noseY) / noseH) * Math.min(noseW, noseH) - noseRamp * 0.6;
+            if (nsd < noseRamp) { noseM[v] = smootherstep(-nsd / noseRamp); d = Math.max(d, noseM[v] * p.noseDepth); }
+          }
+          // Mouth
+          if (Math.abs(x) < mx && y > my0 && y < my1) {
+            var qx = Math.abs(x) - (mg.hw - mg.round), qy = Math.abs(y - mg.cy(x)) - (mg.hh - mg.round);
+            var msd = Math.sqrt(Math.pow(Math.max(qx, 0), 2) + Math.pow(Math.max(qy, 0), 2)) + Math.min(Math.max(qx, qy), 0) - mg.round - mouthRamp * 0.6;
+            if (msd < mouthRamp) { mouthM[v] = smootherstep(-msd / mouthRamp); d = Math.max(d, mouthM[v] * p.mouthDepth); }
+          }
+          var shift = (out - d) / len;
+          if (shift !== 0) {
+            pos[v * 3] = x + ex * shift;
+            pos[v * 3 + 1] = y + ey * shift;
+            pos[v * 3 + 2] = z + ez * shift;
+          }
+        }
+        return { eye: eyeM, nose: noseM, mouth: mouthM };
+      }
+
+      // Splits the surface into skull, eye sockets, nose cavity and mouth so each can be painted on its own.
+      function expandSkull(pos, masks) {
+        var tris = TOPO.length / 3, cat = new Uint8Array(tris), counts = [0, 0, 0, 0], t, k;
+        var arrs = [masks.eye, masks.nose, masks.mouth];
+        for (t = 0; t < tris; t++) {
+          var c = 0;
+          for (k = 0; k < 3; k++) {
+            var s = (arrs[k][TOPO[t * 3]] + arrs[k][TOPO[t * 3 + 1]] + arrs[k][TOPO[t * 3 + 2]]) / 3;
+            if (s > 0.25) c = k + 1;
+          }
+          cat[t] = c;
+          counts[c]++;
+        }
+        var out = counts.map(function (n) { return new Float32Array(n * 9); });
+        var at = [0, 0, 0, 0];
+        for (t = 0; t < tris; t++) {
+          var arr = out[cat[t]], o = at[cat[t]];
+          for (k = 0; k < 3; k++) {
+            var v = TOPO[t * 3 + k];
+            arr[o++] = pos[v * 3]; arr[o++] = pos[v * 3 + 1]; arr[o++] = pos[v * 3 + 2];
+          }
+          at[cat[t]] = o;
+        }
+        var names = ['skull', 'eyes', 'nose', 'mouth'], meshes = [];
+        for (var i = 0; i < 4; i++) if (counts[i]) meshes.push({ name: names[i], positions: out[i], smoothGroup: 'skull' });
+        return meshes;
+      }
+
+      // -----------------------------------------------------------------------
+      // Teeth: closed beveled prisms standing in the mouth pocket
+      // -----------------------------------------------------------------------
+      // Convex outline (counter-clockwise from the front) of a tooth hanging from y = 0 down to y = -h.
+      function toothOutline(w, h, point, upper) {
+        var tipHalf = Math.max(0.25, w / 2 * (1 - point));
+        var y1 = -h * (1 - point * 0.7);
+        var e = 1.5;
+        var pts = [[-w / 2, e], [-w / 2, y1], [-tipHalf, -h], [tipHalf, -h], [w / 2, y1], [w / 2, e]].filter(function (q, i, all) {
+          var prev = all[(i + all.length - 1) % all.length];
+          return Math.abs(q[0] - prev[0]) + Math.abs(q[1] - prev[1]) > 0.01;
+        });
+        if (upper) return pts;
+        return pts.map(function (q) { return [q[0], -q[1]]; }).reverse();
+      }
+
+      function toothPositions(tooth, mg, g, p) {
+        var upper = tooth.row === 0;
+        var yBase = upper ? mg.cy(tooth.u) + mg.hh : mg.cy(tooth.u) - mg.hh;
+        var ring = toothOutline(tooth.w, tooth.h, tooth.point, upper);
+        var mid = yBase + (upper ? -tooth.h / 2 : tooth.h / 2);
+        var floorZ = surfaceZ(tooth.u, mid, g) - p.mouthDepth;
+        var zb = floorZ - 1.5, zf = floorZ + p.toothThick;
+        var bev = Math.min(0.7, tooth.w * 0.25, tooth.h * 0.25);
+        var n = ring.length, i, cxm = 0, cym = 0;
+        ring.forEach(function (q) { cxm += q[0] / n; cym += q[1] / n; });
+        var sx = Math.max(0.3, 1 - bev * 2 / tooth.w), sy = Math.max(0.3, 1 - bev * 2 / tooth.h);
+        var layers = [
+          { z: zb, pts: ring },
+          { z: zf - bev, pts: ring },
+          { z: zf, pts: ring.map(function (q) { return [cxm + (q[0] - cxm) * sx, cym + (q[1] - cym) * sy]; }) }
+        ];
+        var out = [];
+        function P(layer, idx) { var q = layers[layer].pts[idx]; return [tooth.u + q[0], yBase + q[1], layers[layer].z]; }
+        function tri(a, b, c) { out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+        for (var l = 0; l < 2; l++) {
+          for (i = 0; i < n; i++) {
+            var j = (i + 1) % n;
+            tri(P(l, i), P(l, j), P(l + 1, j));
+            tri(P(l, i), P(l + 1, j), P(l + 1, i));
+          }
+        }
+        var cb = [tooth.u + cxm, yBase + cym, zb], cf = [tooth.u + cxm, yBase + cym, zf];
+        for (i = 0; i < n; i++) {
+          var k2 = (i + 1) % n;
+          tri(cb, P(0, k2), P(0, i));
+          tri(cf, P(2, i), P(2, k2));
+        }
+        return new Float32Array(out);
+      }
+
+      // -----------------------------------------------------------------------
+      // Picture cards for the mouth presets
+      // -----------------------------------------------------------------------
+      function mouthCardSvg(values) {
+        var p = {};
+        PARAMS.forEach(function (d) { p[d.key] = d.value; });
+        Object.keys(values).forEach(function (k) { p[k] = values[k]; });
+        var mg = mouthGeo(p);
+        var S = 1.5, oy = mg.y;
+        function X(u) { return (50 + u * S).toFixed(1); }
+        function Y(y) { return (40 - (y - oy) * S).toFixed(1); }
+        // Outline: a rounded box sheared by the smile curve.
+        var pts = [], r = mg.round, i, a;
+        var corners = [[mg.hw - r, mg.hh - r, 0], [-(mg.hw - r), mg.hh - r, 90], [-(mg.hw - r), -(mg.hh - r), 180], [mg.hw - r, -(mg.hh - r), 270]];
+        corners.forEach(function (c) {
+          for (i = 0; i <= 6; i++) {
+            a = (c[2] + i * 15) * Math.PI / 180;
+            var u = c[0] + r * Math.cos(a), w = c[1] + r * Math.sin(a);
+            pts.push(X(u) + ',' + Y(oy + w + mg.curve * Math.pow(u / mg.hw, 2)));
+          }
+        });
+        var teeth = mg.teeth.map(function (t) {
+          var yb = (t.row === 0 ? mg.cy(t.u) + mg.hh : mg.cy(t.u) - mg.hh);
+          var ring = toothOutline(t.w, t.h, t.point, t.row === 0);
+          var d = ring.map(function (q, idx) { return (idx ? 'L' : 'M') + X(t.u + q[0]) + ' ' + Y(yb + Math.max(-9999, q[1] > 0 ? Math.min(q[1], 0.01) : q[1])); }).join('') + 'Z';
+          return '<path class="mm-skull-teeth" d="' + d + '"/>';
+        }).join('');
+        var bone = '<path class="mm-skull-bone" d="M12 4h76q4 0 4 4v46q0 12-12 12H20Q8 66 8 54V8q0-4 4-4z"/>';
+        var eyes = '<ellipse cx="32" cy="14" rx="9" ry="6.5"/><ellipse cx="68" cy="14" rx="9" ry="6.5"/>';
+        return '<svg viewBox="0 0 100 70" aria-hidden="true">' + bone + eyes + '<polygon points="' + pts.join(' ') + '"/>' + teeth + '</svg>';
+      }
+
+      // -----------------------------------------------------------------------
+      // Generator contract
+      // -----------------------------------------------------------------------
+      var TOOTH_STYLES = ['Even', 'Gap tooth', 'Fangs', 'Buck teeth', 'Zigzag', 'Broken'];
+      var PARAMS = [
+        { group: 'Eyes', key: 'eyeSize', label: 'Eye width', unit: ' mm', min: 6, max: 30, step: 0.5, value: 16 },
+        { group: 'Eyes', key: 'eyeHeight', label: 'Eye height (flat ↔ tall)', unit: '%', min: 40, max: 150, step: 5, value: 100 },
+        { group: 'Eyes', key: 'eyeTilt', label: 'Eye tilt (sad ↔ angry)', unit: '°', min: -35, max: 35, step: 1, value: 10,
+          format: function (v) { return (v > 0 ? '+' : '') + v + '°'; } },
+        { group: 'Eyes', key: 'eyeShape', label: 'Eye shape (round ↔ square)', unit: '', min: 2, max: 7, step: 0.2, value: 2.6 },
+        { group: 'Eyes', key: 'eyeSpacing', label: 'Eye spacing', unit: ' mm', min: 20, max: 56, step: 0.5, value: 34 },
+        { group: 'Eyes', key: 'eyeY', label: 'Eye height on face', unit: '%', min: 40, max: 85, step: 1, value: 62 },
+        { group: 'Eyes', key: 'eyeDepth', label: 'Eye socket depth', unit: ' mm', min: 2, max: 16, step: 0.5, value: 8 },
+        { group: 'Eyes', key: 'brow', label: 'Brow ridge', unit: ' mm', min: 0, max: 5, step: 0.25, value: 2 },
+        { group: 'Eye asymmetry', key: 'eyeLeftSize', label: 'Left eye size', unit: '%', min: 50, max: 140, step: 5, value: 100 },
+        { group: 'Eye asymmetry', key: 'eyeLeftTilt', label: 'Left eye extra tilt', unit: '°', min: -30, max: 30, step: 1, value: 0 },
+        { group: 'Eye asymmetry', key: 'eyeLeftShift', label: 'Left eye up / down', unit: ' mm', min: -8, max: 8, step: 0.5, value: 0 },
+        { group: 'Skull shape', key: 'skullWidth', label: 'Skull width', unit: ' mm', min: 60, max: 110, step: 1, value: 80 },
+        { group: 'Skull shape', key: 'skullDepth', label: 'Skull front to back', unit: ' mm', min: 60, max: 110, step: 1, value: 84 },
+        { group: 'Skull shape', key: 'skullHeight', label: 'Skull height', unit: ' mm', min: 70, max: 130, step: 1, value: 95 },
+        { group: 'Skull shape', key: 'dome', label: 'Cranium (boxy ↔ round)', unit: '', min: 0.45, max: 1, step: 0.05, value: 0.7 },
+        { group: 'Skull shape', key: 'jawWidth', label: 'Jaw width', unit: '%', min: 55, max: 100, step: 1, value: 76 },
+        { group: 'Skull shape', key: 'jawDepth', label: 'Jaw depth', unit: '%', min: 60, max: 100, step: 1, value: 82 },
+        { group: 'Skull shape', key: 'cheek', label: 'Cheekbones', unit: ' mm', min: 0, max: 8, step: 0.5, value: 3 },
+        { group: 'Skull shape', key: 'faceFlat', label: 'Face flatness', unit: '%', min: 0, max: 100, step: 5, value: 55 },
+        { group: 'Nose', key: 'noseSize', label: 'Nose size', unit: ' mm', min: 6, max: 30, step: 0.5, value: 12 },
+        { group: 'Nose', key: 'noseWide', label: 'Nose width (slit ↔ wide)', unit: '%', min: 50, max: 160, step: 5, value: 100 },
+        { group: 'Nose', key: 'noseY', label: 'Nose height on face', unit: '%', min: 25, max: 70, step: 1, value: 43 },
+        { group: 'Nose', key: 'noseDepth', label: 'Nose cavity depth', unit: ' mm', min: 2, max: 16, step: 0.5, value: 8 },
+        { tab: 'mouth', group: 'Mouth', key: 'mouthWidth', label: 'Mouth width', unit: ' mm', min: 16, max: 62, step: 1, value: 40 },
+        { tab: 'mouth', group: 'Mouth', key: 'mouthHeight', label: 'Mouth height (jaw open)', unit: ' mm', min: 3, max: 34, step: 0.5, value: 12 },
+        { tab: 'mouth', group: 'Mouth', key: 'mouthY', label: 'Mouth position', unit: '%', min: 8, max: 40, step: 1, value: 21 },
+        { tab: 'mouth', group: 'Mouth', key: 'mouthCurve', label: 'Mouth curve (frown ↔ smile)', unit: ' mm', min: -12, max: 12, step: 0.5, value: 2,
+          format: function (v) { return (v > 0 ? '+' : '') + v + ' mm'; } },
+        { tab: 'mouth', group: 'Mouth', key: 'mouthRound', label: 'Mouth corners (square ↔ round)', unit: '%', min: 0, max: 100, step: 5, value: 60 },
+        { tab: 'mouth', group: 'Mouth', key: 'mouthDepth', label: 'Mouth depth', unit: ' mm', min: 3, max: 12, step: 0.5, value: 6 },
+        { tab: 'mouth', group: 'Teeth', key: 'toothStyle', label: 'Tooth pattern', unit: '', min: 0, max: 5, step: 1, value: 0,
+          format: function (v) { return TOOTH_STYLES[Math.round(v)]; } },
+        { tab: 'mouth', group: 'Teeth', key: 'toothCount', label: 'Teeth per row', unit: '', min: 0, max: 16, step: 1, value: 8 },
+        { tab: 'mouth', group: 'Teeth', key: 'teethRows', label: 'Rows (upper only ↔ both)', unit: '', min: 1, max: 2, step: 1, value: 2 },
+        { tab: 'mouth', group: 'Teeth', key: 'toothLen', label: 'Tooth length (of mouth)', unit: '%', min: 20, max: 100, step: 5, value: 100 },
+        { tab: 'mouth', group: 'Teeth', key: 'toothGap', label: 'Gap between teeth', unit: ' mm', min: 0, max: 3, step: 0.1, value: 0.8 },
+        { tab: 'mouth', group: 'Teeth', key: 'toothPoint', label: 'Tooth shape (square ↔ pointed)', unit: '%', min: 0, max: 100, step: 5, value: 0 },
+        { tab: 'mouth', group: 'Teeth', key: 'toothThick', label: 'Tooth thickness', unit: ' mm', min: 2, max: 8, step: 0.5, value: 4.5 }
+      ];
+
+      var DEFAULTS = {};
+      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
+      function preset(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      // Mouth and teeth presets, shown as picture cards in the Mouth tab.
+      var MOUTH_PRESETS = [
+        { name: 'Grin', values: { mouthWidth: 44, mouthHeight: 12, mouthCurve: 4, mouthRound: 60, toothStyle: 0, toothCount: 9, teethRows: 2, toothLen: 100, toothPoint: 0, toothGap: 0.8 } },
+        { name: 'Grimace', values: { mouthWidth: 46, mouthHeight: 9, mouthCurve: 0, mouthRound: 30, toothStyle: 0, toothCount: 12, teethRows: 2, toothLen: 100, toothPoint: 0, toothGap: 0.5 } },
+        { name: 'Gap tooth', values: { mouthWidth: 38, mouthHeight: 14, mouthCurve: 3, mouthRound: 70, toothStyle: 1, toothCount: 8, teethRows: 2, toothLen: 100, toothPoint: 0, toothGap: 1 } },
+        { name: 'Fangs', values: { mouthWidth: 42, mouthHeight: 16, mouthCurve: 1, mouthRound: 50, toothStyle: 2, toothCount: 10, teethRows: 2, toothLen: 100, toothPoint: 60, toothGap: 0.6 } },
+        { name: 'Buck teeth', values: { mouthWidth: 30, mouthHeight: 12, mouthCurve: 3, mouthRound: 100, toothStyle: 3, toothCount: 6, teethRows: 2, toothLen: 100, toothPoint: 0, toothGap: 1 } },
+        { name: 'Open jaw', values: { mouthWidth: 34, mouthHeight: 28, mouthCurve: -2, mouthRound: 100, toothStyle: 0, toothCount: 6, teethRows: 2, toothLen: 40, toothPoint: 25, toothGap: 1 } },
+        { name: 'Frown', values: { mouthWidth: 42, mouthHeight: 10, mouthCurve: -8, mouthRound: 70, toothStyle: 0, toothCount: 8, teethRows: 1, toothLen: 85, toothPoint: 0, toothGap: 0.9 } },
+        { name: 'Zigzag', values: { mouthWidth: 48, mouthHeight: 16, mouthCurve: 2, mouthRound: 30, toothStyle: 4, toothCount: 9, teethRows: 2, toothLen: 100, toothPoint: 100, toothGap: 0.2 } },
+        { name: 'Broken', values: { mouthWidth: 42, mouthHeight: 14, mouthCurve: 1, mouthRound: 60, toothStyle: 5, toothCount: 9, teethRows: 2, toothLen: 100, toothPoint: 10, toothGap: 1 } },
+        { name: 'Toothless', values: { mouthWidth: 34, mouthHeight: 9, mouthCurve: 3, mouthRound: 100, toothStyle: 0, toothCount: 0, teethRows: 1, toothLen: 100, toothPoint: 0, toothGap: 0.8 } }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-007',
+        category: 'SPOOKY // BONES',
+        title: 'Skull Sculptor',
+        fileName: 'Skull_Sculptor',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#f1f5f9',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Old Ivory', color: '#fde8b4' },
+          { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' },
+          { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { skull: 'Skull', eyes: 'Eye sockets', nose: 'Nose cavity', mouth: 'Mouth', teeth: 'Teeth' },
+        printSettings: {
+          material: 'PLA',
+          nozzle: 0.4,
+          layerHeight: 0.2,
+          infill: 12,
+          walls: 3,
+          topLayers: 5,
+          bottomLayers: 4,
+          supports: false,
+          brim: 3,
+          notes: 'Prints upright on its flat jaw base. A brim helps the small base. The sockets and mouth are shallow pockets so no supports are needed; the upper teeth bridge short gaps.'
+        },
+
+        parameters: PARAMS,
+
+        presets: [
+          preset('Classic skull', {}),
+          preset('Angry skull', { eyeTilt: 24, eyeShape: 3.4, eyeHeight: 75, brow: 4, toothStyle: 4, toothPoint: 100, toothCount: 9 }),
+          preset('Cute skull', { skullWidth: 90, skullHeight: 88, eyeSize: 24, eyeHeight: 115, eyeTilt: -6, eyeShape: 2, eyeSpacing: 38, eyeY: 58, noseSize: 9, mouthWidth: 28, mouthHeight: 9, mouthCurve: 4, toothCount: 5, brow: 0 }),
+          preset('Long skull', { skullWidth: 70, skullHeight: 118, skullDepth: 76, jawWidth: 70, eyeSize: 17, eyeSpacing: 31 }),
+          preset('Wonky skull', { eyeLeftSize: 130, eyeLeftTilt: 12, eyeLeftShift: -3, eyeTilt: 4, mouthCurve: -3, toothStyle: 5, toothCount: 8 }),
+          preset('Default skull', {})
+        ],
+
+        tabs: [{
+          id: 'mouth',
+          label: 'Mouth',
+          hint: 'Pick a mouth and teeth style, then fine-tune the sliders',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Mouth & teeth styles'));
+            var grid = h('div', { class: 'mm-preset-cards' });
+            MOUTH_PRESETS.forEach(function (preset) {
+              var card = h('button', { class: 'mm-preset-card', type: 'button', title: preset.name, onclick: function () {
+                api.setParams(preset.values);
+                api.toast('Mouth style: ' + preset.name);
+              } });
+              card.innerHTML = mouthCardSvg(preset.values) + '<span>' + preset.name + '</span>';
+              grid.appendChild(card);
+            });
+            container.appendChild(grid);
+            container.appendChild(h('p', { class: 'mm-note' }, 'Cards set the mouth and teeth sliders below; keep tuning them by hand. Teeth are separate shells you can paint in the Color tool.'));
+          }
+        }],
+
+        build: function (p, api) {
+          var g = setupGeo(p);
+          var mg = mouthGeo(p);
+          var pos = buildBase(g);
+          var masks = applyFeatures(pos, p, g, mg);
+          var meshes = expandSkull(pos, masks);
+          mg.teeth.forEach(function (t) {
+            meshes.push({ name: 'teeth', positions: toothPositions(t, mg, g, p) });
+          });
+          return meshes;
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

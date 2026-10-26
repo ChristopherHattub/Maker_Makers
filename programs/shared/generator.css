@@ -615,6 +615,9 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-face-body { fill: #fb923c; }
 .mm-face-stem { fill: none; stroke: #86efac; stroke-width: 5; stroke-linecap: round; }
 .mm-preset-card polygon { fill: #1b1206; }
+.mm-preset-card .mm-skull-bone { fill: #f1f5f9; }
+.mm-preset-card .mm-skull-teeth { fill: #fff7d6; stroke: #1b1206; stroke-width: 0.6; }
+.mm-preset-card ellipse { fill: #1b1206; }
 
 /* ---------- Print settings tab ---------- */
 .mm-slider select {
