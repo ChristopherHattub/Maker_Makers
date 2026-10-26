@@ -63,7 +63,7 @@
         // Lathe axis (y) becomes the body axis (z); lathe z becomes down. Then pitch around the front pole.
         var X = lx, Y = -lz, Z = ly - s.shiftZ;
         var c = Math.cos(s.pitch), sn = Math.sin(s.pitch);
-        return [X + s.ox, Y * c - Z * sn + s.oy, Y * sn + Z * c + s.oz];
+        return [X + s.ox, Math.max(Y * c - Z * sn + s.oy, 0), Y * sn + Z * c + s.oz];
       }
 
       function blobPositions(s) {
@@ -84,8 +84,7 @@
       }
 
       function setupBody(p) {
-        var yc = Math.max(p.bodyLift, p.headHeight / 2 + 4,
-          p.abdHeight / 2 + 5 + (p.abdTilt < 0 ? p.abdLength * Math.sin(-p.abdTilt * Math.PI / 180) : 0));
+        var yc = p.bodyLift; // head and abdomen are flattened at the bed (see blobPoint), so a low body sits on a flat belly
         // shiftZ is 0 for the head (centred) and half the length for the abdomen (its front pole is the pivot).
         var head = { len: p.headLength, rx: p.headWidth / 2, rz: p.headHeight / 2, shape: p.headShape, egg: 0, shiftZ: 0, pitch: 0, ox: 0, oy: yc, oz: 0 };
         // The abdomen's front pole sits inside the rear of the head so the two shells overlap well.
@@ -130,7 +129,7 @@
       // -----------------------------------------------------------------------
       // Legs: a bent path (hip -> knee -> ankle -> foot on the bed) swept with a round tube.
       // -----------------------------------------------------------------------
-      var FOOT_DROP = 6; // the last bit of every leg is vertical so the foot ends flat on the bed
+      var FOOT_RUN = 5; // the last bit of every leg runs flat along the bed
 
       function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
       function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
@@ -169,10 +168,10 @@
         return { pts: out, total: total };
       }
 
-      function buildLeg(P, p, kneeFrac, dir) {
+      function buildLeg(P, p, kneeFrac) {
         var path = resample(legPath(P, p.legRound), L_RINGS);
         var pts = path.pts;
-        var n1 = norm(cross(dir, [0, 1, 0])); // out of the leg's plane
+        var n1 = norm(cross(sub(pts[1], pts[0]), [0, 1, 0])); // sideways of the first stretch of the leg
         var pos = new Float32Array((2 + L_RINGS * L_SEG) * 3);
         for (var i = 0; i < L_RINGS; i++) {
           var T = norm(sub(pts[Math.min(i + 1, L_RINGS - 1)], pts[Math.max(i - 1, 0)]));
@@ -196,21 +195,28 @@
         return expand(LEG_TOPO, pos);
       }
 
+      // Legs rest on the bed (no supports needed): hip -> knee -> ankle -> foot, with the foot and knee at bed level
+      // unless the knee is lifted. Front pairs sweep forward and rear pairs backward below the knee, so legs fan out.
       function buildLegs(p, body) {
         var out = [];
         var pairs = Math.round(p.legPairs);
+        var tipR = Math.max(1, (p.legThick / 2) * (1 - p.legTaper / 100));
+        var kneeS = p.legFemur / 100;
+        var kneeR = Math.max(1, (p.legThick / 2) * (1 - (p.legTaper / 100) * kneeS)) * (1 + p.legKnob / 100);
         for (var i = 0; i < pairs; i++) {
           var f = pairs > 1 ? i / (pairs - 1) : 0.5; // 0 = front pair, 1 = rear pair
           var theta = ((p.legLean + p.legSpread * (1 - 2 * f)) * Math.PI) / 180;
+          var theta2 = theta + ((p.legSweep * (1 - 2 * f)) * Math.PI) / 180;
           var reach = p.legReach * (1 + (p.legLenDiff / 100) * (2 * f - 1));
           [-1, 1].forEach(function (side) {
-            var dir = norm([side * Math.cos(theta), 0, Math.sin(theta)]);
-            var hip = [side * Math.cos(theta) * p.headWidth * 0.2, body.yc, Math.sin(theta) * p.headLength * 0.22];
-            var foot = [hip[0] + dir[0] * reach, 0, hip[2] + dir[2] * reach];
-            var knee = [hip[0] + dir[0] * reach * (p.legFemur / 100), body.yc + p.kneeRise, hip[2] + dir[2] * reach * (p.legFemur / 100)];
-            var ankle = [foot[0], FOOT_DROP, foot[2]];
+            var dir = [side * Math.cos(theta), 0, Math.sin(theta)];
+            var dir2 = [side * Math.cos(theta2), 0, Math.sin(theta2)];
+            var hip = [dir[0] * p.headWidth * 0.2, body.yc, dir[2] * p.headLength * 0.22];
+            var knee = [hip[0] + dir[0] * reach * kneeS, kneeR + p.kneeLift, hip[2] + dir[2] * reach * kneeS];
+            var foot = [knee[0] + dir2[0] * reach * (1 - kneeS), tipR, knee[2] + dir2[2] * reach * (1 - kneeS)];
+            var ankle = [foot[0] - dir2[0] * FOOT_RUN, tipR, foot[2] - dir2[2] * FOOT_RUN];
             var d1 = len3(sub(knee, hip)), d2 = len3(sub(ankle, knee));
-            out.push({ name: 'legs', positions: buildLeg([hip, knee, ankle, foot], p, d1 / (d1 + d2 + FOOT_DROP), dir) });
+            out.push({ name: 'legs', positions: buildLeg([hip, knee, ankle, foot], p, d1 / (d1 + d2 + FOOT_RUN)) });
           });
         }
         return out;
@@ -342,10 +348,10 @@
       // Generator contract
       // -----------------------------------------------------------------------
       var DEFAULTS = {
-        abdLength: 50, abdWidth: 42, abdHeight: 38, abdShape: 0.55, abdEgg: 20, abdTilt: 15,
+        abdLength: 50, abdWidth: 42, abdHeight: 38, abdShape: 0.55, abdEgg: 20, abdTilt: 6,
         headLength: 30, headWidth: 26, headHeight: 20, headShape: 0.6, eyes: 8, eyeSize: 3.4,
-        legPairs: 4, legReach: 55, bodyLift: 30, legSpread: 50, legLean: 0, legLenDiff: 0,
-        legFemur: 45, kneeRise: 16, legRound: 0.7, legThick: 5.5, legTaper: 45, legKnob: 25, legFlat: 0,
+        legPairs: 4, legReach: 55, bodyLift: 9, legSpread: 50, legLean: 0, legLenDiff: 0,
+        legFemur: 45, kneeLift: 0, legSweep: 25, legRound: 0.7, legThick: 5.5, legTaper: 45, legKnob: 25, legFlat: 0,
         stampSize: 14, stampRotation: 0
       };
       function preset(label, over) {
@@ -381,9 +387,9 @@
           walls: 3,
           topLayers: 5,
           bottomLayers: 4,
-          supports: true,
-          brim: 4,
-          notes: 'The body floats above the bed on the legs, so print with supports (tree supports work well) under the body, and a brim to hold the thin feet. Legs lifted high over the body with long knees need supports too.'
+          supports: false,
+          brim: 3,
+          notes: 'Prints flat with no supports: the belly is flattened onto the bed and the legs lie along it. Lifting the body or knees (Body height, Knee lift) leaves gaps under them that need supports. A brim helps the thin leg tips stick.'
         },
 
         parameters: [
@@ -392,7 +398,7 @@
           { group: 'Abdomen', key: 'abdHeight', label: 'Abdomen height', unit: ' mm', min: 18, max: 70, step: 1, value: 38 },
           { group: 'Abdomen', key: 'abdShape', label: 'Shape (round ↔ pointed)', unit: '', min: 0.45, max: 1.2, step: 0.05, value: 0.55 },
           { group: 'Abdomen', key: 'abdEgg', label: 'Egg shape (front ↔ rear fat)', unit: '', min: -50, max: 50, step: 5, value: 20 },
-          { group: 'Abdomen', key: 'abdTilt', label: 'Tilt up at the back', unit: '°', min: -10, max: 50, step: 1, value: 15 },
+          { group: 'Abdomen', key: 'abdTilt', label: 'Tilt up at the back', unit: '°', min: -10, max: 50, step: 1, value: 6 },
           { group: 'Head & eyes', key: 'headLength', label: 'Head length', unit: ' mm', min: 16, max: 50, step: 1, value: 30 },
           { group: 'Head & eyes', key: 'headWidth', label: 'Head width', unit: ' mm', min: 14, max: 44, step: 1, value: 26 },
           { group: 'Head & eyes', key: 'headHeight', label: 'Head height', unit: ' mm', min: 12, max: 40, step: 1, value: 20 },
@@ -402,12 +408,13 @@
           { group: 'Leg count & stance', key: 'legPairs', label: 'Leg pairs (2 legs each)', unit: '', min: 1, max: 6, step: 1, value: 4,
             format: function (v) { return v + ' pairs = ' + v * 2 + ' legs'; } },
           { group: 'Leg count & stance', key: 'legReach', label: 'Leg reach (sideways)', unit: ' mm', min: 25, max: 90, step: 1, value: 55 },
-          { group: 'Leg count & stance', key: 'bodyLift', label: 'Body height off the bed', unit: ' mm', min: 12, max: 60, step: 1, value: 30 },
+          { group: 'Leg count & stance', key: 'bodyLift', label: 'Body height (low = no supports)', unit: ' mm', min: 6, max: 50, step: 1, value: 9 },
           { group: 'Leg count & stance', key: 'legSpread', label: 'Leg fan spread (front ↔ back)', unit: '°', min: 10, max: 80, step: 1, value: 50 },
           { group: 'Leg count & stance', key: 'legLean', label: 'Legs lean (back ↔ forward)', unit: '°', min: -30, max: 30, step: 1, value: 0 },
           { group: 'Leg count & stance', key: 'legLenDiff', label: 'Front vs back length', unit: '%', min: -40, max: 40, step: 5, value: 0 },
           { group: 'Leg segments', key: 'legFemur', label: 'Upper leg share (to the knee)', unit: '%', min: 25, max: 70, step: 1, value: 45 },
-          { group: 'Leg segments', key: 'kneeRise', label: 'Knee height above body', unit: ' mm', min: -5, max: 45, step: 1, value: 16 },
+          { group: 'Leg segments', key: 'kneeLift', label: 'Knee lift (0 = flat on the bed)', unit: ' mm', min: 0, max: 40, step: 1, value: 0 },
+          { group: 'Leg segments', key: 'legSweep', label: 'Lower leg sweep (fan out)', unit: '°', min: -40, max: 40, step: 1, value: 25 },
           { group: 'Leg segments', key: 'legRound', label: 'Knee bend (sharp ↔ smooth)', unit: '', min: 0.3, max: 1, step: 0.05, value: 0.7 },
           { group: 'Leg segments', key: 'legThick', label: 'Leg thickness', unit: ' mm', min: 3, max: 10, step: 0.1, value: 5.5 },
           { group: 'Leg segments', key: 'legTaper', label: 'Taper to the foot', unit: '%', min: 0, max: 70, step: 5, value: 45 },
@@ -419,10 +426,10 @@
 
         presets: [
           preset('House spider', {}),
-          preset('Tarantula', { abdLength: 46, abdWidth: 48, abdHeight: 42, abdShape: 0.5, abdTilt: 5, headLength: 34, headWidth: 36, headHeight: 26, legReach: 46, bodyLift: 26, legThick: 8.5, legTaper: 30, kneeRise: 24, legFemur: 50, legKnob: 40 }),
-          preset('Daddy long legs', { abdLength: 28, abdWidth: 18, abdHeight: 16, abdTilt: 5, headLength: 20, headWidth: 16, headHeight: 13, eyes: 2, eyeSize: 3, legPairs: 4, legReach: 85, bodyLift: 48, legThick: 3.4, legTaper: 30, kneeRise: 42, legFemur: 55, legKnob: 40, legRound: 0.9 }),
-          preset('Black widow', { abdLength: 46, abdWidth: 46, abdHeight: 46, abdShape: 0.5, abdEgg: 0, abdTilt: 25, headLength: 22, headWidth: 20, headHeight: 16, eyes: 4, legReach: 62, bodyLift: 34, legThick: 4.2, legTaper: 55, kneeRise: 30, legKnob: 15 }),
-          preset('Chibi spider', { abdLength: 40, abdWidth: 44, abdHeight: 40, abdShape: 0.5, abdEgg: 0, headLength: 36, headWidth: 40, headHeight: 32, eyes: 4, eyeSize: 6, legPairs: 3, legReach: 40, bodyLift: 22, legThick: 6.5, kneeRise: 12 }),
+          preset('Tarantula', { abdLength: 46, abdWidth: 48, abdHeight: 42, abdShape: 0.5, abdTilt: 4, headLength: 34, headWidth: 36, headHeight: 26, legReach: 46, bodyLift: 13, legThick: 8.5, legTaper: 30, legFemur: 50, legKnob: 40, legSweep: 15 }),
+          preset('Daddy long legs', { abdLength: 28, abdWidth: 18, abdHeight: 16, abdTilt: 4, headLength: 20, headWidth: 16, headHeight: 13, eyes: 2, eyeSize: 3, legReach: 85, bodyLift: 8, legThick: 3.4, legTaper: 30, legFemur: 55, legKnob: 40, legRound: 0.9, legSweep: 35 }),
+          preset('Black widow', { abdLength: 46, abdWidth: 46, abdHeight: 46, abdShape: 0.5, abdEgg: 0, abdTilt: 10, headLength: 22, headWidth: 20, headHeight: 16, eyes: 4, legReach: 62, bodyLift: 10, legThick: 4.2, legTaper: 55, legKnob: 15, legSweep: 30 }),
+          preset('Chibi spider', { abdLength: 40, abdWidth: 44, abdHeight: 40, abdShape: 0.5, abdEgg: 0, abdTilt: 0, headLength: 36, headWidth: 40, headHeight: 32, eyes: 4, eyeSize: 6, legPairs: 3, legReach: 40, bodyLift: 12, legThick: 6.5, legSweep: 20 }),
           preset('Default spider', {})
         ],
 

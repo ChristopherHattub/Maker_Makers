@@ -93,8 +93,16 @@ So, to make a feature independently paintable:
 - Every closed solid must be **watertight and manifold**: no open edges, no edge shared by more than two triangles, no degenerate (zero-area) or NaN triangles. `check-mesh.mjs` tests this after welding. It reports per mesh and per `smoothGroup`: a mesh that is only part of a split surface legitimately shows open edges alone, the combined smoothGroup line is what must be OK. Independent solids (stamps, separate parts) must each pass alone.
 - Overlapping shells (a stamp embedded 1.8 mm into the body) are acceptable; slicers union them. Embed placed features into the surface (no gaps, no hairline contact) and keep them proud enough to print (>= 0.8 mm).
 - **Smooth holes and cut-outs**: no stair-stepped or jagged edges. Use a smooth falloff (`smootherstep`: zero slope/curvature at both ends) so cut-outs blend into the surface; pack angular segments toward where detail is (Ghost Builder `FRONT_BIAS`); use enough segments that circles/ellipses look round (>= 48 per full circle; Ghost Builder uses 160 around). Holes must keep a printable wall: do not let `effectiveR`-style depth cut through (clamp with `Math.max`).
-- Avoid overhangs > ~55° without intent, features thinner than ~1.2 mm, and a base smaller than the footprint. Presets and slider extremes must not produce self-intersection, negative radius or inverted triangles.
+- Avoid overhangs > ~55° without intent (see Support-free by default), features thinner than ~1.2 mm, and a base smaller than the footprint. Presets and slider extremes must not produce self-intersection, negative radius or inverted triangles.
 - Keep `build()` fast and re-run the check at slider min/max.
+
+## Support-free by default (required)
+
+Every generator's **defaults and presets must print with no supports, or as few as possible**: Chris's rule is to prevent supports wherever the geometry allows. So design low and flat first:
+- Rest on a flat base or a flat-cut belly (clamp the lowest vertices to the bed plane, as Spider does) instead of floating on thin legs or a point. Keep a wide first layer.
+- Keep slopes and overhangs gentle (about 45° from vertical or less); round or chamfer the unavoidable ones. Limbs, arms and legs should lie along the bed or rise at a steep angle, never arch high over empty space.
+- Set `printSettings.supports` to `false` unless a preset truly needs them, and say in `notes` which slider extremes (raised body, high arches, long overhangs) bring supports back. Label such sliders so users see the trade-off, e.g. `Body height (low = no supports)`.
+- Check the **lowest point stays at the bed** for defaults, presets and slider min/max (the sweep that matches the manifold check), and that nothing floats.
 
 ## Slot and thumbnail
 
