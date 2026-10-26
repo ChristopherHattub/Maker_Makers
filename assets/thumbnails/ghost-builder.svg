@@ -23,7 +23,7 @@
   <ellipse cx="177" cy="118" rx="10" ry="14" fill="#0a2246"/><ellipse cx="177" cy="122" rx="7" ry="9" fill="#06152d"/>
   <ellipse cx="223" cy="118" rx="10" ry="14" fill="#0a2246"/><ellipse cx="223" cy="122" rx="7" ry="9" fill="#06152d"/>
   <ellipse cx="200" cy="170" rx="13" ry="16" fill="#0a2246"/><ellipse cx="200" cy="174" rx="9" ry="10" fill="#06152d"/>
-  <path transform="translate(200 70) scale(0.6)" d="M0 -16L5 -5L17 -4L8 4L11 16L0 9L-11 16L-8 4L-17 -4L-5 -5Z" fill="#c084fc" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+  
   <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
     <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
   </g>
