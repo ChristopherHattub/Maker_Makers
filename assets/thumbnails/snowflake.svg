@@ -24,7 +24,7 @@
   </g>
   <circle cx="200" cy="38" r="11" fill="none" stroke="#00e5ff" stroke-width="8" stroke-opacity="0.85"/><circle cx="200" cy="38" r="11" fill="none" stroke="#d3e0f4" stroke-width="4.5"/>
   <circle cx="200" cy="148" r="15" fill="url(#mat)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
-  <path transform="translate(200 148) scale(0.5)" d="M0 -16L5 -5L17 -4L8 4L11 16L0 9L-11 16L-8 4L-17 -4L-5 -5Z" fill="#c084fc" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>
+  <circle cx="200" cy="148" r="6" fill="#c084fc" stroke="#fff" stroke-width="1.4"/>
   <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
     <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
   </g>
