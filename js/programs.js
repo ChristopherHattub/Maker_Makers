@@ -28,6 +28,14 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/witch-hat.svg',
     programUrl: 'programs/witch-hat.html',
     description: 'Parametric witch hat with adjustable cone height, swoop, lean and floppy tip, a curled or wavy brim, a raised hat band and a flat solid or hollow underside. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 7,
+    title: 'Skull Sculptor',
+    category: 'SPOOKY // BONES',
+    thumbnailUrl: 'assets/thumbnails/skull-sculptor.svg',
+    programUrl: 'programs/skull-sculptor.html',
+    description: 'Parametric skull with adjustable eye sockets (size, tilt, shape, asymmetry), nose cavity, jaw and cheeks, plus a Mouth tab of picture presets (grin, fangs, gap tooth, open jaw and more) for the teeth. Paint parts in the Color tool and export .STL or .3MF with colors.'
   }
 ];
 
