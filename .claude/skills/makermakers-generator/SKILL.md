@@ -24,6 +24,10 @@ Sources of truth (read them before changing anything, they may have moved on sin
 
 Every generator, new or existing, **must** use the shared phone layout from `generator-core.js` / `generator.css`: pinned viewport on top (40%), resizable bottom sheet below with sticky tabs, accordion slider sections, large touch sliders, export buttons always visible, no page scroll. Never write generator-specific mobile CSS, never override the sheet or tab bar, and never make a generator's controls scroll the page. A generator that uses the engine as described here gets it automatically; if a control looks wrong on a phone, fix it in `shared/generator.css` for everyone. Always verify at 375x667 and 390x844 before finishing.
 
+## Print tab realistic render is engine-owned
+
+Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, layer lines from the layer height, brim ring, studio lighting). Every generator gets it for free, so: set accurate `printSettings` (material, `layerHeight`, `brim`) because the preview reflects them, never add your own print preview, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change material, layer height and brim, and confirm the model looks right.
+
 ## Page rules (the standalone bundler depends on these)
 
 - `<body class="mm-gen">`.
@@ -129,7 +133,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
-- [ ] Print tab shows your `printSettings` as defaults, edits change the 3MF, Reset restores them.
+- [ ] Print tab shows the realistic render (colors kept, material/layer-height/brim changes update it live) and your `printSettings` as defaults, edits change the 3MF, Reset restores them.
 - [ ] Export .STL and .3MF download and open (STL size ~ 84 + 50 x triangles bytes; model sits on the bed; 3MF has the colors; the zip lists `Metadata/Slic3r_PE.config`, `project_settings.config`, `print-settings.txt` with your `printSettings`).
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] The collapsed "Disclaimer" block shows under the panel footer buttons (engine-provided; never remove or override it in a generator page) and expands to readable text.

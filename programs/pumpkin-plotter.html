@@ -319,10 +319,10 @@
       // -----------------------------------------------------------------------
       var CARVE_NAMES = {
         eyeTri: 'Triangle eye', eyeRound: 'Round eye', eyeAngry: 'Angry eye', eyeDiamond: 'Diamond eye',
-        nose: 'Nose', smile: 'Smile', toothy: 'Toothy mouth', star: 'Star'
+        nose: 'Nose', smile: 'Smile', toothy: 'Toothy mouth', star: 'Star', eyeAngryL: 'Angry eye (mirrored)'
       };
-      var CARVE_TYPES = Object.keys(CARVE_NAMES);
-      var CARVE_RAMP = 2.0;  // mm of smooth wall around each cut
+      var CARVE_PICKER = ['eyeTri', 'eyeRound', 'eyeAngry', 'eyeDiamond', 'nose', 'smile', 'toothy', 'star'];
+            var CARVE_RAMP = 2.0;  // mm of smooth wall around each cut
       var carves = [];       // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z], poly, reach }
       var carveType = 'eyeTri';
       var refreshCarveUI = null;
@@ -354,6 +354,7 @@
           var table = {
             eyeTri: [[-1, -0.8], [1, -0.8], [0, 0.9]],
             eyeAngry: [[-1, -0.7], [1, -0.7], [1, 0.55]],
+            eyeAngryL: [[-1, -0.7], [1, -0.7], [-1, 0.55]],
             eyeDiamond: [[0, 1], [-0.7, 0], [0, -1], [0.7, 0]],
             nose: [[0, 0.9], [-0.9, -0.7], [0, -0.35], [0.9, -0.7]]
           };
@@ -403,18 +404,34 @@
         return { point: pt, normal: [nx / len, ny / len, nz / len] };
       }
 
-      // Classic jack-o-lantern face on the front, scaled to the current pumpkin.
-      function placeFace(p) {
+      // Face presets: parts are placed by angle around the front (theta, 0 = front) and height fraction, sized from the radius.
+      var FACE_PRESETS = [
+        { name: 'Classic', parts: [['eyeTri', -0.42, 0.66, 0.34], ['eyeTri', 0.42, 0.66, 0.34], ['nose', 0, 0.52, 0.2], ['toothy', 0, 0.34, 0.95]] },
+        { name: 'Friendly', parts: [['eyeRound', -0.4, 0.64, 0.27], ['eyeRound', 0.4, 0.64, 0.27], ['nose', 0, 0.5, 0.17], ['smile', 0, 0.36, 0.85]] },
+        { name: 'Spooky', parts: [['eyeAngryL', -0.42, 0.65, 0.4], ['eyeAngry', 0.42, 0.65, 0.4], ['nose', 0, 0.5, 0.18], ['toothy', 0, 0.32, 1.1]] },
+        { name: 'Starry', parts: [['star', -0.4, 0.66, 0.36], ['star', 0.4, 0.66, 0.36], ['diamondNose', 0, 0.5, 0.18], ['smile', 0, 0.35, 0.95]] },
+        { name: 'Surprised', parts: [['eyeRound', -0.4, 0.68, 0.34], ['eyeRound', 0.4, 0.68, 0.34], ['eyeDiamond', 0, 0.5, 0.2], ['eyeRound', 0, 0.33, 0.4]] }
+      ];
+
+      function placeFace(p, preset) {
         var g = setupGeo(p);
         carves = [];
-        function put(type, theta, yFrac, size, rot) {
-          var sp = surfacePoint(g, theta, yFrac);
-          addCarve(type, size, rot, sp.point, sp.normal);
-        }
-        put('eyeTri', -0.42, 0.66, g.R * 0.34, 0);
-        put('eyeTri', 0.42, 0.66, g.R * 0.34, 0);
-        put('nose', 0, 0.52, g.R * 0.2, 0);
-        put('toothy', 0, 0.34, g.R * 0.95, 0);
+        (preset || FACE_PRESETS[0]).parts.forEach(function (part) {
+          var type = part[0] === 'diamondNose' ? 'eyeDiamond' : part[0];
+          var sp = surfacePoint(g, part[1], part[2]);
+          addCarve(type, g.R * part[3], 0, sp.point, sp.normal);
+        });
+      }
+
+      // Small picture of a preset: a pumpkin disc with the cut-outs drawn dark.
+      function facePreviewSvg(preset) {
+        var shapes = preset.parts.map(function (part) {
+          var type = part[0] === 'diamondNose' ? 'eyeDiamond' : part[0];
+          var cx = 50 + 40 * Math.sin(part[1]) * 1.05, cy = 52 - 44 * (part[2] * 1.6 - 0.72);
+          var pts = carveOutline(type, part[3] * 0.5 * 44).map(function (pt) { return (cx + pt[0]).toFixed(1) + ',' + (cy - pt[1]).toFixed(1); }).join(' ');
+          return '<polygon points="' + pts + '"/>';
+        }).join('');
+        return '<svg viewBox="0 0 100 100" aria-hidden="true"><ellipse cx="50" cy="54" rx="44" ry="38" class="mm-face-body"/><path d="M47 18 q3 -10 9 -8" class="mm-face-stem"/>' + shapes + '</svg>';
       }
 
       // Builds the displacement for the current carves, or null when there are none.
@@ -597,7 +614,7 @@
             container.appendChild(h('h3', { class: 'mm-group-title' }, 'Shape (tap the pumpkin to carve it)'));
             var chips = h('div', { class: 'mm-icon-chips' });
             var shapeButtons = {};
-            CARVE_TYPES.forEach(function (type) {
+            CARVE_PICKER.forEach(function (type) {
               var btn = h('button', {
                 class: 'mm-icon-chip', type: 'button', title: CARVE_NAMES[type], 'aria-pressed': String(type === carveType),
                 onclick: function () {
@@ -612,12 +629,24 @@
             });
             container.appendChild(chips);
 
-            var face = h('button', { class: 'mm-btn mm-btn--green mm-btn--block', type: 'button', onclick: function () {
-              placeFace(api.params);
-              api.rebuild();
-              api.toast('Carved a classic jack-o-lantern face');
-            } }, 'Auto jack-o-lantern face');
-            container.appendChild(face);
+            var presetsBtn = h('button', { class: 'mm-btn mm-btn--green mm-btn--block', type: 'button', 'aria-expanded': 'false' }, 'Face presets');
+            var presetGrid = h('div', { class: 'mm-preset-cards' });
+            presetGrid.hidden = true;
+            FACE_PRESETS.forEach(function (preset) {
+              var card = h('button', { class: 'mm-preset-card', type: 'button', title: preset.name, onclick: function () {
+                placeFace(api.params, preset);
+                api.rebuild();
+                api.toast('Carved the ' + preset.name + ' face');
+              } });
+              card.innerHTML = facePreviewSvg(preset) + '<span>' + preset.name + '</span>';
+              presetGrid.appendChild(card);
+            });
+            presetsBtn.addEventListener('click', function () {
+              presetGrid.hidden = !presetGrid.hidden;
+              presetsBtn.setAttribute('aria-expanded', String(!presetGrid.hidden));
+            });
+            container.appendChild(presetsBtn);
+            container.appendChild(presetGrid);
 
             var count = h('p', { class: 'mm-note' }, '0 cut-outs');
             count.style.marginTop = '0.8rem';

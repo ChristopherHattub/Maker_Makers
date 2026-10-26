@@ -311,7 +311,7 @@
   function renderPrintPanel() {
     dom.printBody.innerHTML = '';
     dom.printBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Print settings' }));
-    dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'Recommended slicer settings for this model. They are saved inside the exported .3MF; your slicer may or may not use them.' }));
+    dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'Recommended slicer settings for this model. They are saved inside the exported .3MF; your slicer may or may not use them. The 3D view shows a realistic preview: material finish, layer lines, brim and your painted colors.' }));
     var group = el('div', { class: 'mm-group' });
     PRINT_FIELDS.forEach(function (f) {
       if (f.type === 'range') {
@@ -319,7 +319,7 @@
         var show = function () { out.textContent = (Number(printSettings[f.key]) || 0) + (f.unit || ''); };
         var input = el('input', {
           type: 'range', min: String(f.min), max: String(f.max), step: String(f.step), 'aria-label': f.label,
-          oninput: function () { printSettings[f.key] = Number(input.value); show(); }
+          oninput: function () { printSettings[f.key] = Number(input.value); show(); updatePrintLook(); }
         });
         input.value = String(printSettings[f.key] || 0);
         show();
@@ -327,6 +327,7 @@
       } else if (f.type === 'select') {
         var sel = el('select', { 'aria-label': f.label, onchange: function () {
           printSettings[f.key] = typeof f.options[0] === 'number' ? Number(sel.value) : sel.value;
+          updatePrintLook();
         } }, f.options.map(function (o) { return el('option', { value: String(o), text: o + (f.unit || '') }); }));
         sel.value = String(printSettings[f.key]);
         if (sel.value !== String(printSettings[f.key])) {
@@ -335,7 +336,7 @@
         }
         group.appendChild(el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: f.label })]), sel]));
       } else {
-        var box = el('input', { type: 'checkbox', 'aria-label': f.label, onchange: function () { printSettings[f.key] = box.checked; } });
+        var box = el('input', { type: 'checkbox', 'aria-label': f.label, onchange: function () { printSettings[f.key] = box.checked; updatePrintLook(); } });
         box.checked = !!printSettings[f.key];
         group.appendChild(el('label', { class: 'mm-check' }, [box, document.createTextNode(f.label)]));
       }
@@ -345,6 +346,7 @@
     dom.printBody.appendChild(el('button', { class: 'mm-btn mm-btn--block', type: 'button', text: 'Reset to recommended', onclick: function () {
       printSettings = printSettingsFor(cfg.printSettings);
       renderPrintPanel();
+      updatePrintLook();
       toast('Print settings reset');
     } }));
   }
@@ -544,6 +546,50 @@
   var viewMode = 'solid';
 
   var modelMaterial = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.03, vertexColors: true });
+  // Print tab: a more realistic render driven by the Print settings (material, layer height, brim) and the painted colors.
+  var PRINT_LOOKS = {
+    PLA: { roughness: 0.5, clearcoat: 0.1, clearcoatRoughness: 0.55, env: 0.35 },
+    PETG: { roughness: 0.2, clearcoat: 0.7, clearcoatRoughness: 0.12, env: 0.55 },
+    ABS: { roughness: 0.4, clearcoat: 0.06, clearcoatRoughness: 0.5, env: 0.3 },
+    ASA: { roughness: 0.55, clearcoat: 0.0, clearcoatRoughness: 0.6, env: 0.25 },
+    TPU: { roughness: 0.78, clearcoat: 0.0, clearcoatRoughness: 0.8, env: 0.15 }
+  };
+  var printUniforms = { uLayer: { value: 0.2 }, uStrength: { value: 0.1 } };
+  var printMaterial = new T.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0, vertexColors: true });
+  printMaterial.extensions = { derivatives: true };
+  printMaterial.onBeforeCompile = function (shader) {
+    shader.uniforms.uLayer = printUniforms.uLayer;
+    shader.uniforms.uStrength = printUniforms.uStrength;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vModelY;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvModelY = (modelMatrix * vec4(position, 1.0)).y;');
+    // Layer lines: faint horizontal banding that fades out when the lines get thinner than a pixel.
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vModelY;\nuniform float uLayer;\nuniform float uStrength;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nfloat lph = vModelY / uLayer; float lfade = 1.0 - smoothstep(0.2, 0.7, fwidth(lph)); float lband = sin(lph * 6.2831853);\ndiffuseColor.rgb *= 1.0 - uStrength * lfade * (0.5 + 0.5 * lband);')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(normal + (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz * (lband * uStrength * lfade * 0.8));');
+  };
+  var studioEnv = null;
+  var brimMesh = null;
+
+  function makeStudioEnv() {
+    var room = new T.Scene();
+    room.background = new T.Color(0x46506a);
+    function box(w, h, d, x, y, z, level) {
+      var m = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshBasicMaterial({ color: new T.Color(level, level, level) }));
+      m.position.set(x, y, z);
+      room.add(m);
+    }
+    box(40, 3, 40, 0, 45, 0, 6);
+    box(3, 30, 40, 45, 15, 0, 3);
+    box(3, 30, 40, -45, 15, 0, 1.5);
+    box(40, 30, 3, 0, 15, 45, 2);
+    var pm = new T.PMREMGenerator(renderer);
+    var tex = pm.fromScene(room, 0.03).texture;
+    pm.dispose();
+    return tex;
+  }
+
   var wireMaterial = new T.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.9 });
   var previewMaterial = new T.MeshBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.55 });
   var modelMeshes = []; // THREE.Mesh per build output entry, in the same order
@@ -575,7 +621,7 @@
       geometry.setAttribute('normal', new T.BufferAttribute(normalsFor[entryIndex], 3));
       geometry.setAttribute('color', new T.BufferAttribute(new Float32Array(entry.positions.length), 3));
       geometry.computeBoundingSphere();
-      var mesh = new T.Mesh(geometry, modelMaterial);
+      var mesh = new T.Mesh(geometry, currentModelMaterial());
       mesh.name = entry.name || 'body';
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -589,12 +635,80 @@
     renderPartList();
     updateStats();
     rebuildWire();
+    if (activeTab === 'print') updatePrintLook();
   }
 
   // View modes: 'solid', 'wire' (triangle edges only) and 'edges' (solid with edges on top).
   // The wire lines are only built while a mode needs them. Painting always shows the solid.
   function effectiveViewMode() {
-    return activeTab === 'color' ? 'solid' : viewMode;
+    return activeTab === 'color' || activeTab === 'print' ? 'solid' : viewMode;
+  }
+
+  function currentModelMaterial() {
+    return activeTab === 'print' ? printMaterial : modelMaterial;
+  }
+
+  // Apply the Print tab's settings to the realistic render: material finish, layer lines, brim, lighting.
+  function updatePrintLook() {
+    var on = activeTab === 'print';
+    var look = PRINT_LOOKS[printSettings.material] || PRINT_LOOKS.PLA;
+    var lh = Math.max(0.04, Number(printSettings.layerHeight) || 0.2);
+    printMaterial.roughness = look.roughness;
+    printMaterial.clearcoat = look.clearcoat;
+    printMaterial.clearcoatRoughness = look.clearcoatRoughness;
+    printMaterial.envMapIntensity = look.env;
+    printUniforms.uLayer.value = lh;
+    printUniforms.uStrength.value = Math.max(0.05, Math.min(0.32, 0.11 * lh / 0.2));
+    if (on && !studioEnv) {
+      try { studioEnv = makeStudioEnv(); } catch (e) { studioEnv = null; }
+    }
+    printMaterial.envMap = on ? studioEnv : null;
+    printMaterial.needsUpdate = true;
+    hemi.intensity = on ? 0.5 : 0.75;
+    key.intensity = on ? 0.85 : 0.85;
+    rim.intensity = on ? 0.3 : 0.42;
+    scene.background.set(on ? 0x161d2c : 0x0b1120);
+    plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
+    plateMesh.material.roughness = on ? 0.55 : 0.85;
+    grid.visible = !on;
+    if (brimMesh) { plate.remove(brimMesh); brimMesh.geometry.dispose(); brimMesh.material.dispose(); brimMesh = null; }
+    if (on && Number(printSettings.brim) > 0) addBrim(Number(printSettings.brim));
+    if (on) $('mm-hint').textContent = 'Realistic preview: ' + printSettings.material + ', ' + lh + ' mm layers' + (Number(printSettings.brim) > 0 ? ', ' + printSettings.brim + ' mm brim' : '');
+  }
+
+  // Flat first-layer brim ring around the footprint (approximated as a circle around the lowest vertices).
+  function addBrim(width) {
+    var minY = Infinity;
+    modelData.forEach(function (entry) {
+      var p = entry.positions;
+      for (var i = 1; i < p.length; i += 3) if (p[i] < minY) minY = p[i];
+    });
+    if (!isFinite(minY)) return;
+    var sx = 0, sz = 0, n = 0;
+    modelData.forEach(function (entry) {
+      var p = entry.positions;
+      for (var i = 0; i < p.length; i += 3) if (p[i + 1] < minY + 0.6) { sx += p[i]; sz += p[i + 2]; n++; }
+    });
+    if (!n) return;
+    var cx = sx / n, cz = sz / n, radius = 0;
+    modelData.forEach(function (entry) {
+      var p = entry.positions;
+      for (var i = 0; i < p.length; i += 3) {
+        if (p[i + 1] < minY + 0.6) radius = Math.max(radius, Math.sqrt(Math.pow(p[i] - cx, 2) + Math.pow(p[i + 2] - cz, 2)));
+      }
+    });
+    var ring = new T.RingGeometry(Math.max(0, radius - 0.4), radius + width, 96);
+    ring.rotateX(-Math.PI / 2);
+    var base = new T.Color(DEFAULT_COLOR);
+    brimMesh = new T.Mesh(ring, new T.MeshStandardMaterial({ color: base, roughness: 0.6, side: T.DoubleSide }));
+    brimMesh.position.set(cx, 0.12, cz);
+    brimMesh.receiveShadow = true;
+    plate.add(brimMesh);
+  }
+
+  function applyModelMaterial() {
+    var m = currentModelMaterial();
+    modelMeshes.forEach(function (mesh) { mesh.material = m; });
   }
 
   function rebuildWire() {
@@ -853,7 +967,7 @@
 
   // Writes the colors for the current tab. Parametric shows the neutral model; Color shows paint.
   function refreshColors() {
-    var colorTab = activeTab === 'color';
+    var colorTab = activeTab === 'color' || activeTab === 'print'; // Print preview shows the painted colors too
     if (colorTab) ensureParts();
     modelMeshes.forEach(function (mesh, meshIndex) {
       var colorAttr = mesh.geometry.attributes.color;
@@ -1033,7 +1147,9 @@
     if (tab !== 'model' && typeof cfg.onHover === 'function') cfg.onHover(null, api);
     dom.extraTabs.forEach(function (t) { if (t.id !== tab && typeof t.cfg.onHover === 'function') t.cfg.onHover(null, api); });
     updateCursor();
-    if (isColor) ensureParts();
+    if (isColor || tab === 'print') ensureParts();
+    applyModelMaterial();
+    updatePrintLook();
     refreshColors();
     renderPartList();
     rebuildWire();
