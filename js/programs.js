@@ -36,6 +36,14 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/skull-sculptor.svg',
     programUrl: 'programs/skull-sculptor.html',
     description: 'Parametric skull with adjustable eye sockets (size, tilt, shape, asymmetry), nose cavity, jaw and cheeks, plus a Mouth tab of picture presets (grin, fangs, gap tooth, open jaw and more) for the teeth. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 3,
+    title: 'Spider',
+    category: 'SPOOKY // CREATURES',
+    thumbnailUrl: 'assets/thumbnails/spider.svg',
+    programUrl: 'programs/spider.html',
+    description: 'Parametric spider: shape the head and abdomen, set the eyes and number of legs, and bend, thicken and taper each leg. Emboss stamps like a mini spider, skull, web or bat. Paint parts in the Color tool and export .STL or .3MF with colors.'
   }
 ];
 

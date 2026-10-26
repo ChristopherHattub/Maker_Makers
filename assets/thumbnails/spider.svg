@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#0d2b59"/>
+  <path d="M0 50H400M0 100H400M0 150H400M0 200H400M0 250H400M50 0V300M100 0V300M150 0V300M200 0V300M250 0V300M300 0V300M350 0V300" stroke="#00e5ff" stroke-opacity="0.08"/>
+  <ellipse cx="200" cy="248" rx="120" ry="12" fill="#06152d" stroke="#00e5ff" stroke-opacity="0.35"/>
+  <g fill="none" stroke="#e2e8f0" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M186 140C150 100 110 110 92 244"/>
+    <path d="M184 150C140 130 96 160 70 238"/>
+    <path d="M186 160C150 160 120 190 112 244"/>
+    <path d="M190 168C170 190 160 220 164 244"/>
+    <path d="M214 140C250 100 290 110 308 244"/>
+    <path d="M216 150C260 130 304 160 330 238"/>
+    <path d="M214 160C250 160 280 190 288 244"/>
+    <path d="M210 168C230 190 240 220 236 244"/>
+  </g>
+  <g fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85">
+    <path d="M186 140C150 100 110 110 92 244"/>
+    <path d="M184 150C140 130 96 160 70 238"/>
+    <path d="M214 140C250 100 290 110 308 244"/>
+    <path d="M216 150C260 130 304 160 330 238"/>
+  </g>
+  <ellipse cx="200" cy="106" rx="42" ry="50" fill="#e2e8f0" stroke="#00e5ff" stroke-width="2"/>
+  <ellipse cx="200" cy="162" rx="30" ry="24" fill="#f1f5f9" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M200 84L205 98L219 99L208 108L212 121L200 114L188 121L192 108L181 99L195 98Z" fill="#c084fc" stroke="#ffffff" stroke-width="1.2"/>
+  <circle cx="190" cy="162" r="5" fill="#0d2b59"/>
+  <circle cx="210" cy="162" r="5" fill="#0d2b59"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7">
+    <path d="M300 40H340V80"/>
+    <path d="M60 40H100M60 40V80"/>
+  </g>
+  <text x="200" y="290" text-anchor="middle" font-family="Courier New, monospace" font-size="11" fill="#00e5ff" fill-opacity="0.8" letter-spacing="2">MM-003 SPIDER</text>
+</svg>
