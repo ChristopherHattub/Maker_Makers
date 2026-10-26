@@ -22,7 +22,7 @@
   <path d="M138 160Q169 170 200 163Q231 170 262 160L200 108Z" fill="url(#green)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
   <path d="M154 124Q177 134 200 127Q223 134 246 124L200 78Z" fill="url(#green)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
   <circle cx="160" cy="214" r="5" fill="url(#warm)" stroke="#00e5ff" stroke-width="1.5"/><circle cx="238" cy="176" r="5" fill="url(#warm)" stroke="#00e5ff" stroke-width="1.5"/><circle cx="176" cy="144" r="4.5" fill="url(#warm)" stroke="#00e5ff" stroke-width="1.5"/><circle cx="218" cy="226" r="5" fill="url(#warm)" stroke="#00e5ff" stroke-width="1.5"/>
-  <path d="M200 40L205 54L220 55L208 64L212 79L200 70L188 79L192 64L180 55L195 54Z" fill="#c084fc" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+  <circle cx="200" cy="72" r="9" fill="#c084fc" stroke="#fff" stroke-width="1.4"/>
   <path d="M150 220C160 200 174 176 186 156" fill="none" stroke="url(#gloss)" stroke-width="6" stroke-linecap="round"/>
   <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
     <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
