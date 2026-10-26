@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-008 Holiday Tree // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Holiday Tree: parameters, presets, palette and geometry. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // ---- Geometry kit: closed shells built from rings (shared vertices, so always watertight) ----
+      var TAU = Math.PI * 2;
+      function rad(d) { return (d * Math.PI) / 180; }
+      function sqr(x) { return x * x; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vnorm(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+      // rings: array of closed point loops [[x,y,z],...] or { pole: [x,y,z] } (a single point cap).
+      // Neighbouring rings must have the same winding. wrap = true joins the last ring to the first (torus).
+      // The winding of the whole shell is fixed afterwards from its signed volume.
+      function shell(rings, wrap) {
+        var verts = [], idx = [], info = [], i, j;
+        rings.forEach(function (r) {
+          if (r.pole) { info.push({ pole: true, s: verts.length, n: 1 }); verts.push(r.pole); }
+          else { info.push({ s: verts.length, n: r.length }); r.forEach(function (q) { verts.push(q); }); }
+        });
+        var n = rings.length, last = wrap ? n : n - 1;
+        for (i = 0; i < last; i++) {
+          var A = info[i], B = info[(i + 1) % n];
+          if (A.pole && B.pole) continue;
+          if (A.pole) { for (j = 0; j < B.n; j++) idx.push(A.s, B.s + (j + 1) % B.n, B.s + j); }
+          else if (B.pole) { for (j = 0; j < A.n; j++) idx.push(A.s + j, A.s + (j + 1) % A.n, B.s); }
+          else {
+            for (j = 0; j < A.n; j++) {
+              var a = A.s + j, b = A.s + (j + 1) % A.n, c = B.s + (j + 1) % B.n, d = B.s + j;
+              idx.push(a, b, c, a, c, d);
+            }
+          }
+        }
+        var vol = 0, p, q, r;
+        for (i = 0; i < idx.length; i += 3) {
+          p = verts[idx[i]]; q = verts[idx[i + 1]]; r = verts[idx[i + 2]];
+          vol += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+        }
+        var out = new Float32Array(idx.length * 3), o = 0, v;
+        for (i = 0; i < idx.length; i += 3) {
+          var tri = vol < 0 ? [idx[i], idx[i + 2], idx[i + 1]] : [idx[i], idx[i + 1], idx[i + 2]];
+          for (j = 0; j < 3; j++) { v = verts[tri[j]]; out[o++] = v[0]; out[o++] = v[1]; out[o++] = v[2]; }
+        }
+        return out;
+      }
+
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Circle / ellipse loop in the XZ plane at height y. o: { cx, cz, sx, sz, rot }.
+      function loopXZ(r, y, seg, o) {
+        o = o || {};
+        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
+        var cr = Math.cos(rot), sr = Math.sin(rot), out = [], j, a, x, z;
+        for (j = 0; j < seg; j++) {
+          a = (j / seg) * TAU;
+          x = r * sx * Math.cos(a); z = r * sz * Math.sin(a);
+          out.push([cx + x * cr - z * sr, y, cz + x * sr + z * cr]);
+        }
+        return out;
+      }
+
+      // Solid of revolution from a profile [[r, y, dx, dz], ...] (bottom to top). r = 0 makes a pole.
+      function lathe(profile, seg, o) {
+        o = o || {};
+        var rings = profile.map(function (p) {
+          var oo = { cx: (o.cx || 0) + (p[2] || 0), cz: (o.cz || 0) + (p[3] || 0), sx: o.sx, sz: o.sz, rot: o.rot };
+          if (p[0] < 1e-6) return { pole: [oo.cx, p[1], oo.cz] };
+          return loopXZ(p[0], p[1], seg, oo);
+        });
+        return shell(rings, false);
+      }
+
+      // Closed ring-shaped solid (torus-like): cross-section polygon [[r, y], ...] revolved around Y.
+      function bandRing(poly, seg, o) {
+        return shell(poly.map(function (p) { return loopXZ(p[0], p[1], seg, o); }), true);
+      }
+
+      // Sphere or ellipsoid. tFrom > 0 starts the sphere at a flat cut (polar angle from the bottom pole).
+      function ball(cx, cy, cz, rx, ry, rz, seg, steps) {
+        var prof = [], k, t;
+        for (k = 0; k <= steps; k++) {
+          t = (k / steps) * Math.PI;
+          prof.push([Math.sin(t), cy - ry * Math.cos(t)]);
+        }
+        prof[0][0] = 0; prof[steps][0] = 0;
+        return lathe(prof, seg, { cx: cx, cz: cz, sx: rx, sz: rz });
+      }
+
+      // Rounded rectangle loop (counter-clockwise from above) at height y.
+      function rrect(hx, hz, cr, y, arcN, cx, cz) {
+        cr = Math.max(0.05, Math.min(cr, Math.min(hx, hz) - 0.02));
+        var out = [], k, a, corners = [[hx - cr, hz - cr, 0], [-(hx - cr), hz - cr, 90], [-(hx - cr), -(hz - cr), 180], [hx - cr, -(hz - cr), 270]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= arcN; k++) {
+            a = rad(c[2] + (k / arcN) * 90);
+            out.push([(cx || 0) + c[0] + cr * Math.cos(a), y, (cz || 0) + c[1] + cr * Math.sin(a)]);
+          }
+        });
+        return out;
+      }
+      function centroid(loop) {
+        var c = [0, 0, 0];
+        loop.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; });
+        return [c[0] / loop.length, c[1] / loop.length, c[2] / loop.length];
+      }
+      // Loft of loops with flat end caps.
+      function loftCapped(loops) {
+        var rings = [{ pole: centroid(loops[0]) }].concat(loops, [{ pole: centroid(loops[loops.length - 1]) }]);
+        return shell(rings, false);
+      }
+
+      // Rod with rounded ends from a to b, radius ra at a and rb at b.
+      function capsule(a, b, ra, rb, seg, capN) {
+        var d = vnorm(vsub(b, a));
+        var ax = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        var u = vnorm(vcross(d, ax)), v = vcross(d, u);
+        function ring(c, r) {
+          var out = [], j, ang;
+          for (j = 0; j < seg; j++) {
+            ang = (j / seg) * TAU;
+            out.push(vadd(c, vadd(vmul(u, r * Math.cos(ang)), vmul(v, r * Math.sin(ang)))));
+          }
+          return out;
+        }
+        var rings = [{ pole: vsub(a, vmul(d, ra)) }], k, phi;
+        for (k = 1; k <= capN; k++) {
+          phi = (k / capN) * (Math.PI / 2);
+          rings.push(ring(vsub(a, vmul(d, ra * Math.cos(phi))), ra * Math.sin(phi)));
+        }
+        for (k = 0; k < capN; k++) {
+          phi = (Math.PI / 2) * (1 - k / capN);
+          rings.push(ring(vadd(b, vmul(d, rb * Math.cos(phi))), rb * Math.sin(phi)));
+        }
+        rings.push({ pole: vadd(b, vmul(d, rb)) });
+        return shell(rings, false);
+      }
+
+      function smootherstep(x) {
+        var t = Math.max(0, Math.min(1, x));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      }
+      function el(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+          else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      // Picture-card style picker for the "Styles" tab. cardSvg(values) draws a small icon.
+      function mountStyleCards(container, api, styles, cardSvg, defaults, heading, note) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
+        var grid = el('div', { class: 'mm-preset-cards' });
+        styles.forEach(function (s) {
+          var vals = {};
+          Object.keys(defaults).forEach(function (k) { vals[k] = defaults[k]; });
+          Object.keys(s.values).forEach(function (k) { vals[k] = s.values[k]; });
+          var card = el('button', { class: 'mm-preset-card', type: 'button', title: s.name, onclick: function () {
+            api.setParams(vals);
+            api.toast('Style: ' + s.name);
+          } });
+          card.innerHTML = cardSvg(vals) + '<span>' + s.name + '</span>';
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
+        container.appendChild(el('p', { class: 'mm-note' }, note));
+      }
+      function withDefaults(defaults, over) {
+        var values = {};
+        Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return values;
+      }
+
+      var SEG = 96;
+      var PARAMS = [
+        { group: 'Tree', key: 'height', label: 'Total height', unit: ' mm', min: 60, max: 130, step: 1, value: 96 },
+        { group: 'Tree', key: 'baseR', label: 'Bottom tier width (radius)', unit: ' mm', min: 16, max: 42, step: 1, value: 28 },
+        { group: 'Tree', key: 'tiers', label: 'Number of tiers', unit: '', min: 3, max: 8, step: 1, value: 5 },
+        { group: 'Tree', key: 'topPct', label: 'Top tier width (% of bottom)', unit: '%', min: 20, max: 60, step: 1, value: 34 },
+        { group: 'Tree', key: 'slope', label: 'Underside slope (steeper = safer print)', unit: '°', min: 45, max: 70, step: 1, value: 50 },
+        { group: 'Tree', key: 'lipH', label: 'Bough edge thickness', unit: ' mm', min: 1.6, max: 4, step: 0.2, value: 2 },
+        { group: 'Boughs', key: 'scallop', label: 'Wavy edges (depth)', unit: '%', min: 0, max: 10, step: 0.5, value: 4 },
+        { group: 'Boughs', key: 'lobes', label: 'Wave count', unit: '', min: 3, max: 14, step: 1, value: 8 },
+        { group: 'Trunk & base', key: 'trunkR', label: 'Trunk width (radius)', unit: ' mm', min: 5, max: 16, step: 0.5, value: 9 },
+        { group: 'Trunk & base', key: 'trunkH', label: 'Trunk showing under tree', unit: ' mm', min: 3, max: 14, step: 1, value: 7 },
+        { group: 'Trunk & base', key: 'basePct', label: 'Snow base (% of tree width, 0 = none)', unit: '%', min: 0, max: 100, step: 1, value: 62,
+          format: function (v) { return v < 40 ? 'None' : v + '%'; } },
+        { group: 'Baubles & topper', key: 'baubles', label: 'Baubles', unit: '', min: 0, max: 24, step: 1, value: 10 },
+        { group: 'Baubles & topper', key: 'baubleR', label: 'Bauble size', unit: ' mm', min: 2.2, max: 5, step: 0.1, value: 3 },
+        { group: 'Baubles & topper', key: 'topper', label: 'Tree topper', unit: '', min: 0, max: 2, step: 1, value: 2,
+          format: function (v) { return ['None', 'Ball', 'Sparkle'][Math.round(v)]; } },
+        { group: 'Baubles & topper', key: 'topperR', label: 'Topper size', unit: ' mm', min: 3, max: 9, step: 0.5, value: 5 }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
+
+      function lerp(a, b, t) { return a + (b - a) * t; }
+
+      function layout(p) {
+        var N = Math.round(p.tiers), T = Math.tan(rad(p.slope)), g = { N: N, T: T, tiers: [] }, i;
+        var R0 = p.baseR, lip = p.lipH;
+        var rtr = Math.min(p.trunkR, R0 * 0.55);
+        g.rtr = rtr;
+        var yl0 = p.trunkH;
+        var Rl = lerp(R0, R0 * p.topPct / 100, 1);
+        var hLast = Math.max(Rl * T * 1.3, 0.22 * (p.height - yl0));
+        var ylLast = Math.max(yl0 + (N - 1) * 4, p.height - lip - hLast);
+        var pitch = (ylLast - yl0) / (N - 1);
+        for (i = 0; i < N; i++) {
+          g.tiers.push({ R: lerp(R0, R0 * p.topPct / 100, N === 1 ? 0 : i / (N - 1)), yl: yl0 + pitch * i, rt: 0 });
+        }
+        g.roof = yl0 + (R0 - rtr) * T;
+        g.apex = g.tiers[N - 1].yl + lip + (p.height - g.tiers[N - 1].yl - lip);
+        for (i = 0; i < N; i++) {
+          var t = g.tiers[i];
+          if (i === N - 1) { t.rt = 0; t.h = p.height - t.yl - lip; t.uX = 1; continue; }
+          var nx = g.tiers[i + 1];
+          t.rt = t.R * 0.12;
+          var K = Math.max(3, nx.yl + (nx.R - t.R) * T - t.yl - lip);
+          var uX = 0.72;
+          t.h = K / uX + (t.R - t.rt) * T;
+          t.uX = uX;
+        }
+        return g;
+      }
+
+      function wobble(p, w, ph, a) { return 1 + (p.scallop / 100) * w * Math.cos(p.lobes * a + ph); }
+
+      function treeShell(p, g) {
+        var prof = [], i, k, N = g.N, lip = p.lipH, SUB = 3, wx = 0.3, dPh = Math.PI / p.lobes;
+        function add(r, y, w, ph) { prof.push({ r: r, y: y, w: w, ph: ph }); }
+        var t0 = g.tiers[0];
+        add(0, g.roof, 0, 0);
+        for (k = 0; k <= SUB; k++) {
+          var f = k / SUB;
+          add(lerp(g.rtr, t0.R, f), lerp(g.roof, t0.yl, f), f, 0);
+        }
+        for (i = 0; i < N; i++) {
+          var t = g.tiers[i], ph = i * dPh;
+          add(t.R, t.yl + lip, 1, ph);
+          if (i === N - 1) {
+            for (k = 1; k < 12; k++) {
+              var u = k / 12;
+              add(lerp(t.R, 0, u), t.yl + lip + t.h * u, lerp(1, 0.2, u), ph);
+            }
+            add(0, t.yl + lip + t.h, 0, ph);
+            break;
+          }
+          var nx = g.tiers[i + 1], uX = t.uX, xr = lerp(t.R, t.rt, uX), xy = t.yl + lip + t.h * uX;
+          for (k = 1; k <= SUB * 2; k++) {
+            var uu = (k / (SUB * 2)) * uX;
+            add(lerp(t.R, t.rt, uu), t.yl + lip + t.h * uu, lerp(1, wx, k / (SUB * 2)), ph);
+          }
+          for (k = 1; k <= SUB; k++) {
+            var ff = k / SUB;
+            add(lerp(xr, nx.R, ff), lerp(xy, nx.yl, ff), lerp(wx, 1, ff), lerp(ph, (i + 1) * dPh, ff));
+          }
+        }
+        var rings = prof.map(function (q) {
+          if (q.r < 1e-6) return { pole: [0, q.y, 0] };
+          var out = [], j, a;
+          for (j = 0; j < SEG; j++) {
+            a = (j / SEG) * TAU;
+            var r = q.r * wobble(p, q.w, q.ph, a);
+            out.push([r * Math.cos(a), q.y, r * Math.sin(a)]);
+          }
+          return out;
+        });
+        return shell(rings, false);
+      }
+
+      function build(p) {
+        var g = layout(p), out = [], i, N = g.N, lip = p.lipH;
+        out.push({ name: 'tree', positions: treeShell(p, g), singlePart: true });
+        var rtr = g.rtr;
+        out.push({ name: 'trunk', positions: lathe([[0, 0], [rtr - 0.8, 0], [rtr, 0.8], [rtr, g.roof + 2], [0, g.roof + 2]], 40), singlePart: true });
+        if (p.basePct >= 40) {
+          var Rb = Math.max(rtr + 6, g.tiers[0].R * p.basePct / 100), h0 = 1.4, top = h0 + (Rb - rtr) * 0.3;
+          out.push({ name: 'base', positions: lathe([[0, 0], [Rb - 0.6, 0], [Rb, 0.6], [Rb, h0], [rtr + 1, top], [0, top]], SEG), singlePart: true });
+        }
+        if (p.baubles > 0) {
+          var b = [], n = Math.round(p.baubles), rb = p.baubleR;
+          for (i = 0; i < n; i++) {
+            var ti = i % (N - 1 < 1 ? 1 : N - 1), t = g.tiers[ti];
+            var u = 0.1 + 0.5 * (((i * 7) % 10) / 10) * t.uX;
+            var a = i * 2.39996, w = lerp(1, 0.3, u / t.uX);
+            var r = lerp(t.R, t.rt, u) * wobble(p, w, ti * Math.PI / p.lobes, a), y = t.yl + lip + t.h * u;
+            var nrm = vnorm([t.h, (t.R - t.rt), 0]);   // outward-up normal in (r, y)
+            var cr = r - nrm[0] * rb * 0.4, cy = y + nrm[1] * -rb * 0.4 * -1 - nrm[1] * rb * 0.8;
+            cy = y - nrm[1] * rb * 0.4;
+            b.push(ball(cr * Math.cos(a), cy, cr * Math.sin(a), rb, rb, rb, 24, 12));
+          }
+          out.push({ name: 'baubles', positions: cat(b), singlePart: true });
+        }
+        if (p.topper >= 1) {
+          var s = p.topperR, H = p.height;
+          if (Math.round(p.topper) === 1) out.push({ name: 'topper', positions: ball(0, H + s * 0.35, 0, s, s, s, 40, 20), singlePart: true });
+          else {
+            var yc = H + s * 0.45, pr = [[0, yc - 1.15 * s]], q;
+            for (q = 1; q < 8; q++) pr.push([s * Math.pow(q / 8, 0.9), yc - 1.15 * s * (1 - q / 8)]);
+            pr.push([s, yc]);
+            for (q = 1; q < 10; q++) pr.push([s * Math.pow(1 - q / 10, 1.4), yc + 1.9 * s * (q / 10)]);
+            pr.push([0, yc + 1.9 * s]);
+            out.push({ name: 'topper', positions: lathe(pr, 48), singlePart: true });
+          }
+        }
+        return out;
+      }
+
+      function cardSvg(v) {
+        var N = Math.round(v.tiers), svg = '<svg viewBox="0 0 64 64" aria-hidden="true">', i;
+        var H = 46 * v.height / 96, W = 24 * v.baseR / 28, top = 58 - H, tl = [];
+        svg += '<rect x="29" y="52" width="6" height="7" fill="#a16207"/>';
+        for (i = 0; i < N; i++) {
+          var f = i / N, yb = 54 - (H - 4) * f * 0.8 - 2, ytop = yb - (H - 4) / N * 1.7;
+          var wb = (W * (1 - f * (1 - v.topPct / 100))) ;
+          svg += '<path d="M' + (32 - wb).toFixed(1) + ' ' + yb.toFixed(1) + 'L32 ' + Math.max(top, ytop).toFixed(1) + 'L' + (32 + wb).toFixed(1) + ' ' + yb.toFixed(1) + 'z" fill="' + (i % 2 ? '#4ade80' : '#22c55e') + '" stroke="#14532d" stroke-width="0.7" stroke-linejoin="round"/>';
+          if (v.baubles > 0 && i < v.baubles) svg += '<circle cx="' + (32 + (i % 2 ? 1 : -1) * wb * 0.45).toFixed(1) + '" cy="' + (yb - 3).toFixed(1) + '" r="' + (v.baubleR * 0.6).toFixed(1) + '" fill="' + (i % 2 ? '#f87171' : '#fde047') + '"/>';
+        }
+        if (v.topper >= 1) svg += '<path d="M32 ' + (top - 7) + 'l1.8 4.2l4.4 .4l-3.4 3l1 4.4l-3.8-2.4l-3.8 2.4l1-4.4l-3.4-3l4.4-.4z" fill="#fde047" stroke="#a16207" stroke-width="0.5"/>';
+        return svg + '</svg>';
+      }
+
+      var STYLES = [
+        { name: 'Classic', values: {} },
+        { name: 'Slim spruce', values: { tiers: 7, baseR: 21, height: 112, topPct: 26, scallop: 3, trunkR: 7, baubles: 8, topper: 1, topperR: 4 } },
+        { name: 'Fat pine', values: { tiers: 4, baseR: 38, height: 84, topPct: 40, scallop: 5, lobes: 10, baubleR: 3.6, baubles: 12, topperR: 6 } },
+        { name: 'Frosty', values: { scallop: 9, lobes: 12, baubles: 0, topper: 2, topperR: 5.5 } },
+        { name: 'Party tree', values: { baubles: 22, baubleR: 3.2, tiers: 6, scallop: 2, topperR: 6 } },
+        { name: 'Mini 3-tier', values: { tiers: 3, height: 66, baseR: 22, topPct: 38, baubles: 5, baubleR: 2.6, topperR: 4, trunkH: 5, trunkR: 7 } }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-008',
+        category: 'CHRISTMAS // TREES',
+        title: 'Holiday Tree',
+        fileName: 'Holiday_Tree',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#86efac',
+        palette: [
+          { name: 'Pine Green', color: '#86efac' },
+          { name: 'Snow White', color: '#f1f5f9' },
+          { name: 'Candy Red', color: '#f87171' },
+          { name: 'Gold', color: '#fde047' },
+          { name: 'Bark Brown', color: '#d6a578' },
+          { name: 'Ice Blue', color: '#93c5fd' },
+          { name: 'Berry Purple', color: '#d8b4fe' },
+          { name: 'Midnight', color: '#334155' }
+        ],
+        partNames: { tree: 'Tree boughs', trunk: 'Trunk', base: 'Snow base', baubles: 'Baubles', topper: 'Topper' },
+        printSettings: {
+          material: 'PLA',
+          nozzle: 0.4,
+          layerHeight: 0.2,
+          infill: 12,
+          walls: 3,
+          topLayers: 5,
+          bottomLayers: 4,
+          supports: false,
+          brim: 3,
+          notes: 'Prints upright on its flat snow base. Every bough has a 45 degree or steeper underside, so no supports are needed. Keep the underside slope at 45 degrees or more, and keep the snow base on for the best bed grip.'
+        },
+
+        parameters: PARAMS,
+        presets: STYLES.map(function (s) { return { label: s.name === 'Classic' ? 'Default tree' : s.name, values: withDefaults(DEFAULTS, s.values) }; }),
+
+        tabs: [{
+          id: 'styles',
+          label: 'Styles',
+          hint: 'Pick a tree style, then fine-tune the sliders',
+          mount: function (container, api) {
+            mountStyleCards(container, api, STYLES, cardSvg, DEFAULTS, 'Tree styles', 'Cards set every slider; keep tuning by hand. The boughs, trunk, snow base, baubles and topper are separate parts you can paint in the Color tool.');
+          }
+        }],
+
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
