@@ -34,35 +34,64 @@ let currentSlide = 0;
 let featuredList = [];
 let carouselTimer = null;
 
-function initSplash() {
-  document.getElementById('program-grid').innerHTML = PROGRAMS.map(p => createMachineryFrameHTML(p)).join('');
-
-  featuredList = PROGRAMS.filter(p => p.featured);
-  const trackEl = document.getElementById('carousel-track');
-  const dotsEl = document.getElementById('carousel-dots');
-
-  trackEl.innerHTML = featuredList.map((prog, idx) => `
-    <div class="carousel-slide">
-      <div style="max-width: 220px; margin: 0 auto; width: 100%;">
-        ${createMachineryFrameHTML(prog)}
-      </div>
+function createBundleSlideHTML(bundle, idx) {
+  const thumbs = bundle.members.map(m => `
+    <button class="bundle-thumb" onclick="openProgram('${m.id}')" title="${m.title}">
+      ${m.thumbnailUrl ? `<img src="${m.thumbnailUrl}" alt="${m.title}">` : '<span>[ EMPTY ]</span>'}
+      <span class="bundle-thumb-label">${m.title}</span>
+    </button>`).join('');
+  return `
+    <div class="carousel-slide bundle-slide">
+      <div class="bundle-collage">${thumbs}</div>
       <div class="carousel-info">
         <div>
-          <span class="featured-badge">FEATURED SLOT 0${idx + 1} // STANDBY</span>
-          <h3>${prog.title || `[ EMPTY FEATURED SLOT 0${idx + 1} ]`}</h3>
-          <p>${prog.description || 'No generator assigned to this featured carousel slot yet.'}</p>
+          <span class="featured-badge">FEATURED BUNDLE // ${bundle.members.length} GENERATORS</span>
+          <h3>${bundle.name}</h3>
+          <p>${bundle.description}</p>
           <div class="spec-table">
-            <div><strong>SOCKET ID</strong>${prog.id}</div>
+            <div><strong>BUNDLE ID</strong>${bundle.id}</div>
             <div><strong>TARGET EXPORTS</strong>.STL / .3MF / .HTML</div>
-            <div><strong>STATUS</strong>${prog.programUrl ? 'ONLINE' : 'EMPTY TEMPLATE'}</div>
+            <div><strong>GENERATORS</strong>${bundle.members.map(m => m.title).join(', ')}</div>
           </div>
         </div>
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-          <button class="btn" onclick="openProgram('${prog.id}')">&#9881; Inspect Slot Shell</button>
+          <button class="btn" onclick="showBundle('${bundle.id}', true)">&#9881; View Bundle</button>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+}
+
+let activeBundle = '';
+
+function renderBundleFilter() {
+  const chips = [{ id: '', name: 'All' }].concat(BUNDLES.filter(b => b.members.length));
+  document.getElementById('bundle-filter').innerHTML = chips.map(b =>
+    `<button class="bundle-chip ${b.id === activeBundle ? 'active' : ''}" onclick="showBundle('${b.id}')">${b.name}${b.id ? ` (${b.members.length})` : ''}</button>`
+  ).join('');
+}
+
+function renderProgramGrid() {
+  const bundle = BUNDLES.find(b => b.id === activeBundle);
+  const list = bundle ? bundle.members : PROGRAMS;
+  document.getElementById('program-grid').innerHTML = list.map(p => createMachineryFrameHTML(p)).join('');
+}
+
+function showBundle(id, scroll) {
+  activeBundle = id;
+  renderBundleFilter();
+  renderProgramGrid();
+  if (scroll) document.getElementById('generators-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initSplash() {
+  renderBundleFilter();
+  renderProgramGrid();
+
+  featuredList = BUNDLES.filter(b => b.featured && b.members.length);
+  const trackEl = document.getElementById('carousel-track');
+  const dotsEl = document.getElementById('carousel-dots');
+
+  trackEl.innerHTML = featuredList.map(createBundleSlideHTML).join('');
 
   dotsEl.innerHTML = featuredList.map((_, idx) =>
     `<button class="dot ${idx === 0 ? 'active' : ''}" onclick="goToSlide(${idx})"></button>`

@@ -581,6 +581,75 @@ header {
   display: block;
 }
 
+/* Bundle filter chips above the grid */
+.bundle-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.bundle-chip {
+  background: transparent;
+  border: 1px solid var(--bp-cyan-dim);
+  color: var(--bp-cyan);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
+.bundle-chip.active {
+  background: var(--bp-cyan);
+  color: var(--bp-bg-deep);
+  font-weight: bold;
+}
+
+/* Featured bundle slide: collage of the member thumbnails */
+.carousel-slide.bundle-slide {
+  grid-template-columns: minmax(0, 360px) 1fr;
+}
+
+.bundle-collage {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.bundle-thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--bp-cyan-dim);
+  background: var(--bp-bg-deep);
+  color: var(--bp-cyan);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bundle-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bundle-thumb-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.6rem;
+  background: rgba(6, 21, 45, 0.85);
+  color: var(--bp-white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Generators grid (4 columns, rows grow with the slot count) */
 .program-grid {
   display: grid;
@@ -956,7 +1025,7 @@ footer {
   .program-grid {
     grid-template-columns: repeat(3, 1fr);
   }
-  .carousel-slide, .viewer-workspace, .map-layout {
+  .carousel-slide, .carousel-slide.bundle-slide, .viewer-workspace, .map-layout {
     grid-template-columns: 1fr;
   }
   .carousel-info {
