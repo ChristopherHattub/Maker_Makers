@@ -49,6 +49,42 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/spider.svg',
     programUrl: 'programs/spider.html',
     description: 'Parametric spider: shape the head and abdomen, set the eyes and number of legs, and bend, thicken and taper each leg. Emboss stamps like a mini spider, skull, web or bat. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 4,
+    title: 'Snowman Stacker',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // FIGURES',
+    thumbnailUrl: 'assets/thumbnails/snowman.svg',
+    programUrl: 'programs/snowman.html',
+    description: 'Parametric snowman: size and stack the three balls, then pick a top hat, beanie or Santa hat, a scarf, a drooping carrot nose, coal eyes, mouth and buttons, and stubby arms. A Styles tab of picture cards sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 6,
+    title: 'Snowflake Studio',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // ORNAMENTS',
+    thumbnailUrl: 'assets/thumbnails/snowflake.svg',
+    programUrl: 'programs/snowflake.html',
+    description: 'Flat printable snowflake ornament: set the number and length of arms, add rows of branches, change the centre and arm tips, and add a hanging loop. A Styles tab of picture cards (fern, lace, crystal and more) sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 8,
+    title: 'Holiday Tree',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // TREES',
+    thumbnailUrl: 'assets/thumbnails/holiday-tree.svg',
+    programUrl: 'programs/holiday-tree.html',
+    description: 'Tiered Christmas tree with adjustable height, width, tier count and wavy bough edges, a trunk, a snow base, baubles and a ball or sparkle topper. Every bough has a self-supporting underside. A Styles tab of picture cards sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+  },
+  {
+    slot: 9,
+    title: 'Holiday Gift Box',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // GIFTS',
+    thumbnailUrl: 'assets/thumbnails/gift-box.svg',
+    programUrl: 'programs/gift-box.html',
+    description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
   }
 ];
 
@@ -65,6 +101,13 @@ const BUNDLES = [
     description: 'Everything spooky in one place: a ghost, a pumpkin, a spider, a witch hat and a skull. Print the whole haunt or mix and match, and paint every part in the Color tool.',
     featured: true,
     generators: ['SLOT-02', 'SLOT-03', 'SLOT-05', 'SLOT-07', 'SLOT-01']
+  },
+  {
+    id: 'christmas',
+    name: 'Christmas Bundle',
+    description: 'A festive set: a snowman, a snowflake ornament, a tiered tree and a gift box with a bow. Every model prints flat or self-supporting, and every part can be painted in the Color tool.',
+    featured: false,
+    generators: ['SLOT-04', 'SLOT-08', 'SLOT-09', 'SLOT-06']
   }
 ];
 
