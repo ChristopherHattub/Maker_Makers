@@ -12,16 +12,32 @@ The grid always shows at least `MIN_SLOTS` (40) sockets, four per row. It adds r
   slot: 1,                // Generated: 1 upward. Shown as "#1" on the socket.
   title: '',              // Name shown on the socket and in the viewer
   category: '',           // Short label under the title, e.g. "HOOKS & WALL STORAGE"
-  featured: index < 3,    // true puts the slot in the Featured Generator carousel
+  bundle: 'halloween',    // Optional: id (or array of ids) of the bundle(s) this generator belongs to
   thumbnailUrl: '',       // Image shown on the socket
   programUrl: '',         // Standalone generator HTML loaded in the viewer iframe
   description: ''         // Shown in the carousel
 }
 ```
 
-Each `GENERATORS` entry sets `slot` plus any of these fields. Only `title`, `category`, `thumbnailUrl`, `programUrl`, `description` and `featured` are meant to be edited. `id` is generated from `slot`.
+Each `GENERATORS` entry sets `slot` plus any of these fields. Only `title`, `category`, `thumbnailUrl`, `programUrl`, `description` and `bundle` are meant to be edited. `id` is generated from `slot`.
 
-**Default featured slots.** The code sets `featured: index < 3`, so slots 1 to 3 are featured out of the box, even though the README says to set `featured: true` by hand. To feature a different slot, change its `featured` value. To stop featuring a slot, set it to `false`.
+**Featuring.** Individual generators are not featured. The Featured carousel shows bundles (see below).
+
+## Bundles
+
+`BUNDLES` in `js/programs.js` groups generators. Bundles are not grid items. They appear as filter chips above the generators grid (picking one shows only its generators; "All" shows everything) and, when `featured: true`, as a slide in the Featured carousel (the only thing in it).
+
+```js
+{
+  id: 'halloween',                 // Used by the generator `bundle` field and the filter
+  name: 'Halloween Bundle',        // Chip and carousel title
+  description: 'Plain text.',      // Carousel text
+  featured: true,                  // Show in the Featured carousel
+  generators: ['SLOT-02', 'SLOT-03']  // Optional ordered member ids
+}
+```
+
+Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field (a string or an array) names the bundle, merged without duplicates. Only generators with a `programUrl` count. After load, each bundle has `members` (resolved programs) and each program has `bundles` (ids). To add a bundle, append an entry and tag its generators; nothing else needs to change.
 
 ## Empty and active slots
 
@@ -64,7 +80,7 @@ Use relative paths only, such as `programs/ghost-builder.html`, never a path sta
    }
    ```
 
-   Fields you leave out stay blank (`featured` defaults to true for slots 1 to 3 only).
+   Add `bundle: '<bundle id>'` if it belongs to a bundle. Fields you leave out stay blank.
 
 4. Run `npm run dev` and open the slot to check the thumbnail, the viewer, and the download button. See [development.md](development.md).
 

@@ -46,7 +46,7 @@ npm run serve -- --port 8080
 
 1. Put the generator's standalone HTML file in `programs/`, for example `programs/honeycomb-hook.html`.
 2. Put its thumbnail in `assets/thumbnails/`.
-3. In `js/programs.js`, fill in that slot's `title`, `category`, `thumbnailUrl` and `programUrl` using relative paths such as `programs/honeycomb-hook.html`. Slots 1 to 3 are featured by default; set `featured: false` to hide a slot from the carousel, or `featured: true` to feature a later slot.
+3. In `js/programs.js`, fill in that slot's `title`, `category`, `thumbnailUrl` and `programUrl` using relative paths such as `programs/honeycomb-hook.html`. To group it with others, add `bundle: '<bundle id>'` (bundles are registered in `BUNDLES` in the same file, and only bundles are featured in the carousel).
 
 Always use relative paths (no leading `/`) so the site works both locally and under a GitHub Pages project URL like `https://<user>.github.io/<repo>/`.
 

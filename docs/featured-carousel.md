@@ -4,28 +4,18 @@ The home screen has two rotating or scrolling strips above the generators grid. 
 
 | Strip | Data | Status |
 | --- | --- | --- |
-| **[01] Featured Generator Modules** | `PROGRAMS` slots where `featured` is true | Shipped |
+| **[01] Featured Bundle** | `BUNDLES` entries where `featured` is true | Shipped |
 | **[01B] Featured Community Models** | `FEATURED_MODELS` in `js/featured.js` | In progress (uncommitted) |
 
-## [01] Featured Generator Modules
+## [01] Featured Bundle
 
-This is a slide carousel built from the generator registry.
+A slide carousel built from `BUNDLES` in `js/programs.js` (see [generator-registry.md](generator-registry.md#bundles)). Only bundles marked `featured: true` with at least one member appear, and individual generators are never featured on their own.
 
-**Data.** `initSplash()` in `js/app.js` filters `PROGRAMS` to `featured` entries and stores them in `featuredList`. Each entry becomes one slide. Slots 1 to 3 are featured by default (see [generator-registry.md](generator-registry.md)).
+**Slide contents.** Each slide shows a collage of the member thumbnails (each opens that generator), a "FEATURED BUNDLE" badge, the bundle name and description, a spec table and a "View Bundle" button. The button selects that bundle in the filter chips above the generators grid and scrolls to it. On narrow screens the slide stacks: collage on top, text below.
 
-**Slide contents.** Each slide shows the slot socket (thumbnail or empty bay), a "FEATURED SLOT 0N // STANDBY" badge, the title, description, a spec table (socket id, target exports, status), and an "Inspect Slot Shell" button. The button calls `openProgram(id)` for that slot.
+**Controls.** PREV and NEXT wrap around, dots call `goToSlide(i)`, and autoplay advances every 5.5 seconds (restarted by any manual control).
 
-**Empty slides.** A featured slot with no title shows "[ EMPTY FEATURED SLOT 0N ]" and a placeholder description.
-
-**Controls.**
-- PREV and NEXT buttons call `moveCarousel(-1)` and `moveCarousel(1)`. They wrap around.
-- Dots call `goToSlide(i)`. The dot for the current slide is marked active.
-- Autoplay advances one slide every 5.5 seconds (`startCarouselAutoPlay()`).
-- Any manual control restarts the 5.5-second timer.
-
-Moving is done by setting `translateX(-N * 100%)` on `#carousel-track`. Each slide is a full-width flex item.
-
-**Known gaps.** Autoplay does not pause on hover or focus, and there is no reduced-motion check in this carousel. The Featured Community Models strip does have both.
+**Known gaps.** Autoplay does not pause on hover or focus, and there is no reduced-motion check in this carousel.
 
 ## [01B] Featured Community Models
 

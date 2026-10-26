@@ -42,7 +42,7 @@ Navigation is entirely in-page. Scrolling to the top happens in `openProgram()`.
 Everything on the grid, carousel and viewer is generated from data at load time:
 
 - `initSplash()` maps `PROGRAMS` through `createMachineryFrameHTML()` into `#program-grid`.
-- The carousel uses the subset of `PROGRAMS` where `featured` is true.
+- The carousel uses the `BUNDLES` where `featured` is true.
 - Slot cards call `openProgram('SLOT-NN')` from an inline `onclick`.
 
 Markup is built with template strings and assigned with `innerHTML`. Content from `PROGRAMS`, `FEATURED_MODELS` and `data/public-printers.json` is trusted, so it is not escaped (see [Known issues](#known-issues)).
@@ -93,4 +93,3 @@ These are current behaviors to know about. None are blocking for the static, tru
 - **Export buttons are placeholders.** The viewer's "Export .STL" and "Export .3MF" buttons are disabled and not wired.
 - **Silent scan failures.** Overpass errors are swallowed, so a failed scan looks like an empty one.
 - **Distance check is in degrees.** Deciding which verified listings to include in a scan uses a degree distance, not kilometers.
-- **Featured default differs from the README.** The code features slots 1 to 3 by default. The README tells you to set `featured: true` by hand.

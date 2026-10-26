@@ -119,7 +119,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
 }
 ```
 
-- Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. `featured` defaults to true for slots 1-3 only; change deliberately.
+- Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. Generators are no longer featured individually; the Featured carousel shows bundles only. If the generator belongs to a theme, add `bundle: '<bundle id>'` to its `GENERATORS` entry (see Bundles below).
 - Titles/categories/descriptions are inserted as HTML unescaped: plain text, no `&`, `<`.
 - A slot with `programUrl` is "ONLINE" (viewer iframe, Download enabled); without `thumbnailUrl` it shows the empty crosshair.
 - **Thumbnail**: see the next section. File `assets/thumbnails/<kebab-name>.svg`, same name as the page.
@@ -135,6 +135,20 @@ All slot thumbnails share one look, so the grid reads as a set. **Start from [th
 - Thin parts (legs, handles) are drawn as stacked strokes: cyan wide, mid-blue, light, then a thin white highlight.
 - Gradient/pattern ids (`bg`, `plate`, `shadow`, `gloss`, `mat`, `warm`, `green`, `gridMinor`, `gridMajor`) are shared names; keep them as in the template and do not add new ids that collide.
 - Check it at card size: open `index.html` in the preview (or an `<img>` on the dev server; `file://` previews do not load images) and confirm nothing is cropped and the silhouette reads at ~200 px wide.
+
+## Bundles
+
+A bundle groups generators under a theme (Halloween, Christmas...). Bundles live in the `BUNDLES` array in `js/programs.js`, under `GENERATORS`:
+
+```js
+{ id: 'halloween', name: 'Halloween Bundle', description: 'Plain text.', featured: true,
+  generators: ['SLOT-02', 'SLOT-03'] }   // optional ordered list of generator ids
+```
+
+- Declare membership on the generator with `bundle: 'halloween'` (string, or an array for several bundles) in its `GENERATORS` entry, and/or list its id in the bundle's `generators`. The two are merged without duplicates; the list sets display order, tagged generators are appended.
+- To make a new bundle, append an entry to `BUNDLES` and tag its generators. `featured: true` shows it in the Featured carousel (bundles are the only featured items). Every bundle with members gets a filter chip above the generators grid. Bundles are never grid items.
+- Only generators with a `programUrl` count as members. Use plain text (no `&`, `<`) in names and descriptions.
+- Thumbnails shown for a bundle are the members' own `thumbnailUrl`s; nothing extra to draw.
 
 ## Visual style conventions (engine-owned, do not override)
 

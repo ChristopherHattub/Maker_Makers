@@ -31,7 +31,7 @@ Thanks for helping with Maker Makers. The project is small on purpose: plain fil
 
 - [ ] Standalone HTML in `programs/`, using a relative path
 - [ ] Thumbnail in `assets/thumbnails/`
-- [ ] Slot updated in `js/programs.js` (`title`, `category`, `thumbnailUrl`, `programUrl`, `description`, `featured`)
+- [ ] Slot updated in `js/programs.js` (`title`, `category`, `thumbnailUrl`, `programUrl`, `description`, `bundle`)
 - [ ] Viewer and download checked on that slot
 
 **Adding a verified printer listing**
