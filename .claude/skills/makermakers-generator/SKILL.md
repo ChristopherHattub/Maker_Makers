@@ -122,7 +122,19 @@ Every generator's **defaults and presets must print with no supports, or as few 
 - Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. `featured` defaults to true for slots 1-3 only; change deliberately.
 - Titles/categories/descriptions are inserted as HTML unescaped: plain text, no `&`, `<`.
 - A slot with `programUrl` is "ONLINE" (viewer iframe, Download enabled); without `thumbnailUrl` it shows the empty crosshair.
-- **Thumbnail** convention: `assets/thumbnails/<kebab-name>.svg`, same name as the page, `viewBox="0 0 400 300"` (4:3, shown `object-fit: cover`), flat illustration in the blueprint style of `assets/thumbnails/ghost-builder.svg`: navy `#0d2b59` background, faint cyan `#00e5ff` grid at 0.08 opacity, an elliptical dark build-plate shadow near the bottom, the object drawn with light fill and a 2 px cyan stroke, one purple/accent detail, cyan corner brackets, and a monospace label `MM-00N TITLE` at the bottom (`Courier New`, size 11, letter-spacing 2). No external fonts or images. Keep the subject centered with margin.
+- **Thumbnail**: see the next section. File `assets/thumbnails/<kebab-name>.svg`, same name as the page.
+
+## Thumbnail style
+
+All slot thumbnails share one look, so the grid reads as a set. **Start from [thumbnail-template.svg](thumbnail-template.svg)** (copy it, set the `MM-00N` code and `TITLE`, draw the subject where the SUBJECT comment is). Do not change the frame.
+
+- Canvas `viewBox="0 0 400 300"` (4:3, shown `object-fit: cover`), no external fonts/images/filters. Subject centered, x 70-330, y 40-250, with its base resting on the build plate ellipse (cy 248). Draw the model's most recognizable view (front or 3/4), not a technical drawing.
+- Frame (already in the template, matches the site CSS): radial navy background (`#14407f` > `#0d2b59` > `#06152d`), 20 px/100 px cyan grid, glowing build plate ellipse with a contact shadow, cyan corner brackets, a `MM-00N` chip top-left, and the title in `Courier New` 12 px, letter-spacing 3, `#eef7ff`, bottom center (upper case, plain text).
+- Shading (fake 3D, the same on every thumbnail): fill each solid with a radial gradient lit from the upper left. `url(#mat)` is the default cool bone/white; `url(#warm)` for orange-ish models, `url(#green)` for greenery. Outline every solid with `stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"`. Add one soft specular streak per major form (`stroke="url(#gloss)"`, width 5-7, round caps) on the upper-left edge. Cavities and holes are `#06152d`/`#0a2246` with a slightly darker inner shape for depth. Overlap order = depth order.
+- Accent: exactly one small purple `#c084fc` detail (star, band, stamp) with a white 1.2-1.4 stroke. At most one other hue (the model's own material).
+- Thin parts (legs, handles) are drawn as stacked strokes: cyan wide, mid-blue, light, then a thin white highlight.
+- Gradient/pattern ids (`bg`, `plate`, `shadow`, `gloss`, `mat`, `warm`, `green`, `gridMinor`, `gridMajor`) are shared names; keep them as in the template and do not add new ids that collide.
+- Check it at card size: open `index.html` in the preview (or an `<img>` on the dev server; `file://` previews do not load images) and confirm nothing is cropped and the silhouette reads at ~200 px wide.
 
 ## Visual style conventions (engine-owned, do not override)
 
