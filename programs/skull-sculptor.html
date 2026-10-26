@@ -116,7 +116,12 @@
       // -----------------------------------------------------------------------
       // Face features: eye sockets, nose cavity and mouth pressed in as smooth pockets
       // -----------------------------------------------------------------------
-      var NOSE_POLY = [[0, 0.95], [-0.95, -0.8], [-0.3, -0.5], [0, -0.85], [0.3, -0.5], [0.95, -0.8]];
+      // Inverted-heart outline, inset so the 0.16 rounding below keeps the overall size and softens every corner.
+      var NOSE_POLY = [[0, 0.95], [-0.95, -0.8], [-0.3, -0.5], [0, -0.85], [0.3, -0.5], [0.95, -0.8]].map(function (q) {
+        var cx = 0, cy = -0.1, f = 0.8;
+        return [cx + (q[0] - cx) * f, cy + (q[1] - cy) * f];
+      });
+      var NOSE_ROUND = 0.16;
 
       function polyDist(poly, x, y) {
         var d = Infinity, inside = false;
@@ -228,7 +233,7 @@
           if (eyeM[v] > 0) d = Math.max(d, eyeM[v] * p.eyeDepth);
           // Nose
           if (Math.abs(x) < noseW + noseRamp + 2 && Math.abs(y - noseY) < noseH + noseRamp + 2) {
-            var nsd = polyDist(NOSE_POLY, x / noseW, (y - noseY) / noseH) * Math.min(noseW, noseH) - noseRamp * 0.6;
+            var nsd = (polyDist(NOSE_POLY, x / noseW, (y - noseY) / noseH) - NOSE_ROUND) * Math.min(noseW, noseH) - noseRamp * 0.6;
             if (nsd < noseRamp) { noseM[v] = smootherstep(-nsd / noseRamp); d = Math.max(d, noseM[v] * p.noseDepth); }
           }
           // Mouth
@@ -249,7 +254,7 @@
 
       // Splits the surface into skull, eye sockets, nose cavity and mouth so each can be painted on its own.
       function expandSkull(pos, masks) {
-        var tris = TOPO.length / 3, cat = new Uint8Array(tris), counts = [0, 0, 0, 0], t, k;
+        var tris = TOPO.length / 3, cat = new Uint8Array(tris), counts = [0, 0, 0, 0, 0], t, k;
         var arrs = [masks.eye, masks.nose, masks.mouth];
         for (t = 0; t < tris; t++) {
           var c = 0;
@@ -257,11 +262,12 @@
             var s = (arrs[k][TOPO[t * 3]] + arrs[k][TOPO[t * 3 + 1]] + arrs[k][TOPO[t * 3 + 2]]) / 3;
             if (s > 0.25) c = k + 1;
           }
+          if (c === 0 && pos[TOPO[t * 3] * 3 + 1] < 1e-6 && pos[TOPO[t * 3 + 1] * 3 + 1] < 1e-6 && pos[TOPO[t * 3 + 2] * 3 + 1] < 1e-6) c = 4;
           cat[t] = c;
           counts[c]++;
         }
         var out = counts.map(function (n) { return new Float32Array(n * 9); });
-        var at = [0, 0, 0, 0];
+        var at = [0, 0, 0, 0, 0];
         for (t = 0; t < tris; t++) {
           var arr = out[cat[t]], o = at[cat[t]];
           for (k = 0; k < 3; k++) {
@@ -270,8 +276,8 @@
           }
           at[cat[t]] = o;
         }
-        var names = ['skull', 'eyes', 'nose', 'mouth'], meshes = [];
-        for (var i = 0; i < 4; i++) if (counts[i]) meshes.push({ name: names[i], positions: out[i], smoothGroup: 'skull' });
+        var names = ['skull', 'eyes', 'nose', 'mouth', 'base'], meshes = [];
+        for (var i = 0; i < 5; i++) if (counts[i]) meshes.push({ name: names[i], positions: out[i], smoothGroup: 'skull' });
         return meshes;
       }
 
@@ -444,7 +450,7 @@
           { name: 'Berry Sorbet', color: '#fda4af' },
           { name: 'Shadow Black', color: '#334155' }
         ],
-        partNames: { skull: 'Skull', eyes: 'Eye sockets', nose: 'Nose cavity', mouth: 'Mouth', teeth: 'Teeth' },
+        partNames: { skull: 'Skull', eyes: 'Eye sockets', nose: 'Nose cavity', mouth: 'Mouth', teeth: 'Teeth', base: 'Base' },
         printSettings: {
           material: 'PLA',
           nozzle: 0.4,
@@ -504,9 +510,13 @@
           var pos = buildBase(g);
           var masks = applyFeatures(pos, p, g, mg);
           var meshes = expandSkull(pos, masks);
-          mg.teeth.forEach(function (t) {
-            meshes.push({ name: 'teeth', positions: toothPositions(t, mg, g, p) });
-          });
+          var toothParts = mg.teeth.map(function (t) { return toothPositions(t, mg, g, p); });
+          var toothLen = toothParts.reduce(function (n, a) { return n + a.length; }, 0);
+          if (toothLen) {
+            var allTeeth = new Float32Array(toothLen), at = 0;
+            toothParts.forEach(function (a) { allTeeth.set(a, at); at += a.length; });
+            meshes.push({ name: 'teeth', positions: allTeeth, singlePart: true });
+          }
           return meshes;
         }
       };

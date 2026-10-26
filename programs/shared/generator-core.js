@@ -880,6 +880,14 @@
         }
       }
 
+      // A mesh entry flagged singlePart is one paintable part (e.g. all teeth together).
+      if (entry.singlePart) {
+        for (var sp = 1; sp < triCount; sp++) {
+          var spa = find(sp), spb = find(0);
+          if (spa !== spb) parent[spa] = spb;
+        }
+      }
+
       // Merge tiny islands (jagged faces around the eyes and mouth) into the largest neighbor.
       var sizeOfRoot = new Int32Array(triCount);
       for (var s = 0; s < triCount; s++) sizeOfRoot[find(s)]++;
