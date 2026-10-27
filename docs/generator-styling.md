@@ -119,9 +119,19 @@ Use `api.THREE` for three.js helpers (geometry, matrices). A common pattern for 
 
 ## Parametric and Color tabs
 
+### Choice controls (engine-owned)
+
+Parameters are sliders only when they are real quantities. Categorical parameters are rendered by the engine as:
+
+- **Two options**: two buttons side by side, both always visible, the selected one highlighted (`.mm-toggle`). This covers every on/off switch.
+- **Three or more options**: a dropdown (`<select>`).
+- **Picture pickers** (`choices: [{ label, svg }]`, see Key Clicker's body shape) stay as icon buttons, with any number of options.
+
+A generator does not build these. Declare a plain integer parameter (`step: 1`, 2 to 8 values) and either give it `options: ['Off', 'On']` (value = `min` + index), or give it a `format` that returns names with no digits (`['None', 'Ball', 'Sparkle'][v]`, `v >= 1 ? 'On' : 'Off'`), which the engine detects automatically. Set `slider: true` on the parameter to opt out. A format that contains digits (`v + ' mm'`) keeps the slider.
+
 The panel has three tabs: Parametric, Color tool and Print. Only one is shown at a time.
 
-**Parametric** starts with a **View** switch (engine-owned, every generator gets it): *Solid*, *Wireframe* (only the triangle edges the model is built from) and *Solid + edges* (shaded model with the edges on top). It is a display mode only; exports are unchanged, and the Color tab always shows the solid so painting stays readable. Below it are presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
+**Parametric** ends with a **View** section holding a *Display* dropdown (engine-owned, every generator gets it): *Solid*, *Wireframe* (only the triangle edges the model is built from) and *Solid + edges* (shaded model with the edges on top). It is a display mode only; exports are unchanged, and the Color tab always shows the solid so painting stays readable. Below it are presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
 
 Placement tools belong to the Parametric tab. In the Color tab the engine does not call `onHover` or `onPick`, clears any preview, and uses a pointer cursor (a crosshair in the Parametric tab when the generator has `onPick`). A generator does not need to handle this itself.
 
@@ -152,7 +162,7 @@ Paint resets when the page reloads. The engine does not save it.
 | Export .STL | Binary STL, one solid, Z-up, on the bed. No color (STL cannot carry color). |
 | Download standalone .html generator | A single HTML file that contains the generator, the shared styles and the engine. |
 
-The file name is the `File name` field in the panel footer, which starts from `fileName`.
+The file name is the `File name` field in the Export block at the bottom of the Print tab, which starts from `fileName`.
 
 The STL export applies this transform: Y-up becomes Z-up (`x, y, z` becomes `x, -z, y`), and the lowest point sits on the bed. Keep this in mind when you compare an export with the viewport.
 
@@ -180,14 +190,14 @@ The engine applies these. A generator should not restyle the page.
 
 - **Header.** The id and category on top, the title below it. Three buttons on the right: *Find local printer for this STL* (green), *Download program (.html)* (amber), and *Back to grid*.
 - **Inside the site viewer.** The viewer's own top bar already shows the id, title and the same three buttons, so a generator loaded in the viewer hides its header and fills the frame. The engine adds `mm-framed` to `<body>` when the page is in an iframe. The viewer hides its empty placeholder panel for any slot that has a `programUrl` (the `has-program` class in `css/styles.css`). Opened on its own, the generator keeps its header.
-- **Panel.** Left column, 380 px wide on desktop. Two tabs at the top. Footer with the triangle count, file name, export buttons, and the standalone download. Button text wraps, so long labels never overflow.
+- **Panel.** Left column, 380 px wide on desktop. Tabs at the top (Parametric, Color tool, Print). There is no footer: the Export block (triangle count, file name, Export .STL, standalone download, disclaimer) sits at the bottom of the Print tab so the other tabs show more settings. Button text wraps, so long labels never overflow.
 - **Viewport.** Right column. Orbit by dragging. The top-left hint and the top-right size readout (`X x Y x Z MM`) are fixed. *Front* and *Iso* sit at the bottom right.
 - **Colors and fonts.** Blueprint palette from `css/styles.css`: deep navy background, cyan for lines and active states, green and amber for the two secondary actions. Monospace font throughout.
 - **Build plate.** A 160 mm square plate, drawn for every generator, so a model's size is easy to judge.
 - **Accordion sections.** Every slider group (by its `group` name), the Presets, the generator's `mount()` extras (titled `cfg.extrasTitle`, default "Stamps & tools") and the View switch are collapsible `<details class="mm-acc">` sections. The first parameter group is open by default; set `openGroups: ['Shape', 'Ribs']` in the config to open others. Order slider groups so the most-used one comes first.
 - **Print tab = realistic render.** Selecting the Print tab switches the viewport to a realistic look for every generator, automatically: the painted colors from the Color tool, a material finish (PLA satin, PETG glossy with clearcoat, ABS/ASA matte, TPU soft), faint horizontal layer lines, a studio reflection environment and a lighter bed. It updates live when the material changes. It is a preview only; nothing changes in the export. Generators need to do nothing.
 - **Extra tabs.** A generator can add its own editor tabs with `tabs: [{ id, label, hint, mount, onHover, onPick }]`; they appear after Parametric. Parameters with `tab: '<id>'` render as open accordion sections in that tab, below the tab's `mount()` content. Pumpkin Plotter uses this for its Carve tab (shape picker, tap-to-carve, auto face).
-- **Phone width (860 px and below).** Mandatory for every generator and provided by the engine; never add generator-specific mobile CSS. The page never scrolls. The viewport is pinned to the top (40% of the height) and the panel becomes a sheet below it: a drag handle (drag to resize, tap to flip between big model and big controls), a fixed tab bar (Parametric / Color tool / Print), the scrolling controls, and a footer that always shows the triangle count and the two export buttons. File name, standalone download and disclaimer sit behind the footer's "More" button. Sliders get 36 px touch targets, the canvas uses `touch-action: none` so orbit gestures never scroll the page, and the header shrinks to a single line with only *Back to grid*. Nothing scrolls sideways.
+- **Phone width (860 px and below).** Mandatory for every generator and provided by the engine; never add generator-specific mobile CSS. The page never scrolls. The viewport is pinned to the top (40% of the height) and the panel becomes a sheet below it: a drag handle (drag to resize, tap to flip between big model and big controls), a fixed tab bar (Parametric / Color tool / Print) and the scrolling controls. Exports live in the Print tab. Sliders get 36 px touch targets, the canvas uses `touch-action: none` so orbit gestures never scroll the page, and the header shrinks to a single line with only *Back to grid*. Nothing scrolls sideways.
 
 Do not add colors, fonts or layout rules inside a generator page. If a generator needs a new style, add it to `shared/generator.css` so every generator gets it.
 
@@ -218,9 +228,9 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 8. Do nothing for the footer disclaimer: the engine adds it.
 9. Open the page in the preview. Check that the Color tool lists sensible parts, that paint survives a slider change, that the STL opens, and that the standalone download runs.
 
-## Footer disclaimer
+## Disclaimer
 
-The engine adds a collapsed "Disclaimer" block under the panel footer buttons of every generator (and so in the standalone download, which has no external links). A generator page must not add or remove it. The text lives in `DISCLAIMER_SHORT` / `DISCLAIMER_ITEMS` in `generator-core.js`, and is mirrored in `index.html` (`#site-disclaimer`) and in [`DISCLAIMER.md`](../DISCLAIMER.md). Edit all three together. It is a best-effort draft and not legal advice (the visible text does not say so); a lawyer should review it for the owner's jurisdiction. Styles are `.mm-disclaimer*` in `shared/generator.css`.
+The engine adds the "Disclaimer" block at the bottom of the Print tab's Export block in every generator (and so in the standalone download, which has no external links). A generator page must not add or remove it. The text lives in `DISCLAIMER_SHORT` / `DISCLAIMER_ITEMS` in `generator-core.js`, and is mirrored in `index.html` (`#site-disclaimer`) and in [`DISCLAIMER.md`](../DISCLAIMER.md). Edit all three together. It is a best-effort draft and not legal advice (the visible text does not say so); a lawyer should review it for the owner's jurisdiction. Styles are `.mm-disclaimer*` in `shared/generator.css`.
 
 ## Limits
 

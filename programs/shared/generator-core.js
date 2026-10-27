@@ -184,19 +184,15 @@
     var colorBody = el('div', { id: 'mm-body-color', class: 'mm-panel-body', hidden: '' });
 
     var fileInput = el('input', { id: 'mm-file-name', type: 'text', maxlength: '60', value: cfg.fileName || 'Model', spellcheck: 'false' });
-    var footer = el('div', { class: 'mm-panel-footer' }, [
+    // Export block lives at the bottom of the Print tab (not in a footer), so every tab shows more settings.
+    var exportBlock = el('div', { class: 'mm-export-block' }, [
+      el('h3', { class: 'mm-group-title', text: 'Export' }),
       el('div', { class: 'mm-stats', id: 'mm-stats', text: 'Geometry ready' }),
+      el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
       el('div', { class: 'mm-export-row' }, [
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } })
       ]),
-      el('button', { class: 'mm-btn mm-footer-toggle', type: 'button', text: 'More: file name, standalone', 'aria-expanded': 'false', onclick: function (e) {
-        var open = footer.classList.toggle('is-expanded');
-        e.currentTarget.setAttribute('aria-expanded', String(open));
-      } }),
-      el('div', { class: 'mm-footer-extra' }, [
-        el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
-        el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: function () { confirmDownload('generator', downloadStandalone); } })
-      ]),
+      el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: function () { confirmDownload('generator', downloadStandalone); } }),
       disclaimerBlock()
     ]);
 
@@ -218,8 +214,7 @@
       modelBody
     ].concat(extraTabs.map(function (t) { return t.body; }), [
       colorBody,
-      printBody,
-      footer
+      printBody
     ]));
 
     var stage = el('div', { class: 'mm-stage', id: 'mm-stage' });
@@ -239,7 +234,7 @@
     document.body.appendChild(header);
     document.body.appendChild(main);
 
-    return { extraTabs: extraTabs, modelBody: modelBody, colorBody: colorBody, printBody: printBody, stage: stage, tabModel: tabModel, tabColor: tabColor, tabPrint: tabPrint };
+    return { exportBlock: exportBlock, extraTabs: extraTabs, modelBody: modelBody, colorBody: colorBody, printBody: printBody, stage: stage, tabModel: tabModel, tabColor: tabColor, tabPrint: tabPrint };
   }
 
   var dom = buildShell();
@@ -293,13 +288,12 @@
       cfg.mount(extras, api);
     }
     dom.modelBody.appendChild(accordion('View', el('div', {}, [
-      el('div', { class: 'mm-chips', id: 'mm-view-modes' }, VIEW_MODES.map(function (mode) {
-        return el('button', {
-          class: 'mm-chip', type: 'button', text: mode.label, title: mode.hint,
-          'aria-pressed': String(mode.id === viewMode),
-          onclick: function () { setViewMode(mode.id); }
-        });
-      })),
+      el('div', { class: 'mm-slider' }, [
+        el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Display' })]),
+        el('select', { id: 'mm-view-modes', 'aria-label': 'Display', onchange: function (e) { setViewMode(e.target.value); } }, VIEW_MODES.map(function (mode) {
+          return el('option', { value: mode.id, text: mode.label, title: mode.hint });
+        }))
+      ]),
       el('p', { class: 'mm-note', text: 'Wireframe shows the triangles the model is built from. It is only a view; exports are unchanged.' })
     ]), false));
 
@@ -347,6 +341,7 @@
     sel.value = printSettings.material;
     if (sel.value !== printSettings.material) { printSettings.material = 'PLA'; sel.value = 'PLA'; }
     dom.printBody.appendChild(el('div', { class: 'mm-group' }, [el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Material' })]), sel])]));
+    dom.printBody.appendChild(dom.exportBlock);
   }
 
   // A parameter with `choices: [{ label, svg }]` is picked from a grid of icon buttons (value = index) instead of a slider.
@@ -374,8 +369,57 @@
     ]);
   }
 
+  // Named options for a categorical parameter, or null when it is a real quantity (slider).
+  // Explicit: `options: ['A', 'B']` (value = min + index). Automatic: a small integer range whose formatted
+  // values contain no digits ('Off'/'On', 'None'/'Ball'/'Sparkle'...) is categorical.
+  function optionNames(p) {
+    if (p.choices || p.slider) return null;
+    if (p.options) return p.options;
+    if (typeof p.format !== 'function' || (p.step || 1) !== 1) return null;
+    var count = Math.round(p.max - p.min) + 1;
+    if (count < 2 || count > 8) return null;
+    var names = [];
+    for (var v = p.min; v <= p.max; v++) {
+      var t = String(p.format(v));
+      if (/\d/.test(t) || names.indexOf(t) >= 0) return null;
+      names.push(t);
+    }
+    return names;
+  }
+
+  // Two options: both buttons visible, the selected one highlighted. More: a dropdown.
+  function optionsFor(p, names) {
+    var base = p.min || 0;
+    var ctl, sync;
+    if (names.length === 2) {
+      var btns = names.map(function (name, i) {
+        return el('button', { type: 'button', class: 'mm-toggle-btn', text: name, onclick: function () {
+          params[p.key] = base + i; sync(); scheduleRebuild();
+        } });
+      });
+      ctl = el('div', { class: 'mm-toggle', role: 'group', 'aria-label': p.label }, btns);
+      sync = function () {
+        var cur = Math.round(params[p.key]) - base;
+        btns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(i === cur)); });
+      };
+    } else {
+      ctl = el('select', { 'aria-label': p.label, onchange: function () {
+        params[p.key] = base + Number(ctl.value); scheduleRebuild();
+      } }, names.map(function (name, i) { return el('option', { value: String(i), text: name }); }));
+      sync = function () { ctl.value = String(Math.round(params[p.key]) - base); };
+    }
+    sliderRefs[p.key] = { choices: true, sync: sync };
+    sync();
+    return el('div', { class: 'mm-slider' }, [
+      el('div', { class: 'mm-slider-head' }, [el('label', { text: p.label })]),
+      ctl
+    ]);
+  }
+
   function sliderFor(p) {
     if (p.choices) return choicesFor(p);
+    var names = optionNames(p);
+    if (names) return optionsFor(p, names);
     var output = el('span', { class: 'mm-slider-value', text: formatParam(p, params[p.key]) });
     var input = el('input', {
       type: 'range', min: String(p.min), max: String(p.max), step: String(p.step || 1), value: String(params[p.key]),
@@ -721,8 +765,8 @@
 
   function setViewMode(mode) {
     viewMode = mode;
-    var chips = document.querySelectorAll('#mm-view-modes .mm-chip');
-    VIEW_MODES.forEach(function (m, i) { chips[i].setAttribute('aria-pressed', String(m.id === mode)); });
+    var sel = $('mm-view-modes');
+    if (sel) sel.value = mode;
     rebuildWire();
   }
 

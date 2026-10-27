@@ -160,12 +160,28 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
   padding: 1rem;
 }
 
-.mm-panel-footer {
+.mm-export-block {
+  margin-top: 1.2rem;
+  padding-top: 0.9rem;
   border-top: 1px dashed var(--bp-cyan-dim);
-  padding: 0.9rem 1rem;
   display: grid;
   gap: 0.55rem;
 }
+
+/* Two-option choice: both visible, selected one highlighted. */
+.mm-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.mm-toggle-btn {
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.4rem;
+  background: rgba(6, 21, 45, 0.7);
+  color: var(--bp-white);
+  border: 1px solid var(--bp-cyan-dim);
+  cursor: pointer;
+}
+.mm-toggle-btn:hover { background: rgba(0, 229, 255, 0.1); }
+.mm-toggle-btn[aria-pressed="true"] { background: rgba(0, 229, 255, 0.2); border-color: var(--bp-cyan); }
+.mm-toggle-btn:focus-visible { outline: 2px solid var(--bp-cyan); outline-offset: 2px; }
 
 .mm-section-title {
   margin: 0 0 0.9rem;
@@ -355,7 +371,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 
 .mm-export-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.5rem;
 }
 
@@ -462,7 +478,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-acc-body { padding: 0.8rem 0.8rem 0.1rem; }
 
 /* Phone-only pieces are hidden on desktop. */
-.mm-sheet-handle, .mm-footer-toggle { display: none; }
+.mm-sheet-handle { display: none; }
 
 .mm-stage canvas, .mm-stage { touch-action: none; }
 .mm-slider input[type="range"] { touch-action: pan-y; }
@@ -513,12 +529,9 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
   .mm-tab { padding: 0.65rem 0.2rem; font-size: 0.68rem; letter-spacing: 0.03em; }
   .mm-panel-body { padding: 0.6rem; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-  .mm-panel-footer { padding: 0.4rem 0.6rem; gap: 0.3rem; }
-  .mm-panel-footer .mm-export-row .mm-btn { padding: 0.45rem 0.4rem; }
   .mm-stats { font-size: 0.68rem; }
-  .mm-footer-toggle { display: inline-flex; padding: 0.3rem; font-size: 0.66rem; border-width: 1px; border-color: var(--bp-cyan-dim); color: var(--bp-muted); }
-  .mm-footer-extra { display: none; gap: 0.55rem; max-height: 30vh; overflow-y: auto; }
-  .mm-panel-footer.is-expanded .mm-footer-extra { display: grid; }
+  .mm-toggle-btn { padding: 0.7rem 0.4rem; font-size: 0.9rem; }
+  .mm-slider select { padding: 0.6rem 0.5rem; font-size: 0.9rem; }
   .mm-disclaimer-body { max-height: none; }
 
   /* Large touch targets for sliders and chips. */
@@ -744,6 +757,7 @@ body.mm-soft {
 .mm-soft .mm-btn--solid, .mm-soft .mm-btn--solid:hover:not(:disabled) { color: #fff; background: var(--s-accent); }
 .mm-soft .mm-stage { background: var(--s-stage); }
 .mm-soft .mm-viewport { border-radius: 18px; overflow: hidden; box-shadow: 0 3px 0 var(--s-edge); }
+.mm-soft .mm-toggle-btn { background: var(--s-card); color: var(--s-text); }
 .mm-soft .mm-choice[aria-pressed="true"] { color: var(--s-text); }
 .mm-soft .mm-viewport { background: var(--s-stage); }
 .mm-soft .mm-stage canvas:not(.mm-backdrop) { position: relative; z-index: 1; }

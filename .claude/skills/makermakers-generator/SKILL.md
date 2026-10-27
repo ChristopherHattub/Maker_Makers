@@ -22,11 +22,11 @@ Sources of truth (read them before changing anything, they may have moved on sin
 
 ## Mobile layout is mandatory and engine-owned
 
-Every generator, new or existing, **must** use the shared phone layout from `generator-core.js` / `generator.css`: pinned viewport on top (40%), resizable bottom sheet below with sticky tabs, accordion slider sections, large touch sliders, export buttons always visible, no page scroll. Never write generator-specific mobile CSS, never override the sheet or tab bar, and never make a generator's controls scroll the page. A generator that uses the engine as described here gets it automatically; if a control looks wrong on a phone, fix it in `shared/generator.css` for everyone. Always verify at 375x667 and 390x844 before finishing.
+Every generator, new or existing, **must** use the shared phone layout from `generator-core.js` / `generator.css`: pinned viewport on top (40%), resizable bottom sheet below with sticky tabs, accordion slider sections, large touch sliders, no page scroll (exports live in the Print tab). Never write generator-specific mobile CSS, never override the sheet or tab bar, and never make a generator's controls scroll the page. A generator that uses the engine as described here gets it automatically; if a control looks wrong on a phone, fix it in `shared/generator.css` for everyone. Always verify at 375x667 and 390x844 before finishing.
 
 ## Print tab realistic render is engine-owned
 
-Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**; there are no slicer settings and no .3MF export. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
+Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**, plus the **Export block** (triangle count, file name, Export .STL, standalone .html download, disclaimer); there are no slicer settings and no .3MF export. Never put export, file name or download controls in another tab. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
 
 ## Page rules (the standalone bundler depends on these)
 
@@ -37,6 +37,10 @@ Opening the Print tab automatically switches the viewport to a realistic render 
 - Relative paths only (`programs/x.html`, `assets/thumbnails/x.svg`), never a leading `/`.
 - Plain JS in an IIFE with `'use strict'`; `var`/function style matching Ghost Builder, single quotes, semicolons, 2-space indent.
 - No colors, fonts or layout rules in the generator page. Missing style? Add it to `shared/generator.css` for all generators.
+
+## Choice controls (engine-owned)
+
+Real quantities are sliders. Categorical parameters are **not**: two options render as two side-by-side buttons with the selected one highlighted (all on/off switches), three or more as a dropdown. Picture pickers (`choices: [{ label, svg }]`) stay as icon buttons. Declare a plain integer parameter (`step: 1`, 2 to 8 values) with either `options: ['Off', 'On']` (value = `min` + index) or a `format` that returns names without digits (`v >= 1 ? 'On' : 'Off'`, `['None','Ball','Sparkle'][v]`); the engine detects it. `slider: true` opts out. A format containing digits (`v + ' mm'`) stays a slider. Do not hand-build chips or toggles in `mount()` for categorical params.
 
 ## Config
 
@@ -152,10 +156,10 @@ A bundle groups generators under a theme (Halloween, Christmas...). Bundles live
 
 ## Visual style conventions (engine-owned, do not override)
 
-Every generator shows the engine's footer disclaimer (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together. The engine also shows a consent modal (`confirmDownload`, must tick the checkbox) before every .STL/.3MF export; it is automatic, so never add a download button that bypasses it, never call export functions directly from generator code, and a new download type must go through `confirmDownload` too.
+Every generator shows the engine's disclaimer at the bottom of the Print tab (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together. The engine also shows a consent modal (`confirmDownload`, must tick the checkbox) before every .STL/.3MF export; it is automatic, so never add a download button that bypasses it, never call export functions directly from generator code, and a new download type must go through `confirmDownload` too.
 
 
-Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool, footer with triangle count, file name, exports and standalone download. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Optional generator tabs (`tabs`, see Config) sit after Parametric. Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders and always-visible export buttons; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
+Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool / Print; no footer: the Print tab's Export block holds triangle count, file name, Export .STL, standalone download and the disclaimer, so other tabs show more settings. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Optional generator tabs (`tabs`, see Config) sit after Parametric. Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
 
 ## Verification checklist (live preview)
 
@@ -171,7 +175,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed). There is no .3MF export.
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] Clicking Export .STL opens the consent modal; the download button stays disabled until the box is ticked; Cancel/Esc/backdrop close it without downloading.
-- [ ] The collapsed "Disclaimer" block shows under the panel footer buttons (engine-provided; never remove or override it in a generator page) and expands to readable text.
-- [ ] Phone width (resize to 375x667 and 390x844): no page scroll or horizontal scroll, model visible above the sliders, sheet handle drags, export buttons visible, accordion sections open/close.
+- [ ] The Disclaimer block shows at the bottom of the Print tab under the Export block (engine-provided; never remove or override it in a generator page) and expands to readable text.
+- [ ] Phone width (resize to 375x667 and 390x844): no page scroll or horizontal scroll, model visible above the sliders, sheet handle drags, Print tab shows Export block, accordion sections open/close.
 - [ ] Slot listing: title, category, description render as plain text; thumbnail not cropped badly.
 - [ ] `git status`: only your files staged and committed.
