@@ -87,6 +87,14 @@ const GENERATORS = [
     description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 10,
+    title: 'Key Clicker',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/key-clicker.svg',
+    programUrl: 'programs/key-clicker.html',
+    description: 'Pad of connected clicker buttons: pick how many (1 to 12), rows, button shape, body shape, keycap height and rounding, and type a character on every keycap. Optional switch socket under each key. Caps print flat beside the body with no supports. Paint body, caps and characters in the Color tool and export .STL.'
+  },
+  {
     slot: 11,
     title: 'Name Keychain',
     category: 'KEYCHAINS // PERSONAL',

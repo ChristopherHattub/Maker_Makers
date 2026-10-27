@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-010 Key Clicker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Key Clicker: a pad of connected buttons with editable keycaps. The body, the keycaps and the
+    // raised characters are separate solids so each can be painted and printed on its own.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      var MAX_KEYS = 12;
+      var labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+      var focusKey = null;
+
+      var SHAPE_NAMES = ['Square', 'Round', 'Hexagon', 'Octagon', 'Diamond', 'Heart', 'Star'];
+      var BODY_NAMES = ['Rounded box', 'Pill', 'Chamfered'];
+      var LAYOUT_NAMES = ['Print layout', 'Assembled preview'];
+      var STYLE_NAMES = ['Block', 'Dot'];
+
+      // -----------------------------------------------------------------------
+      // 5x7 pixel font. Rows are top to bottom, 1 = raised pixel.
+      // -----------------------------------------------------------------------
+      var GLYPHS = {
+        'A': '01110,10001,10001,11111,10001,10001,10001',
+        'B': '11110,10001,10001,11110,10001,10001,11110',
+        'C': '01110,10001,10000,10000,10000,10001,01110',
+        'D': '11110,10001,10001,10001,10001,10001,11110',
+        'E': '11111,10000,10000,11110,10000,10000,11111',
+        'F': '11111,10000,10000,11110,10000,10000,10000',
+        'G': '01110,10001,10000,10111,10001,10001,01111',
+        'H': '10001,10001,10001,11111,10001,10001,10001',
+        'I': '01110,00100,00100,00100,00100,00100,01110',
+        'J': '00111,00010,00010,00010,00010,10010,01100',
+        'K': '10001,10010,10100,11000,10100,10010,10001',
+        'L': '10000,10000,10000,10000,10000,10000,11111',
+        'M': '10001,11011,10101,10101,10001,10001,10001',
+        'N': '10001,11001,10101,10011,10001,10001,10001',
+        'O': '01110,10001,10001,10001,10001,10001,01110',
+        'P': '11110,10001,10001,11110,10000,10000,10000',
+        'Q': '01110,10001,10001,10001,10101,10010,01101',
+        'R': '11110,10001,10001,11110,10100,10010,10001',
+        'S': '01111,10000,10000,01110,00001,00001,11110',
+        'T': '11111,00100,00100,00100,00100,00100,00100',
+        'U': '10001,10001,10001,10001,10001,10001,01110',
+        'V': '10001,10001,10001,10001,10001,01010,00100',
+        'W': '10001,10001,10001,10101,10101,10101,01010',
+        'X': '10001,10001,01010,00100,01010,10001,10001',
+        'Y': '10001,10001,01010,00100,00100,00100,00100',
+        'Z': '11111,00001,00010,00100,01000,10000,11111',
+        '0': '01110,10001,10011,10101,11001,10001,01110',
+        '1': '00100,01100,00100,00100,00100,00100,01110',
+        '2': '01110,10001,00001,00010,00100,01000,11111',
+        '3': '11110,00001,00001,01110,00001,00001,11110',
+        '4': '00010,00110,01010,10010,11111,00010,00010',
+        '5': '11111,10000,11110,00001,00001,10001,01110',
+        '6': '00110,01000,10000,11110,10001,10001,01110',
+        '7': '11111,00001,00010,00100,01000,01000,01000',
+        '8': '01110,10001,10001,01110,10001,10001,01110',
+        '9': '01110,10001,10001,01111,00001,00010,01100',
+        '+': '00000,00100,00100,11111,00100,00100,00000',
+        '-': '00000,00000,00000,11111,00000,00000,00000',
+        '=': '00000,00000,11111,00000,11111,00000,00000',
+        '*': '00000,10101,01110,11111,01110,10101,00000',
+        '/': '00001,00001,00010,00100,01000,10000,10000',
+        '!': '00100,00100,00100,00100,00100,00000,00100',
+        '?': '01110,10001,00001,00010,00100,00000,00100',
+        '#': '01010,01010,11111,01010,11111,01010,01010',
+        '.': '00000,00000,00000,00000,00000,01100,01100',
+        '<': '00010,00100,01000,10000,01000,00100,00010',
+        '>': '01000,00100,00010,00001,00010,00100,01000',
+        '^': '00100,01010,10001,00000,00000,00000,00000',
+        '♥': '01010,11111,11111,11111,01110,00100,00000',
+        '★': '00100,00100,11111,01110,01110,11011,10001',
+        '↑': '00100,01110,10101,00100,00100,00100,00100',
+        '↓': '00100,00100,00100,00100,10101,01110,00100',
+        '←': '00000,00100,01000,11111,01000,00100,00000',
+        '→': '00000,00100,00010,11111,00010,00100,00000',
+        '☺': '00000,01010,01010,00000,10001,01110,00000'
+      };
+
+      function glyphRows(ch) {
+        var g = GLYPHS[ch] || GLYPHS[ch.toUpperCase()];
+        return g ? g.split(',') : null;
+      }
+
+      // -----------------------------------------------------------------------
+      // 2D outlines (counter-clockwise point lists, millimetres, centred on 0,0)
+      // -----------------------------------------------------------------------
+      function arcPoints(cx, cy, r, a0, a1, steps, out) {
+        for (var i = 0; i <= steps; i++) {
+          var a = a0 + (a1 - a0) * i / steps;
+          out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+        }
+      }
+
+      // Regular polygon with rounded corners. size = distance across flats.
+      function roundedPolygon(n, size, rot, radius) {
+        var apothem = size / 2;
+        var r = Math.max(0.05, Math.min(radius, apothem - 0.05));
+        var half = Math.PI / n;
+        var dc = (apothem - r) / Math.cos(half);
+        var steps = Math.max(2, Math.round(10 * (2 * half) / (Math.PI / 2)));
+        var pts = [];
+        for (var k = 0; k < n; k++) {
+          var va = rot + k * 2 * half;
+          arcPoints(dc * Math.cos(va), dc * Math.sin(va), r, va - half, va + half, steps, pts);
+        }
+        return pts;
+      }
+
+      function circlePoints(size, n) {
+        var pts = [];
+        for (var i = 0; i < n; i++) {
+          var a = i / n * Math.PI * 2;
+          pts.push([size / 2 * Math.cos(a), size / 2 * Math.sin(a)]);
+        }
+        return pts;
+      }
+
+      function heartPoints(size) {
+        var pts = [];
+        var s = size / 32;
+        for (var i = 0; i < 96; i++) {
+          var t = -i / 96 * Math.PI * 2;
+          var x = 16 * Math.pow(Math.sin(t), 3);
+          var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+          pts.push([x * s, (y + 2.5) * s]);
+        }
+        return pts;
+      }
+
+      function starPoints(size) {
+        var pts = [];
+        var outer = size / 2 / 0.95 * 0.95;
+        var inner = outer * 0.5;
+        for (var i = 0; i < 10; i++) {
+          var rad = i % 2 === 0 ? outer : inner;
+          var a = Math.PI / 2 + i * Math.PI / 5;
+          pts.push([rad * Math.cos(a), rad * Math.sin(a) - outer * 0.06]);
+        }
+        return pts;
+      }
+
+      function buttonOutline(shape, size, corner) {
+        switch (shape) {
+          case 1: return circlePoints(size, 64);
+          case 2: return roundedPolygon(6, size, 0, corner);
+          case 3: return roundedPolygon(8, size, Math.PI / 8, corner);
+          case 4: return roundedPolygon(4, size * 0.88, 0, corner);
+          case 5: return heartPoints(size);
+          case 6: return starPoints(size);
+          default: return roundedPolygon(4, size, Math.PI / 4, corner);
+        }
+      }
+
+      // Share of the key width that raised characters may use, per shape.
+      var LEGEND_FIT = [0.62, 0.55, 0.55, 0.58, 0.42, 0.42, 0.32];
+
+      function bodyOutline(shape, w, d, corner) {
+        var pts = [];
+        var r = shape === 1 ? Math.min(w, d) / 2 : Math.min(corner, Math.min(w, d) / 2 - 0.1);
+        var hw = w / 2, hd = d / 2;
+        if (shape === 2) {
+          var c = Math.max(1, Math.min(corner, Math.min(w, d) / 2 - 0.5));
+          return [[hw - c, -hd], [hw, -hd + c], [hw, hd - c], [hw - c, hd], [-hw + c, hd], [-hw, hd - c], [-hw, -hd + c], [-hw + c, -hd]];
+        }
+        var steps = 16;
+        arcPoints(hw - r, -hd + r, r, -Math.PI / 2, 0, steps, pts);
+        arcPoints(hw - r, hd - r, r, 0, Math.PI / 2, steps, pts);
+        arcPoints(-hw + r, hd - r, r, Math.PI / 2, Math.PI, steps, pts);
+        arcPoints(-hw + r, -hd + r, r, Math.PI, Math.PI * 1.5, steps, pts);
+        return pts;
+      }
+
+      function wellsInside(wells, outline, wall) {
+        for (var w = 0; w < wells.length; w++) {
+          for (var i = 0; i < wells[w].length; i++) {
+            var x = wells[w][i][0], y = wells[w][i][1];
+            var inside = false, minD = Infinity;
+            for (var j = 0, k = outline.length - 1; j < outline.length; k = j++) {
+              var ax = outline[k][0], ay = outline[k][1], bx = outline[j][0], by = outline[j][1];
+              if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+              var dx = bx - ax, dy = by - ay;
+              var t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+              var ex = ax + t * dx - x, ey = ay + t * dy - y;
+              minD = Math.min(minD, ex * ex + ey * ey);
+            }
+            if (!inside || Math.sqrt(minD) < wall) return false;
+          }
+        }
+        return true;
+      }
+
+      function crossPoints(span, arm) {
+        var a = span / 2, w = arm / 2;
+        return [[a, -w], [a, w], [w, w], [w, a], [-w, a], [-w, w], [-a, w], [-a, -w], [-w, -w], [-w, -a], [w, -a], [w, -w]];
+      }
+
+      // -----------------------------------------------------------------------
+      // Solids. Shape space is X/Y with Z up; the engine is Y-up, so a shape point
+      // (x, y, z) lands at (x, z, -y), which keeps the winding outward.
+      // -----------------------------------------------------------------------
+      function pushPlaced(out, src, px, py, pz) {
+        for (var i = 0; i < src.length; i += 3) {
+          var sx = src[i] + px, sy = src[i + 1] + py, sz = src[i + 2] + pz;
+          out.push(sx, sz, -sy);
+        }
+      }
+
+      function extrude(THREE, outline, holes, depth, bevel) {
+        var toV = function (pts) { return pts.map(function (p) { return new THREE.Vector2(p[0], p[1]); }); };
+        var shape = new THREE.Shape(toV(outline));
+        (holes || []).forEach(function (h) { shape.holes.push(new THREE.Path(toV(h))); });
+        var opts = { depth: depth, curveSegments: 1, bevelEnabled: false };
+        if (bevel > 0.01) {
+          opts.bevelEnabled = true;
+          opts.bevelThickness = bevel;
+          opts.bevelSize = bevel;
+          opts.bevelOffset = -bevel;
+          opts.bevelSegments = 3;
+        }
+        var geo = new THREE.ExtrudeBufferGeometry(shape, opts);
+        if (geo.index) geo = geo.toNonIndexed();
+        var arr = geo.attributes.position.array;
+        var shift = bevel > 0.01 ? bevel : 0;
+        var out = new Float32Array(arr.length);
+        for (var i = 0; i < arr.length; i += 3) {
+          out[i] = arr[i]; out[i + 1] = arr[i + 1]; out[i + 2] = arr[i + 2] + shift;
+        }
+        geo.dispose();
+        return out;
+      }
+
+      // Closed convex prism from a CCW polygon, used for the raised characters.
+      function prism(out, poly, z0, z1, px, py) {
+        var n = poly.length;
+        var cx = 0, cy = 0;
+        poly.forEach(function (p) { cx += p[0]; cy += p[1]; });
+        cx /= n; cy /= n;
+        var tri = [];
+        for (var i = 0; i < n; i++) {
+          var a = poly[i], b = poly[(i + 1) % n];
+          tri.push(cx, cy, z1, a[0], a[1], z1, b[0], b[1], z1);
+          tri.push(cx, cy, z0, b[0], b[1], z0, a[0], a[1], z0);
+          tri.push(a[0], a[1], z0, b[0], b[1], z0, b[0], b[1], z1);
+          tri.push(a[0], a[1], z0, b[0], b[1], z1, a[0], a[1], z1);
+        }
+        pushPlaced(out, tri, px, py, 0);
+      }
+
+      function legendPositions(text, size, shape, legendPct, legendH, style, cx, cy, zTop) {
+        var chars = Array.from(text || '').slice(0, 3);
+        var out = [];
+        if (!chars.length) return new Float32Array(0);
+        var cols = chars.length * 5 + (chars.length - 1);
+        var fit = size * LEGEND_FIT[shape];
+        var unit = Math.min(fit / cols, fit * 1.1 / 7) * legendPct / 100;
+        unit = Math.min(unit, size * 0.11);
+        var box = unit * 1.12;
+        var x0 = cx - cols * unit / 2 + unit / 2;
+        var y0 = cy + 3 * unit;
+        var z0 = zTop - 0.3, z1 = zTop + legendH;
+        var dot = style === 1;
+        var ring = [];
+        if (dot) for (var s = 0; s < 8; s++) ring.push([Math.cos(s / 8 * Math.PI * 2 + Math.PI / 8) * box * 0.58, Math.sin(s / 8 * Math.PI * 2 + Math.PI / 8) * box * 0.58]);
+        var h = box / 2;
+        var sq = [[h, -h], [h, h], [-h, h], [-h, -h]];
+        chars.forEach(function (ch, ci) {
+          var rows = glyphRows(ch);
+          if (!rows) return;
+          rows.forEach(function (row, ry) {
+            for (var rx = 0; rx < 5; rx++) {
+              if (row.charAt(rx) !== '1') continue;
+              var px = x0 + (ci * 6 + rx) * unit;
+              var py = y0 - ry * unit;
+              prism(out, dot ? ring : sq, z0, z1, px, py);
+            }
+          });
+        });
+        return new Float32Array(out);
+      }
+
+      // -----------------------------------------------------------------------
+      // Layout helpers
+      // -----------------------------------------------------------------------
+      function gridCells(count, cols, pitchX, pitchY) {
+        var rows = Math.ceil(count / cols);
+        var cells = [];
+        for (var i = 0; i < count; i++) {
+          var r = Math.floor(i / cols);
+          var inRow = Math.min(cols, count - r * cols);
+          var c = i - r * cols;
+          cells.push({ x: (c - (inRow - 1) / 2) * pitchX, y: ((rows - 1) / 2 - r) * pitchY });
+        }
+        return cells;
+      }
+
+      function smoothNumber(v) { return Math.round(v * 100) / 100; }
+
+      function buildClicker(p, api) {
+        var THREE = api.THREE;
+        var count = Math.max(1, Math.min(MAX_KEYS, Math.round(p.count)));
+        var rows = Math.max(1, Math.min(count, Math.round(p.rows)));
+        var cols = Math.ceil(count / rows);
+        rows = Math.ceil(count / cols);
+        var shape = Math.round(p.btnShape);
+        var size = p.btnSize;
+        var clr = p.clearance;
+        var corner = Math.min(p.keyCorner, size / 2 - 0.2);
+        var gap = Math.max(p.gap, 2 * clr + 1.6);
+        var pitch = size + gap;
+        var floor = p.floor;
+        var bodyH = Math.max(p.bodyHeight, floor + 3);
+        var round = Math.min(p.capRound, p.capHeight / 3, size / 4);
+        var pocketSpan = Math.min(p.pocket, size * 0.4);
+        var pd = pocketSpan > 0 ? p.pocketDepth : 0;
+        var capH = Math.max(p.capHeight, pd + 2 * round + 1.2);
+
+        var gridW = (cols - 1) * pitch + size + 2 * clr;
+        var gridD = (rows - 1) * pitch + size + 2 * clr;
+        var cells = gridCells(count, cols, pitch, pitch);
+        var wellOutline = buttonOutline(shape, size + 2 * clr, corner + clr);
+        var wells = cells.map(function (c) {
+          return wellOutline.map(function (pt) { return [pt[0] + c.x, pt[1] + c.y]; });
+        });
+
+        // The border is a minimum: grow it until every well keeps a 1.4 mm wall inside the outline,
+        // so round ends, big corners and chamfers never break through.
+        var bodyShapeIdx = Math.round(p.bodyShape);
+        var bodyW, bodyD, outline;
+        for (var extra = 0; extra < 40; extra += 0.5) {
+          bodyW = gridW + 2 * (p.margin + extra);
+          bodyD = gridD + 2 * (p.margin + extra);
+          outline = bodyOutline(bodyShapeIdx, bodyW, bodyD, p.bodyCorner);
+          if (wellsInside(wells, outline, 1.4)) break;
+        }
+
+        var out = [];
+        var parts = window.MM_GENERATOR.partNames;
+
+        // Body: a floor plate plus a deck with a well for every key, overlapped 0.4 mm so they fuse.
+        var edge = 0.5; // small edge rounding: the engine smooths shading across edges, so hard 90 degree edges would look streaky
+        var bodyPos = [];
+        var holeSize = Math.min(p.underHole, size - 3);
+        var floorHoles = holeSize >= 3 ? cells.map(function (c) {
+          return circlePoints(holeSize, 40).map(function (pt) { return [pt[0] + c.x, pt[1] + c.y]; });
+        }) : [];
+        pushPlaced(bodyPos, extrude(THREE, outline, floorHoles, floor - 2 * edge, edge), 0, 0, 0);
+        pushPlaced(bodyPos, extrude(THREE, outline, wells, bodyH - floor + 0.4 - 2 * edge, edge), 0, 0, floor - 0.4);
+        out.push({ name: 'body', positions: new Float32Array(bodyPos), singlePart: true });
+
+        // Keycaps and their characters.
+        var assembled = Math.round(p.layout) === 1;
+        var printRows = Math.ceil(count / Math.max(1, Math.round(bodyW / (size + 4))));
+        var printCols = Math.ceil(count / printRows);
+        var printPitch = size + 4;
+        var printCells = gridCells(count, printCols, printPitch, printPitch);
+        var printY0 = -(bodyD / 2 + 7 + (printRows * printPitch) / 2);
+        var capOutline = buttonOutline(shape, size, corner);
+        var cross = pd > 0 ? crossPoints(pocketSpan + 0.2, 1.5) : null;
+        var legendPct = p.legendSize;
+
+        for (var i = 0; i < count; i++) {
+          var cx, cy, cz;
+          if (assembled) { cx = cells[i].x; cy = cells[i].y; cz = floor; }
+          else { cx = printCells[i].x; cy = printY0 + printCells[i].y; cz = 0; }
+          var capPos = [];
+          var rh = capH - pd;
+          pushPlaced(capPos, extrude(THREE, capOutline, null, Math.max(0.4, rh - 2 * round), round), cx, cy, cz + pd);
+          if (pd > 0) pushPlaced(capPos, extrude(THREE, capOutline, [cross], pd + round + 0.3 - 2 * edge, edge), cx, cy, cz);
+          out.push({ name: 'cap' + i, positions: new Float32Array(capPos), singlePart: true });
+          parts['cap' + i] = 'Keycap ' + (i + 1);
+          var leg = legendPositions(labels[i], size, shape, legendPct, p.legendHeight, Math.round(p.legendStyle), cx, cy, cz + capH);
+          if (leg.length) {
+            out.push({ name: 'legend' + i, positions: leg, singlePart: true });
+            parts['legend' + i] = 'Character ' + (i + 1);
+          }
+        }
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // Generator config
+      // -----------------------------------------------------------------------
+      window.MM_GENERATOR = {
+        code: 'MM-010',
+        category: 'DESK // FIDGETS',
+        title: 'Key Clicker',
+        fileName: 'Key_Clicker',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        defaultColor: '#f1f5f9',
+        partNames: { body: 'Body' },
+        openGroups: ['Buttons'],
+        parameters: [
+          { group: 'Buttons', key: 'count', label: 'Number of buttons', unit: '', min: 1, max: 12, step: 1, value: 4 },
+          { group: 'Buttons', key: 'rows', label: 'Rows (1 = a single line)', unit: '', min: 1, max: 4, step: 1, value: 1 },
+          { group: 'Buttons', key: 'btnShape', label: 'Button shape', unit: '', min: 0, max: 6, step: 1, value: 0, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
+          { group: 'Buttons', key: 'btnSize', label: 'Button size', unit: ' mm', min: 12, max: 30, step: 1, value: 18 },
+          { group: 'Buttons', key: 'gap', label: 'Gap between buttons', unit: ' mm', min: 2, max: 12, step: 0.5, value: 4 },
+          { group: 'Buttons', key: 'keyCorner', label: 'Key corner rounding', unit: ' mm', min: 0.5, max: 9, step: 0.5, value: 3 },
+
+          { group: 'Keycaps', key: 'capHeight', label: 'Keycap height', unit: ' mm', min: 6, max: 20, step: 0.5, value: 11 },
+          { group: 'Keycaps', key: 'capRound', label: 'Top edge rounding', unit: ' mm', min: 0, max: 2.5, step: 0.1, value: 1 },
+          { group: 'Keycaps', key: 'pocket', label: 'Switch socket (0 = solid cap)', unit: ' mm', min: 0, max: 8, step: 0.1, value: 4.2 },
+          { group: 'Keycaps', key: 'pocketDepth', label: 'Socket depth', unit: ' mm', min: 2, max: 7, step: 0.5, value: 3.5 },
+
+          { group: 'Body', key: 'bodyShape', label: 'Body shape', unit: '', min: 0, max: 2, step: 1, value: 0, format: function (v) { return BODY_NAMES[Math.round(v)]; } },
+          { group: 'Body', key: 'margin', label: 'Border around keys', unit: ' mm', min: 4, max: 24, step: 1, value: 9 },
+          { group: 'Body', key: 'bodyCorner', label: 'Body corner size', unit: ' mm', min: 1, max: 24, step: 1, value: 8 },
+          { group: 'Body', key: 'bodyHeight', label: 'Body height', unit: ' mm', min: 6, max: 20, step: 0.5, value: 8 },
+          { group: 'Body', key: 'floor', label: 'Floor thickness', unit: ' mm', min: 1.2, max: 4, step: 0.2, value: 2 },
+          { group: 'Body', key: 'clearance', label: 'Cap clearance', unit: ' mm', min: 0.2, max: 1, step: 0.05, value: 0.4 },
+          { group: 'Body', key: 'underHole', label: 'Hole under each key (0 = none)', unit: ' mm', min: 0, max: 20, step: 1, value: 0 },
+
+          { group: 'Layout', key: 'layout', label: 'Layout (print or assembled)', unit: '', min: 0, max: 1, step: 1, value: 0, format: function (v) { return LAYOUT_NAMES[Math.round(v)]; } },
+
+          { tab: 'keys', group: 'Characters', key: 'legendSize', label: 'Character size', unit: '%', min: 40, max: 130, step: 5, value: 100 },
+          { tab: 'keys', group: 'Characters', key: 'legendHeight', label: 'Character height', unit: ' mm', min: 0.4, max: 2, step: 0.1, value: 0.8 },
+          { tab: 'keys', group: 'Characters', key: 'legendStyle', label: 'Character style', unit: '', min: 0, max: 1, step: 1, value: 0, format: function (v) { return STYLE_NAMES[Math.round(v)]; } }
+        ],
+        presets: [
+          { label: 'Default row of four', values: { count: 4, rows: 1, btnShape: 0, btnSize: 18, gap: 4, keyCorner: 3, capHeight: 11, capRound: 1, pocket: 4.2, pocketDepth: 3.5, bodyShape: 0, margin: 9, bodyCorner: 8, bodyHeight: 8, floor: 2, clearance: 0.4, underHole: 0, layout: 0, legendSize: 100, legendHeight: 0.8, legendStyle: 0 } },
+          { label: 'Number pad', values: { count: 9, rows: 3, btnShape: 0, btnSize: 16, gap: 3.5, keyCorner: 3, bodyShape: 0, margin: 8, bodyCorner: 8 } },
+          { label: 'Round arcade pair', values: { count: 2, rows: 1, btnShape: 1, btnSize: 28, gap: 6, bodyShape: 1, margin: 8, capHeight: 13 } },
+          { label: 'Hex tiles', values: { count: 6, rows: 2, btnShape: 2, btnSize: 18, gap: 4, keyCorner: 2, bodyShape: 2, bodyCorner: 8, margin: 9 } },
+          { label: 'Heart trio', values: { count: 3, rows: 1, btnShape: 5, btnSize: 22, gap: 5, bodyShape: 1, margin: 8, legendSize: 80 } },
+          { label: 'Single big button', values: { count: 1, rows: 1, btnShape: 3, btnSize: 30, margin: 10, bodyShape: 0, capHeight: 14 } }
+        ],
+
+        // Keycaps tab: type the character for each button; tapping a key in the viewport jumps to its box.
+        tabs: [{
+          id: 'keys',
+          label: 'Keycaps',
+          hint: 'Tap a keycap to edit its character',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Character on each key'));
+            container.appendChild(h('p', { class: 'mm-note' }, '1 or 2 characters print best. Letters, numbers and + - = * / ! ? # . < > ^ plus ♥ ★ ↑ ↓ ← → ☺.'));
+            var inputs = [];
+            var grid = h('div', { class: 'mm-chips' });
+            for (var i = 0; i < MAX_KEYS; i++) {
+              (function (idx) {
+                var wrap = h('label', { class: 'mm-chip' }, 'Key ' + (idx + 1) + ' ');
+                var input = h('input', { type: 'text', maxlength: '3', value: labels[idx], 'aria-label': 'Character for key ' + (idx + 1), size: '3' });
+                input.style.cssText = 'width:3.4em;margin-left:.4em;text-align:center;font:inherit;color:inherit;background:transparent;border:1px solid currentColor;border-radius:3px';
+                input.addEventListener('input', function () {
+                  labels[idx] = input.value.toUpperCase();
+                  api.rebuild();
+                });
+                wrap.appendChild(input);
+                inputs.push({ wrap: wrap, input: input });
+                grid.appendChild(wrap);
+              })(i);
+            }
+            container.appendChild(grid);
+
+            var fillWith = function (fn) {
+              for (var k = 0; k < MAX_KEYS; k++) labels[k] = fn(k);
+              inputs.forEach(function (it, k) { it.input.value = labels[k]; });
+              api.rebuild();
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Quick fill'));
+            var row = h('div', { class: 'mm-export-row' });
+            row.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () { fillWith(function (k) { return String.fromCharCode(65 + k); }); } }, 'A B C'));
+            row.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () { fillWith(function (k) { return String(k + 1); }); } }, '1 2 3'));
+            row.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () { fillWith(function (k) { return ['←', '↑', '↓', '→'][k % 4]; }); } }, 'Arrows'));
+            row.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () { fillWith(function () { return '♥'; }); } }, 'Hearts'));
+            row.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () { fillWith(function () { return ''; }); } }, 'Blank'));
+            container.appendChild(row);
+
+            // Dim the boxes for keys that are not on the pad right now.
+            var sync = function () {
+              var n = Math.round(api.params.count);
+              inputs.forEach(function (it, k) { it.wrap.style.opacity = k < n ? '1' : '0.35'; });
+            };
+            ['input', 'change', 'click'].forEach(function (ev) { document.addEventListener(ev, function () { setTimeout(sync, 30); }); });
+            sync();
+            focusKey = function (idx) {
+              if (inputs[idx]) { inputs[idx].input.focus(); inputs[idx].input.select(); }
+            };
+          },
+          onPick: function (hit) {
+            var m = /^(cap|legend)(\d+)$/.exec(hit.meshName || '');
+            if (m && focusKey) focusKey(parseInt(m[2], 10));
+          }
+        }],
+
+        build: function (p, api) {
+          return buildClicker(p, api);
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
