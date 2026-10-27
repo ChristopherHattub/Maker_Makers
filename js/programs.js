@@ -87,6 +87,14 @@ const GENERATORS = [
     description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 13,
+    title: 'Snowman 2.0 Generator',
+    category: 'CHRISTMAS // SNOWMAN',
+    thumbnailUrl: 'assets/thumbnails/ornament-stacker.svg',
+    programUrl: 'programs/ornament-stacker.html',
+    description: 'A snowman-building game: pick one to four snowballs, then drag hats, faces, scarves, buttons and stick arms from a picture catalog onto the snowman, with a guide showing where each lands. Add as many as you like, paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 15,
     title: 'Pottery Wheel',
     category: 'POTTERY // WHEEL',

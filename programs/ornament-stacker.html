@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MM-013 Ornament Stacker // Maker Makers</title>
+  <title>MM-013 Snowman 2.0 Generator // Maker Makers</title>
   <link rel="stylesheet" href="shared/generator.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -49,7 +49,7 @@
 </head>
 <body class="mm-gen mm-soft snow">
   <script>
-    // Ornament Stacker: a cozy snowman-building game. Tap pictures from the catalog to add hats, faces, scarves and
+    // Snowman 2.0 Generator: a cozy snowman-building game. Tap pictures from the catalog to add hats, faces, scarves and
     // arms as many times as you like, tap the snowman to place them. The page layout, the viewport, the Color tool
     // and the exports come from shared/generator-core.js.
     (function () {
@@ -358,7 +358,7 @@
           icon: '<path d="M14 40V22c0-6 4-10 8-10 5 0 8 4 8 10v18z" fill="#ef5b5b"/><path d="M30 28c4 0 8 0 8-4 0-2-3-2-8 2z" fill="#ef5b5b"/><rect x="13" y="34" width="18" height="6" rx="3" fill="#fff"/>',
           build: function () {
             return [{ c: 'red', p: cat([ball(0, 3.5, 0, 3.6, 4.6, 3.0, 18, 10), ball(2.8, 3.6, -1.2, 1.5, 1.5, 1.2, 10, 6)]) },
-                    { c: 'white', p: bandRing([[2.9, -0.4], [4.2, -0.4], [4.2, 1.2], [2.9, 1.2]], 18) }];
+                    { c: 'white', p: bandRing([[2.2, -0.4], [3.8, -0.4], [3.8, 1.3], [2.2, 1.3]], 18) }];
           } }
       ];
       var ITEM_BY_ID = {};
@@ -597,7 +597,7 @@
       function mountBuild(container, api) {
         apiRef = api;
         container.appendChild(el('h2', { class: 'mm-section-title' }, 'Build your snowman'));
-        container.appendChild(el('p', { class: 'mm-note' }, 'Drag a picture onto the snowman and let go. A guide shows where it will land while you hold it. Add as many as you like. Drag a piece on the snowman to move it, or tap it to pick it and change its size.'));
+        container.appendChild(el('p', { class: 'mm-note' }, 'Drag a picture onto the snowman and let go (mittens snap onto the ends of stick arms). A guide shows where it will land while you hold it. Add as many as you like. Drag a piece on the snowman to move it, or tap it to pick it and change its size.'));
 
         var list = el('div', { class: 'sn-yours' });
         var tools = el('div', { class: 'sn-tools' });
@@ -654,7 +654,7 @@
       // ---- Drag and drop ----
       var stage = null;   // { THREE, camera, renderer, modelGroup, panel } from onStage
       var drag = null;    // { def, idx, ghost } while an item is being held
-      var raycaster = null;
+      var raycaster = null, lastRay = null;
 
       function castAt(x, y) {
         if (!stage) return null;
@@ -663,6 +663,7 @@
         if (document.elementFromPoint(x, y) !== cv) return null;
         if (!raycaster) raycaster = new stage.THREE.Raycaster();
         raycaster.setFromCamera(new stage.THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), stage.camera);
+        lastRay = raycaster.ray.clone();
         var hits = raycaster.intersectObjects(stage.modelGroup.children, false);
         if (!hits.length) return null;
         var h = hits[0];
@@ -675,7 +676,33 @@
         return st.y;
       }
 
+      // The two free ends of every pair of stick arms, with the direction each arm points.
+      function armTips(balls) {
+        var tips = [], k = balls[balls.length - 1].r / 11, d = vnorm([0, 0.86, -0.5]);
+        items.forEach(function (it) {
+          if (it.id !== 'arms') return;
+          [[it.p, it.n, it.twist], [[-it.p[0], it.p[1], it.p[2]], [-it.n[0], it.n[1], it.n[2]], -it.twist]].forEach(function (side) {
+            var at = function (len) { return placeLocal([{ c: 'x', p: new Float32Array(vmul(d, len)) }], k * it.size, side[2], side[0], side[1])[0].p; };
+            var a = at(21), b = at(30);
+            tips.push({ p: [a[0], a[1], a[2]], n: vnorm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]) });
+          });
+        });
+        return tips;
+      }
+
+      // Mittens snap onto the nearest free arm end when the pointer passes close to it.
+      function snapMitten() {
+        if (!lastRay || !stage) return null;
+        var balls = computeBalls(lastParams), k = balls[balls.length - 1].r / 11, best = null, bd = 9 * k;
+        armTips(balls).forEach(function (t) {
+          var d = lastRay.distanceToPoint(new stage.THREE.Vector3(t.p[0], t.p[1], t.p[2]));
+          if (d < bd) { bd = d; best = t; }
+        });
+        return best ? { p: vsub(best.p, vmul(best.n, 1.2 * k)), n: best.n } : null;
+      }
+
       function placementFor(def, hit) {
+        if (def.id === 'mittens') { var sn = snapMitten(); if (sn) return sn; }
         if (!hit || hit.meshName !== 'Snowman' || hit.normal.y < -0.5) return null;
         var pl = hitPlacement(hit);
         if (def.mode === 'neck') pl = { p: [0, pl.p[1], 0], n: [0, 0, 1] };
@@ -710,7 +737,7 @@
         sel = items.length - 1;
         api.setParams({ itemSize: 100, itemTwist: 0 });
         refreshBuild();
-        api.toast(d.def.name + ' added');
+        api.toast(d.def.name + ' added' + (d.def.id === 'mittens' ? '. Drop them near the end of a stick arm to snap on.' : ''));
       }
       function onDragMove(e) {
         if (!drag) return;
@@ -768,7 +795,7 @@
       window.MM_GENERATOR = {
         code: 'MM-013',
         category: 'ORNAMENTS // SNOWMAN',
-        title: 'Ornament Stacker',
+        title: 'Snowman 2.0 Generator',
         fileName: 'Snowman',
         printerLink: '../index.html#map-screen',
         customStage: true,
