@@ -18,6 +18,21 @@
       --s-bg-img: linear-gradient(#a9cdf0, #e6f2ff);
     }
     .snow .mm-gen-title { font-weight: 600; }
+    /* The 3D view fills the page; the catalog is a translucent, collapsible sheet on the left. */
+    body.snow .mm-main { position: relative; display: block; }
+    body.snow .mm-viewport { position: absolute; inset: 0; order: 0; border-radius: 18px; }
+    body.snow .mm-sheet-handle { display: none; }
+    body.snow .mm-panel { position: absolute; z-index: 6; left: 0.6rem; top: 0.6rem; bottom: 0.6rem; width: min(23rem, calc(100% - 3.4rem));
+      background: rgba(255,255,255,0.68); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: transform .25s ease, opacity .15s; }
+    body.snow .mm-panel.sn-collapsed { transform: translateX(calc(-100% - 0.6rem)); }
+    body.snow .mm-panel.sn-dragging { opacity: 0.35; }
+    body.snow .mm-overlay--tl { display: block; left: auto; right: 0.6rem; top: 0.6rem; max-width: 40%; }
+    .sn-toggle { position: absolute; top: 0.7rem; right: -2.7rem; width: 2.3rem; height: 2.3rem; border-radius: 50%; border: 2px solid var(--s-edge); background: rgba(255,255,255,0.9);
+      color: var(--s-text); font: 700 1.1rem var(--s-font); cursor: pointer; box-shadow: 0 2px 0 var(--s-edge); display: flex; align-items: center; justify-content: center; }
+    .sn-toggle:focus-visible { outline: 3px solid var(--s-accent); outline-offset: 2px; }
+    .sn-card { touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+    .sn-drag { position: fixed; z-index: 50; width: 3.6rem; height: 3.6rem; pointer-events: none; transform: translate(-50%, -60%) rotate(-6deg); filter: drop-shadow(0 6px 6px rgba(36,50,77,0.35)); }
+    .sn-drag svg { width: 100%; height: 100%; }
     .sn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr)); gap: 0.55rem; margin-bottom: 0.9rem; }
     .sn-card { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem 0.25rem 0.4rem; border: 2px solid var(--s-edge); border-radius: 16px;
       background: #fff; color: var(--s-text); font: inherit; font-size: 0.78rem; cursor: pointer; min-height: 5.6rem; transition: transform .12s, box-shadow .12s; box-shadow: 0 3px 0 var(--s-edge); }
@@ -551,7 +566,7 @@
         refreshBuild();
         if (!quiet && i >= 0 && apiRef) {
           var def = ITEM_BY_ID[items[i].id];
-          apiRef.toast(def.mode === 'top' ? def.name + ' selected. Hats stack on top, use Size to change it.' : def.name + ' selected. Tap the snowman to move it.');
+          apiRef.toast(def.mode === 'top' ? def.name + ' selected. Hats stack on top, use Size to change it.' : def.name + ' selected. Drag it on the snowman to move it.');
         }
       }
 
@@ -561,7 +576,7 @@
         sel = items.length - 1;
         api.setParams({ itemSize: 100, itemTwist: 0 });
         refreshBuild();
-        api.toast(def.name + ' added' + (def.mode === 'surf' ? '. Tap the snowman to move it.' : ''));
+        api.toast(def.name + ' added' + (def.mode === 'surf' ? '. Drag it on the snowman to move it.' : ''));
       }
 
       function nearestBall(balls, pt) {
@@ -582,7 +597,7 @@
       function mountBuild(container, api) {
         apiRef = api;
         container.appendChild(el('h2', { class: 'mm-section-title' }, 'Build your snowman'));
-        container.appendChild(el('p', { class: 'mm-note' }, 'Tap a picture to add it. Add as many as you like. Then tap the snowman to move the last thing you added, or tap any piece to pick it again.'));
+        container.appendChild(el('p', { class: 'mm-note' }, 'Drag a picture onto the snowman and let go. A guide shows where it will land while you hold it. Add as many as you like. Drag a piece on the snowman to move it, or tap it to pick it and change its size.'));
 
         var list = el('div', { class: 'sn-yours' });
         var tools = el('div', { class: 'sn-tools' });
@@ -604,7 +619,8 @@
           ITEMS.filter(function (d) { return d.cat === cat; }).forEach(function (def) {
             var b = el('button', { class: 'sn-card', type: 'button', title: 'Add ' + def.name });
             b.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true">' + def.icon + '</svg><span>' + def.name + '</span>';
-            b.addEventListener('click', function () { addItem(def, api); });
+            b.addEventListener('pointerdown', function (e) { startCardDrag(e, def, api); });
+            b.addEventListener('click', function (e) { e.preventDefault(); });
             grid.appendChild(b);
           });
           container.appendChild(grid);
@@ -632,6 +648,104 @@
         if (def.mode === 'neck') ghost.p = [0, pl.p[1], 0];
         var parts = itemParts(ghost, sel, balls, { y: 0 });
         return { positions: cat(parts.map(function (q) { return q.p; })) };
+      }
+
+
+      // ---- Drag and drop ----
+      var stage = null;   // { THREE, camera, renderer, modelGroup, panel } from onStage
+      var drag = null;    // { def, idx, ghost } while an item is being held
+      var raycaster = null;
+
+      function castAt(x, y) {
+        if (!stage) return null;
+        var cv = stage.renderer.domElement, r = cv.getBoundingClientRect();
+        if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+        if (document.elementFromPoint(x, y) !== cv) return null;
+        if (!raycaster) raycaster = new stage.THREE.Raycaster();
+        raycaster.setFromCamera(new stage.THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), stage.camera);
+        var hits = raycaster.intersectObjects(stage.modelGroup.children, false);
+        if (!hits.length) return null;
+        var h = hits[0];
+        return { point: h.point.clone(), normal: h.face.normal.clone().normalize(), meshName: h.object.name };
+      }
+
+      function stackTopY(balls) {
+        var st = { y: balls[balls.length - 1].cy + balls[balls.length - 1].r };
+        items.forEach(function (it, i) { if (ITEM_BY_ID[it.id].mode === 'top') itemParts(it, i, balls, st); });
+        return st.y;
+      }
+
+      function placementFor(def, hit) {
+        if (!hit || hit.meshName !== 'Snowman' || hit.normal.y < -0.5) return null;
+        var pl = hitPlacement(hit);
+        if (def.mode === 'neck') pl = { p: [0, pl.p[1], 0], n: [0, 0, 1] };
+        return pl;
+      }
+
+      // The translucent guide shown while an item is held.
+      function showGuide(def, pl, size, twist, api) {
+        if (!pl) { api.setPreview(null); return; }
+        var balls = computeBalls(lastParams), tmp = { id: def.id, p: pl.p, n: pl.n, size: size, twist: twist };
+        var parts = itemParts(tmp, -1, balls, { y: stackTopY(balls) });
+        api.setPreview({ positions: cat(parts.map(function (q) { return q.p; })) });
+      }
+
+      function endDrag(commit, x, y, api) {
+        var d = drag; drag = null;
+        document.removeEventListener('pointermove', onDragMove, true);
+        document.removeEventListener('pointerup', onDragUp, true);
+        document.removeEventListener('pointercancel', onDragCancel, true);
+        if (d.badge && d.badge.parentNode) d.badge.parentNode.removeChild(d.badge);
+        if (stage) stage.panel.classList.remove('sn-dragging');
+        var pl = commit ? placementFor(d.def, castAt(x, y)) : null;
+        api.setPreview(null);
+        if (d.idx >= 0) {            // moving a piece already on the snowman
+          if (pl && d.def.mode !== 'top') { items[d.idx].p = pl.p; items[d.idx].n = pl.n; }
+          selectItem(d.idx, true);
+          return;
+        }
+        if (!commit || !d.moved) { api.toast('Drag ' + d.def.name + ' onto the snowman to add it'); return; }
+        if (!pl) { api.toast('Drop it on the snowman, not the background'); return; }
+        items.push({ id: d.def.id, p: pl.p, n: pl.n, size: 1, twist: 0 });
+        sel = items.length - 1;
+        api.setParams({ itemSize: 100, itemTwist: 0 });
+        refreshBuild();
+        api.toast(d.def.name + ' added');
+      }
+      function onDragMove(e) {
+        if (!drag) return;
+        e.preventDefault();
+        if (Math.abs(e.clientX - drag.x0) + Math.abs(e.clientY - drag.y0) > 6) drag.moved = true;
+        if (drag.badge) { drag.badge.style.left = e.clientX + 'px'; drag.badge.style.top = e.clientY + 'px'; }
+        var pl = placementFor(drag.def, castAt(e.clientX, e.clientY));
+        if (drag.idx >= 0) {
+          if (pl && drag.def.mode !== 'top') { items[drag.idx].p = pl.p; items[drag.idx].n = pl.n; apiRef.rebuild(); }
+        } else {
+          showGuide(drag.def, pl, 1, 0, apiRef);
+        }
+      }
+      function onDragUp(e) { endDrag(true, e.clientX, e.clientY, apiRef); }
+      function onDragCancel(e) { endDrag(false, e.clientX, e.clientY, apiRef); }
+
+      function beginDrag(def, idx, e, api, withBadge) {
+        if (drag) return;
+        apiRef = api;
+        drag = { def: def, idx: idx, x0: e.clientX, y0: e.clientY, moved: idx >= 0 ? true : false, badge: null };
+        if (withBadge) {
+          var b = el('div', { class: 'sn-drag' });
+          b.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true">' + def.icon + '</svg>';
+          b.style.left = e.clientX + 'px'; b.style.top = e.clientY + 'px';
+          document.body.appendChild(b); drag.badge = b;
+          if (stage) stage.panel.classList.add('sn-dragging');
+        }
+        document.addEventListener('pointermove', onDragMove, true);
+        document.addEventListener('pointerup', onDragUp, true);
+        document.addEventListener('pointercancel', onDragCancel, true);
+      }
+      function startCardDrag(e, def, api) {
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        beginDrag(def, -1, e, api, true);
       }
 
       var BODY_ICON = function (n) {
@@ -676,24 +790,12 @@
         tabs: [{
           id: 'build',
           label: 'Build',
-          hint: 'Tap a picture to add it, then tap the snowman to place it',
+          hint: 'Drag a picture from the left onto the snowman',
           mount: mountBuild,
-          onHover: function (hit, api) {
-            if (!hit || sel < 0 || !(hit.meshName === 'Snowman' || hit.meshName === 'Snow mound')) { api.setPreview(outlineFor(sel)); return; }
-            if (hit.meshName === 'Snow mound' || hit.normal.y < -0.5) { api.setPreview(outlineFor(sel)); return; }
-            api.setPreview(ghostFor(hit));
-          },
+          onHover: function (hit, api) { if (!drag) api.setPreview(sel >= 0 ? outlineFor(sel) : null); },
           onPick: function (hit, api) {
             var owner = meshOwner[hit.meshName];
-            if (owner !== undefined) { selectItem(owner); return; }
-            if (hit.meshName !== 'Snowman') return;
-            if (sel < 0) { api.toast('Add something from the pictures first'); return; }
-            var it = items[sel], def = ITEM_BY_ID[it.id];
-            if (def.mode === 'top') { api.toast('Hats always sit on top of the head'); return; }
-            var pl = hitPlacement(hit);
-            if (def.mode === 'neck') it.p = [0, pl.p[1], 0];
-            else { it.p = pl.p; it.n = pl.n; }
-            api.rebuild();
+            if (owner !== undefined) selectItem(owner);
           }
         }],
 
@@ -708,6 +810,31 @@
           env.key.color.set(0xfff4e0); env.key.intensity = 0.8;
           env.rim.color.set(0x9fc7ff); env.rim.intensity = 0.4;
           startBackdrop(env);
+          var panel = document.querySelector('.mm-panel');
+          stage = { THREE: T, camera: env.camera, renderer: env.renderer, modelGroup: env.modelGroup, panel: panel };
+          var toggle = el('button', { class: 'sn-toggle', type: 'button', title: 'Show or hide the catalog', 'aria-label': 'Show or hide the catalog', 'aria-expanded': 'true' }, '\u2039');
+          toggle.addEventListener('click', function () {
+            var hid = panel.classList.toggle('sn-collapsed');
+            toggle.textContent = hid ? '\u203A' : '\u2039'; toggle.setAttribute('aria-expanded', String(!hid));
+          });
+          panel.appendChild(toggle);
+          // Grab a piece that is already on the snowman and drag it somewhere else.
+          env.renderer.domElement.addEventListener('pointerdown', function (e) {
+            var body = document.getElementById('mm-body-build');
+            if (drag || e.button !== 0 || !body || body.hidden) return;
+            var r = env.renderer.domElement.getBoundingClientRect();
+            if (!raycaster) raycaster = new T.Raycaster();
+            raycaster.setFromCamera(new T.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), env.camera);
+            var hits = raycaster.intersectObjects(env.modelGroup.children, false);
+            if (!hits.length) return;
+            var idx = meshOwner[hits[0].object.name];
+            if (idx === undefined) return;
+            var def = ITEM_BY_ID[items[idx].id];
+            if (def.mode === 'top') return;
+            e.stopImmediatePropagation();
+            selectItem(idx, true);
+            beginDrag(def, idx, e, apiRef, false);
+          }, true);
         },
         onFrame: function () { if (backdrop) backdrop(); },
 
