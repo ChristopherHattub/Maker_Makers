@@ -503,8 +503,8 @@
         }
         function pine(px, py, sz, col) {
           g.fillStyle = col;
-          for (i = 0; i < 4; i++) {
-            var tw = sz * (0.38 + i * 0.2), ty = py - sz * (1.15 - i * 0.28);
+          for (var t = 0; t < 4; t++) {
+            var tw = sz * (0.38 + t * 0.2), ty = py - sz * (1.15 - t * 0.28);
             g.beginPath(); g.moveTo(px, ty - sz * 0.42); g.lineTo(px + tw, ty + sz * 0.22); g.lineTo(px - tw, ty + sz * 0.22); g.closePath(); g.fill();
           }
           g.fillStyle = '#8a6b52'; g.fillRect(px - sz * 0.05, py - sz * 0.1, sz * 0.1, sz * 0.2);
