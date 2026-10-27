@@ -109,6 +109,22 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/image-clicker.svg',
     programUrl: 'programs/image-clicker.html',
     description: 'Upload a PNG, JPG or SVG, or pick a shape, and turn it into a print-in-place fidget clicker: the picture becomes the button outline or is raised on a badge. Set button size, travel, hinge softness, housing wall and an optional keyring loop. Everything runs in your browser. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 13,
+    title: 'Snowman 2.0 Generator',
+    category: 'CHRISTMAS // SNOWMAN',
+    thumbnailUrl: 'assets/thumbnails/ornament-stacker.svg',
+    programUrl: 'programs/ornament-stacker.html',
+    description: 'A snowman-building game: pick one to four snowballs, then drag hats, faces, scarves, buttons and stick arms from a picture catalog onto the snowman, with a guide showing where each lands. Add as many as you like, paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 15,
+    title: 'Pottery Wheel',
+    category: 'POTTERY // WHEEL',
+    thumbnailUrl: 'assets/thumbnails/pottery-wheel.svg',
+    programUrl: 'programs/pottery-wheel.html',
+    description: 'Spin a lump of clay on a wheel and mold it with the mouse or your finger: press, pinch, swell, smooth and pull it taller. Add throwing rings, fluting, facets and a mug handle, with an overhang limit that keeps it printable. Paint glaze in the Color tool and export .STL.'
   }
 ];
 

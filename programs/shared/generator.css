@@ -698,6 +698,24 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-disclaimer-lead { margin: 0 0 0.3rem; }
 .mm-disclaimer summary { color: var(--bp-cyan); }
 
+/* Interactive drawing surface used inside generator tabs (wind chime editor, pottery wheel). */
+.mm-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--bp-cyan-dim);
+  background: rgba(6, 21, 45, 0.78);
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mm-canvas-status {
+  margin: 0.4rem 0 0.6rem;
+  color: var(--bp-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
 /* Icon pickers for parameters with choices */
 .mm-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.1rem, 1fr)); gap: 0.4rem; }
 .mm-choice {
@@ -709,3 +727,24 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-choice:hover { background: rgba(0, 229, 255, 0.1); }
 .mm-choice[aria-pressed="true"] { background: rgba(0, 229, 255, 0.2); border-color: var(--bp-cyan); color: var(--bp-white); }
 .mm-choice:focus-visible { outline: 2px solid var(--bp-cyan); outline-offset: 2px; }
+
+/* Soft themes: a generator page adds body.mm-soft and sets the --s-* tokens to restyle the whole page (snow, studio, ...). */
+body.mm-soft {
+  --bp-bg-deep: var(--s-bg); --bp-bg-panel: var(--s-panel); --bp-cyan: var(--s-accent); --bp-cyan-dim: var(--s-accent-dim);
+  --bp-grid-major: transparent; --bp-grid-minor: transparent; --bp-white: var(--s-text); --bp-muted: var(--s-muted);
+  --bp-amber: var(--s-amber); --bp-green: var(--s-green); --font-tech: var(--s-font);
+  background-image: var(--s-bg-img, none);
+}
+.mm-soft .mm-gen-header { background: var(--s-panel); border-radius: 18px; box-shadow: 0 3px 0 var(--s-edge); }
+.mm-soft .mm-panel { background: var(--s-panel-a); border-radius: 18px; box-shadow: 0 3px 0 var(--s-edge); }
+.mm-soft .mm-chip, .mm-soft .mm-part, .mm-soft .mm-icon-chip, .mm-soft .mm-preset-card, .mm-soft .mm-slider select,
+.mm-soft .mm-file-field input, .mm-soft .mm-acc, .mm-soft .mm-canvas { background: var(--s-card); border-radius: 12px; }
+.mm-soft .mm-overlay { background: var(--s-card-a); color: var(--s-text); border-radius: 10px; }
+.mm-soft .mm-btn { border-radius: 999px; }
+.mm-soft .mm-btn--solid, .mm-soft .mm-btn--solid:hover:not(:disabled) { color: #fff; background: var(--s-accent); }
+.mm-soft .mm-stage { background: var(--s-stage); }
+.mm-soft .mm-viewport { border-radius: 18px; overflow: hidden; box-shadow: 0 3px 0 var(--s-edge); }
+.mm-soft .mm-choice[aria-pressed="true"] { color: var(--s-text); }
+.mm-soft .mm-viewport { background: var(--s-stage); }
+.mm-soft .mm-stage canvas:not(.mm-backdrop) { position: relative; z-index: 1; }
+.mm-soft .mm-stage canvas.mm-backdrop { position: absolute; inset: 0; z-index: 0; cursor: default; pointer-events: none; }
