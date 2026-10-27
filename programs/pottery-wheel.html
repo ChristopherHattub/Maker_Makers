@@ -18,6 +18,9 @@
     .pw-tools { position: absolute; z-index: 3; top: 3.2rem; left: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.3rem; max-width: calc(100% - 1.5rem); }
     .pw-tool { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; width: 3.4rem; padding: 0.35rem 0.1rem 0.25rem; border: 2px solid var(--s-edge);
       border-radius: 14px; background: var(--s-panel-a); color: var(--s-text); font: inherit; font-size: 0.64rem; cursor: pointer; box-shadow: 0 2px 0 var(--s-edge); touch-action: manipulation; }
+    .pw-tool { position: relative; }
+    .pw-tool kbd { position: absolute; top: 2px; right: 4px; font: 700 0.6rem var(--s-font); color: var(--s-muted); }
+    .pw-tool[aria-pressed="true"] kbd { color: #ffe9dc; }
     .pw-tool svg { width: 1.7rem; height: 1.7rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .pw-tool:hover { border-color: var(--s-accent); }
     .pw-tool[aria-pressed="true"] { background: var(--s-accent); border-color: var(--s-accent); color: #fff; }
@@ -28,7 +31,7 @@
     @media (max-width: 860px) {
       .pw-tools { top: 0.4rem; left: 0.4rem; gap: 0.25rem; flex-direction: column; max-height: 9.2rem; }
       .pw-tool { width: 2.75rem; height: 2.75rem; padding: 0; justify-content: center; border-radius: 12px; }
-      .pw-tool span { display: none; }
+      .pw-tool span, .pw-tool kbd { display: none; }
       .pw-tool svg { width: 1.6rem; height: 1.6rem; }
       .pw-stat { display: none !important; }
     }
@@ -422,7 +425,7 @@
         TOOLS.concat([{ id: 'undo', key: 'z', name: 'Undo', hint: 'Undo the last stroke' }]).forEach(function (t) {
           var b = el('button', { class: 'pw-tool', type: 'button', 'aria-label': t.name, title: t.name + (t.id === 'undo' ? ' (Ctrl+Z)' : ' (' + t.key.toUpperCase() + ')') + ': ' + t.hint,
             onclick: function () { if (t.id === 'undo') undo(); else pickTool(t.id, true); } });
-          b.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true">' + TOOL_ICONS[t.id] + '</svg><span>' + t.name + '</span>';
+          b.innerHTML = '<kbd>' + (t.id === 'undo' ? '^Z' : t.key.toUpperCase()) + '</kbd><svg viewBox="0 0 32 32" aria-hidden="true">' + TOOL_ICONS[t.id] + '</svg><span>' + t.name + '</span>';
           if (t.id !== 'undo') b.setAttribute('aria-pressed', String(t.id === tool));
           toolBtns[t.id] = b; bar.appendChild(b);
         });
