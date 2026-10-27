@@ -260,6 +260,34 @@ function renderProgram(progId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Consent gate before any file download. Keep the wording in sync with confirmDownload in programs/shared/generator-core.js.
+function confirmSiteDownload(proceed) {
+  if (document.getElementById('site-consent')) return;
+  const modal = document.createElement('div');
+  modal.className = 'site-modal';
+  modal.id = 'site-consent';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.innerHTML = `<div class="site-modal-box">
+    <h2>Before you download</h2>
+    <p><strong>Safety Warning:</strong> 3D printed objects can shatter or break into small, sharp pieces. Items generated with this tool (such as articulated lanyard links, figures, or small accessories) are a severe choking hazard and are strictly not intended for young children.</p>
+    <p>Additionally, if you are generating custom lamp shades or lighting fixtures, do not use them with incandescent bulbs or high-heat sockets. Materials like Matte PLA and Silk PETG will warp, melt, and pose a severe fire hazard.</p>
+    <label class="site-modal-agree"><input type="checkbox" id="site-consent-agree"> <span>I understand and accept these safety risks.</span></label>
+    <div class="site-modal-actions"><button class="btn" type="button" id="site-consent-cancel">Cancel</button><button class="btn btn-amber" type="button" id="site-consent-go" disabled>Confirm &amp; Download</button></div>
+  </div>`;
+  const close = () => { document.removeEventListener('keydown', onKey, true); modal.remove(); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey, true);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+  document.body.appendChild(modal);
+  const agree = modal.querySelector('#site-consent-agree');
+  const go = modal.querySelector('#site-consent-go');
+  agree.addEventListener('change', () => { go.disabled = !agree.checked; });
+  go.addEventListener('click', () => { if (!agree.checked) return; close(); proceed(); });
+  modal.querySelector('#site-consent-cancel').addEventListener('click', close);
+  agree.focus();
+}
+
 // Shared generators load programs/shared/*. Inline those files so the download works offline.
 async function downloadStandaloneHTML() {
   if (!activeProgram.programUrl) return;

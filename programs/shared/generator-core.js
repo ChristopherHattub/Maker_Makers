@@ -108,11 +108,15 @@
     agree.focus();
   }
 
+  // Always-visible disclaimer sentence, with the longer terms in a collapsed block under it.
   function disclaimerBlock() {
     var items = DISCLAIMER_ITEMS.map(function (t) { return el('p', { text: t }); });
-    return el('details', { class: 'mm-disclaimer' }, [
-      el('summary', { text: 'Disclaimer: ' + DISCLAIMER_SHORT }),
-      el('div', { class: 'mm-disclaimer-body' }, items)
+    return el('div', { class: 'mm-disclaimer' }, [
+      el('p', { class: 'mm-disclaimer-lead' }, [el('strong', { text: 'Disclaimer: ' }), document.createTextNode(DISCLAIMER_SHORT)]),
+      el('details', {}, [
+        el('summary', { text: 'Full terms' }),
+        el('div', { class: 'mm-disclaimer-body' }, items)
+      ])
     ]);
   }
 
@@ -166,7 +170,7 @@
       ]),
       el('div', { class: 'mm-gen-actions' }, [
         el('a', { class: 'mm-btn mm-btn--green', href: cfg.printerLink || '../index.html#map-screen', target: '_top', text: 'Find local printer for this STL' }),
-        el('button', { class: 'mm-btn mm-btn--amber', type: 'button', id: 'mm-download-html', text: 'Download program (.html)', onclick: downloadStandalone }),
+        el('button', { class: 'mm-btn mm-btn--amber', type: 'button', id: 'mm-download-html', text: 'Download program (.html)', onclick: function () { confirmDownload('generator', downloadStandalone); } }),
         el('a', { class: 'mm-btn', href: '../index.html', target: '_top', text: 'Back to grid' })
       ])
     ]);
@@ -185,15 +189,15 @@
       el('div', { class: 'mm-export-row' }, [
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } })
       ]),
-      el('button', { class: 'mm-btn mm-footer-toggle', type: 'button', text: 'More: file name, standalone, disclaimer', 'aria-expanded': 'false', onclick: function (e) {
+      el('button', { class: 'mm-btn mm-footer-toggle', type: 'button', text: 'More: file name, standalone', 'aria-expanded': 'false', onclick: function (e) {
         var open = footer.classList.toggle('is-expanded');
         e.currentTarget.setAttribute('aria-expanded', String(open));
       } }),
       el('div', { class: 'mm-footer-extra' }, [
         el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
-        el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: downloadStandalone }),
-        disclaimerBlock()
-      ])
+        el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: function () { confirmDownload('generator', downloadStandalone); } })
+      ]),
+      disclaimerBlock()
     ]);
 
     // Phone sheet handle: drag to resize the viewport/sheet split, tap to flip between big model and big controls.

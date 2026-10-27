@@ -692,3 +692,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-modal-agree input { margin-top: 3px; flex: none; }
 .mm-modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .mm-modal-actions .mm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.mm-modal-agree input { accent-color: var(--bp-cyan); }
+.mm-disclaimer-lead { margin: 0 0 0.3rem; }
+.mm-disclaimer summary { color: var(--bp-cyan); }
