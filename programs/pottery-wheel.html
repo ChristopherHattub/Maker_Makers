@@ -15,34 +15,31 @@
       --s-bg-img: linear-gradient(#f0dcc0, #e6c9a5);
     }
     .studio .mm-gen-title { font-weight: 700; }
-    .pw-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; margin-bottom: 0.6rem; }
-    .pw-tool { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.45rem 0.1rem 0.35rem; border: 2px solid var(--s-edge);
-      border-radius: 14px; background: var(--s-card); color: var(--s-text); font: inherit; font-size: 0.72rem; cursor: pointer; box-shadow: 0 2px 0 var(--s-edge); }
-    .pw-tool svg { width: 1.9rem; height: 1.9rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .pw-tool kbd { position: absolute; top: 3px; right: 5px; font: 700 0.62rem var(--s-font); color: var(--s-muted); }
+    .pw-tools { position: absolute; z-index: 3; top: 3.2rem; left: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.3rem; max-width: calc(100% - 1.5rem); }
+    .pw-tool { display: flex; flex-direction: column; align-items: center; gap: 0.05rem; width: 3.4rem; padding: 0.35rem 0.1rem 0.25rem; border: 2px solid var(--s-edge);
+      border-radius: 14px; background: var(--s-panel-a); color: var(--s-text); font: inherit; font-size: 0.64rem; cursor: pointer; box-shadow: 0 2px 0 var(--s-edge); touch-action: manipulation; }
+    .pw-tool svg { width: 1.7rem; height: 1.7rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .pw-tool:hover { border-color: var(--s-accent); }
     .pw-tool[aria-pressed="true"] { background: var(--s-accent); border-color: var(--s-accent); color: #fff; }
-    .pw-tool[aria-pressed="true"] kbd { color: #ffe9dc; }
-    .pw-tool:focus-visible, .pw-menu summary:focus-visible { outline: 3px solid var(--s-accent); outline-offset: 2px; }
-    .pw-menu { position: absolute; top: 3.1rem; left: 0.6rem; z-index: 5; width: min(21rem, calc(100% - 1.2rem)); max-height: calc(100% - 4rem); overflow: auto;
-      background: var(--s-panel-a); color: var(--s-text); border: 2px solid var(--s-edge); border-radius: 16px; box-shadow: 0 4px 0 var(--s-edge), 0 8px 24px rgba(74,52,38,0.25); }
-    .pw-menu > summary { list-style: none; cursor: pointer; padding: 0.55rem 0.9rem; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-    .pw-menu > summary::-webkit-details-marker { display: none; }
-    .pw-menu > summary::after { content: '\25BE'; transition: transform .15s; }
-    .pw-menu[open] > summary::after { transform: rotate(180deg); }
-    .pw-menu-body { padding: 0 0.8rem 0.8rem; }
-    .pw-menu .mm-section-title { display: none; }
-    .pw-keys { font-size: 0.74rem; color: var(--s-muted); margin: 0.2rem 0 0.8rem; }
-    .pw-keys kbd { font: 700 0.72rem var(--s-font); border: 1px solid var(--s-edge); border-radius: 5px; padding: 0 0.3rem; background: #fff; }
+    .pw-tool:focus-visible { outline: 3px solid var(--s-accent); outline-offset: 2px; }
+    .pw-stat { position: absolute; z-index: 3; left: 0.75rem; bottom: 0.75rem; max-width: calc(100% - 9rem); font-size: 0.7rem; pointer-events: none; }
+    .pw-finger { display: none; position: absolute; left: 0; top: 0; z-index: 2; border: 2px solid var(--s-accent); border-radius: 50%; background: rgba(196,97,58,0.12); pointer-events: none; }
+    .pw-finger.on { background: rgba(196,97,58,0.3); }
+    @media (max-width: 860px) {
+      .pw-tools { top: 0.4rem; left: 0.4rem; gap: 0.25rem; flex-direction: column; max-height: 9.2rem; }
+      .pw-tool { width: 2.75rem; height: 2.75rem; padding: 0; justify-content: center; border-radius: 12px; }
+      .pw-tool span { display: none; }
+      .pw-tool svg { width: 1.6rem; height: 1.6rem; }
+      .pw-stat { display: none !important; }
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body class="mm-gen mm-soft studio">
   <script>
-    // Pottery Wheel: a spinning lump of clay you mold with the mouse or your finger. The wheel tab draws
-    // the clay turning; pressing on the wall pushes it in and out, and the 3D model on the right is the
-    // same pot, ready to export as .STL. The page layout, the viewport, the Color tool and the exports
+    // Pottery Wheel: a spinning lump of clay you mold with the mouse or your finger. The pot in the 3D view
+    // spins; pressing on the wall pushes it in and out, and the same pot is ready to export as .STL. The page layout, the viewport, the Color tool and the exports
     // come from shared/generator-core.js.
     (function () {
       'use strict';
@@ -121,7 +118,6 @@
       var MIN_R = 6, MAX_R = 72, MIN_HOLE = 3.5;
       var prof = new Float64Array(NS + 1);
       var history = [];
-      var refreshWheel = null;
 
       // Smooth profile through [t, radius] control points (cubic Hermite, Catmull-Rom tangents).
       function fromPoints(pts) {
@@ -327,247 +323,65 @@
       function build(p) {
         var res = potMeshes(p), out = res.meshes;
         if (p.handle >= 1) out.push({ name: 'handle', positions: handleMesh(p, res.eff), singlePart: true });
-        if (refreshWheel) refreshWheel();
         return out;
       }
 
-      // ---- The wheel tab: a side view of the clay that turns, and the tools that mold it ----
+      // ---- Sculpting: press the spinning pot in the 3D view and mold it with a mouse, pen or finger ----
       var TOOLS = [
         { id: 'shape', key: 's', name: 'Shape', hint: 'Press the wall and drag: the clay follows your finger' },
-        { id: 'pinch', key: 'p', name: 'Pinch in', hint: 'Hold on the wall to squeeze it narrower, like pinching a neck' },
-        { id: 'swell', key: 'w', name: 'Swell out', hint: 'Hold on the wall to push it wider, like a belly' },
+        { id: 'pinch', key: 'p', name: 'Pinch', hint: 'Hold on the wall to squeeze it narrower, like pinching a neck' },
+        { id: 'swell', key: 'w', name: 'Swell', hint: 'Hold on the wall to push it wider, like a belly' },
         { id: 'smooth', key: 'm', name: 'Smooth', hint: 'Rub with a sponge to even out bumps' },
         { id: 'lift', key: 'u', name: 'Pull up', hint: 'Drag up to pull the clay taller, down to squash it' }
       ];
-      function cssVar(name, fallback) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; }
-      function rgba(hex, a) {
-        var h = hex.replace('#', ''); if (h.length === 3) h = h.replace(/(.)/g, '$1$1');
-        var n = parseInt(h, 16);
-        return isNaN(n) ? hex : 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+      var TOOL_ICONS = {
+        shape: '<path d="M7 20c0-6 3-9 6-9s5 3 5 9v6"/><path d="M18 24h6c3 0 4-3 2-5"/>',
+        pinch: '<path d="M4 8l8 8M28 8l-8 8M4 26l8-8M28 26l-8-8"/>',
+        swell: '<path d="M12 16H4M20 16h8M16 12V4M16 20v8"/><circle cx="16" cy="16" r="3"/>',
+        smooth: '<rect x="5" y="10" width="22" height="12" rx="6"/><path d="M10 15h.01M16 15h.01M22 15h.01"/>',
+        lift: '<path d="M16 27V6M8 14l8-8 8 8"/>',
+        undo: '<path d="M9 12h11a6 6 0 010 12h-6"/><path d="M13 7l-5 5 5 5"/>'
+      };
+      var tool = 'shape', toolBtns = {}, sculptDirty = false;
+      function toolInfo(id) { return TOOLS.filter(function (t) { return t.id === id; })[0]; }
+      function pickTool(id, say) {
+        tool = id;
+        Object.keys(toolBtns).forEach(function (k) { if (k !== 'undo') toolBtns[k].setAttribute('aria-pressed', String(k === tool)); });
+        if (say && api0) api0.toast(toolInfo(id).name + ': ' + toolInfo(id).hint);
+      }
+      function undo() {
+        var h = history.pop();
+        if (!h) { api0.toast('Nothing to undo'); return; }
+        prof = h.prof; api0.setParams({ height: h.height }); api0.rebuild();
       }
 
-      function mountWheel(container, api) {
-        var tool = 'shape', PERS = 0.2, CH = 340;
-        var toolsBox = el('div', { class: 'pw-tools', role: 'toolbar', 'aria-label': 'Clay tools' });
-        container.appendChild(toolsBox);
-        var cv = el('canvas', { class: 'mm-canvas', height: String(CH) });
-        container.appendChild(cv);
-        var status = el('p', { class: 'mm-canvas-status' }, '');
-        container.appendChild(status);
-        var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), W = 300;
-        var v = { s: 1.6, x0: 150, base: CH - 66 }, spin = 0, last = performance.now(), drag = null, dirty = false, cursor = null;
-
-        function resize() {
-          var w = Math.max(200, Math.floor(cv.getBoundingClientRect().width || 300));
-          if (w === W && cv.width === Math.floor(W * dpr)) return;
-          W = w; cv.width = Math.floor(W * dpr); cv.height = Math.floor(CH * dpr); cv.style.height = CH + 'px';
+      // Moves the clay at one spot of the wall: x = distance from the axis, y = height, both in mm.
+      function applyTool(api, x, y, dt) {
+        var p = api.params, H = p.height, press = p.pressure / 100, ws = p.widthScale / 100;
+        var ic = (y / H) * NS, sig = Math.max(1.2, (p.brush / H) * NS * 0.6), i, lo = Math.max(0, Math.floor(ic - 3 * sig)), hi = Math.min(NS, Math.ceil(ic + 3 * sig));
+        if (y < -p.brush * 0.3 || y > H + p.brush * 0.5) return;
+        var target = clamp(Math.abs(x) / ws, MIN_R, MAX_R), copy = null;
+        if (tool === 'smooth') copy = new Float64Array(prof);
+        for (i = lo; i <= hi; i++) {
+          var w = Math.exp(-Math.pow((i - ic) / sig, 2)) * press;
+          if (tool === 'shape') prof[i] += (target - prof[i]) * Math.min(1, w * 0.5 * dt);
+          else if (tool === 'pinch') prof[i] -= 0.55 * w * dt;
+          else if (tool === 'swell') prof[i] += 0.55 * w * dt;
+          else if (tool === 'smooth') {
+            var a = copy[Math.max(0, i - 1)], b = copy[Math.min(NS, i + 1)], a2 = copy[Math.max(0, i - 3)], b2 = copy[Math.min(NS, i + 3)];
+            prof[i] += ((a + b + a2 + b2) / 4 - prof[i]) * Math.min(1, w * 0.9 * dt);
+          }
+          prof[i] = clamp(prof[i], MIN_R / ws, MAX_R / ws);
         }
-        function fit() { v.s = Math.min(W / 176, (CH - 74) / 170); v.x0 = W / 2; v.base = CH - 66; }
-        function px(x, y) { return [v.x0 + x * v.s, v.base - y * v.s]; }
-        function world(e) { var r = cv.getBoundingClientRect(); return [(e.clientX - r.left - v.x0) / v.s, (v.base - (e.clientY - r.top)) / v.s]; }
+        sculptDirty = true;
+      }
 
-        function applyTool(x, y, dt) {
-          var p = api.params, H = p.height, press = p.pressure / 100, ws = p.widthScale / 100;
-          if (tool === 'lift') return;
-          var ic = (y / H) * NS, sig = Math.max(1.2, (p.brush / H) * NS * 0.6), i, lo = Math.max(0, Math.floor(ic - 3 * sig)), hi = Math.min(NS, Math.ceil(ic + 3 * sig));
-          if (y < -p.brush * 0.3 || y > H + p.brush * 0.5) return;
-          var target = clamp(Math.abs(x) / ws, MIN_R, MAX_R), copy = null;
-          if (tool === 'smooth') copy = new Float64Array(prof);
-          for (i = lo; i <= hi; i++) {
-            var w = Math.exp(-Math.pow((i - ic) / sig, 2)) * press;
-            if (tool === 'shape') prof[i] += (target - prof[i]) * Math.min(1, w * 0.5 * dt);
-            else if (tool === 'pinch') prof[i] -= 0.55 * w * dt;
-            else if (tool === 'swell') prof[i] += 0.55 * w * dt;
-            else if (tool === 'smooth') {
-              var a = copy[Math.max(0, i - 1)], b = copy[Math.min(NS, i + 1)], a2 = copy[Math.max(0, i - 3)], b2 = copy[Math.min(NS, i + 3)];
-              prof[i] += ((a + b + a2 + b2) / 4 - prof[i]) * Math.min(1, w * 0.9 * dt);
-            }
-            prof[i] = clamp(prof[i], MIN_R / ws, MAX_R / ws);
-          }
-          dirty = true;
-        }
-
-        function stat(p, eff) {
-          var txt = 'Height ' + Math.round(p.height) + ' mm  |  widest ' + Math.round(stats.widest) + ' mm  |  holds about ' + Math.round(stats.volume) + ' ml' +
-            (stats.trimmed ? '  |  overhang limit is trimming ' + stats.trimmed + ' slices (amber dashes)' : '');
-          if (status.textContent !== txt) status.textContent = txt;
-        }
-
-        function draw(now) {
-          requestAnimationFrame(draw);
-          var dt = Math.min(2.5, (now - last) / 16.7); last = now;
-          if (!cv.offsetParent) return;
-          resize(); fit();
-          var p = api.params, H = p.height, ws = p.widthScale / 100;
-          spin += dt * (p.speed / 100) * 0.09;
-          if (drag) {
-            // Walk from the last point to the new one so fast strokes leave no gaps.
-            var dx = drag.x - drag.lx, dy = drag.y - drag.ly, dist = Math.sqrt(dx * dx + dy * dy), steps = Math.max(1, Math.ceil(dist / Math.max(2, p.brush / 3)));
-            if (tool === 'lift') {
-              if (Math.abs(dy) > 0.01) { api.setParams({ height: Math.round(clamp(p.height + dy, 30, 150)) }); dirty = false; }
-            } else {
-              for (var k = 1; k <= steps; k++) applyTool(drag.lx + dx * k / steps, drag.ly + dy * k / steps, dt / steps);
-            }
-            drag.lx = drag.x; drag.ly = drag.y;
-          }
-          if (dirty) { dirty = false; api.rebuild(); }
-
-          var eff = effProfile(p), amber = cssVar('--bp-amber', '#ffae00'), cyan = cssVar('--bp-cyan', '#00e5ff'), white = cssVar('--bp-white', '#eef7ff'), muted = cssVar('--bp-muted', '#8ab4e1'), deep = cssVar('--bp-bg-deep', '#06152d');
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          ctx.clearRect(0, 0, W, CH);
-          ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-
-          // Wheel: splash pan, body and a head with turning marks.
-          var hr = 84, hy = v.base;
-          ctx.fillStyle = rgba(cyan, 0.08); ctx.strokeStyle = rgba(cyan, 0.6); ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.moveTo(v.x0 - hr * v.s, hy + 4); ctx.lineTo(v.x0 - hr * v.s, hy + 36); ctx.ellipse(v.x0, hy + 36, hr * v.s, hr * v.s * PERS, 0, Math.PI, 0, true); ctx.lineTo(v.x0 + hr * v.s, hy + 4); ctx.fill(); ctx.stroke();
-          ctx.beginPath(); ctx.ellipse(v.x0, hy, hr * v.s, hr * v.s * PERS, 0, 0, TAU); ctx.fillStyle = rgba(cyan, 0.14); ctx.fill(); ctx.stroke();
-          ctx.save(); ctx.strokeStyle = rgba(white, 0.5); ctx.lineWidth = 2;
-          for (var tk = 0; tk < 12; tk++) {
-            var ang = spin + (tk / 12) * TAU, c = Math.cos(ang), sn = Math.sin(ang);
-            ctx.beginPath(); ctx.moveTo(v.x0 + c * hr * 0.9 * v.s, hy + sn * hr * 0.9 * v.s * PERS); ctx.lineTo(v.x0 + c * hr * v.s, hy + sn * hr * v.s * PERS); ctx.stroke();
-          }
-          ctx.restore();
-
-          // Ghost of the sculpted profile where the overhang limit trims it.
-          var anyTrim = false;
-          ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = amber; ctx.lineWidth = 2;
-          for (var i = 1; i <= NS; i++) {
-            if (!eff.trimmed[i]) continue;
-            anyTrim = true;
-            var r0 = prof[i - 1] * ws, r1 = prof[i] * ws, y0 = ((i - 1) / NS) * H, y1 = (i / NS) * H;
-            [-1, 1].forEach(function (sg) { var a = px(sg * r0, y0), b = px(sg * r1, y1); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
-          }
-          ctx.restore();
-
-          // Clay: silhouette from the effective profile, shaded like a cylinder.
-          var Wl = p.wall, ay = Math.min(Wl * 0.5, 2.4), left = [], right = [];
-          for (i = 0; i <= NS; i++) { left.push(px(-eff.r[i], (i / NS) * H)); right.push(px(eff.r[i], (i / NS) * H)); }
-          var topR = eff.r[NS], innerTop = innerBase(eff, H - ay, H, Wl), ty = px(0, H)[1];
-          var grad = ctx.createLinearGradient(v.x0 - 60 * v.s, 0, v.x0 + 60 * v.s, 0);
-          grad.addColorStop(0, rgba(amber, 0.35)); grad.addColorStop(0.3, rgba(amber, 0.85)); grad.addColorStop(0.55, rgba(amber, 0.6)); grad.addColorStop(1, rgba(amber, 0.3));
-          ctx.beginPath(); ctx.moveTo(left[0][0], left[0][1]);
-          left.forEach(function (q) { ctx.lineTo(q[0], q[1]); });
-          right.slice().reverse().forEach(function (q) { ctx.lineTo(q[0], q[1]); });
-          ctx.ellipse(v.x0, px(0, 0)[1], eff.r[0] * v.s, eff.r[0] * v.s * PERS, 0, 0, Math.PI);
-          ctx.closePath(); ctx.fillStyle = grad; ctx.fill(); ctx.strokeStyle = amber; ctx.lineWidth = 2; ctx.stroke();
-          // Spinning bands: dashed front arcs slide sideways, which reads as the clay turning.
-          ctx.save(); ctx.strokeStyle = rgba(white, 0.35); ctx.lineWidth = 1.2;
-          for (var bi = 1; bi < 16; bi++) {
-            var by = (bi / 16) * H * 0.98, br = rAt(eff, by / H);
-            ctx.setLineDash([2, 10]); ctx.lineDashOffset = -spin * br * v.s * 1.0 - bi * 3;
-            ctx.beginPath(); ctx.ellipse(v.x0, px(0, by)[1], br * v.s, br * v.s * PERS, 0, 0, Math.PI); ctx.stroke();
-          }
-          ctx.restore();
-          // Rim and opening.
-          ctx.beginPath(); ctx.ellipse(v.x0, ty, topR * v.s, topR * v.s * PERS, 0, 0, TAU); ctx.fillStyle = rgba(white, 0.18); ctx.fill(); ctx.strokeStyle = amber; ctx.lineWidth = 2; ctx.stroke();
-          ctx.beginPath(); ctx.ellipse(v.x0, ty, innerTop * v.s, innerTop * v.s * PERS, 0, 0, TAU); ctx.fillStyle = rgba(deep, 0.85); ctx.fill(); ctx.strokeStyle = rgba(amber, 0.7); ctx.lineWidth = 1.5; ctx.stroke();
-          // Handle preview.
-          if (p.handle >= 1) {
-            var hp = handlePath(p, eff);
-            ctx.save(); ctx.lineWidth = hp.tr * 2 * v.s; ctx.strokeStyle = rgba(amber, 0.75);
-            ctx.beginPath(); hp.pts.forEach(function (q, qi) { var a = px(q[0], q[1]); if (qi) ctx.lineTo(a[0], a[1]); else ctx.moveTo(a[0], a[1]); }); ctx.stroke(); ctx.restore();
-          }
-          // Finger.
-          if (cursor) {
-            var cp = px(cursor[0], cursor[1]), cr = p.brush * v.s * 0.5;
-            ctx.beginPath(); ctx.arc(cp[0], cp[1], cr, 0, TAU);
-            ctx.fillStyle = rgba(cyan, drag ? 0.28 : 0.1); ctx.fill(); ctx.strokeStyle = cyan; ctx.lineWidth = 2; ctx.stroke();
-          }
-          ctx.fillStyle = muted; ctx.font = '11px monospace'; ctx.textAlign = 'center';
-          ctx.fillText(TOOLS.filter(function (t) { return t.id === tool; })[0].hint, v.x0, CH - 8);
-          stat(p, eff);
-        }
-        requestAnimationFrame(draw);
-
-        cv.addEventListener('pointerdown', function (e) {
-          var q = world(e);
-          snapshot(api);
-          drag = { id: e.pointerId, x: q[0], y: q[1], lx: q[0], ly: q[1] };
-          cursor = q;
-          try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-        });
-        cv.addEventListener('pointermove', function (e) {
-          var q = world(e); cursor = q;
-          if (drag) { drag.x = q[0]; drag.y = q[1]; }
-        });
-        function up() {
-          if (drag && history.length) {
-            var h = history[history.length - 1], same = true, i;
-            for (i = 0; i <= NS; i++) if (Math.abs(h.prof[i] - prof[i]) > 1e-9) { same = false; break; }
-            if (same && h.height === api.params.height) history.pop();
-          }
-          drag = null;
-        }
-        cv.addEventListener('pointerup', up);
-        cv.addEventListener('pointercancel', up);
-        cv.addEventListener('pointerleave', function () { if (!drag) cursor = null; });
-
-        var toolBtns = {};
-        var TOOL_ICONS = {
-          shape: '<path d="M7 20c0-6 3-9 6-9s5 3 5 9v6"/><path d="M18 24h6c3 0 4-3 2-5"/>',
-          pinch: '<path d="M4 8l8 8M28 8l-8 8M4 26l8-8M28 26l-8-8"/>',
-          swell: '<path d="M12 16H4M20 16h8M16 12V4M16 20v8"/><circle cx="16" cy="16" r="3"/>',
-          smooth: '<rect x="5" y="10" width="22" height="12" rx="6"/><path d="M10 15h.01M16 15h.01M22 15h.01"/>',
-          lift: '<path d="M16 27V6M8 14l8-8 8 8"/>'
-        };
-        function pickTool(id, say) {
-          tool = id;
-          Object.keys(toolBtns).forEach(function (k) { toolBtns[k].setAttribute('aria-pressed', String(k === tool)); });
-          if (say) { var t = TOOLS.filter(function (x) { return x.id === id; })[0]; api.toast(t.name + ': ' + t.hint); }
-        }
-        TOOLS.forEach(function (t) {
-          var b = el('button', { class: 'pw-tool', type: 'button', 'aria-pressed': String(t.id === tool), title: t.name + ' (' + t.key.toUpperCase() + '): ' + t.hint, onclick: function () { pickTool(t.id, true); } });
-          b.innerHTML = '<kbd>' + t.key.toUpperCase() + '</kbd><svg viewBox="0 0 32 32" aria-hidden="true">' + TOOL_ICONS[t.id] + '</svg><span>' + t.name + '</span>';
-          toolBtns[t.id] = b; toolsBox.appendChild(b);
-        });
-        container.appendChild(el('p', { class: 'pw-keys' }, ''));
-        container.lastChild.innerHTML = 'Keys: <kbd>S</kbd> shape <kbd>P</kbd> pinch <kbd>W</kbd> swell <kbd>M</kbd> smooth <kbd>U</kbd> pull up <kbd>Ctrl+Z</kbd> undo <kbd>[</kbd> <kbd>]</kbd> finger size <kbd>Space</kbd> spin on/off';
-
-        // Hotkeys, only while the Wheel tab is showing and you are not typing in a box.
-        var lastSpeed = 50;
-        document.addEventListener('keydown', function (e) {
-          var body = container.closest('.mm-panel-body');
-          if (body && body.hidden) return;
-          var tg = e.target && e.target.tagName;
-          if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || e.altKey || e.metaKey) return;
-          var key = e.key.toLowerCase();
-          if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undoBtn.click(); return; }
-          if (e.ctrlKey) return;
-          var hit = TOOLS.filter(function (t) { return t.key === key; })[0];
-          if (hit) { e.preventDefault(); pickTool(hit.id, true); return; }
-          if (key === '[' || key === ']') { e.preventDefault(); api.setParams({ brush: clamp(api.params.brush + (key === ']' ? 2 : -2), 4, 40) }); return; }
-          if (key === ' ') {
-            e.preventDefault();
-            if (api.params.speed > 0) { lastSpeed = api.params.speed; api.setParams({ speed: 0 }); } else api.setParams({ speed: lastSpeed || 50 });
-          }
-        });
-
-        // The options menu: a collapsible window at the top left of the 3D view.
-        var viewport = document.querySelector('.mm-viewport');
-        var menu = el('details', { class: 'pw-menu', open: '' });
-        menu.appendChild(el('summary', {}, 'Pot options'));
-        var menuBody = el('div', { class: 'pw-menu-body' });
-        menuBody.appendChild(api.takeParams());
-        Array.prototype.slice.call(menuBody.querySelectorAll('.mm-acc')).forEach(function (acc) {
-          var h = acc.querySelector('summary, .mm-acc-head, button');
-          if (h && /^\s*View\s*$/.test(h.textContent)) acc.parentNode.removeChild(acc);
-        });
-        menu.appendChild(menuBody);
-        viewport.appendChild(menu);
-        new MutationObserver(function () {
-          var body = container.closest('.mm-panel-body');
-          menu.style.display = body && body.hidden ? 'none' : '';
-        }).observe(container.closest('.mm-panel-body'), { attributes: true, attributeFilter: ['hidden'] });
-
-function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button', onclick: fn }, label); }
+      // Left menu: undo-style actions and the starting lumps. The tools themselves float over the 3D view.
+      function mountClay(container, api) {
+        function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button', onclick: fn }, label); }
+        container.appendChild(el('p', { class: 'mm-note' }, 'Press the spinning pot in the 3D view and drag to mold it. Use the tools at the top of the view. Drag empty space to orbit; two fingers pinch to zoom.'));
         var row = el('div', { class: 'mm-export-row' });
-        var undoBtn = btn('Undo', function () {
-          var h = history.pop();
-          if (!h) { api.toast('Nothing to undo'); return; }
-          prof = h.prof; api.setParams({ height: h.height }); api.rebuild();
-        });
-        row.appendChild(undoBtn);
+        row.appendChild(btn('Undo', undo));
         row.appendChild(btn('Smooth all', function () {
           snapshot(api);
           for (var pass = 0; pass < 4; pass++) {
@@ -581,7 +395,6 @@ function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button',
           prof[NS] = prof[0]; api.rebuild(); api.toast('Rim now matches the base width');
         }));
         container.appendChild(row);
-
         container.appendChild(el('h3', { class: 'mm-group-title' }, 'Start from a lump'));
         var grid = el('div', { class: 'mm-preset-cards' });
         SHAPES.forEach(function (sh, si) {
@@ -599,9 +412,138 @@ function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button',
         container.appendChild(grid);
       }
 
+      // The floating tool bar, the touch/mouse sculpting and the brush ring, all on the 3D view.
+      function setupSculpt(env) {
+        var T = env.THREE, cvs = env.renderer.domElement, ray = new T.Raycaster(), ndc = new T.Vector2();
+        var viewport = document.querySelector('.mm-viewport'), drag = null, last = performance.now(), statText = '';
+        cvs.style.touchAction = 'none';
+
+        var bar = el('div', { class: 'pw-tools', role: 'toolbar', 'aria-label': 'Clay tools' });
+        TOOLS.concat([{ id: 'undo', key: 'z', name: 'Undo', hint: 'Undo the last stroke' }]).forEach(function (t) {
+          var b = el('button', { class: 'pw-tool', type: 'button', 'aria-label': t.name, title: t.name + (t.id === 'undo' ? ' (Ctrl+Z)' : ' (' + t.key.toUpperCase() + ')') + ': ' + t.hint,
+            onclick: function () { if (t.id === 'undo') undo(); else pickTool(t.id, true); } });
+          b.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true">' + TOOL_ICONS[t.id] + '</svg><span>' + t.name + '</span>';
+          if (t.id !== 'undo') b.setAttribute('aria-pressed', String(t.id === tool));
+          toolBtns[t.id] = b; bar.appendChild(b);
+        });
+        viewport.appendChild(bar);
+        var stat = el('div', { class: 'mm-overlay pw-stat' });
+        viewport.appendChild(stat);
+        var ring = el('div', { class: 'pw-finger' });
+        env.container.appendChild(ring);
+
+        function sculptOn() { var b = document.getElementById('mm-body-model'); return !!b && !b.hidden; }
+        function pxPerMM() {
+          var d = env.camera.position.distanceTo(env.controls.target);
+          return env.container.clientHeight / (2 * d * Math.tan(env.camera.fov * Math.PI / 360));
+        }
+        // Where the pointer touches the clay: distance from the axis (as the camera sees it) and height.
+        function sample(e) {
+          var r = cvs.getBoundingClientRect(), c = env.camera.position, P;
+          ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+          ray.setFromCamera(ndc, env.camera);
+          var hit = ray.intersectObjects(env.modelGroup.children, false)[0];
+          var l = Math.sqrt(c.x * c.x + c.z * c.z) || 1;
+          if (hit) P = hit.point;
+          else {
+            // Off the pot: use the upright plane through the axis that faces the camera.
+            var o = ray.ray.origin, d = ray.ray.direction, nx = c.x / l, nz = c.z / l, den = d.x * nx + d.z * nz;
+            if (Math.abs(den) < 1e-6) return null;
+            P = o.clone().addScaledVector(d, -(o.x * nx + o.z * nz) / den);
+          }
+          return { x: P.x * (c.z / l) + P.z * (-c.x / l), y: P.y, onPot: !!hit, px: e.clientX - r.left, py: e.clientY - r.top };
+        }
+        function showRing(s) {
+          if (!s) { ring.style.display = 'none'; return; }
+          var dia = api0.params.brush * pxPerMM();
+          ring.style.cssText = 'display:block;width:' + dia + 'px;height:' + dia + 'px;transform:translate(' + (s.px - dia / 2) + 'px,' + (s.py - dia / 2) + 'px)';
+          ring.classList.toggle('on', !!drag);
+        }
+        function endDrag() {
+          if (!drag) return;
+          var h = history[history.length - 1], same = !!h, i;
+          if (h) { for (i = 0; i <= NS; i++) if (Math.abs(h.prof[i] - prof[i]) > 1e-9) { same = false; break; } }
+          if (same && h.height === api0.params.height) history.pop();
+          drag = null; env.controls.enabled = true; ring.style.display = 'none';
+        }
+
+        // Capture phase on the stage so a press that lands on the pot sculpts, and anything else orbits as usual.
+        env.container.addEventListener('pointerdown', function (e) {
+          if (drag) { endDrag(); return; }          // a second finger: hand over to orbit/zoom
+          if (!sculptOn() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+          var s = sample(e);
+          if (!s || !s.onPot) return;
+          env.controls.enabled = false;
+          snapshot(api0);
+          drag = { id: e.pointerId, x: s.x, y: s.y, lx: s.x, ly: s.y, cy: e.clientY, lcy: e.clientY };
+          try { cvs.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+          showRing(s);
+          e.preventDefault();
+        }, true);
+        window.addEventListener('pointermove', function (e) {
+          if (drag) {
+            if (e.pointerId !== drag.id) return;
+            var s = sample(e);
+            if (s) { drag.x = s.x; drag.y = s.y; showRing(s); }
+            drag.cy = e.clientY;
+          } else if (e.pointerType === 'mouse' && sculptOn() && e.target === cvs && !(e.buttons & 7)) {
+            var h = sample(e); showRing(h && h.onPot ? h : null);
+          }
+        });
+        function up(e) { if (drag && e.pointerId === drag.id) endDrag(); }
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        cvs.addEventListener('pointerleave', function () { if (!drag) ring.style.display = 'none'; });
+
+        // Hotkeys, only on the Parametric tab and not while typing in a box.
+        var lastSpeed = 50;
+        document.addEventListener('keydown', function (e) {
+          var tg = e.target && e.target.tagName;
+          if (!sculptOn() || tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || e.altKey || e.metaKey) return;
+          var key = e.key.toLowerCase();
+          if (e.ctrlKey && key === 'z') { e.preventDefault(); undo(); return; }
+          if (e.ctrlKey) return;
+          var hit = TOOLS.filter(function (t) { return t.key === key; })[0];
+          if (hit) { e.preventDefault(); pickTool(hit.id, true); return; }
+          if (key === '[' || key === ']') { e.preventDefault(); api0.setParams({ brush: clamp(api0.params.brush + (key === ']' ? 2 : -2), 4, 40) }); return; }
+          if (key === ' ' && tg !== 'BUTTON') {
+            e.preventDefault();
+            if (api0.params.speed > 0) { lastSpeed = api0.params.speed; api0.setParams({ speed: 0 }); } else api0.setParams({ speed: lastSpeed || 50 });
+          }
+        });
+
+        // Each frame: keep pressing while a finger is held (pinch and swell work without moving), and show the stats.
+        return function frame() {
+          var now = performance.now(), dt = Math.min(2.5, (now - last) / 16.7), p = api0.params;
+          last = now;
+          var on = sculptOn();
+          bar.style.display = on ? '' : 'none';
+          stat.style.display = on ? '' : 'none';
+          if (drag) {
+            var dx = drag.x - drag.lx, dy = drag.y - drag.ly, dist = Math.sqrt(dx * dx + dy * dy), steps = Math.max(1, Math.ceil(dist / Math.max(2, p.brush / 3)));
+            if (tool === 'lift') {
+              var dh = (drag.lcy - drag.cy) / pxPerMM();
+              if (Math.abs(dh) > 0.01) api0.setParams({ height: Math.round(clamp(p.height + dh, 30, 150)) });
+            } else {
+              for (var k = 1; k <= steps; k++) applyTool(api0, drag.lx + dx * k / steps, drag.ly + dy * k / steps, dt / steps);
+            }
+            drag.lx = drag.x; drag.ly = drag.y; drag.lcy = drag.cy;
+          }
+          if (sculptDirty) { sculptDirty = false; api0.rebuild(); }
+          if (on) {
+            var hint = document.getElementById('mm-hint'), th = toolInfo(tool).hint;
+            if (hint && hint.textContent !== th) hint.textContent = th;
+            var txt = 'Height ' + Math.round(p.height) + ' mm | widest ' + Math.round(stats.widest) + ' mm | holds about ' + Math.round(stats.volume) + ' ml' +
+              (stats.trimmed ? ' | overhang limit is trimming ' + stats.trimmed + ' slices' : '');
+            if (txt !== statText) { statText = txt; stat.textContent = txt; }
+          }
+        };
+      }
+
+
 
       // ---- Art studio backdrop: a painted wall, window, shelves of pots and a wooden floor behind the 3D view ----
-      var studio = null, wheelSpin = null, api0 = null;
+      var studio = null, wheelSpin = null, sculptFrame = null, api0 = null;
       function paintStudio(w, h) {
         var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
         var g = cv.getContext('2d'), i, j, x, y, fl = h * 0.7;
@@ -665,8 +607,8 @@ function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button',
         fileName: 'Pottery_Wheel',
         printerLink: '../index.html#map-screen',
         customStage: true,
-        hideModelTab: true,
-        openGroups: ['Pot', 'Hands'],
+        extrasTitle: 'Clay tools',
+        openGroups: ['Pot', 'Hands', 'Clay tools'],
         defaultColor: '#e8a27a',
         palette: [
           { name: 'Terracotta', color: '#e8a27a' },
@@ -704,16 +646,12 @@ function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button',
             var w = env.container.clientWidth || 600, h = env.container.clientHeight || 400;
             if (w !== cw || h !== ch) { cw = w; ch = h; cv.width = w; cv.height = h; cache = paintStudio(w, h); cv.getContext('2d').drawImage(cache, 0, 0); }
           };
+          sculptFrame = setupSculpt(env);
           wheelSpin = function () { env.modelGroup.rotation.y += (api0.params.speed / 100) * 0.04; };
         },
-        onFrame: function () { if (studio) studio(); if (wheelSpin) wheelSpin(); },
+        onFrame: function () { if (studio) studio(); if (wheelSpin) wheelSpin(); if (sculptFrame) sculptFrame(); },
 
-        tabs: [{
-          id: 'wheel',
-          label: 'Wheel',
-          hint: 'Press the spinning clay and drag to mold it',
-          mount: mountWheel
-        }],
+        mount: mountClay,
 
         build: function (p, api) { api0 = api; return build(p, api); }
       };

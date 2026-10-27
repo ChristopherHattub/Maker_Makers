@@ -289,7 +289,7 @@
     // Generator-specific extras (for example the Ghost Builder stamp tools).
     var extras = el('div', { id: 'mm-extras' });
     if (typeof cfg.mount === 'function') {
-      dom.modelBody.appendChild(accordion(cfg.extrasTitle || 'Stamps & tools', extras, false));
+      dom.modelBody.appendChild(accordion(cfg.extrasTitle || 'Stamps & tools', extras, !!(cfg.openGroups && cfg.openGroups.indexOf(cfg.extrasTitle) >= 0)));
       cfg.mount(extras, api);
     }
     dom.modelBody.appendChild(accordion('View', el('div', {}, [
