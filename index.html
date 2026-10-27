@@ -37,15 +37,27 @@
     
     <!-- ==================== 1. SPLASH SCREEN (ALL BLANK SLOTS) ==================== -->
     <section id="splash-screen">
-      <div class="hub-head">
-        <div>
-          <h2 class="hub-title">Generators</h2>
-          <p class="hub-sub"><span id="hub-total">0</span> generators in <span id="hub-groups">0</span> collections. Pick a tile to start building.</p>
+      <div class="world" id="world">
+        <div class="world-viewport" id="world-viewport" tabindex="0" role="application" aria-label="Generator map. Drag to pan, use plus and minus to zoom, Tab to move between tiles.">
+          <div class="world-canvas" id="world-canvas"></div>
         </div>
-        <input type="search" id="hub-search" class="bp-input hub-search" placeholder="Search generators..." aria-label="Search generators" autocomplete="off">
-      </div>
 
-      <div class="hub" id="hub"></div>
+        <div class="world-hud world-title">
+          <h2>Generator Map</h2>
+          <p id="world-stats"></p>
+          <input type="search" id="world-search" class="bp-input" placeholder="Search generators..." aria-label="Search generators" autocomplete="off">
+        </div>
+
+        <div class="world-controls" aria-label="Map controls">
+          <button class="btn" type="button" id="world-zoom-in" aria-label="Zoom in">+</button>
+          <button class="btn" type="button" id="world-zoom-out" aria-label="Zoom out">&minus;</button>
+          <button class="btn" type="button" id="world-fit" aria-label="Show the whole map" title="Show the whole map">&#9638;</button>
+        </div>
+
+        <canvas class="world-minimap" id="world-minimap" width="180" height="120" aria-hidden="true"></canvas>
+        <div class="world-hint" id="world-hint">Drag to pan &middot; pinch or Ctrl+scroll to zoom &middot; select a tile, then select it again to open it</div>
+        <aside class="world-panel" id="world-panel" hidden aria-live="polite"></aside>
+      </div>
     </section>
 
     <!-- ==================== 2. PROGRAM VIEWER WORKSPACE (BLANK SHELL) ==================== -->
@@ -201,6 +213,7 @@
   <!-- Leaflet JS (Open Source, No API Key Required) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="js/programs.js"></script>
+  <script src="js/worldmap.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

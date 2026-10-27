@@ -18,19 +18,22 @@ The homepage shows generators as grouped, connected tiles. Generators are listed
 
 ## Groups (BUNDLES)
 
-`BUNDLES` in `js/programs.js` defines the clusters on the homepage. Each group is a heading with its tiles joined by glowing connectors.
+`BUNDLES` in `js/programs.js` defines the regions of the homepage world map. Related groups are placed next to each other.
 
 ```js
 {
   id: 'halloween',                    // Used by the generator `bundle` field
-  name: 'Halloween',                  // Cluster heading
-  description: 'Plain text.',         // Line under the heading
-  accent: '#ff8a1f',                  // Connector and hover glow colour
+  name: 'Halloween',                  // Region heading
+  description: 'Plain text.',         // Shown under the heading and in the details panel
+  accent: '#ff8a1f',                  // Region tint, connectors and hover glow
+  at: [0, 0],                         // Top-left cell on the world grid (one cell = one tile)
+  size: [4, 2],                       // Tile columns and rows (the header takes one extra row)
+  planned: false,                     // true = reserved region with no generators yet
   generators: ['SLOT-02', 'SLOT-03']  // Optional ordered member ids
 }
 ```
 
-Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field names the group. Any generator in no group lands in an automatic last cluster called "More", so nothing is hidden. To add a group, append an entry and tag its generators; nothing else changes. See [homepage.md](homepage.md).
+Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field names the group, filled left to right, top to bottom. A region grows downward when it has more generators than cells, so leave a spare row below it. Groups with no `at` are packed below everything else. Any generator in no group lands in an automatic "More" region. See [homepage.md](homepage.md).
 
 ## Active slots
 

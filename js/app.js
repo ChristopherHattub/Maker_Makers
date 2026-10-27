@@ -2,75 +2,8 @@ function escapeHTML(str) {
   return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function createTileHTML(prog) {
-  const title = escapeHTML(prog.title);
-  const thumb = prog.thumbnailUrl
-    ? `<img src="${prog.thumbnailUrl}" alt="" loading="lazy" draggable="false">`
-    : '<span class="tile-empty">+</span>';
-  const search = escapeHTML(`${prog.title} ${prog.category} ${prog.description}`.toLowerCase());
-  return `
-    <button class="tile" type="button" data-search="${search}" onclick="openProgram('${prog.id}')" aria-label="${title}">
-      <span class="tile-glow" aria-hidden="true"></span>
-      <span class="tile-card">
-        <span class="tile-art">${thumb}</span>
-        <span class="tile-label" title="${escapeHTML(prog.category)}">${title}</span>
-      </span>
-    </button>`;
-}
-
-function createClusterHTML(group) {
-  return `
-    <section class="cluster" data-group="${group.id}" style="--accent: ${group.accent || 'var(--bp-cyan)'}">
-      <div class="cluster-head">
-        <h3>${escapeHTML(group.name)}</h3>
-        <span class="cluster-count">${group.members.length}</span>
-        <p>${escapeHTML(group.description || '')}</p>
-      </div>
-      <div class="cluster-tiles">${group.members.map(createTileHTML).join('')}</div>
-    </section>`;
-}
-
-// A connector runs from each tile to the previous one. Tiles that start a wrapped row have nothing
-// to their left, so they are marked and the connector is hidden there.
-function markRowStarts() {
-  document.querySelectorAll('.cluster-tiles').forEach(row => {
-    let prevTop = null;
-    Array.from(row.children).forEach(t => {
-      if (t.hidden) return;
-      const top = t.offsetTop;
-      t.classList.toggle('row-start', prevTop === null || top !== prevTop);
-      prevTop = top;
-    });
-  });
-}
-
-function filterHub(query) {
-  const q = query.trim().toLowerCase();
-  let shown = 0;
-  document.querySelectorAll('.cluster').forEach(c => {
-    let any = 0;
-    c.querySelectorAll('.tile').forEach(t => {
-      const match = !q || t.dataset.search.includes(q) || c.dataset.group.includes(q);
-      t.hidden = !match;
-      if (match) any++;
-    });
-    c.hidden = !any;
-    shown += any;
-  });
-  document.getElementById('hub-empty').hidden = shown > 0;
-  markRowStarts();
-}
-
 function initSplash() {
-  const groups = BUNDLES.filter(b => b.members.length);
-  const hub = document.getElementById('hub');
-  hub.innerHTML = groups.map(createClusterHTML).join('') +
-    '<p class="hub-empty" id="hub-empty" hidden>No generators match that search.</p>';
-  document.getElementById('hub-total').textContent = groups.reduce((n, g) => n + g.members.length, 0);
-  document.getElementById('hub-groups').textContent = groups.length;
-  document.getElementById('hub-search').addEventListener('input', e => filterHub(e.target.value));
-  window.addEventListener('resize', markRowStarts);
-  markRowStarts();
+  initWorldMap();
   renderIdeasLog();
 }
 
@@ -131,6 +64,7 @@ function exportIdeasJSON() {
 let activeProgram = PROGRAMS[0];
 
 function hideAllScreens() {
+  document.body.classList.remove('on-splash');
   document.getElementById('splash-screen').style.display = 'none';
   document.getElementById('viewer-screen').style.display = 'none';
   document.getElementById('map-screen').style.display = 'none';
@@ -175,7 +109,8 @@ function setFrameUrl(iframe, url) {
 function renderSplash() {
   hideAllScreens();
   document.getElementById('splash-screen').style.display = 'block';
-  markRowStarts();
+  document.body.classList.add('on-splash');
+  worldMapShown();
   const iframe = document.getElementById('external-program-iframe');
   if (iframe) setFrameUrl(iframe, 'about:blank');
 }

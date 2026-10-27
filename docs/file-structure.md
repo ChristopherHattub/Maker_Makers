@@ -4,10 +4,11 @@
 .
 ├── index.html               Page markup: header, three screens, idea modal, footer
 ├── css/
-│   └── styles.css           All site styles (blueprint theme, homepage hub, map, modal)
+│   └── styles.css           All site styles (blueprint theme, homepage world map, map, modal)
 ├── js/
 │   ├── programs.js          GENERATORS list and the PROGRAMS slot array built from it
-│   └── app.js               Rendering, homepage hub, viewer, idea queue, printer map
+│   ├── worldmap.js          Homepage world map: layout, camera, selection, minimap
+│   └── app.js               Rendering, homepage world map, viewer, idea queue, printer map
 ├── data/
 │   ├── public-printers.json Verified printer listings (solid dots, directory)
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
@@ -34,7 +35,7 @@
 | Task | Files |
 | --- | --- |
 | Add or update a generator slot | `js/programs.js`, plus files in `programs/` and `assets/thumbnails/` |
-| Change the homepage hub or viewer behavior | `js/app.js` |
+| Change the homepage world map or viewer behavior | `js/app.js` |
 | Change the look | `css/styles.css` |
 | Change page layout or add a screen | `index.html` (and `js/app.js` for navigation) |
 | Add a verified printer listing | `data/public-printers.json` |

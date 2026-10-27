@@ -8,7 +8,7 @@ The site is a single HTML page (`index.html`) with three screens that share one 
 index.html
  ├── Header (brand, screen buttons, "Submit Generator Idea")
  ├── <main>
- │    └── Generators hub (search + grouped tile clusters)   #splash-screen
+ │    └── Generator world map (pannable regions of tiles)   #splash-screen
  │    ├── #viewer-screen   generator viewer (iframe + controls)
  │    └── #map-screen      printer radar (Leaflet + directory list)
  ├── Idea modal (#idea-modal)
@@ -38,7 +38,7 @@ Navigation is entirely in-page. Scrolling to the top happens in `openProgram()`.
 
 Everything on the hub and viewer is generated from data at load time:
 
-- `initSplash()` renders each group in `BUNDLES` as a cluster of connected tiles into `#hub` (see [homepage.md](homepage.md)).
+- `initSplash()` calls `initWorldMap()` in `js/worldmap.js`, which lays out every group in `BUNDLES` as a region of tiles on the world map (see [homepage.md](homepage.md)).
 - Tiles call `openProgram('SLOT-NN')` from an inline `onclick`.
 
 Markup is built with template strings and assigned with `innerHTML`. Content from `PROGRAMS` and `data/public-printers.json` is trusted, so it is not escaped (see [Known issues](#known-issues)).

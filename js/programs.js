@@ -135,49 +135,61 @@ const GENERATORS = [
   }
 ];
 
-// Group registry. A group (BUNDLES) is a themed cluster on the homepage: its generators show as
-// connected tiles under one heading. Add a group by appending an entry; add a generator to it with
-// the `bundle: '<group id>'` field (a string, or an array for several groups) or the `generators` list.
-// Generators with no group land in an automatic "More" cluster, so nothing is ever hidden.
-//   id / name / description: shown on the cluster header and used by the homepage search
-//   accent: CSS colour for the cluster's connectors and hover glow
+// Group registry. A group (BUNDLES) is a region of the homepage world map. Related groups sit next to
+// each other (Halloween beside Christmas), so the map reads like a heatmap of what exists.
+// Add a group by appending an entry; add a generator to it with the `bundle: '<group id>'` field
+// (a string, or an array for several groups) or the `generators` list.
+//   id / name / description: region header and search text
+//   accent: CSS hex colour of the region's tint, connectors and hover glow
+//   at: [col, row] of the region's top-left cell on the world grid (one cell = one tile).
+//       The region takes one header row, then `size` tile cells. Leave a spare cell or row so a
+//       region can grow; regions without `at` are auto-placed in a new row below everything else.
+//   size: [cols, rows] of tile cells. Rows grow automatically if there are more generators than cells.
+//   planned: true for a region with no generators yet. It shows as empty slots to be filled later.
 //   generators: optional ordered list of ids ('SLOT-01') to control tile order
 const BUNDLES = [
-  {
-    id: 'halloween',
-    name: 'Halloween',
+  // Holidays
+  { id: 'halloween', name: 'Halloween', accent: '#ff8a1f', at: [0, 0], size: [4, 2],
     description: 'A ghost, a pumpkin, a spider, a witch hat and a skull.',
-    accent: '#ff8a1f',
-    generators: ['SLOT-02', 'SLOT-03', 'SLOT-05', 'SLOT-07', 'SLOT-01']
-  },
-  {
-    id: 'christmas',
-    name: 'Christmas',
-    description: 'Snowmen, snowflakes, a tiered tree and a gift box.',
-    accent: '#ff4d6d',
-    generators: ['SLOT-04', 'SLOT-13', 'SLOT-08', 'SLOT-09', 'SLOT-06']
-  },
-  {
-    id: 'fidgets',
-    name: 'Fidgets & Clickers',
+    generators: ['SLOT-02', 'SLOT-03', 'SLOT-05', 'SLOT-07', 'SLOT-01'] },
+  { id: 'christmas', name: 'Christmas', accent: '#ff4d6d', at: [4, 0], size: [4, 2],
+    description: 'Snowmen, snowflakes, a tiered tree and gift boxes.',
+    generators: ['SLOT-04', 'SLOT-13', 'SLOT-08', 'SLOT-09', 'SLOT-06'] },
+  { id: 'easter', name: 'Easter & Spring', accent: '#c4f04a', at: [8, 0], size: [3, 2], planned: true,
+    description: 'Eggs, bunnies and spring flowers.' },
+  { id: 'valentines', name: "Valentine's", accent: '#ff6ec7', at: [0, 3], size: [3, 1], planned: true,
+    description: 'Hearts, gifts and love notes.' },
+  { id: 'thanksgiving', name: 'Thanksgiving & Fall', accent: '#d9822b', at: [3, 3], size: [3, 1], planned: true,
+    description: 'Harvest and autumn decor.' },
+  { id: 'newyear', name: 'New Year & Party', accent: '#ffd400', at: [6, 3], size: [3, 1], planned: true,
+    description: 'Parties, toasts and countdowns.' },
+  { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [9, 3], size: [3, 1], planned: true,
+    description: 'Cake toppers and party favours.' },
+  // Fidgets & personal
+  { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [4, 2],
     description: 'Print-in-place clickers and keycap pads.',
-    accent: '#00e5ff',
-    generators: ['SLOT-10', 'SLOT-12']
-  },
-  {
-    id: 'personal',
-    name: 'Personalised',
+    generators: ['SLOT-10', 'SLOT-12'] },
+  { id: 'personal', name: 'Personalised', accent: '#ffae00', at: [12, 3], size: [4, 1],
     description: 'Name plates and keychains.',
-    accent: '#ffae00',
-    generators: ['SLOT-11']
-  },
-  {
-    id: 'pottery',
-    name: 'Pottery',
+    generators: ['SLOT-11'] },
+  // Home, craft & play
+  { id: 'pottery', name: 'Pottery', accent: '#00ff9d', at: [0, 5], size: [4, 2],
     description: 'Throw and sculpt clay vessels.',
-    accent: '#00ff9d',
-    generators: ['SLOT-15']
-  }
+    generators: ['SLOT-15'] },
+  { id: 'decor', name: 'Home & Decor', accent: '#4aa3ff', at: [4, 5], size: [4, 2], planned: true,
+    description: 'Vases, lamps, frames and wall art.' },
+  { id: 'organization', name: 'Organisation', accent: '#38d6c4', at: [8, 5], size: [4, 2], planned: true,
+    description: 'Hooks, trays, holders and storage.' },
+  { id: 'toys', name: 'Toys & Games', accent: '#ff5252', at: [12, 5], size: [4, 2], planned: true,
+    description: 'Puzzles, spinners and pieces to play with.' },
+  { id: 'garden', name: 'Garden', accent: '#7bd34a', at: [0, 9], size: [4, 2], planned: true,
+    description: 'Planters, markers and plant stands.' },
+  { id: 'animals', name: 'Animals & Creatures', accent: '#ffb86b', at: [4, 9], size: [4, 2], planned: true,
+    description: 'Pets, wildlife and fantasy beasts.' },
+  { id: 'jewelry', name: 'Jewellery & Wearables', accent: '#f08cff', at: [8, 9], size: [4, 2], planned: true,
+    description: 'Rings, pendants and charms.' },
+  { id: 'tabletop', name: 'Tabletop & Gaming', accent: '#8f9bff', at: [12, 9], size: [4, 2], planned: true,
+    description: 'Minis, terrain, dice and tokens.' }
 ];
 
 const highestSlot = GENERATORS.reduce((max, g) => Math.max(max, g.slot), 0);
@@ -208,13 +220,12 @@ BUNDLES.forEach(b => {
   b.members.forEach(p => { p.bundles = (p.bundles || []).concat(b.id); });
 });
 
-// Anything in no group goes to an automatic last group, so a new generator always appears.
+// Anything in no group goes to an automatic last region, so a new generator always appears.
 (function () {
   const grouped = new Set(BUNDLES.flatMap(b => b.members.map(p => p.id)));
   const rest = PROGRAMS.filter(p => p.programUrl && !grouped.has(p.id));
   if (rest.length) {
-    const more = { id: 'more', name: 'More', description: 'Everything else.', accent: '#7ab3ff', generators: [], members: rest };
     rest.forEach(p => { p.bundles = (p.bundles || []).concat('more'); });
-    BUNDLES.push(more);
+    BUNDLES.push({ id: 'more', name: 'More', description: 'Generators not in a group yet.', accent: '#7ab3ff', size: [4, 1], generators: [], members: rest });
   }
 })();
