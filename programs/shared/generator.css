@@ -697,3 +697,15 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-modal-agree input { accent-color: var(--bp-cyan); }
 .mm-disclaimer-lead { margin: 0 0 0.3rem; }
 .mm-disclaimer summary { color: var(--bp-cyan); }
+
+/* Icon pickers for parameters with choices */
+.mm-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.1rem, 1fr)); gap: 0.4rem; }
+.mm-choice {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem; padding: 0.4rem 0.2rem 0.3rem;
+  background: transparent; color: var(--bp-cyan); border: 1px solid var(--bp-cyan-dim); border-radius: 4px;
+  font: inherit; font-size: 0.68rem; cursor: pointer; min-height: 44px;
+}
+.mm-choice svg { width: 2.2rem; height: 2.2rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.mm-choice:hover { background: rgba(0, 229, 255, 0.1); }
+.mm-choice[aria-pressed="true"] { background: rgba(0, 229, 255, 0.2); border-color: var(--bp-cyan); color: var(--bp-white); }
+.mm-choice:focus-visible { outline: 2px solid var(--bp-cyan); outline-offset: 2px; }

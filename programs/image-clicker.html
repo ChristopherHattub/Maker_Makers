@@ -141,6 +141,14 @@
         for (i = 0; i < a.length; i++) a[i] = state.invert ? 1 - s.ink[i] : s.ink[i];
         var r = Math.round(p.smooth / pitchGuess);
         if (r > 0) { boxBlur(a, w, h, r); boxBlur(a, w, h, r); }
+        if (p.detail > 0) {
+          // Unsharp mask: boost local contrast so fine inner lines and edges survive the cutoff.
+          var soft = Float32Array.from(a);
+          boxBlur(soft, w, h, Math.max(2, Math.round(Math.max(w, h) * 0.03)));
+          boxBlur(soft, w, h, Math.max(2, Math.round(Math.max(w, h) * 0.03)));
+          var amt = p.detail / 20;
+          for (i = 0; i < a.length; i++) a[i] = Math.min(1, Math.max(0, a[i] + amt * (a[i] - soft[i])));
+        }
         var cut = 1 - p.threshold / 100, bin = new Uint8Array(w * h);
         for (i = 0; i < a.length; i++) bin[i] = a[i] >= cut ? 1 : 0;
         if (keepLargest) {
@@ -444,7 +452,7 @@
 
       function silhouette(p, margin) {
         var size = p.size;
-        var key = [state.mode, state.badge, state.src.id, state.invert, p.threshold, p.smooth, size, margin.toFixed(2)].join('|');
+        var key = [state.mode, state.badge, state.src.id, state.invert, p.threshold, p.smooth, p.detail, size, margin.toFixed(2)].join('|');
         if (cache.key === key) return cache.grid;
         var g = null;
         if (state.mode === 'outline') {
@@ -459,7 +467,7 @@
 
       function reliefGrid(p) {
         var mm = p.size * p.imgSize / 100;
-        var key = [state.src.id, state.invert, p.threshold, p.smooth, mm.toFixed(2)].join('|');
+        var key = [state.src.id, state.invert, p.threshold, p.smooth, p.detail, mm.toFixed(2)].join('|');
         if (cache.relKey === key) return cache.relGrid;
         var mask = makeMask(p, mm / Math.max(state.src.w, state.src.h), false), g = null;
         if (mask) g = gridFromMask(mask, mm / Math.max(mask.w, mask.h), 0.5);
@@ -544,7 +552,8 @@
         { group: 'Hinge', key: 'hingeT', label: 'Hinge thickness (thin = softer)', unit: ' mm', min: 0.4, max: 1, step: 0.1, value: 0.6 },
         { group: 'Hinge', key: 'lip', label: 'Cap rim over ledge', unit: ' mm', min: 0.8, max: 2.5, step: 0.1, value: 1.4 },
         { tab: 'image', group: 'Picture', key: 'threshold', label: 'Detail cutoff (light ↔ dark)', unit: '%', min: 5, max: 95, step: 1, value: 50 },
-        { tab: 'image', group: 'Picture', key: 'smooth', label: 'Smoothing', unit: ' mm', min: 0, max: 3, step: 0.1, value: 0.6 },
+        { tab: 'image', group: 'Picture', key: 'detail', label: 'Fine detail boost', unit: '%', min: 0, max: 100, step: 5, value: 30 },
+        { tab: 'image', group: 'Picture', key: 'smooth', label: 'Smoothing (low = sharper)', unit: ' mm', min: 0, max: 3, step: 0.1, value: 0.3 },
         { tab: 'image', group: 'Picture', key: 'imgSize', label: 'Picture size on badge', unit: '%', min: 30, max: 95, step: 1, value: 70 },
         { tab: 'image', group: 'Picture', key: 'relief', label: 'Picture height on badge', unit: ' mm', min: 0.6, max: 3, step: 0.2, value: 1.2 }
       ];
@@ -595,18 +604,41 @@
           var url = URL.createObjectURL(file), img = new Image();
           img.onload = function () {
             var w0 = img.naturalWidth || img.width || 512, h0 = img.naturalHeight || img.height || 512;
-            var sc = 256 / Math.max(w0, h0), cw = Math.max(8, Math.round(w0 * sc)), ch = Math.max(8, Math.round(h0 * sc));
+            var sc = 640 / Math.max(w0, h0), cw = Math.max(8, Math.round(w0 * sc)), ch = Math.max(8, Math.round(h0 * sc));
             var cv = document.createElement('canvas');
             cv.width = cw; cv.height = ch;
             var ctx = cv.getContext('2d');
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, cw, ch);
             var data = ctx.getImageData(0, 0, cw, ch).data, ink = new Float32Array(cw * ch), i, clear = 0;
             for (i = 0; i < ink.length; i++) if (data[i * 4 + 3] < 250) clear++;
             var useAlpha = clear > ink.length * 0.01;
-            for (i = 0; i < ink.length; i++) {
-              ink[i] = useAlpha ? data[i * 4 + 3] / 255
-                : 1 - (0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]) / 255;
+            if (useAlpha) {
+              for (i = 0; i < ink.length; i++) ink[i] = data[i * 4 + 3] / 255;
+            } else {
+              // Find the background from the border. If it is a plain colour, ink = how far each pixel is from it
+              // (so a light logo on dark, or a coloured subject on white, both work). Otherwise ink = darkness.
+              var br = 0, bg = 0, bb = 0, bn = 0, edgeIdx = [], x, y;
+              for (x = 0; x < cw; x++) { edgeIdx.push(x, (ch - 1) * cw + x); }
+              for (y = 0; y < ch; y++) { edgeIdx.push(y * cw, y * cw + cw - 1); }
+              edgeIdx.forEach(function (k) { br += data[k * 4]; bg += data[k * 4 + 1]; bb += data[k * 4 + 2]; bn++; });
+              br /= bn; bg /= bn; bb /= bn;
+              var dev = 0;
+              edgeIdx.forEach(function (k) { dev += Math.abs(data[k * 4] - br) + Math.abs(data[k * 4 + 1] - bg) + Math.abs(data[k * 4 + 2] - bb); });
+              dev /= bn * 3;
+              var plainBg = dev < 22;
+              for (i = 0; i < ink.length; i++) {
+                if (plainBg) {
+                  var dr = data[i * 4] - br, dg = data[i * 4 + 1] - bg, db = data[i * 4 + 2] - bb;
+                  ink[i] = Math.min(1, Math.sqrt(dr * dr + dg * dg + db * db) / 255 * 1.5);
+                } else {
+                  ink[i] = 1 - (0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]) / 255;
+                }
+              }
             }
+            // Stretch contrast so the cutoff slider behaves the same for pale and dark pictures.
+            var sorted = Float32Array.from(ink).sort(), lo = sorted[Math.floor(sorted.length * 0.02)], hi = sorted[Math.floor(sorted.length * 0.98)];
+            if (hi - lo > 0.15) for (i = 0; i < ink.length; i++) ink[i] = Math.min(1, Math.max(0, (ink[i] - lo) / (hi - lo)));
             URL.revokeObjectURL(url);
             state.src = { id: 'file:' + file.name + ':' + file.size + ':' + Date.now(), name: file.name, w: cw, h: ch, ink: ink };
             state.fileName = file.name;

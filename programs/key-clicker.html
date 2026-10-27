@@ -25,6 +25,31 @@
       var LAYOUT_NAMES = ['Print layout', 'Assembled preview'];
       var STYLE_NAMES = ['Block', 'Dot'];
 
+      // Pictures for the icon pickers (40x40 viewBox, stroked by the page CSS).
+      function ch(label, svg) { return { label: label, svg: svg }; }
+      var SHAPE_CHOICES = [
+        ch('Square', '<rect x="8" y="8" width="24" height="24" rx="4"/>'),
+        ch('Round', '<circle cx="20" cy="20" r="12"/>'),
+        ch('Hexagon', '<path d="M20 7l11.3 6.5v13L20 33 8.7 26.5v-13z"/>'),
+        ch('Octagon', '<path d="M14 8h12l6 6v12l-6 6H14l-6-6V14z"/>'),
+        ch('Diamond', '<path d="M20 6l14 14-14 14L6 20z"/>'),
+        ch('Heart', '<path d="M20 33C8 25 6 17 10.5 12.5 14 9.5 18 11 20 15c2-4 6-5.500 9.500-2.500C34 17 32 25 20 33z"/>'),
+        ch('Star', '<path d="M20 6l4.200 8.800 9.600 1.300-7 6.700 1.700 9.600L20 27.700 11.500 32.400l1.700-9.600-7-6.700 9.600-1.300z"/>')
+      ];
+      var BODY_CHOICES = [
+        ch('Rounded box', '<rect x="5" y="11" width="30" height="18" rx="6"/><circle cx="13" cy="20" r="3"/><circle cx="27" cy="20" r="3"/>'),
+        ch('Pill', '<rect x="4" y="12" width="32" height="16" rx="8"/><circle cx="13" cy="20" r="3"/><circle cx="27" cy="20" r="3"/>'),
+        ch('Chamfered', '<path d="M11 11h18l6 6v6l-6 6H11l-6-6v-6z"/><circle cx="14" cy="20" r="3"/><circle cx="26" cy="20" r="3"/>')
+      ];
+      var LAYOUT_CHOICES = [
+        ch('Print layout', '<rect x="5" y="22" width="30" height="10" rx="2"/><rect x="8" y="8" width="9" height="9" rx="2"/><rect x="23" y="8" width="9" height="9" rx="2"/>'),
+        ch('Assembled', '<rect x="5" y="24" width="30" height="9" rx="2"/><rect x="8" y="10" width="9" height="11" rx="2"/><rect x="23" y="10" width="9" height="11" rx="2"/>')
+      ];
+      var STYLE_CHOICES = [
+        ch('Block', '<path d="M11 31V9h8a6 6 0 010 11h-8m8 0h2a5.500 5.500 0 010 11h-10"/>'),
+        ch('Dot', '<circle cx="14" cy="12" r="2" fill="currentColor"/><circle cx="26" cy="12" r="2" fill="currentColor"/><circle cx="20" cy="20" r="2" fill="currentColor"/><circle cx="14" cy="28" r="2" fill="currentColor"/><circle cx="26" cy="28" r="2" fill="currentColor"/>')
+      ];
+
       // -----------------------------------------------------------------------
       // 5x7 pixel font. Rows are top to bottom, 1 = raised pixel.
       // -----------------------------------------------------------------------
@@ -407,7 +432,7 @@
         parameters: [
           { group: 'Buttons', key: 'count', label: 'Number of buttons', unit: '', min: 1, max: 12, step: 1, value: 4 },
           { group: 'Buttons', key: 'rows', label: 'Rows (1 = a single line)', unit: '', min: 1, max: 4, step: 1, value: 1 },
-          { group: 'Buttons', key: 'btnShape', label: 'Button shape', unit: '', min: 0, max: 6, step: 1, value: 0, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
+          { group: 'Buttons', key: 'btnShape', choices: SHAPE_CHOICES, label: 'Button shape', unit: '', min: 0, max: 6, step: 1, value: 0, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
           { group: 'Buttons', key: 'btnSize', label: 'Button size', unit: ' mm', min: 12, max: 30, step: 1, value: 18 },
           { group: 'Buttons', key: 'gap', label: 'Gap between buttons', unit: ' mm', min: 2, max: 12, step: 0.5, value: 4 },
           { group: 'Buttons', key: 'keyCorner', label: 'Key corner rounding', unit: ' mm', min: 0.5, max: 9, step: 0.5, value: 3 },
@@ -417,7 +442,7 @@
           { group: 'Keycaps', key: 'pocket', label: 'Switch socket (0 = solid cap)', unit: ' mm', min: 0, max: 8, step: 0.1, value: 4.2 },
           { group: 'Keycaps', key: 'pocketDepth', label: 'Socket depth', unit: ' mm', min: 2, max: 7, step: 0.5, value: 3.5 },
 
-          { group: 'Body', key: 'bodyShape', label: 'Body shape', unit: '', min: 0, max: 2, step: 1, value: 0, format: function (v) { return BODY_NAMES[Math.round(v)]; } },
+          { group: 'Body', key: 'bodyShape', choices: BODY_CHOICES, label: 'Body shape', unit: '', min: 0, max: 2, step: 1, value: 0, format: function (v) { return BODY_NAMES[Math.round(v)]; } },
           { group: 'Body', key: 'margin', label: 'Border around keys', unit: ' mm', min: 4, max: 24, step: 1, value: 9 },
           { group: 'Body', key: 'bodyCorner', label: 'Body corner size', unit: ' mm', min: 1, max: 24, step: 1, value: 8 },
           { group: 'Body', key: 'bodyHeight', label: 'Body height', unit: ' mm', min: 6, max: 20, step: 0.5, value: 8 },
@@ -425,11 +450,11 @@
           { group: 'Body', key: 'clearance', label: 'Cap clearance', unit: ' mm', min: 0.2, max: 1, step: 0.05, value: 0.4 },
           { group: 'Body', key: 'underHole', label: 'Hole under each key (0 = none)', unit: ' mm', min: 0, max: 20, step: 1, value: 0 },
 
-          { group: 'Layout', key: 'layout', label: 'Layout (print or assembled)', unit: '', min: 0, max: 1, step: 1, value: 0, format: function (v) { return LAYOUT_NAMES[Math.round(v)]; } },
+          { group: 'Layout', key: 'layout', choices: LAYOUT_CHOICES, label: 'Layout (print or assembled)', unit: '', min: 0, max: 1, step: 1, value: 0, format: function (v) { return LAYOUT_NAMES[Math.round(v)]; } },
 
           { tab: 'keys', group: 'Characters', key: 'legendSize', label: 'Character size', unit: '%', min: 40, max: 130, step: 5, value: 100 },
           { tab: 'keys', group: 'Characters', key: 'legendHeight', label: 'Character height', unit: ' mm', min: 0.4, max: 2, step: 0.1, value: 0.8 },
-          { tab: 'keys', group: 'Characters', key: 'legendStyle', label: 'Character style', unit: '', min: 0, max: 1, step: 1, value: 0, format: function (v) { return STYLE_NAMES[Math.round(v)]; } }
+          { tab: 'keys', group: 'Characters', key: 'legendStyle', choices: STYLE_CHOICES, label: 'Character style', unit: '', min: 0, max: 1, step: 1, value: 0, format: function (v) { return STYLE_NAMES[Math.round(v)]; } }
         ],
         presets: [
           { label: 'Default row of four', values: { count: 4, rows: 1, btnShape: 0, btnSize: 18, gap: 4, keyCorner: 3, capHeight: 11, capRound: 1, pocket: 4.2, pocketDepth: 3.5, bodyShape: 0, margin: 9, bodyCorner: 8, bodyHeight: 8, floor: 2, clearance: 0.4, underHole: 0, layout: 0, legendSize: 100, legendHeight: 0.8, legendStyle: 0 } },

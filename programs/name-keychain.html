@@ -127,9 +127,22 @@
       };
       var SHAPES = [
         ['rounded', 'Rounded rectangle'], ['pill', 'Pill'], ['oval', 'Oval'], ['hex', 'Hexagon'],
-        ['heart', 'Heart'], ['scallop', 'Scalloped badge'], ['none', 'No plate (letters joined)']
+        ['heart', 'Heart'], ['scallop', 'Scalloped badge'], ['none', 'No backing']
       ];
       var HOLES = [['left', 'Left end'], ['right', 'Right end'], ['top', 'Top centre'], ['none', 'No hole']];
+      var SHAPE_ICONS = {
+        rounded: '<rect x="5" y="11" width="30" height="18" rx="5"/>', pill: '<rect x="4" y="12" width="32" height="16" rx="8"/>',
+        oval: '<ellipse cx="20" cy="20" rx="15" ry="9"/>', hex: '<path d="M4 20l7-9h18l7 9-7 9H11z"/>',
+        heart: '<path d="M20 33C8 25 6 17 10.500 12.500 14 9.500 18 11 20 15c2-4 6-5.500 9.500-2.500C34 17 32 25 20 33z"/>',
+        scallop: '<path d="M8 14q4-5 8 0q4-5 8 0q4-5 8 0q5 6 0 12q-4 5-8 0q-4 5-8 0q-4 5-8 0q-5-6 0-12z"/>',
+        none: '<path d="M5 28V14a4 4 0 018 0v14M13 22h6M19 28V14a4 4 0 018 0v14M27 22h6" stroke-dasharray="0"/>'
+      };
+      var HOLE_ICONS = {
+        left: '<rect x="12" y="13" width="23" height="14" rx="3"/><circle cx="7" cy="20" r="3"/>',
+        right: '<rect x="5" y="13" width="23" height="14" rx="3"/><circle cx="33" cy="20" r="3"/>',
+        top: '<rect x="6" y="16" width="28" height="18" rx="3"/><circle cx="20" cy="9" r="3"/>',
+        none: '<rect x="6" y="12" width="28" height="16" rx="3"/><path d="M10 6l20 28"/>'
+      };
       var CASES = [['typed', 'As typed'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
 
       // Non-slider choices live here; the Name tab edits them.
@@ -264,7 +277,7 @@
                 minX = Math.min(minX, ax, bx); maxX = Math.max(maxX, ax, bx);
               }
             });
-            x += g.w * u * sty.xs + t + p.spacing;
+            x += g.w * u * sty.xs + (state.shape === 'none' ? t * (1 - p.join / 100) : t + p.spacing);
           }
           if (!isFinite(minX)) { minX = 0; maxX = 0; }
           var cx = (minX + maxX) / 2;
@@ -378,11 +391,11 @@
         } else {
           // Joined letters: a bar along each baseline ties the letters together.
           lay.lines.forEach(function (ln) {
-            var bar = strokePoly(ln.x0 + t / 2, ln.base + t * 0.2, ln.x1 - t / 2, ln.base + t * 0.2, t * 1.4, lay.cap);
+            var bar = strokePoly(ln.x0 + t / 2, ln.base, ln.x1 - t / 2, ln.base, t, lay.cap);
             prism(base, bar, 0, textY1);
           });
           var last = lay.lines[lay.lines.length - 1];
-          ringPts = strokePoly(last.x0 + t / 2, last.base + t * 0.2, last.x1 - t / 2, last.base + t * 0.2, t * 1.4, lay.cap);
+          ringPts = strokePoly(last.x0 + t / 2, last.base, last.x1 - t / 2, last.base, t, lay.cap);
         }
 
         lay.segs.forEach(function (s) {
@@ -392,7 +405,7 @@
         if (state.hole !== 'none') {
           var pos = (!plated && state.hole === 'top') ? 'left' : state.hole;
           var holeR = p.holeDia / 2, wall = p.holeWall;
-          var yRef = plated ? 0 : lay.lines[lay.lines.length - 1].base + t * 0.2;
+          var yRef = plated ? 0 : lay.lines[lay.lines.length - 1].base;
           var c = holeCenter(ringPts, pos, yRef, holeR, wall);
           prism_ring(base, c, holeR, wall, plated ? plateT : textY1);
         }
@@ -416,6 +429,7 @@
         { label: 'Love heart', state: { font: 'rounded', shape: 'heart', hole: 'top', caps: 'typed' }, params: { textHeight: 12, stroke: 2.2, pad: 2, rimWidth: 1.4 } },
         { label: 'Scallop badge', state: { font: 'wide', shape: 'scallop', hole: 'top', caps: 'upper' }, params: { textHeight: 12, stroke: 2.4, pad: 3, rimWidth: 1.2 } },
         { label: 'Hex nameplate', state: { font: 'narrow', shape: 'hex', hole: 'left', caps: 'upper' }, params: { textHeight: 15, stroke: 2.6, pad: 4, rimWidth: 1.4 } },
+        { label: 'Bubble letters', state: { font: 'bubble', shape: 'none', hole: 'right', caps: 'typed' }, params: { textHeight: 22, stroke: 4.2, join: 12, plateThick: 3, raise: 1.6 } },
         { label: 'Joined script', state: { font: 'slanted', shape: 'none', hole: 'left', caps: 'typed' }, params: { textHeight: 16, stroke: 3, spacing: 0.5 } }
       ];
 
@@ -437,6 +451,7 @@
           { group: 'Lettering', tab: 'name', key: 'textHeight', label: 'Letter height', unit: ' mm', min: 8, max: 30, step: 0.5, value: 14 },
           { group: 'Lettering', tab: 'name', key: 'stroke', label: 'Stroke thickness', unit: ' mm', min: 1.2, max: 6, step: 0.1, value: 2.6 },
           { group: 'Lettering', tab: 'name', key: 'spacing', label: 'Letter spacing', unit: ' mm', min: 0, max: 6, step: 0.1, value: 1 },
+          { group: 'Lettering', tab: 'name', key: 'join', label: 'Letter overlap (no backing)', unit: '%', min: 0, max: 60, step: 5, value: 12 },
           { group: 'Lettering', tab: 'name', key: 'lineGap', label: 'Line gap (2 lines)', unit: ' mm', min: 0, max: 10, step: 0.5, value: 2 },
           { group: 'Lettering', tab: 'name', key: 'line2Size', label: 'Line 2 size', unit: '%', min: 40, max: 100, step: 5, value: 70 },
           { group: 'Plate', key: 'plateThick', label: 'Plate thickness', unit: ' mm', min: 1.6, max: 6, step: 0.2, value: 3 },
@@ -477,6 +492,18 @@
               wrap.appendChild(control);
               return wrap;
             };
+            var picker = function (key, options, icons) {
+              var wrap = h('div', { class: 'mm-choices' }), btns = [];
+              options.forEach(function (o) {
+                var b = h('button', { type: 'button', class: 'mm-choice', title: o[1], 'aria-label': o[1] });
+                b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true">' + icons[o[0]] + '</svg><span>' + o[1].replace(' (letters joined)', '') + '</span>';
+                b.addEventListener('click', function () { state[key] = o[0]; sync(); api.rebuild(); });
+                btns.push([o[0], b]); wrap.appendChild(b);
+              });
+              function sync() { btns.forEach(function (x) { x[1].setAttribute('aria-pressed', String(state[key] === x[0])); }); }
+              wrap.sync = sync; sync();
+              return wrap;
+            };
             var textInput = function (key, placeholder) {
               var input = h('input', { type: 'text', maxlength: '20', placeholder: placeholder, autocomplete: 'off', spellcheck: 'false' });
               input.value = state[key];
@@ -501,8 +528,8 @@
             container.appendChild(h('h3', { class: 'mm-group-title' }, 'Style'));
             var selFont = select('font', Object.keys(FONTS).map(function (k) { return [k, FONTS[k].label]; }));
             var selCase = select('caps', CASES);
-            var selShape = select('shape', SHAPES);
-            var selHole = select('hole', HOLES);
+            var selShape = picker('shape', SHAPES, SHAPE_ICONS);
+            var selHole = picker('hole', HOLES, HOLE_ICONS);
             container.appendChild(field('Lettering style', selFont));
             container.appendChild(field('Capitals', selCase));
             container.appendChild(field('Plate shape', selShape));
@@ -526,7 +553,7 @@
             refreshNameUI = function () {
               in1.value = state.line1; in2.value = state.line2;
               selFont.value = state.font; selCase.value = state.caps;
-              selShape.value = state.shape; selHole.value = state.hole;
+              selShape.sync(); selHole.sync();
             };
             setTimeout(function () { api.centerCamera('iso'); }, 60);
           }

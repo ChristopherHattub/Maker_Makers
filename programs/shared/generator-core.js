@@ -349,7 +349,33 @@
     dom.printBody.appendChild(el('div', { class: 'mm-group' }, [el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Material' })]), sel])]));
   }
 
+  // A parameter with `choices: [{ label, svg }]` is picked from a grid of icon buttons (value = index) instead of a slider.
+  function choicesFor(p) {
+    var btns = [];
+    var label = el('span', { class: 'mm-slider-value' });
+    function sync() {
+      var cur = Math.round(params[p.key]);
+      btns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(i === cur)); });
+      label.textContent = p.choices[cur] ? p.choices[cur].label : '';
+    }
+    p.choices.forEach(function (c, i) {
+      var b = el('button', {
+        type: 'button', class: 'mm-choice', title: c.label, 'aria-label': p.label + ': ' + c.label,
+        onclick: function () { params[p.key] = i; sync(); scheduleRebuild(); }
+      });
+      b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true">' + c.svg + '</svg><span>' + c.label + '</span>';
+      btns.push(b);
+    });
+    sliderRefs[p.key] = { choices: true, sync: sync };
+    sync();
+    return el('div', { class: 'mm-slider' }, [
+      el('div', { class: 'mm-slider-head' }, [el('label', { text: p.label }), label]),
+      el('div', { class: 'mm-choices' }, btns)
+    ]);
+  }
+
   function sliderFor(p) {
+    if (p.choices) return choicesFor(p);
     var output = el('span', { class: 'mm-slider-value', text: formatParam(p, params[p.key]) });
     var input = el('input', {
       type: 'range', min: String(p.min), max: String(p.max), step: String(p.step || 1), value: String(params[p.key]),
@@ -370,6 +396,7 @@
   function syncSliders() {
     Object.keys(sliderRefs).forEach(function (key) {
       var ref = sliderRefs[key];
+      if (ref.choices) { ref.sync(); return; }
       ref.input.value = String(params[key]);
       ref.output.textContent = formatParam(ref.def, params[key]);
     });
