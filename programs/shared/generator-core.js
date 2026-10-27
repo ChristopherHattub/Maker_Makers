@@ -68,8 +68,42 @@
     'You print at your own risk. Check every model and setting before printing, supervise prints, and follow your printer and material safety guidance. Slicer and printer compatibility is not guaranteed.',
     'To the fullest extent permitted by law, the site owner is not liable for failed prints, malfunctions, damage to printers or materials, wasted material, injury, property damage, or any other loss arising from use of this site.',
     'Community map and printer listings are third-party and often unverified. They are not endorsed. Check each location\'s own rules and fees.',
-    'You are responsible for the legality of what you print and for having the right to print it.'
+    'You are responsible for the legality of what you print and for having the right to print it.',
+    'Printed parts are not tested or certified for any use. Do not rely on one where failure could cause injury or damage, and keep small parts away from young children.'
   ];
+
+  // Consent gate shown before a file download. Confirm runs the download; Cancel or Esc closes.
+  function confirmDownload(label, proceed) {
+    if (document.getElementById('mm-consent')) return;
+    var agree = el('input', { type: 'checkbox', id: 'mm-consent-agree' });
+    var go = el('button', { class: 'mm-btn mm-btn--solid', type: 'button', text: 'Download ' + label, disabled: 'disabled' });
+    var prev = document.activeElement;
+    function close() {
+      document.removeEventListener('keydown', onKey, true);
+      var m = document.getElementById('mm-consent');
+      if (m) m.remove();
+      if (prev && prev.focus) prev.focus();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    agree.addEventListener('change', function () { go.disabled = !agree.checked; });
+    go.addEventListener('click', function () { if (!agree.checked) return; close(); proceed(); });
+    var items = DISCLAIMER_ITEMS.slice(0, 2).concat(DISCLAIMER_ITEMS.slice(-1)).map(function (t) { return el('p', { text: t }); });
+    var modal = el('div', { class: 'mm-modal', id: 'mm-consent', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mm-consent-title' }, [
+      el('div', { class: 'mm-modal-box' }, [
+        el('h2', { id: 'mm-consent-title', class: 'mm-modal-title', text: 'Before you download' }),
+        el('div', { class: 'mm-modal-body' }, items),
+        el('label', { class: 'mm-check mm-modal-agree' }, [agree, el('span', { text: 'I understand and accept that I print at my own risk, and that the site owner is not liable for any loss.' })]),
+        el('div', { class: 'mm-modal-actions' }, [
+          el('button', { class: 'mm-btn', type: 'button', text: 'Cancel', onclick: close }),
+          go
+        ])
+      ])
+    ]);
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(modal);
+    agree.focus();
+  }
 
   function disclaimerBlock() {
     var items = DISCLAIMER_ITEMS.map(function (t) { return el('p', { text: t }); });
@@ -146,8 +180,8 @@
     var footer = el('div', { class: 'mm-panel-footer' }, [
       el('div', { class: 'mm-stats', id: 'mm-stats', text: 'Geometry ready' }),
       el('div', { class: 'mm-export-row' }, [
-        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: exportStl }),
-        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF', onclick: export3mf })
+        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } }),
+        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF', onclick: function () { confirmDownload('.3MF', export3mf); } })
       ]),
       el('button', { class: 'mm-btn mm-footer-toggle', type: 'button', text: 'More: file name, standalone, disclaimer', 'aria-expanded': 'false', onclick: function (e) {
         var open = footer.classList.toggle('is-expanded');
