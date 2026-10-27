@@ -29,7 +29,6 @@
           { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
         ],
         partNames: { body: 'Cup' },
-        printSettings: { material: 'PLA', layerHeight: 0.2, infill: 15, walls: 3, supports: false },
         parameters: [
           { group: 'Size', key: 'height', label: 'Height', unit: ' mm', min: 30, max: 120, step: 1, value: 70 },
           { group: 'Size', key: 'radius', label: 'Radius', unit: ' mm', min: 15, max: 50, step: 1, value: 30 }

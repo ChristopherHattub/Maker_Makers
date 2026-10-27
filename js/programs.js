@@ -12,7 +12,7 @@ const GENERATORS = [
     category: 'SPOOKY // FIGURES',
     thumbnailUrl: 'assets/thumbnails/ghost-builder.svg',
     programUrl: 'programs/ghost-builder.html',
-    description: 'Parametric ghost with folds, arms, a face and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric ghost with folds, arms, a face and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 2,
@@ -21,7 +21,7 @@ const GENERATORS = [
     category: 'SPOOKY // HARVEST',
     thumbnailUrl: 'assets/thumbnails/pumpkin-plotter.svg',
     programUrl: 'programs/pumpkin-plotter.html',
-    description: 'Parametric pumpkin with adjustable ribs, texture, a curly stem, an optional hollow inside and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric pumpkin with adjustable ribs, texture, a curly stem, an optional hollow inside and embossed stamps and carved jack-o-lantern faces. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 5,
@@ -30,7 +30,7 @@ const GENERATORS = [
     category: 'SPOOKY // HEADWEAR',
     thumbnailUrl: 'assets/thumbnails/witch-hat.svg',
     programUrl: 'programs/witch-hat.html',
-    description: 'Parametric witch hat with adjustable cone height, swoop, lean and floppy tip, a curled or wavy brim, a raised hat band and a flat solid or hollow underside. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric witch hat with adjustable cone height, swoop, lean and floppy tip, a curled or wavy brim, a raised hat band and a flat solid or hollow underside. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 7,
@@ -39,7 +39,7 @@ const GENERATORS = [
     category: 'SPOOKY // BONES',
     thumbnailUrl: 'assets/thumbnails/skull-sculptor.svg',
     programUrl: 'programs/skull-sculptor.html',
-    description: 'Parametric skull with adjustable eye sockets (size, tilt, shape, asymmetry), nose cavity, jaw and cheeks, plus a Mouth tab of picture presets (grin, fangs, gap tooth, open jaw and more) for the teeth. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric skull with adjustable eye sockets (size, tilt, shape, asymmetry), nose cavity, jaw and cheeks, plus a Mouth tab of picture presets (grin, fangs, gap tooth, open jaw and more) for the teeth. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 3,
@@ -48,7 +48,7 @@ const GENERATORS = [
     category: 'SPOOKY // CREATURES',
     thumbnailUrl: 'assets/thumbnails/spider.svg',
     programUrl: 'programs/spider.html',
-    description: 'Parametric spider: shape the head and abdomen, set the eyes and number of legs, and bend, thicken and taper each leg. Emboss stamps like a mini spider, skull, web or bat. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric spider: shape the head and abdomen, set the eyes and number of legs, and bend, thicken and taper each leg. Emboss stamps like a mini spider, skull, web or bat. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 4,
@@ -57,7 +57,7 @@ const GENERATORS = [
     category: 'CHRISTMAS // FIGURES',
     thumbnailUrl: 'assets/thumbnails/snowman.svg',
     programUrl: 'programs/snowman.html',
-    description: 'Parametric snowman: size and stack the three balls, then pick a top hat, beanie or Santa hat, a scarf, a drooping carrot nose, coal eyes, mouth and buttons, and stubby arms. A Styles tab of picture cards sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Parametric snowman: size and stack the three balls, then pick a top hat, beanie or Santa hat, a scarf, a drooping carrot nose, coal eyes, mouth and buttons, and stubby arms. A Styles tab of picture cards sets a whole look. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 6,
@@ -66,7 +66,7 @@ const GENERATORS = [
     category: 'CHRISTMAS // ORNAMENTS',
     thumbnailUrl: 'assets/thumbnails/snowflake.svg',
     programUrl: 'programs/snowflake.html',
-    description: 'Flat printable snowflake ornament: set the number and length of arms, add rows of branches, change the centre and arm tips, and add a hanging loop. A Styles tab of picture cards (fern, lace, crystal and more) sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Flat printable snowflake ornament: set the number and length of arms, add rows of branches, change the centre and arm tips, and add a hanging loop. A Styles tab of picture cards (fern, lace, crystal and more) sets a whole look. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 8,
@@ -75,7 +75,7 @@ const GENERATORS = [
     category: 'CHRISTMAS // TREES',
     thumbnailUrl: 'assets/thumbnails/holiday-tree.svg',
     programUrl: 'programs/holiday-tree.html',
-    description: 'Tiered Christmas tree with adjustable height, width, tier count and wavy bough edges, a trunk, a snow base, baubles and a ball or sparkle topper. Every bough has a self-supporting underside. A Styles tab of picture cards sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Tiered Christmas tree with adjustable height, width, tier count and wavy bough edges, a trunk, a snow base, baubles and a ball or sparkle topper. Every bough has a self-supporting underside. A Styles tab of picture cards sets a whole look. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 9,
@@ -84,7 +84,7 @@ const GENERATORS = [
     category: 'CHRISTMAS // GIFTS',
     thumbnailUrl: 'assets/thumbnails/gift-box.svg',
     programUrl: 'programs/gift-box.html',
-    description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL or .3MF with colors.'
+    description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL.'
   }
 ];
 
