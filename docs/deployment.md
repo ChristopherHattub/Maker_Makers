@@ -31,4 +31,4 @@ Absolute paths work locally and break on Pages.
 ## Checking a deploy
 
 - The repository's **Deployments** section (or the Pages settings page) shows the latest publish.
-- After a deploy, load the live URL and check the carousel, a generator slot, and the printer map.
+- After a deploy, load the live URL and check the generators hub, a generator tile, and the printer map.

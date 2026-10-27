@@ -49,7 +49,7 @@ The port can also be set with the `PORT` environment variable. The default is 51
 There are no automated tests or linters. Check by hand:
 
 1. Start `npm run dev`.
-2. Load the home screen. Check the carousel, the grid, and the header buttons.
+2. Load the home screen. Check the generator tiles and the header buttons.
 3. Open a slot (including an empty one) and check the viewer, the iframe, and the download button.
 4. Open the printer map and check the markers, the directory and the status line.
 5. Submit a test idea, then check the queue and "Export Queue (.JSON)".

@@ -1,55 +1,40 @@
 # Generator Registry
 
-The generators grid has at least 40 slots and grows without limit. Generators are listed in `GENERATORS` in [`js/programs.js`](../js/programs.js), which builds the `PROGRAMS` array the site uses.
+The homepage shows generators as grouped, connected tiles. Generators are listed in `GENERATORS` in [`js/programs.js`](../js/programs.js), which builds the `PROGRAMS` array the site uses. Slots are fixed numbers; the homepage only shows slots that have a `programUrl`, so gaps are fine.
 
-## The slot shape
-
-The grid always shows at least `MIN_SLOTS` (40) sockets, four per row. It adds rows automatically: the slot count is the highest filled slot plus one spare row, rounded up to a full row. Add a generator with slot 41 and a new row appears; the page just scrolls further down. Each `PROGRAMS` entry looks like this:
+## The generator shape
 
 ```js
 {
-  id: 'SLOT-01',          // Generated: 'SLOT-' + two-digit slot number. Do not change.
-  slot: 1,                // Generated: 1 upward. Shown as "#1" on the socket.
-  title: '',              // Name shown on the socket and in the viewer
-  category: '',           // Short label under the title, e.g. "HOOKS & WALL STORAGE"
-  bundle: 'halloween',    // Optional: id (or array of ids) of the bundle(s) this generator belongs to
-  thumbnailUrl: '',       // Image shown on the socket
-  programUrl: '',         // Standalone generator HTML loaded in the viewer iframe
-  description: ''         // Shown in the carousel
+  slot: 14,                // Unique number. Becomes id 'SLOT-14'.
+  title: '',               // Tile label and viewer title
+  category: '',            // Short label, e.g. "CHRISTMAS // GIFTS" (also searchable)
+  bundle: 'christmas',     // Optional: group id (or array of ids)
+  thumbnailUrl: '',        // Tile image
+  programUrl: '',          // Standalone generator HTML loaded in the viewer iframe
+  description: ''          // Searched by the homepage search box
 }
 ```
 
-Each `GENERATORS` entry sets `slot` plus any of these fields. Only `title`, `category`, `thumbnailUrl`, `programUrl`, `description` and `bundle` are meant to be edited. `id` is generated from `slot`.
+## Groups (BUNDLES)
 
-**Featuring.** Individual generators are not featured. The Featured carousel shows bundles (see below).
-
-## Bundles
-
-`BUNDLES` in `js/programs.js` groups generators. Bundles are not grid items. They appear as filter chips above the generators grid (picking one shows only its generators; "All" shows everything) and, when `featured: true`, as a slide in the Featured carousel (the only thing in it).
+`BUNDLES` in `js/programs.js` defines the clusters on the homepage. Each group is a heading with its tiles joined by glowing connectors.
 
 ```js
 {
-  id: 'halloween',                 // Used by the generator `bundle` field and the filter
-  name: 'Halloween Bundle',        // Chip and carousel title
-  description: 'Plain text.',      // Carousel text
-  featured: true,                  // Show in the Featured carousel
+  id: 'halloween',                    // Used by the generator `bundle` field
+  name: 'Halloween',                  // Cluster heading
+  description: 'Plain text.',         // Line under the heading
+  accent: '#ff8a1f',                  // Connector and hover glow colour
   generators: ['SLOT-02', 'SLOT-03']  // Optional ordered member ids
 }
 ```
 
-Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field (a string or an array) names the bundle, merged without duplicates. Only generators with a `programUrl` count. After load, each bundle has `members` (resolved programs) and each program has `bundles` (ids). To add a bundle, append an entry and tag its generators; nothing else needs to change.
+Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field names the group. Any generator in no group lands in an automatic last cluster called "More", so nothing is hidden. To add a group, append an entry and tag its generators; nothing else changes. See [homepage.md](homepage.md).
 
-## Empty and active slots
+## Active slots
 
-A slot is treated as **active** when it has a `programUrl`:
-
-| Condition | Socket | Carousel status | Viewer |
-| --- | --- | --- | --- |
-| No `thumbnailUrl` | Crosshair with "[ EMPTY SOCKET ]" | — | — |
-| No `programUrl` | — | "EMPTY TEMPLATE" | "[ NO GENERATOR LOADED ]" message; Download button disabled |
-| `programUrl` set | — | "ONLINE" | Program loads in the iframe; Download button enabled |
-
-The viewer reads `programUrl` directly, so a slot can have a title and thumbnail before its program is ready.
+A slot is **active** when it has a `programUrl`, and only active slots get a homepage tile. A tile without a `thumbnailUrl` shows a plus sign. The viewer reads `programUrl` directly.
 
 ## The generator contract
 

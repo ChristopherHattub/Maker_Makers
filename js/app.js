@@ -1,129 +1,77 @@
-function createMachineryFrameHTML(prog) {
-  const hasThumb = Boolean(prog.thumbnailUrl);
-  const displayTitle = prog.title || 'UNASSIGNED MODULE';
-  const displayCat = prog.category || 'AWAITING UPLOAD';
+function escapeHTML(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
-  const visualContent = hasThumb
-    ? `<img class="swappable-thumb" src="${prog.thumbnailUrl}" alt="${displayTitle}">`
-    : `<div class="socket-empty-bay">
-         <div class="crosshair"></div>
-         <span>[ EMPTY SOCKET ]</span>
-       </div>`;
-
+function createTileHTML(prog) {
+  const title = escapeHTML(prog.title);
+  const thumb = prog.thumbnailUrl
+    ? `<img src="${prog.thumbnailUrl}" alt="" loading="lazy" draggable="false">`
+    : '<span class="tile-empty">+</span>';
+  const search = escapeHTML(`${prog.title} ${prog.category} ${prog.description}`.toLowerCase());
   return `
-    <div class="machinery-frame" onclick="openProgram('${prog.id}')" title="${prog.id}">
-      <div class="machinery-clamp-top"></div>
-      <span class="rivet tl"></span><span class="rivet tr"></span>
-      <span class="rivet bl"></span><span class="rivet br"></span>
-      <div class="thumbnail-socket">
-        <div class="socket-top-bar">
-          <span>${prog.id}</span>
-          <span>#${prog.slot}</span>
-        </div>
-        ${visualContent}
-        <div class="socket-labelplate">
-          <h4>${displayTitle}</h4>
-          <span>${displayCat}</span>
-        </div>
-      </div>
-    </div>
-  `;
+    <button class="tile" type="button" data-search="${search}" onclick="openProgram('${prog.id}')" aria-label="${title}">
+      <span class="tile-glow" aria-hidden="true"></span>
+      <span class="tile-card">
+        <span class="tile-art">${thumb}</span>
+        <span class="tile-label" title="${escapeHTML(prog.category)}">${title}</span>
+      </span>
+    </button>`;
 }
 
-let currentSlide = 0;
-let featuredList = [];
-let carouselTimer = null;
-
-function createBundleSlideHTML(bundle, idx) {
-  const thumbs = bundle.members.map(m => `
-    <button class="bundle-thumb" onclick="openProgram('${m.id}')" title="${m.title}">
-      ${m.thumbnailUrl ? `<img src="${m.thumbnailUrl}" alt="${m.title}">` : '<span>[ EMPTY ]</span>'}
-      <span class="bundle-thumb-label">${m.title}</span>
-    </button>`).join('');
+function createClusterHTML(group) {
   return `
-    <div class="carousel-slide bundle-slide">
-      <div class="bundle-collage">${thumbs}</div>
-      <div class="carousel-info">
-        <div>
-          <span class="featured-badge">FEATURED BUNDLE // ${bundle.members.length} GENERATORS</span>
-          <h3>${bundle.name}</h3>
-          <p>${bundle.description}</p>
-          <div class="spec-table">
-            <div><strong>BUNDLE ID</strong>${bundle.id}</div>
-            <div><strong>TARGET EXPORTS</strong>.STL / .3MF / .HTML</div>
-            <div><strong>GENERATORS</strong>${bundle.members.map(m => m.title).join(', ')}</div>
-          </div>
-        </div>
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-          <button class="btn" onclick="showBundle('${bundle.id}', true)">&#9881; View Bundle</button>
-        </div>
+    <section class="cluster" data-group="${group.id}" style="--accent: ${group.accent || 'var(--bp-cyan)'}">
+      <div class="cluster-head">
+        <h3>${escapeHTML(group.name)}</h3>
+        <span class="cluster-count">${group.members.length}</span>
+        <p>${escapeHTML(group.description || '')}</p>
       </div>
-    </div>`;
+      <div class="cluster-tiles">${group.members.map(createTileHTML).join('')}</div>
+    </section>`;
 }
 
-let activeBundle = '';
-
-function renderBundleFilter() {
-  const chips = [{ id: '', name: 'All' }].concat(BUNDLES.filter(b => b.members.length));
-  document.getElementById('bundle-filter').innerHTML = chips.map(b =>
-    `<button class="bundle-chip ${b.id === activeBundle ? 'active' : ''}" onclick="showBundle('${b.id}')">${b.name}${b.id ? ` (${b.members.length})` : ''}</button>`
-  ).join('');
+// A connector runs from each tile to the previous one. Tiles that start a wrapped row have nothing
+// to their left, so they are marked and the connector is hidden there.
+function markRowStarts() {
+  document.querySelectorAll('.cluster-tiles').forEach(row => {
+    let prevTop = null;
+    Array.from(row.children).forEach(t => {
+      if (t.hidden) return;
+      const top = t.offsetTop;
+      t.classList.toggle('row-start', prevTop === null || top !== prevTop);
+      prevTop = top;
+    });
+  });
 }
 
-function renderProgramGrid() {
-  const bundle = BUNDLES.find(b => b.id === activeBundle);
-  const list = bundle ? bundle.members : PROGRAMS;
-  document.getElementById('program-grid').innerHTML = list.map(p => createMachineryFrameHTML(p)).join('');
-}
-
-function showBundle(id, scroll) {
-  activeBundle = id;
-  renderBundleFilter();
-  renderProgramGrid();
-  if (scroll) document.getElementById('generators-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+function filterHub(query) {
+  const q = query.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll('.cluster').forEach(c => {
+    let any = 0;
+    c.querySelectorAll('.tile').forEach(t => {
+      const match = !q || t.dataset.search.includes(q) || c.dataset.group.includes(q);
+      t.hidden = !match;
+      if (match) any++;
+    });
+    c.hidden = !any;
+    shown += any;
+  });
+  document.getElementById('hub-empty').hidden = shown > 0;
+  markRowStarts();
 }
 
 function initSplash() {
-  renderBundleFilter();
-  renderProgramGrid();
-
-  featuredList = BUNDLES.filter(b => b.featured && b.members.length);
-  const trackEl = document.getElementById('carousel-track');
-  const dotsEl = document.getElementById('carousel-dots');
-
-  trackEl.innerHTML = featuredList.map(createBundleSlideHTML).join('');
-
-  dotsEl.innerHTML = featuredList.map((_, idx) =>
-    `<button class="dot ${idx === 0 ? 'active' : ''}" onclick="goToSlide(${idx})"></button>`
-  ).join('');
-
-  startCarouselAutoPlay();
+  const groups = BUNDLES.filter(b => b.members.length);
+  const hub = document.getElementById('hub');
+  hub.innerHTML = groups.map(createClusterHTML).join('') +
+    '<p class="hub-empty" id="hub-empty" hidden>No generators match that search.</p>';
+  document.getElementById('hub-total').textContent = groups.reduce((n, g) => n + g.members.length, 0);
+  document.getElementById('hub-groups').textContent = groups.length;
+  document.getElementById('hub-search').addEventListener('input', e => filterHub(e.target.value));
+  window.addEventListener('resize', markRowStarts);
+  markRowStarts();
   renderIdeasLog();
-}
-
-function updateCarouselPosition() {
-  document.getElementById('carousel-track').style.transform = `translateX(-${currentSlide * 100}%)`;
-  document.querySelectorAll('.dot').forEach((d, idx) => d.classList.toggle('active', idx === currentSlide));
-}
-
-function moveCarousel(dir) {
-  currentSlide = (currentSlide + dir + featuredList.length) % featuredList.length;
-  updateCarouselPosition();
-  startCarouselAutoPlay();
-}
-
-function goToSlide(idx) {
-  currentSlide = idx;
-  updateCarouselPosition();
-  startCarouselAutoPlay();
-}
-
-function startCarouselAutoPlay() {
-  if (carouselTimer) clearInterval(carouselTimer);
-  carouselTimer = setInterval(() => {
-    currentSlide = (currentSlide + 1) % featuredList.length;
-    updateCarouselPosition();
-  }, 5500);
 }
 
 function getSavedIdeas() {
@@ -227,6 +175,7 @@ function setFrameUrl(iframe, url) {
 function renderSplash() {
   hideAllScreens();
   document.getElementById('splash-screen').style.display = 'block';
+  markRowStarts();
   const iframe = document.getElementById('external-program-iframe');
   if (iframe) setFrameUrl(iframe, 'about:blank');
 }
@@ -570,45 +519,6 @@ async function scanGlobalPrintersNear(lat, lng, label) {
   renderPrinterLocations(combinedResults);
 }
 
-function createFeaturedCardHTML(model) {
-  const visual = model.thumbnailUrl
-    ? `<img src="${model.thumbnailUrl}" alt="${model.title}" loading="lazy">`
-    : `<div class="socket-empty-bay"><div class="crosshair"></div><span>[ NO THUMBNAIL ]</span></div>`;
-
-  return `
-    <a class="featured-card" href="${model.url || '#'}" title="${model.title}">
-      <div class="featured-thumb">${visual}</div>
-      <div class="featured-card-label">
-        <h4>${model.title}</h4>
-        <span>BY ${model.creator} // ${model.generator}</span>
-      </div>
-    </a>
-  `;
-}
-
-function initFeaturedStrip() {
-  const strip = document.getElementById('featured-strip');
-  const track = document.getElementById('featured-track');
-  track.innerHTML = FEATURED_MODELS.map(createFeaturedCardHTML).join('');
-
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduceMotion || FEATURED_MODELS.length < 2) return;
-
-  let paused = false;
-  strip.addEventListener('mouseenter', () => { paused = true; });
-  strip.addEventListener('mouseleave', () => { paused = false; });
-  strip.addEventListener('focusin', () => { paused = true; });
-  strip.addEventListener('focusout', () => { paused = false; });
-
-  setInterval(() => {
-    if (paused) return;
-    const cards = track.children;
-    const step = cards[1].offsetLeft - cards[0].offsetLeft;
-    const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 2;
-    strip.scrollTo({ left: atEnd ? 0 : strip.scrollLeft + step, behavior: 'smooth' });
-  }, 3500);
-}
-
 loadPublicPrinters().then(() => {
   if (leafletMap) {
     renderPrinterLocations(PUBLIC_PRINTERS);
@@ -617,6 +527,5 @@ loadPublicPrinters().then(() => {
 });
 
 initSplash();
-initFeaturedStrip();
 window.addEventListener('hashchange', renderRoute);
 renderRoute();

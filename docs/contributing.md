@@ -6,7 +6,7 @@ Thanks for helping with Maker Makers. The project is small on purpose: plain fil
 
 - **No build step and no dependencies.** Don't add npm packages, bundlers, or frameworks for a small feature. Use the dev server and browser APIs that already exist.
 - **Relative paths only.** Every URL to a local file must be relative, so the site works on GitHub Pages project URLs. See [deployment.md](deployment.md).
-- **Keep the data in data files.** Generators belong in `js/programs.js`, community models in `js/featured.js`, and printers in `data/public-printers.json`. Don't hardcode them into rendering code.
+- **Keep the data in data files.** Generators belong in `js/programs.js`, and printers in `data/public-printers.json`. Don't hardcode them into rendering code.
 - **Escape anything from outside.** Text that comes from search results, OpenStreetMap, or user input must not be inserted as raw HTML. Plain values from the repo's own data files are trusted (see [architecture.md](architecture.md#known-issues)).
 - **Degrade gracefully.** Storage, geolocation and external services can all fail. Wrap them, and show a sensible fallback.
 
@@ -40,12 +40,6 @@ Thanks for helping with Maker Makers. The project is small on purpose: plain fil
 - [ ] Entry added to `data/public-printers.json` with `verifiedDate` set
 - [ ] Coordinates checked on a map
 - [ ] Map popup and directory card checked for length
-
-**Adding a featured community model**
-
-- [ ] Thumbnail in `assets/thumbnails/featured/`
-- [ ] Entry added to `FEATURED_MODELS` in `js/featured.js`
-- [ ] Strip checked at desktop and phone widths
 
 **Changing the deploy**
 

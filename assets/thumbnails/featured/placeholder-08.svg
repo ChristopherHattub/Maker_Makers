@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
-  <rect width="400" height="300" fill="#0d2b59"/>
-  <path d="M0 50H400M0 100H400M0 150H400M0 200H400M0 250H400M50 0V300M100 0V300M150 0V300M200 0V300M250 0V300M300 0V300M350 0V300" stroke="#00e5ff" stroke-opacity="0.08"/>
-  <g fill="none" stroke="#00e5ff" stroke-width="2" stroke-opacity="0.7">
-    <path d="M150 90L200 65L250 90V140L200 165L150 140Z"/>
-    <path d="M150 90L200 115L250 90M200 115V165"/>
-  </g>
-  <text x="200" y="230" text-anchor="middle" font-family="Courier New, monospace" font-size="16" fill="#00e5ff" letter-spacing="2">PLACEHOLDER 08</text>
-</svg>

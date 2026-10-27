@@ -1,7 +1,5 @@
 // Slot registry. Add a generator by adding an entry to GENERATORS with the next free slot number.
-// The grid grows by itself: it always shows at least MIN_SLOTS sockets, plus one spare row of
-// empty sockets after the highest filled slot, so the page just gets longer as slots are used.
-const MIN_SLOTS = 40;
+const MIN_SLOTS = 40; // internal lookup table size only; the homepage shows filled slots, not empty ones
 const GRID_COLUMNS = 4;
 
 const GENERATORS = [
@@ -128,26 +126,48 @@ const GENERATORS = [
   }
 ];
 
-// Bundle registry. A bundle groups generators under one theme. Bundles are NOT grid items: they
-// appear as the Featured carousel and as filter chips above the generators grid.
-// To add a bundle: append an entry here. Members come from two places and are merged (no duplicates):
-//   - `generators`: ordered list of generator ids ('SLOT-01'), controls display order
-//   - the optional `bundle: '<bundle id>'` field on a GENERATORS entry (a string, or an array for several bundles)
-// `featured: true` puts the bundle in the Featured carousel; only bundles are featured there.
+// Group registry. A group (BUNDLES) is a themed cluster on the homepage: its generators show as
+// connected tiles under one heading. Add a group by appending an entry; add a generator to it with
+// the `bundle: '<group id>'` field (a string, or an array for several groups) or the `generators` list.
+// Generators with no group land in an automatic "More" cluster, so nothing is ever hidden.
+//   id / name / description: shown on the cluster header and used by the homepage search
+//   accent: CSS colour for the cluster's connectors and hover glow
+//   generators: optional ordered list of ids ('SLOT-01') to control tile order
 const BUNDLES = [
   {
     id: 'halloween',
-    name: 'Halloween Bundle',
-    description: 'Everything spooky in one place: a ghost, a pumpkin, a spider, a witch hat and a skull. Print the whole haunt or mix and match, and paint every part in the Color tool.',
-    featured: true,
+    name: 'Halloween',
+    description: 'A ghost, a pumpkin, a spider, a witch hat and a skull.',
+    accent: '#ff8a1f',
     generators: ['SLOT-02', 'SLOT-03', 'SLOT-05', 'SLOT-07', 'SLOT-01']
   },
   {
     id: 'christmas',
-    name: 'Christmas Bundle',
-    description: 'A festive set: a snowman, a snowflake ornament, a tiered tree and a gift box with a bow. Every model prints flat or self-supporting, and every part can be painted in the Color tool.',
-    featured: false,
-    generators: ['SLOT-04', 'SLOT-08', 'SLOT-09', 'SLOT-06']
+    name: 'Christmas',
+    description: 'Snowmen, snowflakes, a tiered tree and a gift box.',
+    accent: '#ff4d6d',
+    generators: ['SLOT-04', 'SLOT-13', 'SLOT-08', 'SLOT-09', 'SLOT-06']
+  },
+  {
+    id: 'fidgets',
+    name: 'Fidgets & Clickers',
+    description: 'Print-in-place clickers and keycap pads.',
+    accent: '#00e5ff',
+    generators: ['SLOT-10', 'SLOT-12']
+  },
+  {
+    id: 'personal',
+    name: 'Personalised',
+    description: 'Name plates and keychains.',
+    accent: '#ffae00',
+    generators: ['SLOT-11']
+  },
+  {
+    id: 'pottery',
+    name: 'Pottery',
+    description: 'Throw and sculpt clay vessels.',
+    accent: '#00ff9d',
+    generators: ['SLOT-15']
   }
 ];
 
@@ -178,3 +198,14 @@ BUNDLES.forEach(b => {
   b.members = ids.map(id => PROGRAMS.find(p => p.id === id)).filter(p => p && p.programUrl);
   b.members.forEach(p => { p.bundles = (p.bundles || []).concat(b.id); });
 });
+
+// Anything in no group goes to an automatic last group, so a new generator always appears.
+(function () {
+  const grouped = new Set(BUNDLES.flatMap(b => b.members.map(p => p.id)));
+  const rest = PROGRAMS.filter(p => p.programUrl && !grouped.has(p.id));
+  if (rest.length) {
+    const more = { id: 'more', name: 'More', description: 'Everything else.', accent: '#7ab3ff', generators: [], members: rest };
+    rest.forEach(p => { p.bundles = (p.bundles || []).concat('more'); });
+    BUNDLES.push(more);
+  }
+})();

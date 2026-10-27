@@ -37,36 +37,15 @@
     
     <!-- ==================== 1. SPLASH SCREEN (ALL BLANK SLOTS) ==================== -->
     <section id="splash-screen">
-      <div class="section-banner">
-        <h2><span>[01]</span> Featured Bundle</h2>
-        <span class="meta-tag">CURATED GENERATOR BUNDLES</span>
-      </div>
-
-      <div class="carousel-wrapper" id="featured-carousel">
-        <div class="carousel-track" id="carousel-track"></div>
-        <div class="carousel-controls">
-          <button class="btn" onclick="moveCarousel(-1)">&#9664; PREV SLOT</button>
-          <div class="carousel-dots" id="carousel-dots"></div>
-          <button class="btn" onclick="moveCarousel(1)">NEXT SLOT &#9654;</button>
+      <div class="hub-head">
+        <div>
+          <h2 class="hub-title">Generators</h2>
+          <p class="hub-sub"><span id="hub-total">0</span> generators in <span id="hub-groups">0</span> collections. Pick a tile to start building.</p>
         </div>
+        <input type="search" id="hub-search" class="bp-input hub-search" placeholder="Search generators..." aria-label="Search generators" autocomplete="off">
       </div>
 
-      <div class="section-banner">
-        <h2><span>[01B]</span> Featured Community Models</h2>
-        <span class="meta-tag">USER-MADE STL THUMBNAILS // AUTO-ROTATING</span>
-      </div>
-
-      <div class="featured-strip" id="featured-strip">
-        <div class="featured-track" id="featured-track"></div>
-      </div>
-
-      <div class="section-banner" id="generators-section">
-        <h2><span>[02]</span> Generators</h2>
-        <span class="meta-tag">MACHINERY SOCKETS FOR THUMBNAILS & HTML PROGRAMS // GROWS AS SLOTS ARE ADDED</span>
-      </div>
-
-      <div class="bundle-filter" id="bundle-filter" aria-label="Filter generators by bundle"></div>
-      <div class="program-grid" id="program-grid"></div>
+      <div class="hub" id="hub"></div>
     </section>
 
     <!-- ==================== 2. PROGRAM VIEWER WORKSPACE (BLANK SHELL) ==================== -->
@@ -222,7 +201,6 @@
   <!-- Leaflet JS (Open Source, No API Key Required) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="js/programs.js"></script>
-  <script src="js/featured.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

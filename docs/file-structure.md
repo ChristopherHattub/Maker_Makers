@@ -4,17 +4,15 @@
 .
 ├── index.html               Page markup: header, three screens, idea modal, footer
 ├── css/
-│   └── styles.css           All site styles (blueprint theme, grid, carousel, map, modal)
+│   └── styles.css           All site styles (blueprint theme, homepage hub, map, modal)
 ├── js/
 │   ├── programs.js          GENERATORS list and the PROGRAMS slot array built from it
-│   ├── featured.js          FEATURED_MODELS: Featured Community Models data (in progress)
-│   └── app.js               Rendering, carousel, viewer, idea queue, printer map
+│   └── app.js               Rendering, homepage hub, viewer, idea queue, printer map
 ├── data/
 │   ├── public-printers.json Verified printer listings (solid dots, directory)
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
 ├── assets/
 │   └── thumbnails/          Slot thumbnail images (ghost-builder.svg, ...)
-│       └── featured/        Featured Community Models thumbnails (in progress)
 ├── programs/                Generator pages (ghost-builder.html, ...)
 │   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
 ├── scripts/
@@ -36,12 +34,11 @@
 | Task | Files |
 | --- | --- |
 | Add or update a generator slot | `js/programs.js`, plus files in `programs/` and `assets/thumbnails/` |
-| Change the grid, carousel or viewer behavior | `js/app.js` |
+| Change the homepage hub or viewer behavior | `js/app.js` |
 | Change the look | `css/styles.css` |
 | Change page layout or add a screen | `index.html` (and `js/app.js` for navigation) |
 | Add a verified printer listing | `data/public-printers.json` |
 | Review an unverified candidate | `data/osm-candidates.json` (move it to the verified file once checked) |
-| Add a featured community model | `js/featured.js` and `assets/thumbnails/featured/` |
 | Change how the site is published | Repository **Settings > Pages** (deploy from `main` / root) |
 
 ## Folders that are intentionally empty
