@@ -415,7 +415,7 @@
         return 0;
       }
       function typeIcon(type) {
-        var prof = pieceProfile(type, 1, 1), hh = prof[prof.length - 1][1], pts = [];
+        var prof = pieceProfile(type, 12, 1).map(function (q) { return [q[0] / 12, q[1] / 12]; }), hh = prof[prof.length - 1][1], pts = [];
         prof.forEach(function (q) { pts.push([q[0], -q[1] + hh / 2]); });
         prof.slice().reverse().forEach(function (q) { pts.push([-q[0], -q[1] + hh / 2]); });
         return '<svg viewBox="-1.1 -1.4 2.2 2.8" aria-hidden="true"><polygon points="' + pts.map(function (q) { return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join(' ') + '"/></svg>';
