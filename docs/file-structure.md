@@ -43,7 +43,7 @@
 
 ## Folders that are intentionally empty
 
-`assets/thumbnails/` holds the slot thumbnails (`ghost-builder.svg` for slot 1) and the featured placeholders in `featured/`. Slot 1 points at `programs/ghost-builder.html` and its thumbnail. The other slots have no `programUrl` or `thumbnailUrl`, so they render as empty sockets.
+`assets/thumbnails/` holds the slot thumbnails (`ghost-builder.svg` for slot 1). Slot 1 points at `programs/ghost-builder.html` and its thumbnail. Slots without a `programUrl` get no homepage tile.
 
 ## Files not to commit
 

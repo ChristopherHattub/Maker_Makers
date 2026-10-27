@@ -75,7 +75,7 @@ If a service is unreachable, the map shows the verified listings and the status 
 
 ## Styling
 
-`css/styles.css` holds all styles. It uses a "blueprint" theme built from CSS custom properties (`--bp-cyan`, `--bp-amber`, `--bp-bg-main`, and so on) defined in `:root` at the top of the file. Layout is responsive; the grid and carousel switch sizes at the 1100px and 680px breakpoints.
+`css/styles.css` holds all styles. It uses a "blueprint" theme built from CSS custom properties (`--bp-cyan`, `--bp-amber`, `--bp-bg-main`, and so on) defined in `:root` at the top of the file. Layout is responsive; the hub tiles and viewer switch sizes at the 1100px and 680px breakpoints.
 
 ## Known issues
 
