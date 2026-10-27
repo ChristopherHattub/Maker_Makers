@@ -241,6 +241,7 @@
       var STAMP_NAMES = { star: 'Star', moon: 'Moon', bat: 'Bat', bolt: 'Bolt' };
       var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
       var stampType = 'star';
+      var refreshStampUI = null;
 
       function isGhostSurface(name) { return name === 'body' || name === 'face'; }
 
@@ -359,8 +360,8 @@
             format: function (v) { return (v > 0 ? '+' : '') + v + '°'; } },
           { group: 'Face', key: 'mouthSize', label: 'Mouth size (line ↔ open "O")', unit: '%', min: 0, max: 100, step: 2, value: 50,
             format: function (v) { return v === 0 ? 'Flat line' : v + '% open "O"'; } },
-          { group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
-          { group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
+          { tab: 'stamp', group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
+          { tab: 'stamp', group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
         ],
 
         presets: [
@@ -370,99 +371,105 @@
           { label: 'Default ghost', values: { height: 85, folds: 4.5, ripples: 6, swoop: 4, twist: 0, armReach: 7, eyeSlant: 0, mouthSize: 50, stampSize: 12, stampRotation: 0 } }
         ],
 
-        // Generator-specific panel: stamp shape choice and undo/clear.
-        mount: function (container, api) {
-          var h = function (tag, attrs, text) {
-            var node = document.createElement(tag);
-            Object.keys(attrs || {}).forEach(function (k) {
-              if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
-              else node.setAttribute(k, attrs[k]);
+
+        // Stamp tab: pick a shape, then tap the model to place it.
+        tabs: [{
+          id: 'stamp',
+          label: 'Stamp',
+          hint: 'Tap the ghost to place the selected stamp',
+  mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamp shape (click the ghost to place)'));
+            var chips = h('div', { class: 'mm-icon-chips' });
+            var shapeButtons = {};
+            ['star', 'moon', 'bat', 'bolt'].forEach(function (type) {
+              var btn = h('button', {
+                class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType),
+                onclick: function () {
+                  stampType = type;
+                  Object.keys(shapeButtons).forEach(function (k) { shapeButtons[k].setAttribute('aria-pressed', String(k === type)); });
+                  api.toast('Selected ' + STAMP_NAMES[type] + ' stamp. Click the ghost to place it.');
+                }
+              });
+              btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
+              shapeButtons[type] = btn;
+              chips.appendChild(btn);
             });
-            if (text) node.textContent = text;
-            return node;
-          };
+            container.appendChild(chips);
 
-          container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamp shape (click the ghost to place)'));
-          var chips = h('div', { class: 'mm-icon-chips' });
-          var shapeButtons = {};
-          ['star', 'moon', 'bat', 'bolt'].forEach(function (type) {
-            var btn = h('button', {
-              class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType),
-              onclick: function () {
-                stampType = type;
-                Object.keys(shapeButtons).forEach(function (k) { shapeButtons[k].setAttribute('aria-pressed', String(k === type)); });
-                api.toast('Selected ' + STAMP_NAMES[type] + ' stamp. Click the ghost to place it.');
-              }
+            var count = h('p', { class: 'mm-note' }, '0 stamps placed');
+            var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!stamps.length) return;
+              stamps.pop();
+              api.rebuild();
+              api.toast('Removed last stamp');
+            } }, 'Undo last stamp');
+            var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!stamps.length) return;
+              stamps = [];
+              api.rebuild();
+              api.toast('Cleared all stamps');
+            } }, 'Clear stamps');
+            container.appendChild(count);
+            container.appendChild(h('div', { class: 'mm-export-row' }, null));
+            container.lastChild.appendChild(undo);
+            container.lastChild.appendChild(clear);
+
+            // Keep the count in sync after every rebuild.
+            var refresh = function () {
+              count.textContent = stamps.length + (stamps.length === 1 ? ' stamp placed' : ' stamps placed');
+              undo.disabled = stamps.length === 0;
+              clear.disabled = stamps.length === 0;
+            };
+            refreshStampUI = refresh;
+            refresh();
+          },
+          onHover: function (hit, api) {
+            if (!hit || !isGhostSurface(hit.meshName) || hit.point.y <= 4) {
+              api.setPreview(null);
+              return;
+            }
+            api.setPreview({
+              positions: stampPositions({
+                type: stampType,
+                size: api.params.stampSize,
+                rotation: api.params.stampRotation,
+                point: hit.point.toArray(),
+                normal: hit.normal.toArray()
+              })
             });
-            btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
-            shapeButtons[type] = btn;
-            chips.appendChild(btn);
-          });
-          container.appendChild(chips);
+          },
 
-          var count = h('p', { class: 'mm-note' }, '0 stamps placed');
-          var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
-            if (!stamps.length) return;
-            stamps.pop();
+          onPick: function (hit, api) {
+            if (!isGhostSurface(hit.meshName)) return;
+            if (hit.point.y < 4) {
+              api.toast('Tip: stamp higher up on the ghost body!');
+              return;
+            }
+            stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
             api.rebuild();
-            api.toast('Removed last stamp');
-          } }, 'Undo last stamp');
-          var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
-            if (!stamps.length) return;
-            stamps = [];
-            api.rebuild();
-            api.toast('Cleared all stamps');
-          } }, 'Clear stamps');
-          container.appendChild(count);
-          container.appendChild(h('div', { class: 'mm-export-row' }, null));
-          container.lastChild.appendChild(undo);
-          container.lastChild.appendChild(clear);
-
-          // Keep the count in sync after every rebuild.
-          var refresh = function () {
-            count.textContent = stamps.length + (stamps.length === 1 ? ' stamp placed' : ' stamps placed');
-            undo.disabled = stamps.length === 0;
-            clear.disabled = stamps.length === 0;
-          };
-          this._refresh = refresh;
-          refresh();
-        },
+            api.toast('Stamped ' + STAMP_NAMES[stampType] + ' (+1.5 mm)');
+          }
+        }],
 
         build: function (p, api) {
           var meshes = buildBody(p);
           stamps.forEach(function (stamp) {
             meshes.push({ name: 'detail', positions: stampPositions(stamp) });
           });
-          if (this._refresh) this._refresh();
+          if (refreshStampUI) refreshStampUI();
           return meshes;
         },
 
-        onHover: function (hit, api) {
-          if (!hit || !isGhostSurface(hit.meshName) || hit.point.y <= 4) {
-            api.setPreview(null);
-            return;
-          }
-          api.setPreview({
-            positions: stampPositions({
-              type: stampType,
-              size: api.params.stampSize,
-              rotation: api.params.stampRotation,
-              point: hit.point.toArray(),
-              normal: hit.normal.toArray()
-            })
-          });
-        },
-
-        onPick: function (hit, api) {
-          if (!isGhostSurface(hit.meshName)) return;
-          if (hit.point.y < 4) {
-            api.toast('Tip: stamp higher up on the ghost body!');
-            return;
-          }
-          stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
-          api.rebuild();
-          api.toast('Stamped ' + STAMP_NAMES[stampType] + ' (+1.5 mm)');
-        }
       };
     })();
   </script>
