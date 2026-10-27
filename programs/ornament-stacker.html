@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-013 Ornament Stacker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Ornament Stacker: a remix of Snowman Stacker. Instead of three fixed balls you build a tower from a
+    // tray of pieces (balls, eggs, drums, cones, domes, gems): add, reorder, resize and click them in the
+    // viewport. The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // ---- Geometry kit: closed shells built from rings (shared vertices, so always watertight) ----
+      var TAU = Math.PI * 2;
+      function rad(d) { return (d * Math.PI) / 180; }
+      function sqr(x) { return x * x; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vnorm(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+      // rings: array of closed point loops [[x,y,z],...] or { pole: [x,y,z] } (a single point cap).
+      // Neighbouring rings must have the same winding. wrap = true joins the last ring to the first (torus).
+      // The winding of the whole shell is fixed afterwards from its signed volume.
+      function shell(rings, wrap) {
+        var verts = [], idx = [], info = [], i, j;
+        rings.forEach(function (r) {
+          if (r.pole) { info.push({ pole: true, s: verts.length, n: 1 }); verts.push(r.pole); }
+          else { info.push({ s: verts.length, n: r.length }); r.forEach(function (q) { verts.push(q); }); }
+        });
+        var n = rings.length, last = wrap ? n : n - 1;
+        for (i = 0; i < last; i++) {
+          var A = info[i], B = info[(i + 1) % n];
+          if (A.pole && B.pole) continue;
+          if (A.pole) { for (j = 0; j < B.n; j++) idx.push(A.s, B.s + (j + 1) % B.n, B.s + j); }
+          else if (B.pole) { for (j = 0; j < A.n; j++) idx.push(A.s + j, A.s + (j + 1) % A.n, B.s); }
+          else {
+            for (j = 0; j < A.n; j++) {
+              var a = A.s + j, b = A.s + (j + 1) % A.n, c = B.s + (j + 1) % B.n, d = B.s + j;
+              idx.push(a, b, c, a, c, d);
+            }
+          }
+        }
+        var vol = 0, p, q, r;
+        for (i = 0; i < idx.length; i += 3) {
+          p = verts[idx[i]]; q = verts[idx[i + 1]]; r = verts[idx[i + 2]];
+          vol += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+        }
+        var out = new Float32Array(idx.length * 3), o = 0, v;
+        for (i = 0; i < idx.length; i += 3) {
+          var tri = vol < 0 ? [idx[i], idx[i + 2], idx[i + 1]] : [idx[i], idx[i + 1], idx[i + 2]];
+          for (j = 0; j < 3; j++) { v = verts[tri[j]]; out[o++] = v[0]; out[o++] = v[1]; out[o++] = v[2]; }
+        }
+        return out;
+      }
+
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Circle / ellipse loop in the XZ plane at height y. o: { cx, cz, sx, sz, rot }.
+      function loopXZ(r, y, seg, o) {
+        o = o || {};
+        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
+        var cr = Math.cos(rot), sr = Math.sin(rot), out = [], j, a, x, z;
+        for (j = 0; j < seg; j++) {
+          a = (j / seg) * TAU;
+          x = r * sx * Math.cos(a); z = r * sz * Math.sin(a);
+          out.push([cx + x * cr - z * sr, y, cz + x * sr + z * cr]);
+        }
+        return out;
+      }
+
+      // Solid of revolution from a profile [[r, y, dx, dz], ...] (bottom to top). r = 0 makes a pole.
+      function lathe(profile, seg, o) {
+        o = o || {};
+        var rings = profile.map(function (p) {
+          var oo = { cx: (o.cx || 0) + (p[2] || 0), cz: (o.cz || 0) + (p[3] || 0), sx: o.sx, sz: o.sz, rot: o.rot };
+          if (p[0] < 1e-6) return { pole: [oo.cx, p[1], oo.cz] };
+          return loopXZ(p[0], p[1], seg, oo);
+        });
+        return shell(rings, false);
+      }
+
+      // Closed ring-shaped solid (torus-like): cross-section polygon [[r, y], ...] revolved around Y.
+      function bandRing(poly, seg, o) {
+        return shell(poly.map(function (p) { return loopXZ(p[0], p[1], seg, o); }), true);
+      }
+
+      // Sphere or ellipsoid. tFrom > 0 starts the sphere at a flat cut (polar angle from the bottom pole).
+      function ball(cx, cy, cz, rx, ry, rz, seg, steps) {
+        var prof = [], k, t;
+        for (k = 0; k <= steps; k++) {
+          t = (k / steps) * Math.PI;
+          prof.push([Math.sin(t), cy - ry * Math.cos(t)]);
+        }
+        prof[0][0] = 0; prof[steps][0] = 0;
+        return lathe(prof, seg, { cx: cx, cz: cz, sx: rx, sz: rz });
+      }
+
+      // Rounded rectangle loop (counter-clockwise from above) at height y.
+      function rrect(hx, hz, cr, y, arcN, cx, cz) {
+        cr = Math.max(0.05, Math.min(cr, Math.min(hx, hz) - 0.02));
+        var out = [], k, a, corners = [[hx - cr, hz - cr, 0], [-(hx - cr), hz - cr, 90], [-(hx - cr), -(hz - cr), 180], [hx - cr, -(hz - cr), 270]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= arcN; k++) {
+            a = rad(c[2] + (k / arcN) * 90);
+            out.push([(cx || 0) + c[0] + cr * Math.cos(a), y, (cz || 0) + c[1] + cr * Math.sin(a)]);
+          }
+        });
+        return out;
+      }
+      function centroid(loop) {
+        var c = [0, 0, 0];
+        loop.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; });
+        return [c[0] / loop.length, c[1] / loop.length, c[2] / loop.length];
+      }
+      // Loft of loops with flat end caps.
+      function loftCapped(loops) {
+        var rings = [{ pole: centroid(loops[0]) }].concat(loops, [{ pole: centroid(loops[loops.length - 1]) }]);
+        return shell(rings, false);
+      }
+
+      // Rod with rounded ends from a to b, radius ra at a and rb at b.
+      function capsule(a, b, ra, rb, seg, capN) {
+        var d = vnorm(vsub(b, a));
+        var ax = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        var u = vnorm(vcross(d, ax)), v = vcross(d, u);
+        function ring(c, r) {
+          var out = [], j, ang;
+          for (j = 0; j < seg; j++) {
+            ang = (j / seg) * TAU;
+            out.push(vadd(c, vadd(vmul(u, r * Math.cos(ang)), vmul(v, r * Math.sin(ang)))));
+          }
+          return out;
+        }
+        var rings = [{ pole: vsub(a, vmul(d, ra)) }], k, phi;
+        for (k = 1; k <= capN; k++) {
+          phi = (k / capN) * (Math.PI / 2);
+          rings.push(ring(vsub(a, vmul(d, ra * Math.cos(phi))), ra * Math.sin(phi)));
+        }
+        for (k = 0; k < capN; k++) {
+          phi = (Math.PI / 2) * (1 - k / capN);
+          rings.push(ring(vadd(b, vmul(d, rb * Math.cos(phi))), rb * Math.sin(phi)));
+        }
+        rings.push({ pole: vadd(b, vmul(d, rb)) });
+        return shell(rings, false);
+      }
+
+      function smootherstep(x) {
+        var t = Math.max(0, Math.min(1, x));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      }
+      function el(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+          else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      // Picture-card style picker for the "Styles" tab. cardSvg(values) draws a small icon.
+      function mountStyleCards(container, api, styles, cardSvg, defaults, heading, note) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
+        var grid = el('div', { class: 'mm-preset-cards' });
+        styles.forEach(function (s) {
+          var vals = {};
+          Object.keys(defaults).forEach(function (k) { vals[k] = defaults[k]; });
+          Object.keys(s.values).forEach(function (k) { vals[k] = s.values[k]; });
+          var card = el('button', { class: 'mm-preset-card', type: 'button', title: s.name, onclick: function () {
+            api.setParams(vals);
+            api.toast('Style: ' + s.name);
+          } });
+          card.innerHTML = cardSvg(vals) + '<span>' + s.name + '</span>';
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
+        container.appendChild(el('p', { class: 'mm-note' }, note));
+      }
+      function withDefaults(defaults, over) {
+        var values = {};
+        Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return values;
+      }
+
+      // Ornament hook: a small ring standing up on a model (plane faces +Z) so it can be hung from a string.
+      // Bottom of the ring sits `embed` mm inside the model at (cx, baseY, cz).
+      function hookRing(cx, baseY, cz, hole, tube, embed) {
+        var Rc = hole + tube, cy = baseY - embed + Rc + tube, N = 40, k, rings = [];
+        var oct = [[-1, -0.5], [-0.5, -1], [0.5, -1], [1, -0.5], [1, 0.5], [0.5, 1], [-0.5, 1], [-1, 0.5]];
+        for (k = 0; k < N; k++) {
+          var th = (k / N) * TAU, c = Math.cos(th), s = Math.sin(th), ring = [];
+          oct.forEach(function (q) {
+            ring.push([cx + (Rc + q[0] * tube) * c, cy + (Rc + q[0] * tube) * s, cz + q[1] * tube * 1.15]);
+          });
+          rings.push(ring);
+        }
+        return shell(rings, true);
+      }
+
+
+      // ---- Stamp library: flat shapes placed on the model surface by clicking ----
+      var STAMP_NAMES = { star: 'Star', snow: 'Snowflake', tree: 'Tree', heart: 'Heart', bell: 'Bell', cane: 'Candy cane', holly: 'Holly', gift: 'Gift', ball: 'Ball', diamond: 'Diamond' };
+      var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
+      var stampType = 'star';
+      var refreshStampPanel = null;
+
+      function strokeOutline(pts, hw) {
+        var left = [], right = [], i, a, b, dx, dy, l;
+        for (i = 0; i < pts.length; i++) {
+          a = pts[Math.max(0, i - 1)]; b = pts[Math.min(pts.length - 1, i + 1)];
+          dx = b[0] - a[0]; dy = b[1] - a[1]; l = Math.sqrt(dx * dx + dy * dy) || 1;
+          left.push([pts[i][0] - (dy / l) * hw, pts[i][1] + (dx / l) * hw]);
+          right.push([pts[i][0] + (dy / l) * hw, pts[i][1] - (dx / l) * hw]);
+        }
+        return left.concat(right.reverse());
+      }
+      function mirrorHalf(half) {
+        var out = half.slice(), i;
+        for (i = half.length - 1; i >= 1; i--) out.push([-half[i][0], half[i][1]]);
+        return out;
+      }
+      function leaf(angleDeg, len, wid, ox, oy) {
+        var up = [], dn = [], i, s, w, a = rad(angleDeg), c = Math.cos(a), sn = Math.sin(a);
+        for (i = 0; i <= 12; i++) {
+          s = i / 12; w = wid * Math.pow(Math.sin(Math.PI * s), 0.8);
+          up.push([s * len, w]); dn.push([s * len, -w]);
+        }
+        return up.concat(dn.reverse()).map(function (q) { return [ox + q[0] * c - q[1] * sn, oy + q[0] * sn + q[1] * c]; });
+      }
+      function disc(cx, cy, r, n) {
+        var out = [], i;
+        for (i = 0; i < n; i++) out.push([cx + r * Math.cos((i / n) * TAU), cy + r * Math.sin((i / n) * TAU)]);
+        return out;
+      }
+
+      // Outline polygons (unit radius). Each polygon is extruded as its own solid; overlaps are fine.
+      function stampPolys(type) {
+        var i, a, pts = [];
+        if (type === 'star') {
+          for (i = 0; i < 10; i++) { a = (i * Math.PI) / 5 + Math.PI / 2; pts.push([Math.cos(a) * (i % 2 ? 0.46 : 1), Math.sin(a) * (i % 2 ? 0.46 : 1)]); }
+          return [pts];
+        }
+        if (type === 'snow') {
+          var spec = [[-30, 0.3], [-17, 0.68], [-8, 0.5], [0, 1], [8, 0.5], [17, 0.68]];
+          for (i = 0; i < 6; i++) spec.forEach(function (sp) { var an = rad(90 + i * 60 + sp[0]); pts.push([Math.cos(an) * sp[1], Math.sin(an) * sp[1]]); });
+          return [pts];
+        }
+        if (type === 'tree') {
+          return [mirrorHalf([[0, 1], [0.42, 0.42], [0.2, 0.42], [0.68, -0.12], [0.3, -0.12], [0.86, -0.68], [0.14, -0.68], [0.14, -1]])];
+        }
+        if (type === 'heart') {
+          for (i = 0; i < 36; i++) {
+            a = (i / 36) * TAU;
+            pts.push([(16 * Math.pow(Math.sin(a), 3)) / 17, (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a) + 2.5) / 17]);
+          }
+          return [pts];
+        }
+        if (type === 'bell') {
+          return [mirrorHalf([[0, 1], [0.2, 0.94], [0.35, 0.74], [0.4, 0.35], [0.5, -0.1], [0.7, -0.45], [0.82, -0.58], [0.82, -0.7], [0.2, -0.7], [0.2, -0.82], [0.1, -1]])];
+        }
+        if (type === 'cane') {
+          var cl = [[0.32, -1], [0.32, -0.5], [0.32, 0]];
+          for (i = 0; i <= 14; i++) { a = (i / 14) * Math.PI; cl.push([-0.08 + 0.4 * Math.cos(a), 0 + 0.4 * Math.sin(a)]); }
+          cl.push([-0.48, -0.3]);
+          return [strokeOutline(cl, 0.17).map(function (q) { return [q[0] + 0.08, q[1] - 0.2]; })];
+        }
+        if (type === 'holly') {
+          return [leaf(38, 1.1, 0.34, 0, -0.45), leaf(142, 1.1, 0.34, 0, -0.45), disc(-0.16, -0.38, 0.17, 14), disc(0.16, -0.38, 0.17, 14), disc(0, -0.2, 0.17, 14)];
+        }
+        if (type === 'gift') {
+          var bowL = [], bowR = [];
+          for (i = 0; i < 16; i++) { a = (i / 16) * TAU; bowL.push([-0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); bowR.push([0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); }
+          return [[[-0.72, -1], [0.72, -1], [0.72, 0.06], [-0.72, 0.06]], [[-0.84, 0.06], [0.84, 0.06], [0.84, 0.42], [-0.84, 0.42]], bowL, bowR];
+        }
+        if (type === 'diamond') return [[[0, 1], [0.62, 0], [0, -1], [-0.62, 0]]];
+        return [disc(0, 0, 1, 24)];
+      }
+
+      function stampIcon(type) {
+        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true">' + stampPolys(type).map(function (poly) {
+          return '<polygon points="' + poly.map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ') + '"/>';
+        }).join('') + '</svg>';
+      }
+
+      // Stamp mesh in model space: sunk `embed` mm into the surface and standing `depth - embed` mm proud.
+      function stampPositions(stamp, depth, embed) {
+        if (stamp.type === 'ball') {
+          var br = stamp.size * 0.5, nb = vnorm(stamp.normal), c = vadd(stamp.point, vmul(nb, br * 0.3));
+          return ball(c[0], c[1], c[2], br, br, br, 28, 14);
+        }
+        var THREE = window.THREE, normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
+        var shapes = stampPolys(stamp.type).map(function (poly) {
+          var shape = new THREE.Shape();
+          poly.forEach(function (pt, i) { if (i === 0) shape.moveTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); else shape.lineTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); });
+          shape.closePath();
+          return shape;
+        });
+        var geo = new THREE.ExtrudeGeometry(shapes, { depth: depth, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.3, bevelSegments: 2, curveSegments: 12 });
+        geo.rotateZ((((stamp.rotation || 0) * Math.PI) / 180));
+        geo.translate(0, 0, -embed);
+        var upVec = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+        var tx = new THREE.Vector3().crossVectors(upVec, normal).normalize();
+        var ty = new THREE.Vector3().crossVectors(normal, tx).normalize();
+        var quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tx, ty, normal));
+        var matrix = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(stamp.point), quat, new THREE.Vector3(1, 1, 1));
+        var flat = geo.toNonIndexed();
+        flat.applyMatrix4(matrix);
+        return flat.attributes.position.array.slice();
+      }
+
+      // Panel for a stamp tab: shape chips, undo and clear (plus optional extra buttons).
+      function mountStampPanel(container, api, types, heading, noun, extraButtons) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
+        var chips = el('div', { class: 'mm-icon-chips' }), buttons = {};
+        types.forEach(function (type) {
+          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType), onclick: function () {
+            stampType = type;
+            Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
+            api.toast('Selected ' + STAMP_NAMES[type] + '. Click the model to place it.');
+          } });
+          btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
+          buttons[type] = btn;
+          chips.appendChild(btn);
+        });
+        container.appendChild(chips);
+        var count = el('p', { class: 'mm-note' }, '0 ' + noun + 's placed');
+        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps.pop(); api.rebuild(); api.toast('Removed last ' + noun); } } }, 'Undo last');
+        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps = []; api.rebuild(); api.toast('Cleared all ' + noun + 's'); } } }, 'Clear all');
+        container.appendChild(count);
+        var row = el('div', { class: 'mm-export-row' });
+        row.appendChild(undo); row.appendChild(clear);
+        (extraButtons || []).forEach(function (b) { row.appendChild(el('button', { class: 'mm-btn', type: 'button', onclick: function () { b.run(api); } }, b.label)); });
+        container.appendChild(row);
+        refreshStampPanel = function () {
+          count.textContent = stamps.length + ' ' + noun + (stamps.length === 1 ? '' : 's') + ' placed';
+          undo.disabled = stamps.length === 0;
+          clear.disabled = stamps.length === 0;
+        };
+        refreshStampPanel();
+      }
+
+      // ---- Pieces: each type is a profile [[r, y], ...] from a bottom pole to a top pole ----
+      var TYPES = ['ball', 'egg', 'drum', 'cone', 'dome', 'gem'];
+      var TYPE_NAMES = { ball: 'Ball', egg: 'Egg', drum: 'Drum', cone: 'Cone', dome: 'Dome', gem: 'Gem' };
+      var MAX_PIECES = 8;
+      var PIECE_LABELS = ['Piece 1 (bottom)', 'Piece 2', 'Piece 3', 'Piece 4', 'Piece 5', 'Piece 6', 'Piece 7', 'Piece 8'];
+
+      function pieceProfile(type, R, sq) {
+        var pts = [], k, n = 16, t, a, c, h, y;
+        if (type === 'ball' || type === 'egg') {
+          var tall = type === 'egg' ? 1.14 : 1;
+          for (k = 0; k <= n; k++) {
+            t = (k / n) * Math.PI;
+            pts.push([k === 0 || k === n ? 0 : R * Math.sin(t) * (type === 'egg' ? 1 + 0.16 * Math.cos(t) : 1), R * sq * tall * (1 - Math.cos(t))]);
+          }
+        } else if (type === 'drum') {
+          h = R * 1.1 * sq; c = Math.min(R * 0.3, 3, h * 0.4);
+          pts.push([0, 0], [R - c, 0]);
+          for (k = 1; k <= 6; k++) { a = (k / 6) * Math.PI / 2; pts.push([R - c + c * Math.sin(a), c - c * Math.cos(a)]); }
+          for (k = 0; k <= 6; k++) { a = (k / 6) * Math.PI / 2; pts.push([R - c + c * Math.cos(a), h - c + c * Math.sin(a)]); }
+          pts.push([0, h]);
+        } else if (type === 'cone') {
+          h = R * 1.9 * sq;
+          pts.push([0, 0], [R - 1.5, 0], [R, 1.5]);
+          for (k = 1; k <= 8; k++) { y = 1.5 + (h - 1.5) * 0.97 * (k / 8); pts.push([R * (1 - (y - 1.5) / (h - 1.5)) + 0.6, y]); }
+          pts.push([0, h]);
+        } else if (type === 'dome') {
+          h = R * 0.85 * sq;
+          pts.push([0, 0], [R - 0.8, 0], [R, 0.8]);
+          for (k = 1; k <= 14; k++) { a = (k / 14) * Math.PI / 2; pts.push([k === 14 ? 0 : R * Math.cos(a), 0.8 + (h - 0.8) * Math.sin(a)]); }
+        } else {
+          h = R * 2.1 * sq;
+          for (k = 0; k <= 14; k++) {
+            var s = k / 14, f = s < 0.42 ? s / 0.42 : (1 - s) / 0.58;
+            pts.push([k === 0 || k === 14 ? 0 : R * Math.pow(f, 0.8), h * s]);
+          }
+        }
+        return pts;
+      }
+
+      // Cuts a pointed bottom flat so the first piece stands on a wide base.
+      function flatten(prof, flat) {
+        if (prof[1][1] < 0.01) return prof;
+        var rmax = 0, i;
+        prof.forEach(function (q) { rmax = Math.max(rmax, q[0]); });
+        var want = rmax * flat;
+        for (i = 1; i < prof.length; i++) { if (prof[i][0] >= want) break; }
+        if (i >= prof.length || i < 1) return prof;
+        var a = prof[i - 1], b = prof[i], u = (want - a[0]) / Math.max(1e-6, b[0] - a[0]);
+        var yc = a[1] + (b[1] - a[1]) * u, out = [[0, 0], [want, 0]];
+        for (var j = i + 1; j < prof.length; j++) out.push([prof[j][0], prof[j][1] - yc]);
+        return out;
+      }
+      function profR(prof, y) {
+        for (var i = 1; i < prof.length; i++) {
+          if (y <= prof[i][1] + 1e-9) {
+            var a = prof[i - 1], b = prof[i], d = b[1] - a[1];
+            return d < 1e-9 ? Math.max(a[0], b[0]) : a[0] + (b[0] - a[0]) * Math.max(0, Math.min(1, (y - a[1]) / d));
+          }
+        }
+        return 0;
+      }
+      function typeIcon(type) {
+        var prof = pieceProfile(type, 1, 1), hh = prof[prof.length - 1][1], pts = [];
+        prof.forEach(function (q) { pts.push([q[0], -q[1] + hh / 2]); });
+        prof.slice().reverse().forEach(function (q) { pts.push([-q[0], -q[1] + hh / 2]); });
+        return '<svg viewBox="-1.1 -1.4 2.2 2.8" aria-hidden="true"><polygon points="' + pts.map(function (q) { return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join(' ') + '"/></svg>';
+      }
+
+      // ---- State: the stack itself (top of the array = top of the tower) ----
+      var LAYOUTS = [
+        { name: 'Triple ball', pieces: [['ball', 22, 1], ['ball', 17, 1], ['ball', 12.5, 1]] },
+        { name: 'Egg tower', pieces: [['egg', 20, 1], ['egg', 15, 1], ['egg', 10.5, 1]] },
+        { name: 'Totem', pieces: [['drum', 18, 1], ['gem', 14, 1], ['drum', 14, 0.8], ['dome', 11, 1]] },
+        { name: 'Gem stack', pieces: [['gem', 17, 1], ['gem', 13, 1], ['gem', 9, 1]] },
+        { name: 'Pine tower', pieces: [['drum', 15, 0.7], ['cone', 17, 0.9], ['cone', 12, 0.9], ['cone', 7.5, 1]] },
+        { name: 'Mushroom', pieces: [['drum', 9, 1.2], ['dome', 22, 1.1]] }
+      ];
+      var pieces = [], sel = 0, refreshStack = null;
+      function loadLayout(i) {
+        pieces = LAYOUTS[i].pieces.map(function (q) { return { type: q[0], size: q[1], squash: q[2] }; });
+        sel = 0;
+      }
+      loadLayout(0);
+
+      var TOPPERS = ['None', 'Ball', 'Star', 'Spike'];
+      var PARAMS = [
+        { group: 'Stack', key: 'stackScale', label: 'Overall size', unit: '%', min: 60, max: 140, step: 1, value: 100 },
+        { group: 'Stack', key: 'joinDepth', label: 'Join depth (light touch ↔ sunk in)', unit: '%', min: 8, max: 40, step: 1, value: 22 },
+        { group: 'Stack', key: 'baseFlat', label: 'Flat base (wider = safer print)', unit: '%', min: 60, max: 96, step: 1, value: 80 },
+        { group: 'Stack', key: 'facets', label: 'Facets (smooth ↔ low-poly)', unit: '', min: 0, max: 12, step: 1, value: 0,
+          format: function (v) { return v < 3 ? 'Smooth' : Math.round(v) + ' sides'; } },
+        { group: 'Stack', key: 'bandT', label: 'Neck bands (0 = none)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 0,
+          format: function (v) { return v < 1 ? 'None' : v + ' mm'; } },
+        { group: 'Topper & hook', key: 'topper', label: 'Topper', unit: '', min: 0, max: 3, step: 1, value: 2,
+          format: function (v) { return TOPPERS[Math.round(v)]; } },
+        { group: 'Topper & hook', key: 'topperSize', label: 'Topper size', unit: ' mm', min: 5, max: 20, step: 1, value: 11 },
+        { group: 'Topper & hook', key: 'hook', label: 'Ornament hook on top', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Topper & hook', key: 'hookHole', label: 'Hook hole size', unit: ' mm', min: 1.6, max: 3.6, step: 0.1, value: 2.4 },
+        { group: 'Topper & hook', key: 'hookTube', label: 'Hook ring thickness', unit: ' mm', min: 1.2, max: 2.4, step: 0.1, value: 1.6 },
+        { tab: 'stack', group: 'Selected piece', key: 'selSize', label: 'Piece size', unit: ' mm', min: 5, max: 36, step: 0.5, value: 22 },
+        { tab: 'stack', group: 'Selected piece', key: 'selSquash', label: 'Piece height (squashed ↔ stretched)', unit: '%', min: 50, max: 170, step: 1, value: 100 },
+        { tab: 'stamps', group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 24, step: 1, value: 12 },
+        { tab: 'stamps', group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
+
+      var lastMeshes = [];
+      function build(p) {
+        var out = [], i, k;
+        if (sel >= pieces.length) sel = pieces.length - 1;
+        if (pieces[sel]) { pieces[sel].size = p.selSize; pieces[sel].squash = p.selSquash / 100; }
+        var seg = p.facets >= 3 ? Math.round(p.facets) : 72;
+        var sc = p.stackScale / 100, y0 = 0, prevTop = 0, prevProf = null, prevBase = 0, topY = 0;
+        var bands = [];
+        for (i = 0; i < pieces.length; i++) {
+          var pc = pieces[i], prof = pieceProfile(pc.type, pc.size * sc, pc.squash);
+          if (i === 0) prof = flatten(prof, p.baseFlat / 100);
+          var h = prof[prof.length - 1][1];
+          if (i > 0) {
+            var ov = (p.joinDepth / 100) * Math.min(prevTop - prevBase, h);
+            y0 = prevTop - ov;
+            if (p.bandT >= 1) {
+              var yj = y0 + ov * 0.5, rj = Math.min(profR(prevProf, yj - prevBase), profR(prof, yj - y0)) + p.bandT * 0.35, T = p.bandT, poly = [], b;
+              for (b = 0; b < 12; b++) poly.push([rj + T * 1.1 * Math.cos((b / 12) * TAU), yj + T * 0.9 * Math.sin((b / 12) * TAU)]);
+              bands.push(bandRing(poly, seg));
+            }
+          }
+          var shifted = prof.map(function (q) { return [q[0], q[1] + y0]; });
+          out.push({ name: 'piece' + i, positions: lathe(shifted, seg), singlePart: true });
+          prevProf = prof; prevBase = y0; prevTop = y0 + h; topY = prevTop;
+        }
+        if (bands.length) out.push({ name: 'bands', positions: cat(bands), singlePart: true });
+        var hookY = topY, tz = p.topperSize, tpos = null;
+        if (p.topper >= 1) {
+          var tt = Math.round(p.topper);
+          if (tt === 1) {
+            tpos = ball(0, topY + tz * 0.55, 0, tz * 0.55, tz * 0.55, tz * 0.55, seg > 20 ? seg : 28, 14);
+            hookY = topY + tz * 1.1;
+          } else if (tt === 2) {
+            var starPoly = stampPolys('star')[0], cy2 = topY + tz * 0.42 - 0.8;
+            tpos = loftCapped([-1.6, 1.6].map(function (zz) { return starPoly.map(function (q) { return [q[0] * tz * 0.5, cy2 + q[1] * tz * 0.5, zz]; }); }));
+            hookY = topY + tz * 0.92;
+          } else {
+            tpos = lathe([[0, topY - 1], [tz * 0.34, topY - 1], [tz * 0.3, topY + tz * 0.1], [0.5, topY + tz * 1.25], [0, topY + tz * 1.4]], seg > 20 ? seg : 28);
+            hookY = topY + tz * 1.4;
+          }
+          out.push({ name: 'topper', positions: tpos, singlePart: true });
+        }
+        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, hookY, 0, p.hookHole, p.hookTube, 1.8), singlePart: true });
+        stamps.forEach(function (st) { out.push({ name: 'stamp', positions: stampPositions(st, 3.3, 1.8), singlePart: true }); });
+        lastMeshes = out;
+        if (refreshStamp2) refreshStamp2();
+        if (refreshStack) refreshStack();
+        return out;
+      }
+      var refreshStamp2 = null;
+
+      // Piece index from a mesh name such as "piece2", or -1.
+      function pieceIndex(name) { return /^piece\d$/.test(name || '') ? parseInt(name.slice(5), 10) : -1; }
+      function highlight(api, idx) {
+        if (idx < 0 || idx >= pieces.length) { api.setPreview(null); return; }
+        var m = lastMeshes.filter(function (e) { return e.name === 'piece' + idx; })[0];
+        if (!m) { api.setPreview(null); return; }
+        var src = m.positions, out = new Float32Array(src.length), cx = 0, cy = 0, cz = 0, i, n = src.length / 3;
+        for (i = 0; i < src.length; i += 3) { cx += src[i]; cy += src[i + 1]; cz += src[i + 2]; }
+        cx /= n; cy /= n; cz /= n;
+        for (i = 0; i < src.length; i += 3) { out[i] = cx + (src[i] - cx) * 1.035; out[i + 1] = cy + (src[i + 1] - cy) * 1.02; out[i + 2] = cz + (src[i + 2] - cz) * 1.035; }
+        api.setPreview({ positions: out });
+      }
+
+      function stackWarnings() {
+        // A piece much wider than the one under it hangs over empty space and needs supports.
+        return pieces.map(function (pc, i) { return i > 0 && pc.size * (pc.type === 'cone' ? 1 : 0.9) > pieces[i - 1].size * 1.18 && pieces[i - 1].type !== 'drum'; });
+      }
+
+      function mountStack(container, api) {
+        function syncSliders() { api.setParams({ selSize: pieces[sel].size, selSquash: Math.round(pieces[sel].squash * 100) }); }
+        function select(i) { sel = Math.max(0, Math.min(pieces.length - 1, i)); syncSliders(); api.toast('Selected ' + (sel + 1) + ': ' + TYPE_NAMES[pieces[sel].type]); }
+
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Piece tray (tap to add on top)'));
+        var tray = el('div', { class: 'mm-icon-chips' });
+        TYPES.forEach(function (type) {
+          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: 'Add ' + TYPE_NAMES[type], onclick: function () {
+            if (pieces.length >= MAX_PIECES) { api.toast('The stack holds up to ' + MAX_PIECES + ' pieces'); return; }
+            var top = pieces[pieces.length - 1];
+            pieces.push({ type: type, size: Math.max(6, Math.round(top.size * 0.78 * 2) / 2), squash: 1 });
+            sel = pieces.length - 1; syncSliders(); api.rebuild(); api.toast('Added ' + TYPE_NAMES[type]);
+          } });
+          btn.innerHTML = typeIcon(type) + '<span>' + TYPE_NAMES[type] + '</span>';
+          tray.appendChild(btn);
+        });
+        container.appendChild(tray);
+
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Your stack (top first, tap to select)'));
+        var list = el('div', { class: 'mm-chips' });
+        container.appendChild(list);
+        var note = el('p', { class: 'mm-note' }, '');
+        container.appendChild(note);
+
+        function act(label, fn) { return el('button', { class: 'mm-btn', type: 'button', onclick: fn }, label); }
+        var row1 = el('div', { class: 'mm-export-row' }), row2 = el('div', { class: 'mm-export-row' });
+        row1.appendChild(act('Move up', function () {
+          if (sel < pieces.length - 1) { var t = pieces[sel]; pieces[sel] = pieces[sel + 1]; pieces[sel + 1] = t; sel++; api.rebuild(); }
+        }));
+        row1.appendChild(act('Move down', function () {
+          if (sel > 0) { var t = pieces[sel]; pieces[sel] = pieces[sel - 1]; pieces[sel - 1] = t; sel--; api.rebuild(); }
+        }));
+        row1.appendChild(act('Duplicate', function () {
+          if (pieces.length >= MAX_PIECES) { api.toast('The stack holds up to ' + MAX_PIECES + ' pieces'); return; }
+          pieces.splice(sel + 1, 0, { type: pieces[sel].type, size: pieces[sel].size, squash: pieces[sel].squash });
+          sel++; api.rebuild();
+        }));
+        row2.appendChild(act('Next shape', function () {
+          pieces[sel].type = TYPES[(TYPES.indexOf(pieces[sel].type) + 1) % TYPES.length]; api.rebuild();
+        }));
+        row2.appendChild(act('Remove', function () {
+          if (pieces.length <= 1) { api.toast('Keep at least one piece'); return; }
+          pieces.splice(sel, 1); sel = Math.min(sel, pieces.length - 1); syncSliders(); api.rebuild();
+        }));
+        container.appendChild(row1); container.appendChild(row2);
+
+        refreshStack = function () {
+          list.innerHTML = '';
+          var warn = stackWarnings(), any = false, i;
+          for (i = pieces.length - 1; i >= 0; i--) {
+            (function (idx) {
+              var pc = pieces[idx];
+              var b = el('button', { class: 'mm-chip', type: 'button', 'aria-pressed': String(idx === sel), onclick: function () { select(idx); api.rebuild(); } },
+                (idx + 1) + ' ' + TYPE_NAMES[pc.type] + ' ' + (Math.round(pc.size * 2) / 2) + (warn[idx] ? ' !' : ''));
+              if (warn[idx]) any = true;
+              list.appendChild(b);
+            })(i);
+          }
+          note.textContent = any ? '"!" marks a piece much wider than the one under it, which overhangs and may need supports. Make the lower piece bigger, or swap a drum underneath.' : 'Pieces sit on each other like a snowman, no supports needed. Click a piece in the viewport to select it.';
+        };
+        refreshStack();
+
+        // Picture cards for whole-tower looks.
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Starter towers'));
+        var grid = el('div', { class: 'mm-preset-cards' });
+        LAYOUTS.forEach(function (lay, li) {
+          var card = el('button', { class: 'mm-preset-card', type: 'button', title: lay.name, onclick: function () {
+            loadLayout(li); syncSliders(); api.rebuild(); api.toast('Tower: ' + lay.name);
+          } });
+          var y = 0, shapes = lay.pieces.map(function (q) {
+            var pr = pieceProfile(q[0], q[1], q[2]), top = pr[pr.length - 1][1], ov = 0.22 * Math.min(top, 20), base = y;
+            y += top - ov; return { pr: pr, base: base };
+          });
+          var total = y + 8, svg = '<svg viewBox="-26 -4 52 ' + (Math.max(30, total) + 4) + '" aria-hidden="true">';
+          shapes.forEach(function (s) {
+            var pts = [];
+            s.pr.forEach(function (q) { pts.push([q[0], total - s.base - q[1]]); });
+            s.pr.slice().reverse().forEach(function (q) { pts.push([-q[0], total - s.base - q[1]]); });
+            svg += '<polygon points="' + pts.map(function (q) { return q[0].toFixed(2) + ',' + q[1].toFixed(2); }).join(' ') + '"/>';
+          });
+          card.innerHTML = svg + '</svg><span>' + lay.name + '</span>';
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
+      }
+
+      var STYLES = [
+        { name: 'Default stacker', values: {} },
+        { name: 'Low-poly gems', values: { facets: 6, bandT: 1.6, topper: 3, baseFlat: 76 } },
+        { name: 'Banded ball tower', values: { bandT: 2.4, topper: 1, topperSize: 8 } },
+        { name: 'Hanging ornament', values: { hook: 1, topper: 0, stackScale: 80 } },
+        { name: 'Big and chunky', values: { stackScale: 125, joinDepth: 30, baseFlat: 90, topperSize: 14 } }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-013',
+        category: 'ORNAMENTS // STACKERS',
+        title: 'Ornament Stacker',
+        fileName: 'Ornament_Stacker',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#f1f5f9',
+        palette: [
+          { name: 'Snow White', color: '#f1f5f9' },
+          { name: 'Candy Red', color: '#f87171' },
+          { name: 'Pine Green', color: '#86efac' },
+          { name: 'Carrot Orange', color: '#fdba74' },
+          { name: 'Coal Black', color: '#334155' },
+          { name: 'Ice Blue', color: '#93c5fd' },
+          { name: 'Gold', color: '#fde047' },
+          { name: 'Berry Purple', color: '#d8b4fe' }
+        ],
+        partNames: (function () {
+          var names = { bands: 'Neck bands', topper: 'Topper', hook: 'Ornament hook', stamp: 'Stamp' };
+          PIECE_LABELS.forEach(function (l, i) { names['piece' + i] = l; });
+          return names;
+        })(),
+
+        parameters: PARAMS,
+
+        presets: STYLES.map(function (s) { return { label: s.name, values: withDefaults(DEFAULTS, s.values) }; }),
+
+        testSetup: function () { loadLayout(0); },
+
+        tabs: [{
+          id: 'stack',
+          label: 'Stack',
+          hint: 'Add pieces from the tray, then click a piece to resize it',
+          mount: mountStack,
+          onHover: function (hit, api) {
+            var i = hit ? pieceIndex(hit.meshName) : -1;
+            highlight(api, i);
+          },
+          onPick: function (hit, api) {
+            var i = pieceIndex(hit.meshName);
+            if (i < 0) return;
+            sel = i;
+            api.setParams({ selSize: pieces[sel].size, selSquash: Math.round(pieces[sel].squash * 100) });
+            api.toast('Selected piece ' + (sel + 1) + ': ' + TYPE_NAMES[pieces[sel].type]);
+            api.rebuild();
+          }
+        }, {
+          id: 'stamps',
+          label: 'Stamps',
+          hint: 'Pick a holiday stamp, then click the stack to place it',
+          mount: function (container, api) {
+            mountStampPanel(container, api, ['star', 'snow', 'tree', 'heart', 'bell', 'cane', 'holly', 'gift'], 'Holiday stamps (click the stack to place)', 'stamp');
+            refreshStamp2 = refreshStampPanel;
+            container.appendChild(el('p', { class: 'mm-note' }, 'Stamps stand 1.5 mm proud of the surface and are separate parts you can paint in the Color tool. Set size and rotation below.'));
+          },
+          onHover: function (hit, api) {
+            if (!hit || pieceIndex(hit.meshName) < 0 || hit.normal.y < -0.5 || hit.point.y < 5) { api.setPreview(null); return; }
+            api.setPreview({ positions: stampPositions({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() }, 3.3, 1.8) });
+          },
+          onPick: function (hit, api) {
+            if (pieceIndex(hit.meshName) < 0) return;
+            if (hit.normal.y < -0.5 || hit.point.y < 5) { api.toast('Tip: stamp on the sides or top, not the underside.'); return; }
+            stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
+            api.rebuild();
+            api.toast('Stamped ' + STAMP_NAMES[stampType]);
+          }
+        }],
+
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

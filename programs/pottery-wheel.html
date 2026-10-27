@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-015 Pottery Wheel // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Pottery Wheel: a spinning lump of clay you mold with the mouse or your finger. The wheel tab draws
+    // the clay turning; pressing on the wall pushes it in and out, and the 3D model on the right is the
+    // same pot, ready to export as .STL. The page layout, the viewport, the Color tool and the exports
+    // come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // ---- Geometry kit: closed shells built from rings (shared vertices, so always watertight) ----
+      var TAU = Math.PI * 2;
+      function rad(d) { return (d * Math.PI) / 180; }
+      function rad(d) { return (d * Math.PI) / 180; }
+      function sqr(x) { return x * x; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function shell(rings, wrap) {
+        var verts = [], idx = [], info = [], i, j;
+        rings.forEach(function (r) {
+          if (r.pole) { info.push({ pole: true, s: verts.length, n: 1 }); verts.push(r.pole); }
+          else { info.push({ s: verts.length, n: r.length }); r.forEach(function (q) { verts.push(q); }); }
+        });
+        var n = rings.length, last = wrap ? n : n - 1;
+        for (i = 0; i < last; i++) {
+          var A = info[i], B = info[(i + 1) % n];
+          if (A.pole && B.pole) continue;
+          if (A.pole) { for (j = 0; j < B.n; j++) idx.push(A.s, B.s + (j + 1) % B.n, B.s + j); }
+          else if (B.pole) { for (j = 0; j < A.n; j++) idx.push(A.s + j, A.s + (j + 1) % A.n, B.s); }
+          else {
+            for (j = 0; j < A.n; j++) {
+              var a = A.s + j, b = A.s + (j + 1) % A.n, c = B.s + (j + 1) % B.n, d = B.s + j;
+              idx.push(a, b, c, a, c, d);
+            }
+          }
+        }
+        var vol = 0, p, q, r;
+        for (i = 0; i < idx.length; i += 3) {
+          p = verts[idx[i]]; q = verts[idx[i + 1]]; r = verts[idx[i + 2]];
+          vol += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+        }
+        var out = new Float32Array(idx.length * 3), o = 0, v;
+        for (i = 0; i < idx.length; i += 3) {
+          var tri = vol < 0 ? [idx[i], idx[i + 2], idx[i + 1]] : [idx[i], idx[i + 1], idx[i + 2]];
+          for (j = 0; j < 3; j++) { v = verts[tri[j]]; out[o++] = v[0]; out[o++] = v[1]; out[o++] = v[2]; }
+        }
+        return out;
+      }
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+      function smootherstep(x) {
+        var t = Math.max(0, Math.min(1, x));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      }
+      function el(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+          else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      function withDefaults(defaults, over) {
+        var values = {};
+        Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return values;
+      }
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+
+      // ---- The clay: an outer radius sample for every slice of the pot, bottom (t = 0) to rim (t = 1) ----
+      var NS = 80;              // slices in the sculpted profile
+      var NR = 80;              // rings per wall in the mesh
+      var SEGN = 96;            // points around every ring
+      var MIN_R = 6, MAX_R = 72, MIN_HOLE = 3.5;
+      var prof = new Float64Array(NS + 1);
+      var history = [];
+      var refreshWheel = null;
+
+      // Smooth profile through [t, radius] control points (cubic Hermite, Catmull-Rom tangents).
+      function fromPoints(pts) {
+        var out = new Float64Array(NS + 1), i, j;
+        for (i = 0; i <= NS; i++) {
+          var t = i / NS;
+          for (j = 0; j < pts.length - 2 && t > pts[j + 1][0]; j++) { /* find segment */ }
+          var a = pts[j], b = pts[j + 1], dt = b[0] - a[0], u = clamp((t - a[0]) / dt, 0, 1);
+          var m0 = (j > 0 ? (b[1] - pts[j - 1][1]) / (b[0] - pts[j - 1][0]) : (b[1] - a[1]) / dt) * dt;
+          var m1 = (j < pts.length - 2 ? (pts[j + 2][1] - a[1]) / (pts[j + 2][0] - a[0]) : (b[1] - a[1]) / dt) * dt;
+          var u2 = u * u, u3 = u2 * u;
+          out[i] = (2 * u3 - 3 * u2 + 1) * a[1] + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * b[1] + (u3 - u2) * m1;
+        }
+        return out;
+      }
+
+      // Starting lumps. Each also sets the height, wall and handle so it prints well straight away.
+      var SHAPES = [
+        { name: 'Fresh clay', pts: [[0, 34], [1, 34]], values: { height: 70, wall: 3.4, baseThick: 5, handle: 0 } },
+        { name: 'Vase', pts: [[0, 24], [0.3, 36], [0.5, 35], [0.8, 19], [0.92, 18], [1, 24]], values: { height: 100, wall: 3.2, baseThick: 5, handle: 0 } },
+        { name: 'Bowl', pts: [[0, 22], [0.3, 38], [0.7, 50], [1, 56]], values: { height: 55, wall: 3.4, baseThick: 4, handle: 0 } },
+        { name: 'Mug', pts: [[0, 31], [0.5, 32], [1, 33]], values: { height: 90, wall: 3.4, baseThick: 6, handle: 1, handleTop: 82, handleBottom: 22 } },
+        { name: 'Bottle', pts: [[0, 26], [0.35, 30], [0.55, 27], [0.7, 12], [0.86, 8.5], [0.97, 9.5], [1, 11]], values: { height: 130, wall: 3.2, baseThick: 5, handle: 0 } },
+        { name: 'Jug', pts: [[0, 28], [0.45, 38], [0.75, 28], [0.9, 24], [1, 28]], values: { height: 110, wall: 3.4, baseThick: 6, handle: 1, handleTop: 80, handleBottom: 30 } },
+        { name: 'Dish', pts: [[0, 40], [1, 64]], values: { height: 26, wall: 3.4, baseThick: 4, handle: 0 } }
+      ];
+      function loadShape(i) { prof = fromPoints(SHAPES[i].pts); history = []; }
+      loadShape(1);
+
+      function snapshot(api) { history.push({ prof: new Float64Array(prof), height: api.params.height }); if (history.length > 40) history.shift(); }
+
+      var PARAMS = [
+        { group: 'Pot', key: 'height', label: 'Height', unit: ' mm', min: 30, max: 150, step: 1, value: 100 },
+        { group: 'Pot', key: 'widthScale', label: 'Width (squeeze ↔ widen all)', unit: '%', min: 60, max: 130, step: 1, value: 100 },
+        { group: 'Pot', key: 'wall', label: 'Wall thickness', unit: ' mm', min: 2.4, max: 8, step: 0.2, value: 3.2 },
+        { group: 'Pot', key: 'baseThick', label: 'Base thickness', unit: ' mm', min: 3, max: 12, step: 0.5, value: 5 },
+        { group: 'Pot', key: 'maxAngle', label: 'Overhang limit (low = no supports)', unit: '°', min: 35, max: 85, step: 1, value: 52,
+          format: function (v) { return v >= 80 ? 'Free (may need supports)' : v + '° from upright'; } },
+        { group: 'Texture', key: 'rings', label: 'Throwing rings', unit: ' mm', min: 0, max: 2.5, step: 0.1, value: 0,
+          format: function (v) { return v < 0.1 ? 'Smooth' : v + ' mm'; } },
+        { group: 'Texture', key: 'ringCount', label: 'Number of rings', unit: '', min: 3, max: 30, step: 1, value: 12 },
+        { group: 'Texture', key: 'spiral', label: 'Rings (level ↔ spiral)', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'Spiral' : 'Level'; } },
+        { group: 'Texture', key: 'flutes', label: 'Fluting grooves', unit: '', min: 0, max: 16, step: 1, value: 0,
+          format: function (v) { return v < 3 ? 'None' : Math.round(v) + ' grooves'; } },
+        { group: 'Texture', key: 'fluteDepth', label: 'Groove depth', unit: ' mm', min: 0.4, max: 3, step: 0.1, value: 1.4 },
+        { group: 'Texture', key: 'twist', label: 'Groove twist', unit: '°', min: -180, max: 180, step: 5, value: 0 },
+        { group: 'Shape tweaks', key: 'facets', label: 'Faceted sides (0 = round)', unit: '', min: 0, max: 10, step: 1, value: 0,
+          format: function (v) { return v < 3 ? 'Round' : Math.round(v) + ' sides'; } },
+        { group: 'Shape tweaks', key: 'oval', label: 'Oval squash', unit: '%', min: 0, max: 25, step: 1, value: 0 },
+        { group: 'Shape tweaks', key: 'wobble', label: 'Hand-made wobble', unit: ' mm', min: 0, max: 3, step: 0.1, value: 0,
+          format: function (v) { return v < 0.1 ? 'None' : v + ' mm'; } },
+        { group: 'Handle', key: 'handle', label: 'Handle', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Handle', key: 'handleTop', label: 'Top joins at (height)', unit: '%', min: 40, max: 95, step: 1, value: 80 },
+        { group: 'Handle', key: 'handleBottom', label: 'Bottom joins at (height)', unit: '%', min: 8, max: 70, step: 1, value: 25 },
+        { group: 'Handle', key: 'handleOut', label: 'Reach (shortened if too tall to print)', unit: ' mm', min: 10, max: 45, step: 1, value: 26 },
+        { group: 'Handle', key: 'handleThick', label: 'Handle thickness', unit: ' mm', min: 2.4, max: 5, step: 0.1, value: 3.4 },
+        { tab: 'wheel', group: 'Your hands', key: 'brush', label: 'Finger size', unit: ' mm', min: 4, max: 40, step: 1, value: 16 },
+        { tab: 'wheel', group: 'Your hands', key: 'pressure', label: 'Pressure (gentle ↔ firm)', unit: '%', min: 20, max: 100, step: 1, value: 60 },
+        { tab: 'wheel', group: 'Your hands', key: 'speed', label: 'Wheel speed', unit: '', min: 0, max: 100, step: 1, value: 50,
+          format: function (v) { return v < 1 ? 'Stopped' : Math.round(v * 1.2) + ' rpm'; } }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
+
+      // Radius profile as it will print: width scale applied, then the overhang limit trims anything steeper.
+      function effProfile(p) {
+        var r = new Float64Array(NS + 1), trimmed = new Array(NS + 1), i, ws = p.widthScale / 100;
+        for (i = 0; i <= NS; i++) { r[i] = clamp(prof[i] * ws, MIN_R, MAX_R); trimmed[i] = false; }
+        if (p.maxAngle < 80) {
+          var lim = Math.tan(rad(p.maxAngle)) * (p.height / NS);
+          for (i = 1; i <= NS; i++) {
+            var v = clamp(r[i], r[i - 1] - lim, r[i - 1] + lim);
+            if (Math.abs(v - r[i]) > 0.01) trimmed[i] = true;
+            r[i] = v;
+          }
+        }
+        return { r: r, trimmed: trimmed };
+      }
+      function rAt(eff, t) {
+        var f = clamp(t, 0, 1) * NS, i = Math.min(NS - 1, Math.floor(f)), u = f - i;
+        return eff.r[i] * (1 - u) + eff.r[i + 1] * u;
+      }
+      function slopeAt(eff, t, H) {
+        var h = 1 / NS;
+        return (rAt(eff, t + h) - rAt(eff, t - h)) / ((Math.min(1, t + h) - Math.max(0, t - h)) * H);
+      }
+      function innerBase(eff, y, H, W) {
+        var t = y / H, s = slopeAt(eff, t, H);
+        return Math.max(rAt(eff, t) - Math.min(W * 1.8, W * Math.sqrt(1 + s * s)), MIN_HOLE);
+      }
+
+      // ---- Mesh ----
+      function mods(p, W) {
+        var m = {
+          rings: p.rings, ringCount: Math.round(p.ringCount), spiral: p.spiral >= 1,
+          flutes: p.flutes >= 3 ? Math.round(p.flutes) : 0, fluteD: Math.max(0, Math.min(p.fluteDepth, W - 1.6)), twist: rad(p.twist),
+          facets: p.facets >= 3 ? Math.round(p.facets) : 0, oval: p.oval / 100, wobble: p.wobble
+        };
+        return m;
+      }
+      function ringPoint(m, base, y, a, outer, H, Hp) {
+        var t = y / H, env = smootherstep(t / 0.09) * smootherstep((Hp - y) / (H * 0.08));
+        var r = base;
+        if (m.rings > 0) r += m.rings * env * Math.sin(TAU * m.ringCount * t + (m.spiral ? a : 0));
+        if (outer && m.flutes) r -= m.fluteD * env * (0.5 + 0.5 * Math.cos(m.flutes * a + m.twist * t));
+        if (m.wobble > 0) r += m.wobble * env * (0.6 * Math.sin(3 * a + t * 7) + 0.4 * Math.sin(5 * a - t * 4.5));
+        if (m.facets) {
+          var seg = TAU / m.facets, loc = ((a % seg) + seg) % seg - seg / 2;
+          r *= Math.cos(Math.PI / m.facets) / Math.cos(loc);
+        }
+        return [r * Math.cos(a) * (1 + m.oval), y, r * Math.sin(a) * (1 - m.oval)];
+      }
+
+      var stats = { volume: 0, widest: 0, trimmed: 0 };
+      function potMeshes(p) {
+        var H = p.height, W = p.wall, B = Math.min(p.baseThick, H - 10), eff = effProfile(p), m = mods(p, W);
+        var ay = Math.min(W * 0.5, 2.4), Hp = H - ay, rings = [], i, s, j;
+        function row(y, base, outer, inset) {
+          var out = [];
+          for (s = 0; s < SEGN; s++) out.push(ringPoint(m, base - (inset || 0), y, (s / SEGN) * TAU, outer, H, Hp));
+          return out;
+        }
+        rings.push({ pole: [0, 0, 0] });
+        for (i = 0; i <= NR; i++) { var yo = Hp * i / NR; rings.push(row(yo, rAt(eff, yo / H), true, i === 0 ? 1.0 : 0)); }
+        var outerTop = rings[rings.length - 1], M = 10, innerRows = [];
+        for (i = 0; i <= NR; i++) { var yi = Hp - (Hp - B) * i / NR; innerRows.push(row(yi, innerBase(eff, yi, H, W), false)); }
+        var innerTop = innerRows[0];
+        for (j = 1; j < M; j++) {
+          var th = (j / M) * Math.PI, ring = [];
+          for (s = 0; s < SEGN; s++) {
+            var po = outerTop[s], pi = innerTop[s], c = Math.cos(th);
+            ring.push([(po[0] + pi[0]) / 2 + (po[0] - pi[0]) / 2 * c, Hp + ay * Math.sin(th), (po[2] + pi[2]) / 2 + (po[2] - pi[2]) / 2 * c]);
+          }
+          rings.push(ring);
+        }
+        innerRows.forEach(function (r) { rings.push(r); });
+        rings.push({ pole: [0, B, 0] });
+        var tris = shell(rings, false), n = SEGN;
+        var outerCount = (n + 2 * n * NR) * 9, rimCount = (2 * n * M) * 9;
+        var body = [
+          { name: 'outer', positions: tris.subarray(0, outerCount), smoothGroup: 'pot', singlePart: true },
+          { name: 'rim', positions: tris.subarray(outerCount, outerCount + rimCount), smoothGroup: 'pot', singlePart: true },
+          { name: 'inner', positions: tris.subarray(outerCount + rimCount), smoothGroup: 'pot', singlePart: true }
+        ];
+        // Stats for the editor: how much it holds, how wide it is, how much the overhang limit trimmed.
+        var vol = 0, widest = 0, tr = 0;
+        for (i = 0; i < NR; i++) {
+          var y1 = Hp - (Hp - B) * i / NR, ri = innerBase(eff, y1, H, W);
+          vol += Math.PI * ri * ri * ((Hp - B) / NR);
+        }
+        for (i = 0; i <= NS; i++) { widest = Math.max(widest, eff.r[i]); if (eff.trimmed[i]) tr++; }
+        stats = { volume: vol / 1000, widest: widest * 2, trimmed: tr };
+        return { meshes: body, eff: eff };
+      }
+
+      // ---- Handle: a tube swept along a rounded ear shape on the +X side ----
+      function handlePath(p, eff) {
+        var H = p.height, yt = H * p.handleTop / 100, yb = H * p.handleBottom / 100;
+        if (yt - yb < 14) yt = yb + 14;
+        var tr = Math.min(p.handleThick, (p.wall - 0.8) / 0.75) / 2 * 2;
+        tr = Math.min(p.handleThick / 2 * 2, (p.wall - 0.8) / 0.75);
+        var rT = rAt(eff, yt / H) - 0.6, rB = rAt(eff, yb / H) - 0.6;
+        var out = Math.min(p.handleOut, (yt - yb) / 2);
+        var A = [rT, yt], D = [rB, yb], P = [Math.max(rT, rB) + out, (yt + yb) / 2];
+        var pts = [A, P, D], k, q;
+        for (k = 0; k < 3; k++) {
+          var next = [pts[0]];
+          for (q = 0; q < pts.length - 1; q++) {
+            var a = pts[q], b = pts[q + 1];
+            next.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+          }
+          next.push(pts[pts.length - 1]);
+          pts = next;
+        }
+        return { pts: pts, tr: tr / 2 };
+      }
+      function handleMesh(p, eff) {
+        var hp = handlePath(p, eff), pts = hp.pts, tr = hp.tr, rings = [], i, k, SEGH = 20;
+        function dir(i) {
+          var a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.sqrt(dx * dx + dy * dy) || 1;
+          return [dx / l, dy / l];
+        }
+        var d0 = dir(0), d1 = dir(pts.length - 1);
+        rings.push({ pole: [pts[0][0] - d0[0] * tr * 0.9, pts[0][1] - d0[1] * tr * 0.9, 0] });
+        for (i = 0; i < pts.length; i++) {
+          var d = dir(i), nx = -d[1], ny = d[0], ring = [];
+          for (k = 0; k < SEGH; k++) {
+            var ang = (k / SEGH) * TAU;
+            ring.push([pts[i][0] + nx * Math.cos(ang) * tr, pts[i][1] + ny * Math.cos(ang) * tr, Math.sin(ang) * tr]);
+          }
+          rings.push(ring);
+        }
+        rings.push({ pole: [pts[pts.length - 1][0] + d1[0] * tr * 0.9, pts[pts.length - 1][1] + d1[1] * tr * 0.9, 0] });
+        return shell(rings, false);
+      }
+
+      function build(p) {
+        var res = potMeshes(p), out = res.meshes;
+        if (p.handle >= 1) out.push({ name: 'handle', positions: handleMesh(p, res.eff), singlePart: true });
+        if (refreshWheel) refreshWheel();
+        return out;
+      }
+
+      // ---- The wheel tab: a side view of the clay that turns, and the tools that mold it ----
+      var TOOLS = [
+        { id: 'shape', name: 'Shape', hint: 'Press the wall and drag: the clay follows your finger' },
+        { id: 'pinch', name: 'Pinch in', hint: 'Hold on the wall to squeeze it narrower, like pinching a neck' },
+        { id: 'swell', name: 'Swell out', hint: 'Hold on the wall to push it wider, like a belly' },
+        { id: 'smooth', name: 'Smooth', hint: 'Rub with a sponge to even out bumps' },
+        { id: 'lift', name: 'Pull up', hint: 'Drag up to pull the clay taller, down to squash it' }
+      ];
+      function cssVar(name, fallback) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; }
+      function rgba(hex, a) {
+        var h = hex.replace('#', ''); if (h.length === 3) h = h.replace(/(.)/g, '$1$1');
+        var n = parseInt(h, 16);
+        return isNaN(n) ? hex : 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+      }
+
+      function mountWheel(container, api) {
+        var tool = 'shape', PERS = 0.2, CH = 340;
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Throw a pot'));
+        var cv = el('canvas', { class: 'mm-canvas', height: String(CH) });
+        container.appendChild(cv);
+        var status = el('p', { class: 'mm-canvas-status' }, '');
+        container.appendChild(status);
+        var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), W = 300;
+        var v = { s: 1.6, x0: 150, base: CH - 66 }, spin = 0, last = performance.now(), drag = null, dirty = false, cursor = null;
+
+        function resize() {
+          var w = Math.max(200, Math.floor(cv.getBoundingClientRect().width || 300));
+          if (w === W && cv.width === Math.floor(W * dpr)) return;
+          W = w; cv.width = Math.floor(W * dpr); cv.height = Math.floor(CH * dpr); cv.style.height = CH + 'px';
+        }
+        function fit() { v.s = Math.min(W / 176, (CH - 74) / 170); v.x0 = W / 2; v.base = CH - 66; }
+        function px(x, y) { return [v.x0 + x * v.s, v.base - y * v.s]; }
+        function world(e) { var r = cv.getBoundingClientRect(); return [(e.clientX - r.left - v.x0) / v.s, (v.base - (e.clientY - r.top)) / v.s]; }
+
+        function applyTool(x, y, dt) {
+          var p = api.params, H = p.height, press = p.pressure / 100, ws = p.widthScale / 100;
+          if (tool === 'lift') return;
+          var ic = (y / H) * NS, sig = Math.max(1.2, (p.brush / H) * NS * 0.6), i, lo = Math.max(0, Math.floor(ic - 3 * sig)), hi = Math.min(NS, Math.ceil(ic + 3 * sig));
+          if (y < -p.brush * 0.3 || y > H + p.brush * 0.5) return;
+          var target = clamp(Math.abs(x) / ws, MIN_R, MAX_R), copy = null;
+          if (tool === 'smooth') copy = new Float64Array(prof);
+          for (i = lo; i <= hi; i++) {
+            var w = Math.exp(-Math.pow((i - ic) / sig, 2)) * press;
+            if (tool === 'shape') prof[i] += (target - prof[i]) * Math.min(1, w * 0.5 * dt);
+            else if (tool === 'pinch') prof[i] -= 0.55 * w * dt;
+            else if (tool === 'swell') prof[i] += 0.55 * w * dt;
+            else if (tool === 'smooth') {
+              var a = copy[Math.max(0, i - 1)], b = copy[Math.min(NS, i + 1)], a2 = copy[Math.max(0, i - 3)], b2 = copy[Math.min(NS, i + 3)];
+              prof[i] += ((a + b + a2 + b2) / 4 - prof[i]) * Math.min(1, w * 0.9 * dt);
+            }
+            prof[i] = clamp(prof[i], MIN_R / ws, MAX_R / ws);
+          }
+          dirty = true;
+        }
+
+        function stat(p, eff) {
+          var txt = 'Height ' + Math.round(p.height) + ' mm  |  widest ' + Math.round(stats.widest) + ' mm  |  holds about ' + Math.round(stats.volume) + ' ml' +
+            (stats.trimmed ? '  |  overhang limit is trimming ' + stats.trimmed + ' slices (amber dashes)' : '');
+          if (status.textContent !== txt) status.textContent = txt;
+        }
+
+        function draw(now) {
+          requestAnimationFrame(draw);
+          var dt = Math.min(2.5, (now - last) / 16.7); last = now;
+          if (!cv.offsetParent) return;
+          resize(); fit();
+          var p = api.params, H = p.height, ws = p.widthScale / 100;
+          spin += dt * (p.speed / 100) * 0.09;
+          if (drag) {
+            // Walk from the last point to the new one so fast strokes leave no gaps.
+            var dx = drag.x - drag.lx, dy = drag.y - drag.ly, dist = Math.sqrt(dx * dx + dy * dy), steps = Math.max(1, Math.ceil(dist / Math.max(2, p.brush / 3)));
+            if (tool === 'lift') {
+              if (Math.abs(dy) > 0.01) { api.setParams({ height: Math.round(clamp(p.height + dy, 30, 150)) }); dirty = false; }
+            } else {
+              for (var k = 1; k <= steps; k++) applyTool(drag.lx + dx * k / steps, drag.ly + dy * k / steps, dt / steps);
+            }
+            drag.lx = drag.x; drag.ly = drag.y;
+          }
+          if (dirty) { dirty = false; api.rebuild(); }
+
+          var eff = effProfile(p), amber = cssVar('--bp-amber', '#ffae00'), cyan = cssVar('--bp-cyan', '#00e5ff'), white = cssVar('--bp-white', '#eef7ff'), muted = cssVar('--bp-muted', '#8ab4e1'), deep = cssVar('--bp-bg-deep', '#06152d');
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, W, CH);
+          ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+          // Wheel: splash pan, body and a head with turning marks.
+          var hr = 84, hy = v.base;
+          ctx.fillStyle = rgba(cyan, 0.08); ctx.strokeStyle = rgba(cyan, 0.6); ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(v.x0 - hr * v.s, hy + 4); ctx.lineTo(v.x0 - hr * v.s, hy + 36); ctx.ellipse(v.x0, hy + 36, hr * v.s, hr * v.s * PERS, 0, Math.PI, 0, true); ctx.lineTo(v.x0 + hr * v.s, hy + 4); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.ellipse(v.x0, hy, hr * v.s, hr * v.s * PERS, 0, 0, TAU); ctx.fillStyle = rgba(cyan, 0.14); ctx.fill(); ctx.stroke();
+          ctx.save(); ctx.strokeStyle = rgba(white, 0.5); ctx.lineWidth = 2;
+          for (var tk = 0; tk < 12; tk++) {
+            var ang = spin + (tk / 12) * TAU, c = Math.cos(ang), sn = Math.sin(ang);
+            ctx.beginPath(); ctx.moveTo(v.x0 + c * hr * 0.9 * v.s, hy + sn * hr * 0.9 * v.s * PERS); ctx.lineTo(v.x0 + c * hr * v.s, hy + sn * hr * v.s * PERS); ctx.stroke();
+          }
+          ctx.restore();
+
+          // Ghost of the sculpted profile where the overhang limit trims it.
+          var anyTrim = false;
+          ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = amber; ctx.lineWidth = 2;
+          for (var i = 1; i <= NS; i++) {
+            if (!eff.trimmed[i]) continue;
+            anyTrim = true;
+            var r0 = prof[i - 1] * ws, r1 = prof[i] * ws, y0 = ((i - 1) / NS) * H, y1 = (i / NS) * H;
+            [-1, 1].forEach(function (sg) { var a = px(sg * r0, y0), b = px(sg * r1, y1); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
+          }
+          ctx.restore();
+
+          // Clay: silhouette from the effective profile, shaded like a cylinder.
+          var Wl = p.wall, ay = Math.min(Wl * 0.5, 2.4), left = [], right = [];
+          for (i = 0; i <= NS; i++) { left.push(px(-eff.r[i], (i / NS) * H)); right.push(px(eff.r[i], (i / NS) * H)); }
+          var topR = eff.r[NS], innerTop = innerBase(eff, H - ay, H, Wl), ty = px(0, H)[1];
+          var grad = ctx.createLinearGradient(v.x0 - 60 * v.s, 0, v.x0 + 60 * v.s, 0);
+          grad.addColorStop(0, rgba(amber, 0.35)); grad.addColorStop(0.3, rgba(amber, 0.85)); grad.addColorStop(0.55, rgba(amber, 0.6)); grad.addColorStop(1, rgba(amber, 0.3));
+          ctx.beginPath(); ctx.moveTo(left[0][0], left[0][1]);
+          left.forEach(function (q) { ctx.lineTo(q[0], q[1]); });
+          right.slice().reverse().forEach(function (q) { ctx.lineTo(q[0], q[1]); });
+          ctx.ellipse(v.x0, px(0, 0)[1], eff.r[0] * v.s, eff.r[0] * v.s * PERS, 0, 0, Math.PI);
+          ctx.closePath(); ctx.fillStyle = grad; ctx.fill(); ctx.strokeStyle = amber; ctx.lineWidth = 2; ctx.stroke();
+          // Spinning bands: dashed front arcs slide sideways, which reads as the clay turning.
+          ctx.save(); ctx.strokeStyle = rgba(white, 0.35); ctx.lineWidth = 1.2;
+          for (var bi = 1; bi < 16; bi++) {
+            var by = (bi / 16) * H * 0.98, br = rAt(eff, by / H);
+            ctx.setLineDash([2, 10]); ctx.lineDashOffset = -spin * br * v.s * 1.0 - bi * 3;
+            ctx.beginPath(); ctx.ellipse(v.x0, px(0, by)[1], br * v.s, br * v.s * PERS, 0, 0, Math.PI); ctx.stroke();
+          }
+          ctx.restore();
+          // Rim and opening.
+          ctx.beginPath(); ctx.ellipse(v.x0, ty, topR * v.s, topR * v.s * PERS, 0, 0, TAU); ctx.fillStyle = rgba(white, 0.18); ctx.fill(); ctx.strokeStyle = amber; ctx.lineWidth = 2; ctx.stroke();
+          ctx.beginPath(); ctx.ellipse(v.x0, ty, innerTop * v.s, innerTop * v.s * PERS, 0, 0, TAU); ctx.fillStyle = rgba(deep, 0.85); ctx.fill(); ctx.strokeStyle = rgba(amber, 0.7); ctx.lineWidth = 1.5; ctx.stroke();
+          // Handle preview.
+          if (p.handle >= 1) {
+            var hp = handlePath(p, eff);
+            ctx.save(); ctx.lineWidth = hp.tr * 2 * v.s; ctx.strokeStyle = rgba(amber, 0.75);
+            ctx.beginPath(); hp.pts.forEach(function (q, qi) { var a = px(q[0], q[1]); if (qi) ctx.lineTo(a[0], a[1]); else ctx.moveTo(a[0], a[1]); }); ctx.stroke(); ctx.restore();
+          }
+          // Finger.
+          if (cursor) {
+            var cp = px(cursor[0], cursor[1]), cr = p.brush * v.s * 0.5;
+            ctx.beginPath(); ctx.arc(cp[0], cp[1], cr, 0, TAU);
+            ctx.fillStyle = rgba(cyan, drag ? 0.28 : 0.1); ctx.fill(); ctx.strokeStyle = cyan; ctx.lineWidth = 2; ctx.stroke();
+          }
+          ctx.fillStyle = muted; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+          ctx.fillText(TOOLS.filter(function (t) { return t.id === tool; })[0].hint, v.x0, CH - 8);
+          stat(p, eff);
+        }
+        requestAnimationFrame(draw);
+
+        cv.addEventListener('pointerdown', function (e) {
+          var q = world(e);
+          snapshot(api);
+          drag = { id: e.pointerId, x: q[0], y: q[1], lx: q[0], ly: q[1] };
+          cursor = q;
+          try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        });
+        cv.addEventListener('pointermove', function (e) {
+          var q = world(e); cursor = q;
+          if (drag) { drag.x = q[0]; drag.y = q[1]; }
+        });
+        function up() {
+          if (drag && history.length) {
+            var h = history[history.length - 1], same = true, i;
+            for (i = 0; i <= NS; i++) if (Math.abs(h.prof[i] - prof[i]) > 1e-9) { same = false; break; }
+            if (same && h.height === api.params.height) history.pop();
+          }
+          drag = null;
+        }
+        cv.addEventListener('pointerup', up);
+        cv.addEventListener('pointercancel', up);
+        cv.addEventListener('pointerleave', function () { if (!drag) cursor = null; });
+
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Tools'));
+        var chips = el('div', { class: 'mm-chips' }), toolBtns = {};
+        TOOLS.forEach(function (t) {
+          var b = el('button', { class: 'mm-chip', type: 'button', 'aria-pressed': String(t.id === tool), title: t.hint, onclick: function () {
+            tool = t.id;
+            Object.keys(toolBtns).forEach(function (k) { toolBtns[k].setAttribute('aria-pressed', String(k === tool)); });
+            api.toast(t.name + ': ' + t.hint);
+          } }, t.name);
+          toolBtns[t.id] = b; chips.appendChild(b);
+        });
+        container.appendChild(chips);
+        container.appendChild(el('p', { class: 'mm-note' }, 'Press on the clay and drag. Shape follows your finger, Pinch and Swell work while you hold, Pull up changes the height. Finger size and pressure are below. The 3D pot updates as you work.'));
+
+        function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button', onclick: fn }, label); }
+        var row = el('div', { class: 'mm-export-row' });
+        row.appendChild(btn('Undo', function () {
+          var h = history.pop();
+          if (!h) { api.toast('Nothing to undo'); return; }
+          prof = h.prof; api.setParams({ height: h.height }); api.rebuild();
+        }));
+        row.appendChild(btn('Smooth all', function () {
+          snapshot(api);
+          for (var pass = 0; pass < 4; pass++) {
+            var c = new Float64Array(prof), i;
+            for (i = 1; i < NS; i++) prof[i] = (c[i - 1] + 2 * c[i] + c[i + 1]) / 4;
+          }
+          api.rebuild(); api.toast('Smoothed the whole pot');
+        }));
+        row.appendChild(btn('Mirror ends', function () {
+          snapshot(api);
+          prof[NS] = prof[0]; api.rebuild(); api.toast('Rim now matches the base width');
+        }));
+        container.appendChild(row);
+
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Start from a lump'));
+        var grid = el('div', { class: 'mm-preset-cards' });
+        SHAPES.forEach(function (sh, si) {
+          var card = el('button', { class: 'mm-preset-card', type: 'button', title: sh.name, onclick: function () {
+            loadShape(si);
+            api.setParams(withDefaults({ widthScale: 100, rings: 0, flutes: 0, facets: 0, oval: 0, wobble: 0, twist: 0, maxAngle: 52 }, sh.values));
+            api.rebuild(); api.toast('New clay: ' + sh.name);
+          } });
+          var pr = fromPoints(sh.pts), hh = sh.values.height, pts = [], k;
+          for (k = 0; k <= NS; k += 4) pts.push([pr[k], hh * (1 - k / NS)]);
+          for (k = NS; k >= 0; k -= 4) pts.push([-pr[k], hh * (1 - k / NS)]);
+          card.innerHTML = '<svg viewBox="-70 -6 140 ' + (hh + 12) + '" aria-hidden="true"><polygon points="' + pts.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' ') + '"/></svg><span>' + sh.name + '</span>';
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
+      }
+
+      var STYLES = [
+        { name: 'Default pot', values: {} },
+        { name: 'Thrown rings', values: { rings: 1.1, ringCount: 14, spiral: 1 } },
+        { name: 'Fluted jar', values: { flutes: 10, fluteDepth: 1.6 } },
+        { name: 'Twisted fluting', values: { flutes: 8, fluteDepth: 1.8, twist: 120 } },
+        { name: 'Hex jar', values: { facets: 6 } },
+        { name: 'Hand-made wobble', values: { wobble: 1.4, oval: 6 } }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-015',
+        category: 'POTTERY // WHEEL',
+        title: 'Pottery Wheel',
+        fileName: 'Pottery_Wheel',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#e8a27a',
+        palette: [
+          { name: 'Terracotta', color: '#e8a27a' },
+          { name: 'Bone Glaze', color: '#f1f5f9' },
+          { name: 'Celadon', color: '#a7d7c5' },
+          { name: 'Cobalt Blue', color: '#93b4f0' },
+          { name: 'Honey Amber', color: '#f2c14e' },
+          { name: 'Rose Blush', color: '#fda4af' },
+          { name: 'Lilac Slip', color: '#d8b4fe' },
+          { name: 'Iron Black', color: '#334155' }
+        ],
+        partNames: { outer: 'Outside', rim: 'Rim', inner: 'Inside', handle: 'Handle' },
+
+        parameters: PARAMS,
+
+        presets: STYLES.map(function (s) { return { label: s.name, values: withDefaults({ rings: 0, ringCount: 12, spiral: 0, flutes: 0, fluteDepth: 1.4, twist: 0, facets: 0, oval: 0, wobble: 0 }, s.values) }; }),
+
+        testSetup: function () { loadShape(1); },
+
+        tabs: [{
+          id: 'wheel',
+          label: 'Wheel',
+          hint: 'Press the spinning clay and drag to mold it',
+          mount: mountWheel
+        }],
+
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

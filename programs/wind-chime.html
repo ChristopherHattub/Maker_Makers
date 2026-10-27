@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-014 Wind Chime Composer // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Wind Chime Composer: a flat mobile you compose by placing hangers on a bar with the mouse or finger.
+    // Everything prints flat in one plate. The page layout, the viewport, the Color tool and the exports
+    // come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // ---- Geometry kit: closed shells built from rings (shared vertices, so always watertight) ----
+      var TAU = Math.PI * 2;
+      function rad(d) { return (d * Math.PI) / 180; }
+      function rad(d) { return (d * Math.PI) / 180; }
+      function sqr(x) { return x * x; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vnorm(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+      // rings: array of closed point loops [[x,y,z],...] or { pole: [x,y,z] } (a single point cap).
+      // Neighbouring rings must have the same winding. wrap = true joins the last ring to the first (torus).
+      // The winding of the whole shell is fixed afterwards from its signed volume.
+      function shell(rings, wrap) {
+        var verts = [], idx = [], info = [], i, j;
+        rings.forEach(function (r) {
+          if (r.pole) { info.push({ pole: true, s: verts.length, n: 1 }); verts.push(r.pole); }
+          else { info.push({ s: verts.length, n: r.length }); r.forEach(function (q) { verts.push(q); }); }
+        });
+        var n = rings.length, last = wrap ? n : n - 1;
+        for (i = 0; i < last; i++) {
+          var A = info[i], B = info[(i + 1) % n];
+          if (A.pole && B.pole) continue;
+          if (A.pole) { for (j = 0; j < B.n; j++) idx.push(A.s, B.s + (j + 1) % B.n, B.s + j); }
+          else if (B.pole) { for (j = 0; j < A.n; j++) idx.push(A.s + j, A.s + (j + 1) % A.n, B.s); }
+          else {
+            for (j = 0; j < A.n; j++) {
+              var a = A.s + j, b = A.s + (j + 1) % A.n, c = B.s + (j + 1) % B.n, d = B.s + j;
+              idx.push(a, b, c, a, c, d);
+            }
+          }
+        }
+        var vol = 0, p, q, r;
+        for (i = 0; i < idx.length; i += 3) {
+          p = verts[idx[i]]; q = verts[idx[i + 1]]; r = verts[idx[i + 2]];
+          vol += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+        }
+        var out = new Float32Array(idx.length * 3), o = 0, v;
+        for (i = 0; i < idx.length; i += 3) {
+          var tri = vol < 0 ? [idx[i], idx[i + 2], idx[i + 1]] : [idx[i], idx[i + 1], idx[i + 2]];
+          for (j = 0; j < 3; j++) { v = verts[tri[j]]; out[o++] = v[0]; out[o++] = v[1]; out[o++] = v[2]; }
+        }
+        return out;
+      }
+
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Circle / ellipse loop in the XZ plane at height y. o: { cx, cz, sx, sz, rot }.
+      function loopXZ(r, y, seg, o) {
+        o = o || {};
+        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
+        var cr = Math.cos(rot), sr = Math.sin(rot), out = [], j, a, x, z;
+        for (j = 0; j < seg; j++) {
+          a = (j / seg) * TAU;
+          x = r * sx * Math.cos(a); z = r * sz * Math.sin(a);
+          out.push([cx + x * cr - z * sr, y, cz + x * sr + z * cr]);
+        }
+        return out;
+      }
+      // Closed ring-shaped solid (torus-like): cross-section polygon [[r, y], ...] revolved around Y.
+      function bandRing(poly, seg, o) {
+        return shell(poly.map(function (p) { return loopXZ(p[0], p[1], seg, o); }), true);
+      }
+      // Rounded rectangle loop (counter-clockwise from above) at height y.
+      function rrect(hx, hz, cr, y, arcN, cx, cz) {
+        cr = Math.max(0.05, Math.min(cr, Math.min(hx, hz) - 0.02));
+        var out = [], k, a, corners = [[hx - cr, hz - cr, 0], [-(hx - cr), hz - cr, 90], [-(hx - cr), -(hz - cr), 180], [hx - cr, -(hz - cr), 270]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= arcN; k++) {
+            a = rad(c[2] + (k / arcN) * 90);
+            out.push([(cx || 0) + c[0] + cr * Math.cos(a), y, (cz || 0) + c[1] + cr * Math.sin(a)]);
+          }
+        });
+        return out;
+      }
+      function centroid(loop) {
+        var c = [0, 0, 0];
+        loop.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; });
+        return [c[0] / loop.length, c[1] / loop.length, c[2] / loop.length];
+      }
+      // Loft of loops with flat end caps.
+      function loftCapped(loops) {
+        var rings = [{ pole: centroid(loops[0]) }].concat(loops, [{ pole: centroid(loops[loops.length - 1]) }]);
+        return shell(rings, false);
+      }
+      function smootherstep(x) {
+        var t = Math.max(0, Math.min(1, x));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      }
+      function el(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+          else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      function withDefaults(defaults, over) {
+        var values = {};
+        Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return values;
+      }
+
+      // ---- Charm outlines: unit radius, centred, top (where the string joins) at y = 1 ----
+      var CHARMS = ['star', 'heart', 'drop', 'flower', 'leaf', 'diamond', 'circle', 'hex', 'tube'];
+      var CHARM_NAMES = { star: 'Star', heart: 'Heart', drop: 'Drop', flower: 'Flower', leaf: 'Leaf', diamond: 'Diamond', circle: 'Circle', hex: 'Hexagon', tube: 'Chime tube' };
+      var charmCache = {};
+      function charmPoly(type) {
+        if (charmCache[type]) return charmCache[type];
+        var pts = [], i, a, n;
+        if (type === 'star') {
+          for (i = 0; i < 10; i++) { a = (i * Math.PI) / 5 + Math.PI / 2; pts.push([Math.cos(a) * (i % 2 ? 0.48 : 1), Math.sin(a) * (i % 2 ? 0.48 : 1)]); }
+        } else if (type === 'heart') {
+          for (i = 0; i < 40; i++) {
+            a = (i / 40) * TAU;
+            pts.push([(16 * Math.pow(Math.sin(a), 3)) / 17, (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a) + 2.2) / 17]);
+          }
+        } else if (type === 'drop') {
+          pts.push([0, 1]);
+          for (i = 0; i <= 32; i++) { a = rad(26.7) - (i / 32) * rad(233.4); pts.push([0.62 * Math.cos(a), -0.38 + 0.62 * Math.sin(a)]); }
+        } else if (type === 'flower') {
+          for (i = 0; i < 60; i++) { a = (i / 60) * TAU + Math.PI / 2; var rr = 0.8 + 0.2 * Math.cos(5 * (a - Math.PI / 2)); pts.push([rr * Math.cos(a), rr * Math.sin(a)]); }
+        } else if (type === 'leaf') {
+          for (i = 0; i < 36; i++) { a = (i / 36) * TAU; pts.push([0.5 * Math.sin(a) * (0.55 + 0.45 * Math.abs(Math.sin(a))), Math.cos(a)]); }
+        } else if (type === 'diamond') {
+          pts = [[0, 1], [0.62, 0], [0, -1], [-0.62, 0]];
+        } else if (type === 'circle') {
+          for (i = 0; i < 40; i++) { a = (i / 40) * TAU + Math.PI / 2; pts.push([Math.cos(a), Math.sin(a)]); }
+        } else if (type === 'hex') {
+          for (i = 0; i < 6; i++) { a = (i / 6) * TAU + Math.PI / 2; pts.push([Math.cos(a), Math.sin(a)]); }
+        } else {
+          // Chime tube: a long narrow rounded rectangle, top at y = 1.
+          var hw = 0.16, c2 = 0.16, k;
+          for (k = 0; k <= 6; k++) { a = (k / 6) * Math.PI / 2; pts.push([hw - c2 + c2 * Math.cos(a), 1 - c2 + c2 * Math.sin(a)]); }
+          for (k = 0; k <= 6; k++) { a = Math.PI / 2 + (k / 6) * Math.PI / 2; pts.push([-hw + c2 + c2 * Math.cos(a), 1 - c2 + c2 * Math.sin(a)]); }
+          for (k = 0; k <= 6; k++) { a = Math.PI + (k / 6) * Math.PI / 2; pts.push([-hw + c2 + c2 * Math.cos(a), -1 + c2 + c2 * Math.sin(a)]); }
+          for (k = 0; k <= 6; k++) { a = 1.5 * Math.PI + (k / 6) * Math.PI / 2; pts.push([hw - c2 + c2 * Math.cos(a), -1 + c2 + c2 * Math.sin(a)]); }
+        }
+        // Normalise so the topmost point is exactly y = 1 and the shape is centred on the bounding box middle.
+        var minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
+        pts.forEach(function (q) { minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); });
+        var ext = Math.max(maxY - minY, 1e-6) / 2, midY = (maxY + minY) / 2, midX = (maxX + minX) / 2;
+        if (type !== 'tube') pts = pts.map(function (q) { return [(q[0] - midX) / ext, (q[1] - midY) / ext]; });
+        var area = 0;
+        pts.forEach(function (q, j) { var r = pts[(j + 1) % pts.length]; area += q[0] * r[1] - r[0] * q[1]; });
+        charmCache[type] = { pts: pts, area: Math.abs(area) / 2 };
+        return charmCache[type];
+      }
+      function charmIcon(type) {
+        return '<svg viewBox="-1.15 -1.15 2.3 2.3" aria-hidden="true"><polygon points="' + charmPoly(type).pts.map(function (q) { return q[0].toFixed(3) + ',' + (-q[1]).toFixed(3); }).join(' ') + '"/></svg>';
+      }
+
+      // Flat slab of a polygon [[x, z], ...] in the XZ plane, thickness t, with a small chamfer top and bottom.
+      function slab(poly, t) {
+        var cx = 0, cz = 0, rmin = Infinity;
+        poly.forEach(function (q) { cx += q[0]; cz += q[1]; });
+        cx /= poly.length; cz /= poly.length;
+        poly.forEach(function (q) { rmin = Math.min(rmin, Math.sqrt(sqr(q[0] - cx) + sqr(q[1] - cz))); });
+        var ch = Math.min(0.4, rmin * 0.22, t * 0.3), sc = 1 - ch / Math.max(rmin, 0.3);
+        function loop(y, s) { return poly.map(function (q) { return [cx + (q[0] - cx) * s, y, cz + (q[1] - cz) * s]; }); }
+        return loftCapped([loop(0, sc), loop(ch, 1), loop(t - ch, 1), loop(t, sc)]);
+      }
+      function sqr(x) { return x * x; }
+
+      // ---- State: the hangers on the bar ----
+      // u: position along the bar (-1 left end ... 1 right end), len: string length (mm), size: charm radius (mm)
+      var LAYOUTS = [
+        { name: 'Star trio', items: [[-0.6, 14, 'star', 8], [0, 26, 'star', 10], [0.6, 14, 'star', 8]] },
+        { name: 'Wind chime', items: [[-0.8, 6, 'tube', 14], [-0.4, 6, 'tube', 22], [0, 6, 'tube', 28], [0.4, 6, 'tube', 19], [0.8, 6, 'tube', 12]] },
+        { name: 'Hearts & drops', items: [[-0.75, 12, 'heart', 7], [-0.25, 28, 'drop', 8], [0.25, 20, 'heart', 9], [0.75, 34, 'drop', 7]] },
+        { name: 'Garden', items: [[-0.7, 16, 'flower', 8], [-0.25, 30, 'leaf', 9], [0.2, 14, 'drop', 7], [0.65, 26, 'flower', 9]] },
+        { name: 'Gem drop', items: [[-0.5, 20, 'diamond', 9], [0, 40, 'hex', 8], [0.5, 20, 'diamond', 9]] }
+      ];
+      var hangers = [], sel = 0, nextType = 'star', refreshMobile = null, lastMeshes = [];
+      var MAX_HANGERS = 9;
+      function loadLayout(i) {
+        hangers = LAYOUTS[i].items.map(function (q) { return { u: q[0], len: q[1], type: q[2], size: q[3] }; });
+        sel = 0;
+      }
+      loadLayout(0);
+
+      var PARAMS = [
+        { group: 'Bar', key: 'barLen', label: 'Bar length', unit: ' mm', min: 60, max: 170, step: 1, value: 100 },
+        { group: 'Bar', key: 'barW', label: 'Bar width', unit: ' mm', min: 5, max: 14, step: 0.5, value: 8 },
+        { group: 'Bar', key: 'thick', label: 'Plate thickness', unit: ' mm', min: 2, max: 5, step: 0.2, value: 3 },
+        { group: 'Bar', key: 'autoBalance', label: 'Hanging loop', unit: '', min: 0, max: 1, step: 1, value: 1,
+          format: function (v) { return v >= 1 ? 'Auto balance' : 'Manual'; } },
+        { group: 'Bar', key: 'loopPos', label: 'Manual loop position (left ↔ right)', unit: '', min: -1, max: 1, step: 0.02, value: 0,
+          format: function (v) { return v < -0.05 ? 'Left ' + Math.round(-v * 100) + '%' : v > 0.05 ? 'Right ' + Math.round(v * 100) + '%' : 'Centre'; } },
+        { group: 'Bar', key: 'loopHole', label: 'Loop hole size', unit: ' mm', min: 2, max: 5, step: 0.2, value: 3 },
+        { group: 'Strings', key: 'strW', label: 'String width', unit: ' mm', min: 1.4, max: 4, step: 0.2, value: 2 },
+        { group: 'Strings', key: 'beads', label: 'Beads on each string', unit: '', min: 0, max: 5, step: 1, value: 0 },
+        { group: 'Strings', key: 'charmScale', label: 'All charms size', unit: '%', min: 60, max: 150, step: 1, value: 100 },
+        { tab: 'mobile', group: 'Selected hanger', key: 'selSize', label: 'Charm size', unit: ' mm', min: 4, max: 34, step: 0.5, value: 8 },
+        { tab: 'mobile', group: 'Selected hanger', key: 'selLen', label: 'String length', unit: ' mm', min: 4, max: 90, step: 1, value: 14 }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
+
+      function halfSpan(p) { return p.barLen / 2 - p.barW / 2 - 0.5; }
+      function hangerX(h, p) { return h.u * halfSpan(p); }
+      function charmR(h, p) { return h.size * p.charmScale / 100; }
+
+      // Balance point of the bar plus every hanger (weights follow plate area).
+      function balance(p) {
+        var wsum = p.barLen * p.barW, msum = 0;
+        hangers.forEach(function (h) {
+          var R = charmR(h, p), w = charmPoly(h.type).area * R * R + h.len * p.strW;
+          wsum += w; msum += w * hangerX(h, p);
+        });
+        return msum / wsum;
+      }
+      function loopX(p) {
+        var lim = p.barLen / 2 - p.barW * 0.5 - 2;
+        return Math.max(-lim, Math.min(lim, p.autoBalance >= 1 ? balance(p) : p.loopPos * lim));
+      }
+
+      function build(p) {
+        var out = [], i, k, t = p.thick;
+        if (sel >= hangers.length) sel = hangers.length - 1;
+        if (hangers[sel]) { hangers[sel].size = p.selSize; hangers[sel].len = p.selLen; }
+        var hs = p.barW / 2;
+        // Bar: a stadium plate.
+        var barLoops = function (y, inset) { return rrect(p.barLen / 2 - inset, hs - inset, hs - inset, y, 8, 0, 0); };
+        var chb = Math.min(0.4, t * 0.3);
+        out.push({ name: 'bar', positions: loftCapped([barLoops(0, chb), barLoops(chb, 0), barLoops(t - chb, 0), barLoops(t, chb)]), singlePart: true });
+        // Hanging loop.
+        var lx = loopX(p), Ro = p.loopHole + 2.2, lcz = -hs - Ro + 1.4, rings = [], ch = 0.4;
+        [[p.loopHole, 0], [Ro - ch, 0], [Ro, ch], [Ro, t - ch], [Ro - ch, t], [p.loopHole, t]].forEach(function (q) {
+          rings.push(loopXZ(q[0], q[1], 48, { cx: lx, cz: lcz }));
+        });
+        out.push({ name: 'loop', positions: shell(rings, true), singlePart: true });
+        // Strings and beads.
+        var strings = [], beads = [];
+        hangers.forEach(function (h, idx) {
+          var x = hangerX(h, p), R = charmR(h, p), sw = p.strW;
+          strings.push(slab(rrect(sw / 2, h.len / 2 + 0.5, sw / 2 - 0.05, 0, 4, x, h.len / 2 - 0.1).map(function (q) { return [q[0], q[2]]; }), t));
+          var n = Math.round(p.beads);
+          for (k = 0; k < n; k++) {
+            var bz = hs + 2.5 + (k + 0.5) * Math.max(0, h.len - hs - 3.5) / Math.max(1, n);
+            if (bz > h.len - 1.5) continue;
+            var bp = [], bn = 20, br = sw * 1.15, b;
+            for (b = 0; b < bn; b++) bp.push([x + br * Math.cos((b / bn) * TAU), bz + br * Math.sin((b / bn) * TAU)]);
+            beads.push(slab(bp, t));
+          }
+          var zc = h.len - 1 + R, poly = charmPoly(h.type).pts.map(function (q) { return [x + q[0] * R, zc - q[1] * R]; });
+          out.push({ name: 'charm' + idx, positions: slab(poly, t), singlePart: true });
+        });
+        out.splice(2, 0, { name: 'strings', positions: cat(strings), singlePart: true });
+        if (beads.length) out.splice(3, 0, { name: 'beads', positions: cat(beads), singlePart: true });
+        lastMeshes = out;
+        if (refreshMobile) refreshMobile();
+        return out;
+      }
+
+      function hangerIndex(name) { return /^charm\d$/.test(name || '') ? parseInt(name.slice(5), 10) : -1; }
+      function highlight(api, idx) {
+        var m = idx >= 0 ? lastMeshes.filter(function (e) { return e.name === 'charm' + idx; })[0] : null;
+        if (!m) { api.setPreview(null); return; }
+        var src = m.positions, out = new Float32Array(src.length), cx = 0, cz = 0, i, n = src.length / 3;
+        for (i = 0; i < src.length; i += 3) { cx += src[i]; cz += src[i + 2]; }
+        cx /= n; cz /= n;
+        for (i = 0; i < src.length; i += 3) { out[i] = cx + (src[i] - cx) * 1.06; out[i + 1] = src[i + 1] + 0.3; out[i + 2] = cz + (src[i + 2] - cz) * 1.06; }
+        api.setPreview({ positions: out });
+      }
+
+      // ---- The editor: a top-down canvas of the mobile. Tap the bar to add, drag a charm to move it, drag down to lengthen ----
+      function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#00e5ff'; }
+
+      function mountMobile(container, api) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Compose the mobile'));
+        var cv = el('canvas', { class: 'mm-canvas', height: '280' });
+        container.appendChild(cv);
+        var status = el('p', { class: 'mm-canvas-status' }, '');
+        container.appendChild(status);
+        var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), W = 300, H = 280;
+        var view = { s: 2, x0: 150, z0: 40 }, tilt = 0, tiltVel = 0, drag = null, anchor = [0, 0];
+
+        function resize() {
+          var w = Math.max(200, Math.floor(cv.getBoundingClientRect().width || 300));
+          if (w === W && cv.width === Math.floor(W * dpr)) return;
+          W = w; cv.width = Math.floor(W * dpr); cv.height = Math.floor(H * dpr);
+          cv.style.height = H + 'px';
+        }
+        function fit() {
+          var p = api.params, zmax = 60;
+          hangers.forEach(function (h) { zmax = Math.max(zmax, h.len + 2 * charmR(h, p)); });
+          var loopTop = p.barW / 2 + p.loopHole * 2 + 6;
+          view.s = Math.min((W - 24) / (p.barLen + 8), (H - 20) / (zmax + loopTop + 4));
+          view.x0 = W / 2; view.z0 = 10 + loopTop * view.s;
+        }
+        function toPx(x, z) { return [view.x0 + x * view.s, view.z0 + z * view.s]; }
+        function toWorld(px, py) { return [(px - view.x0) / view.s, (py - view.z0) / view.s]; }
+        function rot(pt, a, c) { var dx = pt[0] - c[0], dy = pt[1] - c[1], ca = Math.cos(a), sa = Math.sin(a); return [c[0] + dx * ca - dy * sa, c[1] + dx * sa + dy * ca]; }
+
+        function draw(now) {
+          requestAnimationFrame(draw);
+          if (!cv.offsetParent) return;
+          resize(); fit();
+          var p = api.params, cyan = cssVar('--bp-cyan'), amber = cssVar('--bp-amber'), white = cssVar('--bp-white'), muted = cssVar('--bp-muted'), green = cssVar('--bp-green');
+          var lx = loopX(p), bx = balance(p), off = lx - bx;
+          // Physics-ish sway: lean towards the heavy side, with a gentle idle swing.
+          var target = Math.max(-0.5, Math.min(0.5, off / (p.barLen / 2) * 1.4)) * (drag ? 0 : 1);
+          tiltVel += (target - tilt) * 0.06; tiltVel *= 0.88; tilt += tiltVel;
+          var ang = tilt + Math.sin(now / 900) * 0.018;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, W, H);
+          ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+          // Ruler ticks along the bar.
+          ctx.strokeStyle = muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
+          for (var m = -Math.floor(p.barLen / 20) * 10; m <= p.barLen / 2; m += 10) {
+            var tp = toPx(m, -p.barW / 2 - 4); ctx.beginPath(); ctx.moveTo(tp[0], tp[1]); ctx.lineTo(tp[0], tp[1] - (m % 50 === 0 ? 7 : 3)); ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          anchor = [lx, -p.barW / 2 - (p.loopHole + 2.2) + 1.4];
+          var ap = toPx(anchor[0], anchor[1]);
+          // Plumb line from the loop.
+          ctx.setLineDash([4, 4]); ctx.strokeStyle = green; ctx.globalAlpha = 0.5;
+          ctx.beginPath(); ctx.moveTo(ap[0], ap[1]); ctx.lineTo(ap[0], H - 4); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+          ctx.save();
+          ctx.translate(ap[0], ap[1]); ctx.rotate(ang); ctx.translate(-ap[0], -ap[1]);
+          // Bar.
+          var b0 = toPx(-p.barLen / 2, -p.barW / 2), bw = p.barLen * view.s, bh = p.barW * view.s;
+          ctx.fillStyle = cyan; ctx.globalAlpha = 0.22; ctx.strokeStyle = cyan; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.roundRect ? ctx.roundRect(b0[0], b0[1], bw, bh, bh / 2) : ctx.rect(b0[0], b0[1], bw, bh);
+          ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+          // Hanging loop.
+          var lp = toPx(anchor[0], anchor[1]);
+          ctx.beginPath(); ctx.arc(lp[0], lp[1], (p.loopHole + 2.2) * view.s, 0, TAU);
+          ctx.moveTo(lp[0] + p.loopHole * view.s, lp[1]); ctx.arc(lp[0], lp[1], p.loopHole * view.s, 0, TAU, true);
+          ctx.fillStyle = amber; ctx.globalAlpha = 0.35; ctx.fill('evenodd'); ctx.globalAlpha = 1; ctx.strokeStyle = amber; ctx.stroke();
+          // Hangers.
+          hangers.forEach(function (h, idx) {
+            var x = hangerX(h, p), R = charmR(h, p), zc = h.len - 1 + R, isSel = idx === sel;
+            var s0 = toPx(x, p.barW / 2), s1 = toPx(x, h.len);
+            ctx.strokeStyle = white; ctx.globalAlpha = 0.7; ctx.lineWidth = Math.max(1, p.strW * view.s);
+            ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.globalAlpha = 1;
+            ctx.beginPath();
+            charmPoly(h.type).pts.forEach(function (q, j) { var pp = toPx(x + q[0] * R, zc - q[1] * R); if (j) ctx.lineTo(pp[0], pp[1]); else ctx.moveTo(pp[0], pp[1]); });
+            ctx.closePath();
+            ctx.fillStyle = isSel ? amber : cyan; ctx.globalAlpha = isSel ? 0.45 : 0.25; ctx.fill(); ctx.globalAlpha = 1;
+            ctx.strokeStyle = isSel ? amber : cyan; ctx.lineWidth = isSel ? 3 : 2; ctx.stroke();
+          });
+          ctx.restore();
+          // Fulcrum marker and balance read-out.
+          ctx.fillStyle = green; ctx.beginPath(); ctx.moveTo(ap[0], ap[1] - 14); ctx.lineTo(ap[0] - 5, ap[1] - 22); ctx.lineTo(ap[0] + 5, ap[1] - 22); ctx.closePath(); ctx.fill();
+          var txt = Math.abs(off) < 1.2 ? 'Balanced: it will hang level' : 'Leans ' + (off > 0 ? 'left' : 'right') + ' by ' + Math.abs(off).toFixed(1) + ' mm' + (p.autoBalance >= 1 ? '' : ' (turn on Auto balance)');
+          if (status.textContent !== txt) status.textContent = txt;
+        }
+        requestAnimationFrame(draw);
+
+        function pointer(e) { var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+        function worldPt(e) { var a = pointer(e); var q = toWorld(a[0], a[1]); var anchorW = anchor; return rot(q, -tilt, anchorW); }
+
+        function setSel(i) {
+          sel = Math.max(0, Math.min(hangers.length - 1, i));
+          api.setParams({ selSize: hangers[sel].size, selLen: hangers[sel].len });
+        }
+        cv.addEventListener('pointerdown', function (e) {
+          var p = api.params, q = worldPt(e), hit = -1, i;
+          for (i = hangers.length - 1; i >= 0; i--) {
+            var h = hangers[i], R = charmR(h, p), cx = hangerX(h, p), cz = h.len - 1 + R;
+            if (Math.abs(q[0] - cx) < Math.max(R, 3.5) && q[1] > p.barW / 2 && q[1] < cz + R + 2) { hit = i; break; }
+          }
+          if (hit < 0 && Math.abs(q[1]) <= p.barW / 2 + 3 && Math.abs(q[0]) <= p.barLen / 2) {
+            if (hangers.length >= MAX_HANGERS) { api.toast('The bar holds up to ' + MAX_HANGERS + ' hangers'); return; }
+            var u = Math.max(-1, Math.min(1, q[0] / halfSpan(p)));
+            hangers.push({ u: u, len: 16, type: nextType, size: 8 });
+            hit = hangers.length - 1;
+          }
+          if (hit < 0) return;
+          sel = hit;
+          drag = { id: e.pointerId };
+          try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+          api.setParams({ selSize: hangers[sel].size, selLen: hangers[sel].len });
+          api.rebuild();
+        });
+        cv.addEventListener('pointermove', function (e) {
+          if (!drag) return;
+          var p = api.params, q = worldPt(e), h = hangers[sel], R = charmR(h, p);
+          h.u = Math.max(-1, Math.min(1, q[0] / halfSpan(p)));
+          var len = Math.round(Math.max(4, Math.min(90, q[1] - R + 1)));
+          api.setParams({ selLen: len });
+          h.len = len;
+          api.rebuild();
+        });
+        function end() { drag = null; }
+        cv.addEventListener('pointerup', end);
+        cv.addEventListener('pointercancel', end);
+
+        // Charm picker: changes the selected hanger and the type used for the next one you add.
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Charm shape (for the selected hanger)'));
+        var chips = el('div', { class: 'mm-icon-chips' }), chipBtns = {};
+        CHARMS.forEach(function (type) {
+          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: CHARM_NAMES[type], 'aria-pressed': 'false', onclick: function () {
+            nextType = type;
+            if (hangers[sel]) hangers[sel].type = type;
+            api.rebuild();
+          } });
+          btn.innerHTML = charmIcon(type) + '<span>' + CHARM_NAMES[type] + '</span>';
+          chipBtns[type] = btn; chips.appendChild(btn);
+        });
+        container.appendChild(chips);
+        container.appendChild(el('p', { class: 'mm-note' }, 'Tap the bar to add a hanger. Drag a charm sideways to move it and down to lengthen its string. The green marker is where the loop sits; with Auto balance on it always hangs level.'));
+
+        var row1 = el('div', { class: 'mm-export-row' }), row2 = el('div', { class: 'mm-export-row' });
+        function btn(label, fn) { return el('button', { class: 'mm-btn', type: 'button', onclick: fn }, label); }
+        row1.appendChild(btn('Delete selected', function () {
+          if (hangers.length <= 1) { api.toast('Keep at least one hanger'); return; }
+          hangers.splice(sel, 1); setSel(Math.min(sel, hangers.length - 1)); api.rebuild();
+        }));
+        row1.appendChild(btn('Duplicate', function () {
+          if (hangers.length >= MAX_HANGERS) { api.toast('The bar holds up to ' + MAX_HANGERS + ' hangers'); return; }
+          var h = hangers[sel];
+          hangers.push({ u: Math.max(-1, Math.min(1, h.u + 0.3 > 1 ? h.u - 0.3 : h.u + 0.3)), len: h.len, type: h.type, size: h.size });
+          setSel(hangers.length - 1); api.rebuild();
+        }));
+        row2.appendChild(btn('Mirror left ↔ right', function () { hangers.forEach(function (h) { h.u = -h.u; }); api.rebuild(); }));
+        row2.appendChild(btn('Space evenly', function () {
+          hangers.sort(function (a, b) { return a.u - b.u; });
+          var n = hangers.length; hangers.forEach(function (h, i) { h.u = n === 1 ? 0 : -0.82 + (1.64 * i) / (n - 1); });
+          api.rebuild(); api.toast('Spaced evenly');
+        }));
+        container.appendChild(row1); container.appendChild(row2);
+
+        refreshMobile = function () {
+          CHARMS.forEach(function (t) { chipBtns[t].setAttribute('aria-pressed', String(hangers[sel] && hangers[sel].type === t)); });
+        };
+        refreshMobile();
+
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Starter mobiles'));
+        var grid = el('div', { class: 'mm-preset-cards' });
+        LAYOUTS.forEach(function (lay, li) {
+          var card = el('button', { class: 'mm-preset-card', type: 'button', title: lay.name, onclick: function () {
+            loadLayout(li); setSel(0); api.rebuild(); api.toast('Mobile: ' + lay.name);
+          } });
+          var svg = '<svg viewBox="-60 -14 120 100" aria-hidden="true"><rect x="-50" y="-4" width="100" height="8" rx="4"/>';
+          lay.items.forEach(function (q) {
+            var x = q[0] * 46, R = q[3], zc = q[1] - 1 + R;
+            svg += '<rect x="' + (x - 1) + '" y="4" width="2" height="' + q[1] + '"/><polygon points="' + charmPoly(q[2]).pts.map(function (pt) { return (x + pt[0] * R).toFixed(1) + ',' + (zc - pt[1] * R).toFixed(1); }).join(' ') + '"/>';
+          });
+          card.innerHTML = svg + '</svg><span>' + lay.name + '</span>';
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
+      }
+
+      var STYLES = [
+        { name: 'Default mobile', values: {} },
+        { name: 'Beaded strings', values: { beads: 3, strW: 1.6 } },
+        { name: 'Chunky plates', values: { thick: 4.2, strW: 3, barW: 11, charmScale: 115 } },
+        { name: 'Long and light', values: { barLen: 140, thick: 2.4, strW: 1.6, charmScale: 90 } },
+        { name: 'Manual loop (off centre)', values: { autoBalance: 0, loopPos: -0.4 } }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-014',
+        category: 'ORNAMENTS // MOBILES',
+        title: 'Wind Chime Composer',
+        fileName: 'Wind_Chime_Mobile',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#f1f5f9',
+        palette: [
+          { name: 'Cloud White', color: '#f1f5f9' },
+          { name: 'Sky Blue', color: '#93c5fd' },
+          { name: 'Mint Breeze', color: '#a7f3d0' },
+          { name: 'Sunny Yellow', color: '#fde047' },
+          { name: 'Blossom Pink', color: '#fda4af' },
+          { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Peach Matte', color: '#fdba74' },
+          { name: 'Slate Night', color: '#334155' }
+        ],
+        partNames: (function () {
+          var names = { bar: 'Bar', loop: 'Hanging loop', strings: 'Strings', beads: 'Beads' };
+          for (var i = 0; i < MAX_HANGERS; i++) names['charm' + i] = 'Charm ' + (i + 1);
+          return names;
+        })(),
+
+        parameters: PARAMS,
+
+        presets: STYLES.map(function (s) { return { label: s.name, values: withDefaults(DEFAULTS, s.values) }; }),
+
+        testSetup: function () { loadLayout(0); },
+
+        tabs: [{
+          id: 'mobile',
+          label: 'Mobile',
+          hint: 'Click a charm to select it. Compose the mobile in the editor.',
+          mount: mountMobile,
+          onHover: function (hit, api) { highlight(api, hit ? hangerIndex(hit.meshName) : -1); },
+          onPick: function (hit, api) {
+            var i = hangerIndex(hit.meshName);
+            if (i < 0) return;
+            sel = i;
+            api.setParams({ selSize: hangers[sel].size, selLen: hangers[sel].len });
+            api.rebuild();
+          }
+        }],
+
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

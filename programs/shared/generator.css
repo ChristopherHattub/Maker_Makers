@@ -620,6 +620,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-preset-card ellipse { fill: #1b1206; }
 
 /* ---------- Print settings tab ---------- */
+.mm-slider input[type="text"],
 .mm-slider select {
   width: 100%;
   font-family: inherit;
@@ -696,3 +697,21 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-modal-agree input { accent-color: var(--bp-cyan); }
 .mm-disclaimer-lead { margin: 0 0 0.3rem; }
 .mm-disclaimer summary { color: var(--bp-cyan); }
+
+/* Interactive drawing surface used inside generator tabs (wind chime editor, pottery wheel). */
+.mm-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--bp-cyan-dim);
+  background: rgba(6, 21, 45, 0.78);
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mm-canvas-status {
+  margin: 0.4rem 0 0.6rem;
+  color: var(--bp-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
