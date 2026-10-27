@@ -620,6 +620,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-preset-card ellipse { fill: #1b1206; }
 
 /* ---------- Print settings tab ---------- */
+.mm-slider input[type="text"],
 .mm-slider select {
   width: 100%;
   font-family: inherit;

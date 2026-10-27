@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-011 Name Keychain // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Name Keychain: raised stroke-font lettering on a flat plate with a key ring loop. The page layout,
+    // the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      var DEG = Math.PI / 180;
+      var CAP_STEPS = 5;     // Segments per round stroke end
+      var EMBED = 0.4;       // mm that raised parts sink into the plate so slicers union them
+
+      // -----------------------------------------------------------------------
+      // Stroke font. Each glyph is a width plus polylines on a grid: cap height 6,
+      // x-height 4, descender -2. Strokes are thickened into capsules at build time.
+      // -----------------------------------------------------------------------
+      function arc(cx, cy, rx, ry, a0, a1) {
+        var n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 24));
+        var pts = [];
+        for (var i = 0; i <= n; i++) {
+          var a = (a0 + (a1 - a0) * i / n) * DEG;
+          pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+        }
+        return pts;
+      }
+      function join() { return Array.prototype.concat.apply([], arguments); }
+      function glyph(w) { return { w: w, s: Array.prototype.slice.call(arguments, 1) }; }
+      var DOT = function (x, y) { return [[x, y], [x, y + 0.01]]; };
+
+      var heartPts = [];
+      for (var hi = 360; hi >= 0; hi -= 15) {
+        var ht = hi * DEG;
+        var hx = 16 * Math.pow(Math.sin(ht), 3);
+        var hy = 13 * Math.cos(ht) - 5 * Math.cos(2 * ht) - 2 * Math.cos(3 * ht) - Math.cos(4 * ht);
+        heartPts.push([(hx + 16) / 32 * 5.2, (hy + 17) / 29 * 5.4 + 0.3]);
+      }
+
+      var GLYPHS = {
+        ' ': glyph(2.5),
+        'A': glyph(4, [[0, 0], [2, 6], [4, 0]], [[0.9, 2.2], [3.1, 2.2]]),
+        'B': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.4, 1.5, 90, -90), [[0, 3]]), join([[0, 3], [2.6, 3]], arc(2.6, 1.5, 1.5, 1.5, 90, -90), [[0, 0]])),
+        'C': glyph(4.4, arc(2.2, 3, 2.2, 3, 45, 315)),
+        'D': glyph(4.4, [[0, 0], [0, 6]], join([[0, 6], [1.8, 6]], arc(1.8, 3, 2.6, 3, 90, -90), [[0, 0]])),
+        'E': glyph(4, [[4, 6], [0, 6], [0, 0], [4, 0]], [[0, 3], [3, 3]]),
+        'F': glyph(4, [[4, 6], [0, 6], [0, 0]], [[0, 3], [3, 3]]),
+        'G': glyph(4.4, join(arc(2.2, 3, 2.2, 3, 45, 360), [[2.4, 3]])),
+        'H': glyph(4, [[0, 0], [0, 6]], [[4, 0], [4, 6]], [[0, 3], [4, 3]]),
+        'I': glyph(0, [[0, 0], [0, 6]]),
+        'J': glyph(3, join([[3, 6]], arc(1.5, 1.5, 1.5, 1.5, 0, -180))),
+        'K': glyph(4, [[0, 0], [0, 6]], [[4, 6], [0, 2.5]], [[1.2, 3.5], [4, 0]]),
+        'L': glyph(3.6, [[0, 6], [0, 0], [3.6, 0]]),
+        'M': glyph(4.4, [[0, 0], [0, 6], [2.2, 2.2], [4.4, 6], [4.4, 0]]),
+        'N': glyph(4, [[0, 0], [0, 6], [4, 0], [4, 6]]),
+        'O': glyph(4.4, arc(2.2, 3, 2.2, 3, 0, 360)),
+        'P': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.6, 1.5, 90, -90), [[0, 3]])),
+        'Q': glyph(4.4, arc(2.2, 3, 2.2, 3, 0, 360), [[2.6, 1.6], [4.4, -0.6]]),
+        'R': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.6, 1.5, 90, -90), [[0, 3]]), [[1.6, 3], [4, 0]]),
+        'S': glyph(4, join(arc(2, 4.5, 1.9, 1.5, 20, 270), arc(2, 1.5, 2, 1.5, 90, -160))),
+        'T': glyph(4, [[0, 6], [4, 6]], [[2, 6], [2, 0]]),
+        'U': glyph(4, join([[0, 6]], arc(2, 2.2, 2, 2.2, 180, 360), [[4, 6]])),
+        'V': glyph(4, [[0, 6], [2, 0], [4, 6]]),
+        'W': glyph(5, [[0, 6], [1.1, 0], [2.5, 4], [3.9, 0], [5, 6]]),
+        'X': glyph(4, [[0, 6], [4, 0]], [[4, 6], [0, 0]]),
+        'Y': glyph(4, [[0, 6], [2, 3], [4, 6]], [[2, 3], [2, 0]]),
+        'Z': glyph(4, [[0, 6], [4, 6], [0, 0], [4, 0]]),
+        '0': glyph(3.8, arc(1.9, 3, 1.9, 3, 0, 360)),
+        '1': glyph(2, [[0.2, 4.8], [2, 6], [2, 0]]),
+        '2': glyph(4, join(arc(2, 4.3, 1.9, 1.7, 160, -20), [[0, 0], [4, 0]])),
+        '3': glyph(4, join(arc(2, 4.5, 1.8, 1.5, 150, -90), arc(2, 1.6, 2, 1.6, 90, -150))),
+        '4': glyph(4, [[3, 0], [3, 6], [0, 2], [4, 2]]),
+        '5': glyph(4, join([[3.6, 6], [0.4, 6], [0.7, 3.2]], arc(2, 1.8, 2, 1.8, 130, -150))),
+        '6': glyph(4, [[3.2, 6], [0.1, 2.2]], arc(2, 1.9, 1.9, 1.9, 0, 360)),
+        '7': glyph(4, [[0, 6], [4, 6], [1.4, 0]]),
+        '8': glyph(4, arc(2, 4.6, 1.6, 1.4, 0, 360), arc(2, 1.6, 1.9, 1.6, 0, 360)),
+        '9': glyph(4, arc(2, 4.1, 1.9, 1.9, 0, 360), [[0.8, 0], [3.9, 3.8]]),
+        '-': glyph(2.8, [[0.2, 3], [2.6, 3]]),
+        '+': glyph(3, [[0, 3], [3, 3]], [[1.5, 1.5], [1.5, 4.5]]),
+        '.': glyph(0, DOT(0, 0)),
+        '!': glyph(0, [[0, 6], [0, 1.8]], DOT(0, 0)),
+        '\'': glyph(0, [[0, 6], [0, 4.5]]),
+        '♥': glyph(5.2, heartPts),
+        'a': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360), [[3.8, 4], [3.8, 0]]),
+        'b': glyph(3.8, [[0, 6], [0, 0]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'c': glyph(3.8, arc(1.9, 2, 1.9, 2, 40, 320)),
+        'd': glyph(3.8, [[3.8, 6], [3.8, 0]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'e': glyph(3.8, join([[0, 2], [3.8, 2]], arc(1.9, 2, 1.9, 2, 0, 320))),
+        'f': glyph(2.8, join([[1.2, 0], [1.2, 5]], arc(2.4, 5, 1.2, 1, 180, 60)), [[0, 3.8], [2.6, 3.8]]),
+        'g': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360), join([[3.8, 4], [3.8, -0.5]], arc(1.9, -0.5, 1.9, 1.4, 0, -150))),
+        'h': glyph(3.6, [[0, 6], [0, 0]], join(arc(1.8, 2.2, 1.8, 1.8, 180, 0), [[3.6, 0]])),
+        'i': glyph(0, [[0, 0], [0, 4]], DOT(0, 5.6)),
+        'j': glyph(1.3, join([[1.3, 4], [1.3, -0.6]], arc(0.1, -0.6, 1.2, 1.2, 0, -100)), DOT(1.3, 5.6)),
+        'k': glyph(3.4, [[0, 6], [0, 0]], [[3.2, 4], [0, 1.6]], [[1, 2.4], [3.4, 0]]),
+        'l': glyph(0, [[0, 6], [0, 0]]),
+        'm': glyph(6, [[0, 4], [0, 0]], join(arc(1.5, 2.2, 1.5, 1.8, 180, 0), arc(4.5, 2.2, 1.5, 1.8, 180, 0), [[6, 0]]), [[3, 2.2], [3, 0]]),
+        'n': glyph(3.6, [[0, 4], [0, 0]], join(arc(1.8, 2.2, 1.8, 1.8, 180, 0), [[3.6, 0]])),
+        'o': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360)),
+        'p': glyph(3.8, [[0, 4], [0, -2]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'q': glyph(3.8, [[3.8, 4], [3.8, -2]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'r': glyph(2.8, [[0, 4], [0, 0]], arc(1.6, 2.2, 1.6, 1.8, 180, 50)),
+        's': glyph(3.4, join(arc(1.7, 3.1, 1.5, 0.9, 20, 270), arc(1.7, 1.1, 1.7, 1.1, 90, -160))),
+        't': glyph(2.8, join([[1.2, 5.6], [1.2, 0.8]], arc(2.4, 0.8, 1.2, 0.8, 180, 270)), [[0, 4], [2.8, 4]]),
+        'u': glyph(3.6, join([[0, 4], [0, 1.8]], arc(1.8, 1.8, 1.8, 1.8, 180, 360)), [[3.6, 4], [3.6, 0]]),
+        'v': glyph(3.6, [[0, 4], [1.8, 0], [3.6, 4]]),
+        'w': glyph(4.8, [[0, 4], [1, 0], [2.4, 3], [3.8, 0], [4.8, 4]]),
+        'x': glyph(3.4, [[0, 4], [3.4, 0]], [[3.4, 4], [0, 0]]),
+        'y': glyph(3.6, [[0, 4], [1.8, 0.4]], [[3.6, 4], [1, -2]]),
+        'z': glyph(3.4, [[0, 4], [3.4, 4], [0, 0], [3.4, 0]])
+      };
+
+      // Lettering styles (a select in the Name tab): stroke caps, slant, width and weight.
+      var FONTS = {
+        rounded: { label: 'Rounded', cap: 'round', shear: 0, xs: 1, tmul: 1 },
+        block: { label: 'Block', cap: 'square', shear: 0, xs: 1, tmul: 1 },
+        slanted: { label: 'Slanted', cap: 'round', shear: 0.26, xs: 1, tmul: 1 },
+        wide: { label: 'Wide', cap: 'round', shear: 0, xs: 1.3, tmul: 1 },
+        narrow: { label: 'Narrow', cap: 'square', shear: 0, xs: 0.75, tmul: 1 },
+        bubble: { label: 'Bubble', cap: 'round', shear: 0, xs: 1.15, tmul: 1.6 }
+      };
+      var SHAPES = [
+        ['rounded', 'Rounded rectangle'], ['pill', 'Pill'], ['oval', 'Oval'], ['hex', 'Hexagon'],
+        ['heart', 'Heart'], ['scallop', 'Scalloped badge'], ['none', 'No plate (letters joined)']
+      ];
+      var HOLES = [['left', 'Left end'], ['right', 'Right end'], ['top', 'Top centre'], ['none', 'No hole']];
+      var CASES = [['typed', 'As typed'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
+
+      // Non-slider choices live here; the Name tab edits them.
+      var state = { line1: 'Chris', line2: '', font: 'rounded', shape: 'rounded', hole: 'left', caps: 'typed' };
+      var refreshNameUI = null;
+
+      // -----------------------------------------------------------------------
+      // Geometry helpers (2D x / gy -> 3D x / y / -z, Y up)
+      // -----------------------------------------------------------------------
+      function v3(p, y) { return [p[0], y, -p[1]]; }
+      function tri(out, a, b, c) {
+        out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(out, a0, b0, b1, a1) { tri(out, a0, b0, b1); tri(out, a0, b1, a1); }
+
+      // Closed prism from a CCW polygon. center = fan point for star-shaped outlines (default: vertex 0, convex only).
+      function prism(out, poly, y0, y1, center) {
+        var n = poly.length, i, a, b;
+        for (i = 0; i < n; i++) {
+          a = poly[i]; b = poly[(i + 1) % n];
+          quad(out, v3(a, y0), v3(b, y0), v3(b, y1), v3(a, y1));
+          if (center) {
+            tri(out, v3(center, y1), v3(a, y1), v3(b, y1));
+            tri(out, v3(center, y0), v3(b, y0), v3(a, y0));
+          } else if (i > 0 && i < n - 1) {
+            tri(out, v3(poly[0], y1), v3(a, y1), v3(b, y1));
+            tri(out, v3(poly[0], y0), v3(b, y0), v3(a, y0));
+          }
+        }
+      }
+
+      // Closed ring prism between two CCW loops with the same vertex count.
+      function ringPrism(out, outer, inner, y0, y1) {
+        var n = outer.length, i, a, b, c, d;
+        for (i = 0; i < n; i++) {
+          a = outer[i]; b = outer[(i + 1) % n]; c = inner[(i + 1) % n]; d = inner[i];
+          quad(out, v3(a, y0), v3(b, y0), v3(b, y1), v3(a, y1));
+          quad(out, v3(d, y0), v3(d, y1), v3(c, y1), v3(c, y0));
+          tri(out, v3(a, y1), v3(b, y1), v3(c, y1));
+          tri(out, v3(a, y1), v3(c, y1), v3(d, y1));
+          tri(out, v3(a, y0), v3(c, y0), v3(b, y0));
+          tri(out, v3(a, y0), v3(d, y0), v3(c, y0));
+        }
+      }
+
+      // Convex capsule (round) or box (square) polygon around a segment.
+      function strokePoly(x0, y0, x1, y1, t, cap) {
+        var h = t / 2, dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) { dx = 1; dy = 0; len = 1; }
+        dx /= len; dy /= len;
+        var nx = -dy, ny = dx, pts = [], i, ang, c, s;
+        if (cap === 'square') {
+          var ax = x0 - dx * h * 0.97, ay = y0 - dy * h * 0.97, bx = x1 + dx * h * 1.03, by = y1 + dy * h * 1.03; // uneven so overlapping boxes never share an exact edge
+          return [[ax - nx * h, ay - ny * h], [bx - nx * h, by - ny * h], [bx + nx * h, by + ny * h], [ax + nx * h, ay + ny * h]];
+        }
+        for (i = 0; i <= CAP_STEPS; i++) {
+          ang = (-90 + 180 * i / CAP_STEPS) * DEG; c = Math.cos(ang); s = Math.sin(ang);
+          pts.push([x1 + h * (dx * c + nx * s), y1 + h * (dy * c + ny * s)]);
+        }
+        for (i = 0; i <= CAP_STEPS; i++) {
+          ang = (90 + 180 * i / CAP_STEPS) * DEG; c = Math.cos(ang); s = Math.sin(ang);
+          pts.push([x0 + h * (dx * c + nx * s), y0 + h * (dy * c + ny * s)]);
+        }
+        return pts;
+      }
+
+      // Drop repeated points and split long edges so rim offsets stay even.
+      function densify(pts, maxLen) {
+        var clean = [], i, a, b, d, k, steps, out = [];
+        for (i = 0; i < pts.length; i++) {
+          a = pts[i]; b = clean[clean.length - 1];
+          if (!b || Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) > 1e-4) clean.push(a);
+        }
+        var f = clean[0], l = clean[clean.length - 1];
+        if (clean.length > 1 && Math.abs(f[0] - l[0]) + Math.abs(f[1] - l[1]) <= 1e-4) clean.pop();
+        for (i = 0; i < clean.length; i++) {
+          a = clean[i]; b = clean[(i + 1) % clean.length];
+          d = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1]));
+          steps = Math.max(1, Math.ceil(d / maxLen));
+          for (k = 0; k < steps; k++) out.push([a[0] + (b[0] - a[0]) * k / steps, a[1] + (b[1] - a[1]) * k / steps]);
+        }
+        return out;
+      }
+
+      function offsetInward(pts, w) {
+        var n = pts.length, out = [], i, p, a, b, e1x, e1y, e2x, e2y, l1, l2, n1x, n1y, n2x, n2y, mx, my, ml, dot;
+        for (i = 0; i < n; i++) {
+          p = pts[i]; a = pts[(i + n - 1) % n]; b = pts[(i + 1) % n];
+          e1x = p[0] - a[0]; e1y = p[1] - a[1]; l1 = Math.sqrt(e1x * e1x + e1y * e1y) || 1;
+          e2x = b[0] - p[0]; e2y = b[1] - p[1]; l2 = Math.sqrt(e2x * e2x + e2y * e2y) || 1;
+          n1x = e1y / l1; n1y = -e1x / l1; n2x = e2y / l2; n2y = -e2x / l2; // outward for CCW
+          mx = n1x + n2x; my = n1y + n2y; ml = Math.sqrt(mx * mx + my * my) || 1;
+          mx /= ml; my /= ml;
+          dot = Math.max(0.35, mx * n1x + my * n1y);
+          out.push([p[0] - mx * w / dot, p[1] - my * w / dot]);
+        }
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // Lettering layout: returns stroke segments centred on the origin plus the ink box.
+      // -----------------------------------------------------------------------
+      function prepText() {
+        var l1 = state.line1, l2 = state.line2;
+        if (state.caps === 'upper') { l1 = l1.toUpperCase(); l2 = l2.toUpperCase(); }
+        if (state.caps === 'lower') { l1 = l1.toLowerCase(); l2 = l2.toLowerCase(); }
+        l1 = l1.replace(/<3/g, '♥'); l2 = l2.replace(/<3/g, '♥');
+        var lines = [];
+        if (l1.trim()) lines.push(l1);
+        if (l2.trim()) lines.push(l2);
+        if (!lines.length) lines.push('Name');
+        return lines;
+      }
+
+      function layout(p) {
+        var sty = FONTS[state.font] || FONTS.rounded;
+        var t = p.stroke * sty.tmul;
+        var lines = prepText(), segs = [], infos = [], baseline = 0, prevCap = 0, prevDesc = false;
+        lines.forEach(function (text, li) {
+          var u = p.textHeight * (li === 0 ? 1 : p.line2Size / 100) / 6;
+          if (li > 0) baseline -= prevCap + (prevDesc ? 2 * prevCap / 6 : 0) + t + p.lineGap;
+          var x = 0, mine = [], desc = false, minX = Infinity, maxX = -Infinity;
+          for (var ci = 0; ci < text.length; ci++) {
+            var ch = text.charAt(ci), g = GLYPHS[ch] || GLYPHS[' '];
+            if (/[gjpqy]/.test(ch)) desc = true;
+            g.s.forEach(function (poly) {
+              for (var k = 0; k < poly.length - 1; k++) {
+                var a = poly[k], b = poly[k + 1];
+                var ay = a[1] * u, by = b[1] * u;
+                var ax = x + a[0] * u * sty.xs + ay * sty.shear, bx = x + b[0] * u * sty.xs + by * sty.shear;
+                mine.push([ax, ay + baseline, bx, by + baseline]);
+                minX = Math.min(minX, ax, bx); maxX = Math.max(maxX, ax, bx);
+              }
+            });
+            x += g.w * u * sty.xs + t + p.spacing;
+          }
+          if (!isFinite(minX)) { minX = 0; maxX = 0; }
+          var cx = (minX + maxX) / 2;
+          mine.forEach(function (s) { segs.push([s[0] - cx, s[1], s[2] - cx, s[3]]); });
+          infos.push({ x0: minX - cx - t / 2, x1: maxX - cx + t / 2, base: baseline });
+          prevCap = 6 * u; prevDesc = desc;
+        });
+        var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+        segs.forEach(function (s) {
+          bx0 = Math.min(bx0, s[0], s[2]); bx1 = Math.max(bx1, s[0], s[2]);
+          by0 = Math.min(by0, s[1], s[3]); by1 = Math.max(by1, s[1], s[3]);
+        });
+        if (!isFinite(bx0)) { bx0 = -5; bx1 = 5; by0 = 0; by1 = 6; }
+        bx0 -= t / 2; bx1 += t / 2; by0 -= t / 2; by1 += t / 2;
+        var cxm = (bx0 + bx1) / 2, cym = (by0 + by1) / 2;
+        segs = segs.map(function (s) { return [s[0] - cxm, s[1] - cym, s[2] - cxm, s[3] - cym]; });
+        infos.forEach(function (li) { li.x0 -= cxm; li.x1 -= cxm; li.base -= cym; });
+        return { segs: segs, lines: infos, t: t, cap: sty.cap, W: bx1 - bx0, H: by1 - by0 };
+      }
+
+      // -----------------------------------------------------------------------
+      // Plate outlines (CCW, star-shaped about the origin)
+      // -----------------------------------------------------------------------
+      function roundedRect(a, b, r) {
+        var pts = [], corners = [[a - r, -(b - r), -90], [a - r, b - r, 0], [-(a - r), b - r, 90], [-(a - r), -(b - r), 180]];
+        var steps = r > 0.01 ? 12 : 1;
+        corners.forEach(function (c) {
+          for (var i = 0; i <= steps; i++) {
+            var ang = (c[2] + 90 * i / steps) * DEG;
+            pts.push([c[0] + r * Math.cos(ang), c[1] + r * Math.sin(ang)]);
+          }
+        });
+        return pts;
+      }
+
+      function ellipsePts(A, B, n, wobble, lobes) {
+        var pts = [];
+        for (var i = 0; i < n; i++) {
+          var a = i / n * Math.PI * 2, k = 1 + (wobble ? wobble * Math.cos(lobes * a) : 0);
+          pts.push([A * k * Math.cos(a), B * k * Math.sin(a)]);
+        }
+        return pts;
+      }
+
+      function plateOutline(shape, W, H, p) {
+        var pad = p.pad + p.rimWidth, a = W / 2 + pad, b = H / 2 + pad, pts, i;
+        if (shape === 'rounded') pts = roundedRect(a, b, Math.min(p.corner, a, b));
+        else if (shape === 'pill') pts = roundedRect(a + b * 0.45, b, b);
+        else if (shape === 'oval' || shape === 'scallop') {
+          var k = 1.22, A = k * W / 2 + pad, B = (H / 2) / Math.sqrt(1 - 1 / (k * k)) + pad;
+          pts = shape === 'oval' ? ellipsePts(A, B, 96, 0, 0) : ellipsePts(A * 1.04, B * 1.04, 192, 0.04, 14);
+        } else if (shape === 'hex') {
+          var c = b * 0.58, ax = W / 2 + pad + c;
+          pts = [[ax, 0], [ax - c, b], [-(ax - c), b], [-ax, 0], [-(ax - c), -b], [ax - c, -b]];
+        } else { // heart
+          var s = Math.max((W / 2 + pad) / 10, (H / 2 + pad) / 5, 0.9);
+          pts = [];
+          for (i = 0; i < 360; i += 3) {
+            var th = i * DEG;
+            var hx = 16 * Math.pow(Math.sin(th), 3);
+            var hy = 13 * Math.cos(th) - 5 * Math.cos(2 * th) - 2 * Math.cos(3 * th) - Math.cos(4 * th);
+            pts.push([hx * s, (hy - 3) * s]);
+          }
+          pts.reverse(); // the curve runs clockwise
+        }
+        return densify(pts, 3);
+      }
+
+      // Centre of the key ring hole: just outside the outline so the ring overlaps it by half the wall.
+      function holeCenter(pts, pos, yRef, holeR, wall) {
+        var band = (holeR + wall) * 0.7, i, v, best = null;
+        for (i = 0; i < pts.length; i++) {
+          v = pts[i];
+          if (pos === 'top') {
+            if (Math.abs(v[0]) <= band && (best === null || v[1] > best)) best = v[1];
+          } else if (Math.abs(v[1] - yRef) <= band) {
+            if (best === null || (pos === 'left' ? v[0] < best : v[0] > best)) best = v[0];
+          }
+        }
+        if (best === null) best = 0;
+        var off = holeR + wall * 0.5;
+        if (pos === 'top') return [0, best + off];
+        return [pos === 'left' ? best - off : best + off, yRef];
+      }
+
+      function circle(cx, cy, r, n) {
+        var pts = [];
+        for (var i = 0; i < n; i++) {
+          var a = i / n * Math.PI * 2;
+          pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+        }
+        return pts;
+      }
+
+      function buildKeychain(p) {
+        var lay = layout(p), t = lay.t;
+        var base = [], rim = [], text = [];
+        var plated = state.shape !== 'none';
+        var plateT = p.plateThick;
+        var textY0 = plated ? plateT - EMBED : 0;
+        var textY1 = plateT + p.raise;
+        var outline, ringPts;
+
+        if (plated) {
+          outline = plateOutline(state.shape, lay.W, lay.H, p);
+          prism(base, outline, 0, plateT, [0, 0]);
+          if (p.rimWidth >= 0.2) {
+            ringPrism(rim, outline, offsetInward(outline, p.rimWidth), plateT - EMBED, plateT + p.rimHeight);
+          }
+          ringPts = outline;
+        } else {
+          // Joined letters: a bar along each baseline ties the letters together.
+          lay.lines.forEach(function (ln) {
+            var bar = strokePoly(ln.x0 + t / 2, ln.base + t * 0.2, ln.x1 - t / 2, ln.base + t * 0.2, t * 1.4, lay.cap);
+            prism(base, bar, 0, textY1);
+          });
+          var last = lay.lines[lay.lines.length - 1];
+          ringPts = strokePoly(last.x0 + t / 2, last.base + t * 0.2, last.x1 - t / 2, last.base + t * 0.2, t * 1.4, lay.cap);
+        }
+
+        lay.segs.forEach(function (s) {
+          prism(text, strokePoly(s[0], s[1], s[2], s[3], t, lay.cap), textY0, textY1);
+        });
+
+        if (state.hole !== 'none') {
+          var pos = (!plated && state.hole === 'top') ? 'left' : state.hole;
+          var holeR = p.holeDia / 2, wall = p.holeWall;
+          var yRef = plated ? 0 : lay.lines[lay.lines.length - 1].base + t * 0.2;
+          var c = holeCenter(ringPts, pos, yRef, holeR, wall);
+          prism_ring(base, c, holeR, wall, plated ? plateT : textY1);
+        }
+
+        var meshes = [{ name: 'base', positions: new Float32Array(base) }];
+        if (rim.length) meshes.push({ name: 'rim', positions: new Float32Array(rim) });
+        meshes.push({ name: 'text', positions: new Float32Array(text) });
+        return meshes;
+      }
+
+      function prism_ring(out, c, holeR, wall, h) {
+        ringPrism(out, circle(c[0], c[1], holeR + wall, 48), circle(c[0], c[1], holeR, 48), 0, h);
+      }
+
+      // -----------------------------------------------------------------------
+      // Looks: one tap sets the lettering, plate and hole choices plus the matching sliders.
+      // -----------------------------------------------------------------------
+      var LOOKS = [
+        { label: 'Classic tag', state: { font: 'block', shape: 'rounded', hole: 'left', caps: 'upper' }, params: { textHeight: 14, stroke: 2.6, pad: 5, corner: 5, rimWidth: 1.6 } },
+        { label: 'Bubble pill', state: { font: 'bubble', shape: 'pill', hole: 'left', caps: 'typed' }, params: { textHeight: 14, stroke: 2.4, pad: 4, rimWidth: 1.2 } },
+        { label: 'Love heart', state: { font: 'rounded', shape: 'heart', hole: 'top', caps: 'typed' }, params: { textHeight: 12, stroke: 2.2, pad: 2, rimWidth: 1.4 } },
+        { label: 'Scallop badge', state: { font: 'wide', shape: 'scallop', hole: 'top', caps: 'upper' }, params: { textHeight: 12, stroke: 2.4, pad: 3, rimWidth: 1.2 } },
+        { label: 'Hex nameplate', state: { font: 'narrow', shape: 'hex', hole: 'left', caps: 'upper' }, params: { textHeight: 15, stroke: 2.6, pad: 4, rimWidth: 1.4 } },
+        { label: 'Joined script', state: { font: 'slanted', shape: 'none', hole: 'left', caps: 'typed' }, params: { textHeight: 16, stroke: 3, spacing: 0.5 } }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-011',
+        category: 'KEYCHAINS // PERSONAL',
+        title: 'Name Keychain',
+        fileName: 'Name_Keychain',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { base: 'Plate & ring', rim: 'Border', text: 'Lettering' },
+        openGroups: ['Lettering'],
+
+        parameters: [
+          { group: 'Lettering', tab: 'name', key: 'textHeight', label: 'Letter height', unit: ' mm', min: 8, max: 30, step: 0.5, value: 14 },
+          { group: 'Lettering', tab: 'name', key: 'stroke', label: 'Stroke thickness', unit: ' mm', min: 1.2, max: 6, step: 0.1, value: 2.6 },
+          { group: 'Lettering', tab: 'name', key: 'spacing', label: 'Letter spacing', unit: ' mm', min: 0, max: 6, step: 0.1, value: 1 },
+          { group: 'Lettering', tab: 'name', key: 'lineGap', label: 'Line gap (2 lines)', unit: ' mm', min: 0, max: 10, step: 0.5, value: 2 },
+          { group: 'Lettering', tab: 'name', key: 'line2Size', label: 'Line 2 size', unit: '%', min: 40, max: 100, step: 5, value: 70 },
+          { group: 'Plate', key: 'plateThick', label: 'Plate thickness', unit: ' mm', min: 1.6, max: 6, step: 0.2, value: 3 },
+          { group: 'Plate', key: 'pad', label: 'Space around the name', unit: ' mm', min: 2, max: 16, step: 0.5, value: 5 },
+          { group: 'Plate', key: 'corner', label: 'Corner rounding (rectangle)', unit: ' mm', min: 0, max: 20, step: 0.5, value: 6 },
+          { group: 'Plate', key: 'raise', label: 'Letters stand up', unit: ' mm', min: 0.8, max: 5, step: 0.2, value: 1.6 },
+          { group: 'Border', key: 'rimWidth', label: 'Border width (0 = none)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 1.6 },
+          { group: 'Border', key: 'rimHeight', label: 'Border height', unit: ' mm', min: 0.4, max: 3, step: 0.2, value: 1 },
+          { group: 'Key ring hole', key: 'holeDia', label: 'Hole diameter', unit: ' mm', min: 3, max: 10, step: 0.5, value: 5 },
+          { group: 'Key ring hole', key: 'holeWall', label: 'Ring wall', unit: ' mm', min: 2, max: 6, step: 0.5, value: 3 }
+        ],
+
+        presets: [
+          { label: 'Default keychain', values: { textHeight: 14, stroke: 2.6, spacing: 1, lineGap: 2, line2Size: 70, plateThick: 3, pad: 5, corner: 6, raise: 1.6, rimWidth: 1.6, rimHeight: 1, holeDia: 5, holeWall: 3 } },
+          { label: 'Chunky letters', values: { textHeight: 18, stroke: 4.2, spacing: 1.5, plateThick: 3.4, raise: 2.4 } },
+          { label: 'Slim and light', values: { textHeight: 12, stroke: 1.8, spacing: 0.6, plateThick: 2, raise: 1.2, rimWidth: 1 } }
+        ],
+
+        tabs: [{
+          id: 'name',
+          label: 'Name',
+          hint: 'Type your name, pick a style, then fine-tune the lettering sliders',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            var field = function (label, control) {
+              var wrap = h('div', { class: 'mm-slider' });
+              var head = h('div', { class: 'mm-slider-head' });
+              head.appendChild(h('label', {}, label));
+              wrap.appendChild(head);
+              wrap.appendChild(control);
+              return wrap;
+            };
+            var textInput = function (key, placeholder) {
+              var input = h('input', { type: 'text', maxlength: '20', placeholder: placeholder, autocomplete: 'off', spellcheck: 'false' });
+              input.value = state[key];
+              input.addEventListener('input', function () { state[key] = input.value; api.rebuild(); });
+              return input;
+            };
+            var select = function (key, options) {
+              var sel = h('select', {});
+              options.forEach(function (o) { sel.appendChild(h('option', { value: o[0] }, o[1])); });
+              sel.value = state[key];
+              sel.addEventListener('change', function () { state[key] = sel.value; api.rebuild(); });
+              return sel;
+            };
+
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Your name'));
+            var in1 = textInput('line1', 'Line 1 (e.g. Chris)');
+            var in2 = textInput('line2', 'Line 2 (optional)');
+            container.appendChild(field('Line 1', in1));
+            container.appendChild(field('Line 2 (optional)', in2));
+            container.appendChild(h('p', { class: 'mm-note' }, 'Letters, numbers, - + . ! \' and <3 for a heart. Up to 20 characters per line.'));
+
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Style'));
+            var selFont = select('font', Object.keys(FONTS).map(function (k) { return [k, FONTS[k].label]; }));
+            var selCase = select('caps', CASES);
+            var selShape = select('shape', SHAPES);
+            var selHole = select('hole', HOLES);
+            container.appendChild(field('Lettering style', selFont));
+            container.appendChild(field('Capitals', selCase));
+            container.appendChild(field('Plate shape', selShape));
+            container.appendChild(field('Key ring hole', selHole));
+
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Quick looks'));
+            var chips = h('div', { class: 'mm-chips' });
+            LOOKS.forEach(function (look) {
+              chips.appendChild(h('button', {
+                class: 'mm-chip', type: 'button', 'aria-pressed': 'false',
+                onclick: function () {
+                  Object.keys(look.state).forEach(function (k) { state[k] = look.state[k]; });
+                  api.setParams(look.params);
+                  refreshNameUI();
+                  api.toast(look.label + ' applied');
+                }
+              }, look.label));
+            });
+            container.appendChild(chips);
+
+            refreshNameUI = function () {
+              in1.value = state.line1; in2.value = state.line2;
+              selFont.value = state.font; selCase.value = state.caps;
+              selShape.value = state.shape; selHole.value = state.hole;
+            };
+            setTimeout(function () { api.centerCamera('iso'); }, 60);
+          }
+        }],
+
+        build: function (p) {
+          return buildKeychain(p);
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

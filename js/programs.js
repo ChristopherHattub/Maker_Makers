@@ -85,6 +85,14 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/gift-box.svg',
     programUrl: 'programs/gift-box.html',
     description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 11,
+    title: 'Name Keychain',
+    category: 'KEYCHAINS // PERSONAL',
+    thumbnailUrl: 'assets/thumbnails/name-keychain.svg',
+    programUrl: 'programs/name-keychain.html',
+    description: 'Personalised name keychain: type one or two lines, pick a lettering style, plate shape, border and key ring hole, then tune size and thickness. Prints flat with no supports. Paint plate, border and letters in the Color tool and export .STL.'
   }
 ];
 
