@@ -123,6 +123,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/pottery-wheel.svg',
     programUrl: 'programs/pottery-wheel.html',
     description: 'Spin a lump of clay on a wheel and mold it with the mouse or your finger: press, pinch, swell, smooth and pull it taller. Add throwing rings, fluting, facets and a mug handle, with an overhang limit that keeps it printable. Paint glaze in the Color tool and export .STL.'
+  },
+  {
+    slot: 16,
+    title: 'Gift Box 2.0',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // GIFTS',
+    thumbnailUrl: 'assets/thumbnails/gift-box-2.svg',
+    programUrl: 'programs/gift-box-2.html',
+    description: 'Wrap a gift box in a cozy Christmas workshop with a turning table, fireplace, tree and falling snow. Pick a square, round or hexagon box, set lid, ribbon bands and a classic, pom-pom or flat bow, then tap the box to stick on stars, hearts, trees and more. Paint parts in the Color tool and export .STL.'
   }
 ];
 

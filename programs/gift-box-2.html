@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-016 Gift Box 2.0 // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <style>
+    body.mm-soft.workshop {
+      --s-bg: #3a2a24; --s-panel: #fdf3e4; --s-panel-a: rgba(253,243,228,0.97); --s-accent: #b8322f; --s-accent-dim: rgba(184,50,47,0.35);
+      --s-text: #3d2a22; --s-muted: #7d6354; --s-amber: #c9893a; --s-green: #3f7d58; --s-edge: #e6cfae;
+      --s-card: #f6e4cb; --s-card-a: rgba(253,243,228,0.92); --s-stage: #234a3b;
+      --s-font: 'Trebuchet MS', 'Segoe UI', Roboto, sans-serif;
+      --s-bg-img: linear-gradient(#4a3329, #2f221d);
+    }
+    .workshop .mm-gen-title { font-weight: 700; }
+    .workshop .mm-icon-chip svg { fill: currentColor; stroke: none; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen mm-soft workshop">
+  <script>
+    // Gift Box 2.0: a gift box you wrap in a cozy Christmas workshop. Pick the box shape, lid, ribbon and
+    // bow in the Parametric tab, then tap the box in the Decorate tab to stick on stars, hearts, trees and
+    // more. The box turns on the wrapping table and the room behind it glows. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // ---- Geometry kit: closed shells built from rings (shared vertices, so always watertight) ----
+      var TAU = Math.PI * 2;
+      function rad(d) { return (d * Math.PI) / 180; }
+      function sqr(x) { return x * x; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vnorm(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+      // rings: array of closed point loops [[x,y,z],...] or { pole: [x,y,z] } (a single point cap).
+      // Neighbouring rings must have the same winding. wrap = true joins the last ring to the first (torus).
+      // The winding of the whole shell is fixed afterwards from its signed volume.
+      function shell(rings, wrap) {
+        var verts = [], idx = [], info = [], i, j;
+        rings.forEach(function (r) {
+          if (r.pole) { info.push({ pole: true, s: verts.length, n: 1 }); verts.push(r.pole); }
+          else { info.push({ s: verts.length, n: r.length }); r.forEach(function (q) { verts.push(q); }); }
+        });
+        var n = rings.length, last = wrap ? n : n - 1;
+        for (i = 0; i < last; i++) {
+          var A = info[i], B = info[(i + 1) % n];
+          if (A.pole && B.pole) continue;
+          if (A.pole) { for (j = 0; j < B.n; j++) idx.push(A.s, B.s + (j + 1) % B.n, B.s + j); }
+          else if (B.pole) { for (j = 0; j < A.n; j++) idx.push(A.s + j, A.s + (j + 1) % A.n, B.s); }
+          else {
+            for (j = 0; j < A.n; j++) {
+              var a = A.s + j, b = A.s + (j + 1) % A.n, c = B.s + (j + 1) % B.n, d = B.s + j;
+              idx.push(a, b, c, a, c, d);
+            }
+          }
+        }
+        var vol = 0, p, q, r;
+        for (i = 0; i < idx.length; i += 3) {
+          p = verts[idx[i]]; q = verts[idx[i + 1]]; r = verts[idx[i + 2]];
+          vol += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+        }
+        var out = new Float32Array(idx.length * 3), o = 0, v;
+        for (i = 0; i < idx.length; i += 3) {
+          var tri = vol < 0 ? [idx[i], idx[i + 2], idx[i + 1]] : [idx[i], idx[i + 1], idx[i + 2]];
+          for (j = 0; j < 3; j++) { v = verts[tri[j]]; out[o++] = v[0]; out[o++] = v[1]; out[o++] = v[2]; }
+        }
+        return out;
+      }
+
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Circle / ellipse loop in the XZ plane at height y. o: { cx, cz, sx, sz, rot }.
+      function loopXZ(r, y, seg, o) {
+        o = o || {};
+        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
+        var cr = Math.cos(rot), sr = Math.sin(rot), out = [], j, a, x, z;
+        for (j = 0; j < seg; j++) {
+          a = (j / seg) * TAU;
+          x = r * sx * Math.cos(a); z = r * sz * Math.sin(a);
+          out.push([cx + x * cr - z * sr, y, cz + x * sr + z * cr]);
+        }
+        return out;
+      }
+
+      // Solid of revolution from a profile [[r, y, dx, dz], ...] (bottom to top). r = 0 makes a pole.
+      function lathe(profile, seg, o) {
+        o = o || {};
+        var rings = profile.map(function (p) {
+          var oo = { cx: (o.cx || 0) + (p[2] || 0), cz: (o.cz || 0) + (p[3] || 0), sx: o.sx, sz: o.sz, rot: o.rot };
+          if (p[0] < 1e-6) return { pole: [oo.cx, p[1], oo.cz] };
+          return loopXZ(p[0], p[1], seg, oo);
+        });
+        return shell(rings, false);
+      }
+
+      // Closed ring-shaped solid (torus-like): cross-section polygon [[r, y], ...] revolved around Y.
+      function bandRing(poly, seg, o) {
+        return shell(poly.map(function (p) { return loopXZ(p[0], p[1], seg, o); }), true);
+      }
+
+      // Sphere or ellipsoid. tFrom > 0 starts the sphere at a flat cut (polar angle from the bottom pole).
+      function ball(cx, cy, cz, rx, ry, rz, seg, steps) {
+        var prof = [], k, t;
+        for (k = 0; k <= steps; k++) {
+          t = (k / steps) * Math.PI;
+          prof.push([Math.sin(t), cy - ry * Math.cos(t)]);
+        }
+        prof[0][0] = 0; prof[steps][0] = 0;
+        return lathe(prof, seg, { cx: cx, cz: cz, sx: rx, sz: rz });
+      }
+
+      // Rounded rectangle loop (counter-clockwise from above) at height y.
+      function rrect(hx, hz, cr, y, arcN, cx, cz) {
+        cr = Math.max(0.05, Math.min(cr, Math.min(hx, hz) - 0.02));
+        var out = [], k, a, corners = [[hx - cr, hz - cr, 0], [-(hx - cr), hz - cr, 90], [-(hx - cr), -(hz - cr), 180], [hx - cr, -(hz - cr), 270]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= arcN; k++) {
+            a = rad(c[2] + (k / arcN) * 90);
+            out.push([(cx || 0) + c[0] + cr * Math.cos(a), y, (cz || 0) + c[1] + cr * Math.sin(a)]);
+          }
+        });
+        return out;
+      }
+      function centroid(loop) {
+        var c = [0, 0, 0];
+        loop.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; });
+        return [c[0] / loop.length, c[1] / loop.length, c[2] / loop.length];
+      }
+      // Loft of loops with flat end caps.
+      function loftCapped(loops) {
+        var rings = [{ pole: centroid(loops[0]) }].concat(loops, [{ pole: centroid(loops[loops.length - 1]) }]);
+        return shell(rings, false);
+      }
+
+      // Rod with rounded ends from a to b, radius ra at a and rb at b.
+      function capsule(a, b, ra, rb, seg, capN) {
+        var d = vnorm(vsub(b, a));
+        var ax = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        var u = vnorm(vcross(d, ax)), v = vcross(d, u);
+        function ring(c, r) {
+          var out = [], j, ang;
+          for (j = 0; j < seg; j++) {
+            ang = (j / seg) * TAU;
+            out.push(vadd(c, vadd(vmul(u, r * Math.cos(ang)), vmul(v, r * Math.sin(ang)))));
+          }
+          return out;
+        }
+        var rings = [{ pole: vsub(a, vmul(d, ra)) }], k, phi;
+        for (k = 1; k <= capN; k++) {
+          phi = (k / capN) * (Math.PI / 2);
+          rings.push(ring(vsub(a, vmul(d, ra * Math.cos(phi))), ra * Math.sin(phi)));
+        }
+        for (k = 0; k < capN; k++) {
+          phi = (Math.PI / 2) * (1 - k / capN);
+          rings.push(ring(vadd(b, vmul(d, rb * Math.cos(phi))), rb * Math.sin(phi)));
+        }
+        rings.push({ pole: vadd(b, vmul(d, rb)) });
+        return shell(rings, false);
+      }
+
+      function el(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+          else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      // Picture-card style picker for the "Styles" tab. cardSvg(values) draws a small icon.
+      function mountStyleCards(container, api, styles, cardSvg, defaults, heading, note) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
+        var grid = el('div', { class: 'mm-preset-cards' });
+        styles.forEach(function (s) {
+          var vals = {};
+          Object.keys(defaults).forEach(function (k) { vals[k] = defaults[k]; });
+          Object.keys(s.values).forEach(function (k) { vals[k] = s.values[k]; });
+          var card = el('button', { class: 'mm-preset-card', type: 'button', title: s.name, onclick: function () {
+            api.setParams(vals);
+            api.toast('Style: ' + s.name);
+          } });
+          card.innerHTML = cardSvg(vals) + '<span>' + s.name + '</span>';
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
+        container.appendChild(el('p', { class: 'mm-note' }, note));
+      }
+      function withDefaults(defaults, over) {
+        var values = {};
+        Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return values;
+      }
+
+      // Ornament hook: a small ring standing up on a model (plane faces +Z) so it can be hung from a string.
+      // Bottom of the ring sits `embed` mm inside the model at (cx, baseY, cz).
+      function hookRing(cx, baseY, cz, hole, tube, embed) {
+        var Rc = hole + tube, cy = baseY - embed + Rc + tube, N = 40, k, rings = [];
+        var oct = [[-1, -0.5], [-0.5, -1], [0.5, -1], [1, -0.5], [1, 0.5], [0.5, 1], [-0.5, 1], [-1, 0.5]];
+        for (k = 0; k < N; k++) {
+          var th = (k / N) * TAU, c = Math.cos(th), s = Math.sin(th), ring = [];
+          oct.forEach(function (q) {
+            ring.push([cx + (Rc + q[0] * tube) * c, cy + (Rc + q[0] * tube) * s, cz + q[1] * tube * 1.15]);
+          });
+          rings.push(ring);
+        }
+        return shell(rings, true);
+      }
+
+      var ARC = 6;
+      var PARAMS = [
+        { group: 'Box', key: 'shape', label: 'Box shape', unit: '', min: 0, max: 2, step: 1, value: 0,
+          format: function (v) { return ['Square', 'Round', 'Hexagon'][Math.round(v)]; } },
+        { group: 'Box', key: 'boxW', label: 'Width', unit: ' mm', min: 30, max: 90, step: 1, value: 60 },
+        { group: 'Box', key: 'boxD', label: 'Depth', unit: ' mm', min: 30, max: 90, step: 1, value: 60 },
+        { group: 'Box', key: 'boxH', label: 'Box height', unit: ' mm', min: 20, max: 80, step: 1, value: 40 },
+        { group: 'Box', key: 'corner', label: 'Corner rounding (square)', unit: ' mm', min: 1, max: 10, step: 0.5, value: 4 },
+        { group: 'Lid', key: 'lidH', label: 'Lid height', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
+        { group: 'Lid', key: 'lidOver', label: 'Lid overhang (0 = flush)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 2.2 },
+        { group: 'Ribbon', key: 'ribbon', label: 'Ribbon', unit: '', min: 0, max: 2, step: 1, value: 2,
+          format: function (v) { return ['None', 'One band', 'Cross'][Math.round(v)]; } },
+        { group: 'Ribbon', key: 'ribbonW', label: 'Ribbon width', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
+        { group: 'Ribbon', key: 'proud', label: 'Ribbon raise', unit: ' mm', min: 0.8, max: 2.5, step: 0.1, value: 1.4 },
+        { group: 'Bow', key: 'bow', label: 'Bow', unit: '', min: 0, max: 3, step: 1, value: 1,
+          format: function (v) { return ['Off', 'Classic', 'Pom-pom', 'Flat'][Math.round(v)]; } },
+        { group: 'Bow', key: 'bowSize', label: 'Bow size', unit: ' mm', min: 10, max: 40, step: 1, value: 26 },
+        { group: 'Bow', key: 'bowHeight', label: 'Bow loop height', unit: ' mm', min: 4, max: 14, step: 0.5, value: 8 },
+        { group: 'Bow', key: 'bowSpread', label: 'Loop spread (classic only)', unit: '°', min: 12, max: 60, step: 1, value: 34 },
+        { group: 'Bow', key: 'tails', label: 'Ribbon tails', unit: '', min: 0, max: 1, step: 1, value: 1,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Ornament hook', key: 'hook', label: 'Ornament hook on top', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Ornament hook', key: 'hookHole', label: 'Hook hole size', unit: ' mm', min: 1.6, max: 3.6, step: 0.1, value: 2.4 },
+        { group: 'Ornament hook', key: 'hookTube', label: 'Hook ring thickness', unit: ' mm', min: 1.2, max: 2.4, step: 0.1, value: 1.6 },
+        { group: 'Workshop', key: 'spin', label: 'Turntable speed', unit: '', min: 0, max: 100, step: 1, value: 20,
+          format: function (v) { return v < 1 ? 'Stopped' : Math.round(v * 0.6) + ' rpm'; } },
+        { group: 'Workshop', key: 'snow', label: 'Snow at the window', unit: '', min: 0, max: 1, step: 1, value: 1,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { tab: 'decorate', group: 'Sticker', key: 'stickerSize', label: 'Sticker size', unit: ' mm', min: 8, max: 30, step: 1, value: 16 },
+        { tab: 'decorate', group: 'Sticker', key: 'stickerRot', label: 'Sticker turn', unit: '°', min: 0, max: 355, step: 5, value: 0 }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
+
+      // ---- Box outlines: square, round or hexagon loops that all have the same point count ----
+      var HEX_RC = 0.12;
+      var HEX_RI = (Math.cos(Math.PI / 6) - HEX_RC) / Math.cos(Math.PI / 6);
+      var HEX_X = HEX_RI + HEX_RC;
+      function hexLoop(hx, hz, y) {
+        var out = [], k, j, a, c, sx = hx / HEX_X, sz = hz / Math.cos(Math.PI / 6), t;
+        for (k = 0; k < 6; k++) {
+          a = (k * Math.PI) / 3;
+          for (j = 0; j <= ARC; j++) {
+            t = a - Math.PI / 6 + (j / ARC) * (Math.PI / 3);
+            out.push([(HEX_RI * Math.cos(a) + HEX_RC * Math.cos(t)) * sx, y, (HEX_RI * Math.sin(a) + HEX_RC * Math.sin(t)) * sz]);
+          }
+        }
+        return out;
+      }
+      function shapeLoop(p, grow, y) {
+        var W = p.boxW / 2 + grow, D = p.boxD / 2 + grow, cr = Math.min(p.corner, Math.min(p.boxW, p.boxD) / 2 - 1) + grow;
+        if (p.shape >= 2) return hexLoop(W, D, y);
+        if (p.shape >= 1) return loopXZ(1, y, 4 * (ARC + 1) * 2, { sx: W, sz: D });
+        return rrect(W, D, cr, y, ARC);
+      }
+
+      // Where a line through the outline (fixed x for axis 'z', fixed z for axis 'x') enters and leaves it.
+      function span(loop, axis, t) {
+        var a = axis === 'z' ? 0 : 2, b = axis === 'z' ? 2 : 0, lo = Infinity, hi = -Infinity, i, p, q, u;
+        for (i = 0; i < loop.length; i++) {
+          p = loop[i]; q = loop[(i + 1) % loop.length];
+          if ((p[a] - t) * (q[a] - t) > 0 || p[a] === q[a]) continue;
+          u = p[b] + ((t - p[a]) / (q[a] - p[a])) * (q[b] - p[b]);
+          lo = Math.min(lo, u); hi = Math.max(hi, u);
+        }
+        if (lo === Infinity) { lo = -10; hi = 10; }
+        return [lo, hi];
+      }
+      // One ring of a ribbon slab: narrow across the band, hugging the outline along its length.
+      function stripRing(loop, axis, half, off, y) {
+        var K = 4, far = [], near = [], k, t, s;
+        for (k = 0; k <= K; k++) {
+          t = -half + (2 * half * k) / K;
+          s = span(loop, axis, t);
+          if (axis === 'z') { far.push([t, y, s[1] + off]); near.push([t, y, s[0] - off]); }
+          else { far.push([s[1] + off, y, t]); near.push([s[0] - off, y, t]); }
+        }
+        return far.concat(near.reverse());
+      }
+
+      function domeLobe(cx, cz, ang, a, b, hgt, y0, seg) {
+        var prof = [[0, y0], [1, y0]], k, ph;
+        for (k = 1; k <= 8; k++) {
+          ph = (k / 8) * (Math.PI / 2);
+          prof.push([k === 8 ? 0 : Math.cos(ph), y0 + hgt * Math.sin(ph)]);
+        }
+        return lathe(prof, seg, { cx: cx, cz: cz, sx: a, sz: b, rot: ang });
+      }
+
+      function build(p) {
+        var out = [], W = p.boxW / 2, D = p.boxD / 2, H = p.boxH;
+        var ov = p.lidOver, lh = p.lidH, c = Math.min(1.2, H * 0.1), pr = p.proud;
+        // Box: small chamfer at the bottom so the first layer does not flare out.
+        out.push({ name: 'box', positions: loftCapped([shapeLoop(p, -c, 0), shapeLoop(p, 0, c), shapeLoop(p, 0, H + 1)]), singlePart: true });
+        // Lid: starts flush with the box, then grows out at 45 degrees (so the overhang needs no support).
+        var yb = H - 0.3, top = H + lh, tc = Math.min(1.4, lh * 0.2);
+        var lidRings = [shapeLoop(p, 0, yb)];
+        if (ov > 0.05) lidRings.push(shapeLoop(p, ov, yb + ov));
+        lidRings.push(shapeLoop(p, ov, top - tc), shapeLoop(p, ov - tc, top));
+        out.push({ name: 'lid', positions: loftCapped(lidRings), singlePart: true });
+        // Ribbon bands: slabs that wrap box and lid, slightly raised, following the outline.
+        var rw = p.ribbonW / 2, bands = [], bodyL = shapeLoop(p, 0, 0), lidL = shapeLoop(p, ov, 0);
+        function band(axis) {
+          var res = [];
+          res.push(loftCapped([stripRing(bodyL, axis, rw - 0.5, pr - 0.5, 0), stripRing(bodyL, axis, rw, pr, 0.5), stripRing(bodyL, axis, rw, pr, H + 0.6)]));
+          var l = [stripRing(bodyL, axis, rw, pr, yb)];
+          if (ov > 0.05) l.push(stripRing(lidL, axis, rw, pr, yb + ov));
+          l.push(stripRing(lidL, axis, rw, pr, top - 0.2), stripRing(lidL, axis, rw, pr, top + pr - 0.6), stripRing(lidL, axis, rw - 0.6, pr - 0.6, top + pr));
+          res.push(loftCapped(l));
+          return res;
+        }
+        if (p.ribbon >= 1) bands = bands.concat(band('z'));
+        if (p.ribbon >= 2) bands = bands.concat(band('x'));
+        if (bands.length) out.push({ name: 'ribbon', positions: cat(bands), singlePart: true });
+        var hookBase = top + (p.ribbon >= 1 ? pr : 0);
+        // Bow on top: soft loops (classic four, pom-pom eight, or a flat pair), a knot and two tails.
+        if (p.bow >= 1) {
+          var yTop = top + (p.ribbon >= 1 ? pr : 0), y0 = yTop - 1, S = Math.min(p.bowSize, Math.min(W, D) * 1.9 + ov);
+          var a = S * 0.32, b = S * 0.2, off = a * 0.8, hg = p.bowHeight, sp = rad(p.bowSpread), lobes = [], angs;
+          if (p.bow >= 3) { angs = [0, Math.PI]; a = S * 0.34; b = S * 0.22; off = a * 0.85; }
+          else if (p.bow >= 2) {
+            angs = []; for (var q = 0; q < 8; q++) angs.push((q * Math.PI) / 4 + Math.PI / 8);
+            a = S * 0.27; b = S * 0.13; off = a * 0.78;
+          } else angs = [-sp, sp, Math.PI - sp, Math.PI + sp];
+          angs.forEach(function (th) { lobes.push(domeLobe(Math.cos(th) * off, Math.sin(th) * off, th, a, b, hg, y0, 40)); });
+          if (p.tails >= 1 && p.bow !== 2) {
+            [Math.PI / 2 - 0.42, Math.PI / 2 + 0.42].forEach(function (th) {
+              var ta = S * 0.2, tb = S * 0.075;
+              lobes.push(domeLobe(Math.cos(th) * ta * 0.85, Math.sin(th) * ta * 0.85, th, ta, tb, Math.min(3, hg * 0.4), y0, 32));
+            });
+          }
+          out.push({ name: 'bow', positions: cat(lobes), singlePart: true });
+          var kr = S * 0.13;
+          out.push({ name: 'knot', positions: ball(0, y0 + hg * 0.55, 0, kr, hg * 0.62, kr, 36, 14), singlePart: true });
+          hookBase = y0 + hg * 1.17;
+        }
+        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, hookBase, 0, p.hookHole, p.hookTube, p.bow >= 1 ? 2.2 : 1.2), singlePart: true });
+        return out;
+      }
+
+      // ---- Stickers: raised shapes you tap onto the box and lid ----
+      var STICKER_NAMES = { star: 'Star', heart: 'Heart', flake: 'Snowflake', tree: 'Tree', bauble: 'Bauble', gift: 'Present' };
+      var stickers = [];     // { type, size, rotation, point (model space), normal (model space) }
+      var stickerType = 'star';
+      var refreshStickerUI = null;
+      var modelGroup0 = null;
+
+      function stickerOutline(type, r) {
+        var pts = [], i, ang, rr;
+        if (type === 'star' || type === 'flake') {
+          var n = type === 'star' ? 5 : 6, inner = type === 'star' ? 0.44 : 0.36;
+          for (i = 0; i < n * 2; i++) {
+            ang = (i * Math.PI) / n + Math.PI / 2; rr = i % 2 === 0 ? r : r * inner;
+            pts.push([Math.cos(ang) * rr, Math.sin(ang) * rr]);
+          }
+        } else if (type === 'heart') {
+          for (i = 0; i < 40; i++) {
+            ang = (i / 40) * TAU;
+            pts.push([(16 * Math.pow(Math.sin(ang), 3)) / 17 * r, (13 * Math.cos(ang) - 5 * Math.cos(2 * ang) - 2 * Math.cos(3 * ang) - Math.cos(4 * ang) + 2.5) / 17 * r]);
+          }
+        } else if (type === 'tree') {
+          [[0, 1], [0.5, 0.3], [0.24, 0.3], [0.72, -0.3], [0.16, -0.3], [0.16, -0.85], [-0.16, -0.85], [-0.16, -0.3], [-0.72, -0.3], [-0.24, 0.3], [-0.5, 0.3]]
+            .forEach(function (q) { pts.push([q[0] * r, q[1] * r]); });
+        } else if (type === 'bauble') {
+          for (i = 0; i < 32; i++) { ang = (i / 32) * TAU; pts.push([Math.cos(ang) * r * 0.9, Math.sin(ang) * r * 0.9 - r * 0.08]); }
+        } else {
+          [[-0.8, -0.8], [0.8, -0.8], [0.8, 0.8], [-0.8, 0.8]].forEach(function (q) { pts.push([q[0] * r, q[1] * r]); });
+        }
+        return pts;
+      }
+      function stickerShape(type, size) {
+        var shape = new window.THREE.Shape();
+        stickerOutline(type, size * 0.5).forEach(function (pt, i) {
+          if (i === 0) shape.moveTo(pt[0], pt[1]); else shape.lineTo(pt[0], pt[1]);
+        });
+        shape.closePath();
+        return shape;
+      }
+      function stickerIcon(type) {
+        var points = stickerOutline(type, 1).map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ');
+        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><polygon points="' + points + '"/></svg>';
+      }
+      // Sticker mesh in model space: 1.8 mm into the surface and 1.5 mm proud of it.
+      function stickerPositions(s) {
+        var THREE = window.THREE;
+        var geo = new THREE.ExtrudeGeometry(stickerShape(s.type, s.size), {
+          depth: 3.3, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.3, bevelSegments: 2, curveSegments: 16
+        });
+        geo.rotateZ(((s.rotation || 0) * Math.PI) / 180);
+        geo.translate(0, 0, -1.8);
+        var normal = new THREE.Vector3().fromArray(s.normal).normalize();
+        var upVec = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+        var tx = new THREE.Vector3().crossVectors(upVec, normal).normalize();
+        var ty = new THREE.Vector3().crossVectors(normal, tx).normalize();
+        var quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tx, ty, normal));
+        var matrix = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(s.point), quat, new THREE.Vector3(1, 1, 1));
+        var flat = geo.toNonIndexed();
+        flat.applyMatrix4(matrix);
+        return flat.attributes.position.array.slice();
+      }
+      function stickable(hit) { return hit && (hit.meshName === 'box' || hit.meshName === 'lid') && hit.point.y > 3; }
+      // The box turns on the table, but a hit has its point in the room and its normal on the model: convert both.
+      function worldNormal(hit) {
+        var n = hit.normal.clone();
+        if (modelGroup0) n.applyQuaternion(modelGroup0.quaternion);
+        return n;
+      }
+
+      function cardSvg(v) {
+        var shape = Math.round(v.shape), w = 40 * v.boxW / 60, h = 26 * v.boxH / 40, lh = 5 + v.lidH * 0.35, x = 32 - w / 2, yb = 56, rx = shape === 1 ? 10 : shape === 2 ? 6 : 2;
+        var svg = '<svg viewBox="0 0 64 64" aria-hidden="true">';
+        svg += '<rect x="' + x.toFixed(1) + '" y="' + (yb - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + rx + '" fill="#e0524b" stroke="#7f1d1d" stroke-width="0.8"/>';
+        if (v.ribbon >= 1) svg += '<rect x="' + (32 - v.ribbonW * 0.3).toFixed(1) + '" y="' + (yb - h).toFixed(1) + '" width="' + (v.ribbonW * 0.6).toFixed(1) + '" height="' + h.toFixed(1) + '" fill="#fde047" stroke="#a16207" stroke-width="0.5"/>';
+        svg += '<rect x="' + (x - 1.5).toFixed(1) + '" y="' + (yb - h - lh).toFixed(1) + '" width="' + (w + 3).toFixed(1) + '" height="' + lh.toFixed(1) + '" rx="' + rx + '" fill="#f27a74" stroke="#7f1d1d" stroke-width="0.8"/>';
+        if (v.ribbon >= 1) svg += '<rect x="' + (32 - v.ribbonW * 0.3).toFixed(1) + '" y="' + (yb - h - lh).toFixed(1) + '" width="' + (v.ribbonW * 0.6).toFixed(1) + '" height="' + lh.toFixed(1) + '" fill="#fde047" stroke="#a16207" stroke-width="0.5"/>';
+        if (v.ribbon >= 2) svg += '<rect x="' + (x - 1.5).toFixed(1) + '" y="' + (yb - h - lh * 0.65).toFixed(1) + '" width="' + (w + 3).toFixed(1) + '" height="' + (lh * 0.3).toFixed(1) + '" fill="#fde047" opacity="0.9"/>';
+        if (v.bow >= 1) {
+          var by = yb - h - lh, s = 4 + v.bowSize * 0.28, e = '<ellipse cx="';
+          if (v.bow >= 2) {
+            svg += '<circle cx="32" cy="' + (by - s * 0.45).toFixed(1) + '" r="' + (s * 0.85).toFixed(1) + '" fill="#fde047" stroke="#a16207" stroke-width="0.6"/>';
+          } else {
+            svg += e + (32 - s * 0.7).toFixed(1) + '" cy="' + (by - s * 0.45).toFixed(1) + '" rx="' + (s * 0.8).toFixed(1) + '" ry="' + (s * 0.5).toFixed(1) + '" transform="rotate(-25 ' + (32 - s * 0.7).toFixed(1) + ' ' + (by - s * 0.45).toFixed(1) + ')" fill="#fde047" stroke="#a16207" stroke-width="0.6"/>';
+            svg += e + (32 + s * 0.7).toFixed(1) + '" cy="' + (by - s * 0.45).toFixed(1) + '" rx="' + (s * 0.8).toFixed(1) + '" ry="' + (s * 0.5).toFixed(1) + '" transform="rotate(25 ' + (32 + s * 0.7).toFixed(1) + ' ' + (by - s * 0.45).toFixed(1) + ')" fill="#fde047" stroke="#a16207" stroke-width="0.6"/>';
+          }
+          svg += '<circle cx="32" cy="' + (by - 1).toFixed(1) + '" r="' + (s * 0.3).toFixed(1) + '" fill="#facc15" stroke="#a16207" stroke-width="0.6"/>';
+        }
+        return svg + '</svg>';
+      }
+
+      var STYLES = [
+        { name: 'Classic', values: {} },
+        { name: 'Round hatbox', values: { shape: 1, boxW: 64, boxD: 64, boxH: 34, lidH: 14, ribbon: 1, ribbonW: 10, bow: 2, bowSize: 26, bowHeight: 9 } },
+        { name: 'Hexagon treasure', values: { shape: 2, boxW: 66, boxD: 58, boxH: 44, lidH: 12, ribbon: 1, ribbonW: 12, bow: 1, bowSize: 28 } },
+        { name: 'Tall tower', values: { boxW: 44, boxD: 44, boxH: 66, bowSize: 22, ribbonW: 10 } },
+        { name: 'Flat box', values: { boxW: 80, boxD: 62, boxH: 24, lidH: 9, bow: 3, bowSize: 34, ribbonW: 14 } },
+        { name: 'Pom-pom present', values: { boxW: 54, boxD: 54, corner: 6, bow: 2, bowSize: 30, bowHeight: 11, ribbonW: 10 } },
+        { name: 'Plain box', values: { ribbon: 0, bow: 0, lidOver: 3, corner: 6 } }
+      ];
+
+      // ---- The workshop: a night window, a fireplace, a tree and string lights behind the box ----
+      var room = null, spinOn = null, api0 = null, hovering = false, wrapBody = null;
+      function seeded(seed) { return function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+      function paintRoom(w, h) {
+        var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        var g = cv.getContext('2d'), i, x, y, fl = h * 0.72, sc = h / 450, rnd = seeded(7);
+        var wall = g.createLinearGradient(0, 0, 0, fl); wall.addColorStop(0, '#1d4536'); wall.addColorStop(1, '#2f6350');
+        g.fillStyle = wall; g.fillRect(0, 0, w, fl);
+        g.strokeStyle = 'rgba(255,240,200,0.06)'; g.lineWidth = 2;
+        for (x = 0; x < w; x += 26 * sc) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, fl); g.stroke(); }
+        // wainscot
+        g.fillStyle = '#eadbbf'; g.fillRect(0, fl - h * 0.14, w, h * 0.14);
+        g.fillStyle = '#c9ad82'; g.fillRect(0, fl - h * 0.14 - 4, w, 6);
+        g.strokeStyle = 'rgba(120,85,50,0.25)'; g.lineWidth = 2;
+        for (x = w * 0.04; x < w; x += w * 0.16) { g.strokeRect(x, fl - h * 0.12, w * 0.12, h * 0.1); }
+        // window
+        var wx = w * 0.4, wy = h * 0.09, ww = Math.max(70, w * 0.2), wh = h * 0.34;
+        g.fillStyle = '#8b5a34'; g.fillRect(wx - 9, wy - 9, ww + 18, wh + 18);
+        var sky = g.createLinearGradient(0, wy, 0, wy + wh); sky.addColorStop(0, '#0f1d3d'); sky.addColorStop(1, '#3a5f94');
+        g.fillStyle = sky; g.fillRect(wx, wy, ww, wh);
+        g.fillStyle = '#fff6d6'; g.beginPath(); g.arc(wx + ww * 0.72, wy + wh * 0.25, ww * 0.09, 0, TAU); g.fill();
+        g.fillStyle = '#0f1d3d'; g.beginPath(); g.arc(wx + ww * 0.76, wy + wh * 0.22, ww * 0.08, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.8)';
+        for (i = 0; i < 18; i++) { g.fillRect(wx + rnd() * ww, wy + rnd() * wh * 0.55, 1.6, 1.6); }
+        g.fillStyle = '#e8f1fb'; g.beginPath(); g.moveTo(wx, wy + wh); g.lineTo(wx, wy + wh * 0.82);
+        g.quadraticCurveTo(wx + ww * 0.3, wy + wh * 0.72, wx + ww * 0.55, wy + wh * 0.84); g.quadraticCurveTo(wx + ww * 0.8, wy + wh * 0.92, wx + ww, wy + wh * 0.8); g.lineTo(wx + ww, wy + wh); g.fill();
+        g.fillStyle = '#8b5a34'; g.fillRect(wx + ww / 2 - 3, wy, 6, wh); g.fillRect(wx, wy + wh * 0.5 - 3, ww, 6);
+        g.fillStyle = '#a97545'; g.fillRect(wx - 16, wy + wh + 9, ww + 32, 9);
+        // curtains
+        g.fillStyle = '#b8322f';
+        g.beginPath(); g.moveTo(wx - 14, wy - 14); g.lineTo(wx + ww * 0.22, wy - 14); g.quadraticCurveTo(wx + ww * 0.1, wy + wh * 0.5, wx + ww * 0.2, wy + wh + 9); g.lineTo(wx - 14, wy + wh + 9); g.fill();
+        g.beginPath(); g.moveTo(wx + ww + 14, wy - 14); g.lineTo(wx + ww * 0.78, wy - 14); g.quadraticCurveTo(wx + ww * 0.9, wy + wh * 0.5, wx + ww * 0.8, wy + wh + 9); g.lineTo(wx + ww + 14, wy + wh + 9); g.fill();
+        g.fillStyle = '#7a5532'; g.fillRect(wx - 24, wy - 22, ww + 48, 8);
+        // fireplace
+        var fx = w * 0.04, fw = Math.max(110, w * 0.22), fy = h * 0.3, fh = fl - fy + 6;
+        g.fillStyle = '#9a4a38'; g.fillRect(fx, fy, fw, fh);
+        g.strokeStyle = 'rgba(60,25,18,0.45)'; g.lineWidth = 1.5;
+        for (y = fy; y < fy + fh; y += 14 * sc) { g.beginPath(); g.moveTo(fx, y); g.lineTo(fx + fw, y); g.stroke(); for (x = fx + ((Math.round(y / (14 * sc)) % 2) * 14 * sc); x < fx + fw; x += 28 * sc) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 14 * sc); g.stroke(); } }
+        g.fillStyle = '#a97545'; g.fillRect(fx - 12, fy - 10, fw + 24, 14);
+        g.fillStyle = '#1c0f0b'; g.beginPath(); g.moveTo(fx + fw * 0.16, fl + 4); g.lineTo(fx + fw * 0.16, fy + fh * 0.5); g.quadraticCurveTo(fx + fw * 0.5, fy + fh * 0.22, fx + fw * 0.84, fy + fh * 0.5); g.lineTo(fx + fw * 0.84, fl + 4); g.fill();
+        g.fillStyle = '#4a2c1a'; g.fillRect(fx + fw * 0.22, fl - 12 * sc, fw * 0.56, 11 * sc);
+        // mantel garland and stockings
+        g.strokeStyle = '#2f7a4f'; g.lineWidth = 9 * sc; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(fx - 8, fy - 14); g.quadraticCurveTo(fx + fw / 2, fy + 18 * sc, fx + fw + 8, fy - 14); g.stroke();
+        [['#b8322f', 0.2], ['#3f7d58', 0.5], ['#b8322f', 0.8]].forEach(function (st) {
+          var sx = fx + fw * st[1], sy = fy + 12 * sc;
+          g.fillStyle = st[0]; g.beginPath(); g.moveTo(sx - 7 * sc, sy); g.lineTo(sx + 7 * sc, sy); g.lineTo(sx + 7 * sc, sy + 26 * sc); g.quadraticCurveTo(sx + 7 * sc, sy + 36 * sc, sx + 20 * sc, sy + 34 * sc); g.quadraticCurveTo(sx + 22 * sc, sy + 44 * sc, sx + 4 * sc, sy + 44 * sc); g.quadraticCurveTo(sx - 7 * sc, sy + 44 * sc, sx - 7 * sc, sy + 30 * sc); g.closePath(); g.fill();
+          g.fillStyle = '#fbf3e4'; g.fillRect(sx - 9 * sc, sy - 4 * sc, 18 * sc, 8 * sc);
+        });
+        // tree
+        var tx = w * 0.84, tb = fl + 10, th = h * 0.54, trees = [];
+        g.fillStyle = '#5b3a24'; g.fillRect(tx - 7 * sc, tb - 16 * sc, 14 * sc, 18 * sc);
+        for (i = 0; i < 3; i++) {
+          var ty = tb - th * (0.04 + i * 0.27), tw = th * (0.36 - i * 0.07), tp = ty - th * 0.38;
+          var gr = g.createLinearGradient(tx - tw, 0, tx + tw, 0); gr.addColorStop(0, '#1e5a35'); gr.addColorStop(0.5, '#2f8a4f'); gr.addColorStop(1, '#1b4f30');
+          g.fillStyle = gr; g.beginPath(); g.moveTo(tx, tp); g.lineTo(tx + tw, ty); g.lineTo(tx - tw, ty); g.closePath(); g.fill();
+          for (var k = 0; k < 6; k++) { var f = rnd(), side = rnd() * 2 - 1; trees.push([tx + side * tw * f * 0.8, tp + (ty - tp) * (0.25 + f * 0.7)]); }
+        }
+        g.fillStyle = '#fde68a'; g.beginPath();
+        for (i = 0; i < 10; i++) { var aa = (i * Math.PI) / 5 - Math.PI / 2, rr2 = i % 2 === 0 ? 11 * sc : 5 * sc; g.lineTo(tx + Math.cos(aa) * rr2, tb - th * 1.0 + Math.sin(aa) * rr2 + 4 * sc); }
+        g.closePath(); g.fill();
+        [['#b8322f', -34, 4], ['#3f7d58', -2, -4], ['#c9893a', 30, 6]].forEach(function (gf) {
+          var gx = tx + gf[1] * sc - 14 * sc, gy = tb + 2 * sc + gf[2], gs = 28 * sc;
+          g.fillStyle = gf[0]; g.fillRect(gx, gy - gs * 0.75, gs, gs * 0.75);
+          g.fillStyle = '#fde68a'; g.fillRect(gx + gs * 0.43, gy - gs * 0.75, gs * 0.14, gs * 0.75); g.fillRect(gx, gy - gs * 0.43, gs, gs * 0.12);
+        });
+        // wooden floor
+        var floor = g.createLinearGradient(0, fl, 0, h); floor.addColorStop(0, '#a9774a'); floor.addColorStop(1, '#6e4a2c');
+        g.fillStyle = floor; g.fillRect(0, fl, w, h - fl);
+        g.strokeStyle = 'rgba(40,22,12,0.3)'; g.lineWidth = 2;
+        for (i = 0; i < 11; i++) { g.beginPath(); g.moveTo(w / 2 + (i - 5) * w * 0.025, fl); g.lineTo(w / 2 + (i - 5) * w * 0.34, h); g.stroke(); }
+        g.beginPath(); g.moveTo(0, fl); g.lineTo(w, fl); g.strokeStyle = '#4f3320'; g.lineWidth = 5; g.stroke();
+        var vg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75); vg.addColorStop(0, 'rgba(20,10,5,0)'); vg.addColorStop(1, 'rgba(20,10,5,0.4)');
+        g.fillStyle = vg; g.fillRect(0, 0, w, h);
+        return { cv: cv, w: w, h: h, fl: fl, sc: sc, win: [wx, wy, ww, wh], fire: [fx, fw, fy, fh], tree: trees,
+          flakes: (function () { var a = [], j; for (j = 0; j < 46; j++) a.push([rnd(), rnd(), 0.4 + rnd() * 0.9, 0.3 + rnd() * 0.7]); return a; })() };
+      }
+      var LIGHT_COLORS = ['#ff6b5e', '#ffd166', '#7ee0a0', '#7fb8ff', '#ffb3e6'];
+      function drawRoom(g, r, t, snow) {
+        var w = r.w, h = r.h, sc = r.sc, i, f;
+        g.clearRect(0, 0, w, h);
+        g.drawImage(r.cv, 0, 0);
+        // snow falling past the window
+        if (snow) {
+          g.save(); g.beginPath(); g.rect(r.win[0], r.win[1], r.win[2], r.win[3]); g.clip();
+          g.fillStyle = 'rgba(255,255,255,0.9)';
+          r.flakes.forEach(function (s) {
+            var x = r.win[0] + ((s[0] + Math.sin(t * 0.0006 * s[3] + s[1] * 9) * 0.05 + 1) % 1) * r.win[2];
+            var y = r.win[1] + ((s[1] + t * 0.00007 * s[3]) % 1) * r.win[3];
+            g.beginPath(); g.arc(x, y, s[2] * 1.8 * Math.max(0.6, sc), 0, TAU); g.fill();
+          });
+          g.restore();
+        }
+        // fire: warm glow on the bricks and floor, and three dancing flames
+        var fx = r.fire[0], fw = r.fire[1], fy = r.fire[2], fh = r.fire[3], flick = 0.78 + 0.22 * Math.sin(t * 0.011) * Math.sin(t * 0.0073 + 1);
+        var glow = g.createRadialGradient(fx + fw / 2, r.fl, 10, fx + fw / 2, r.fl, fw * 1.7);
+        glow.addColorStop(0, 'rgba(255,170,70,' + (0.42 * flick).toFixed(3) + ')'); glow.addColorStop(1, 'rgba(255,120,40,0)');
+        g.fillStyle = glow; g.fillRect(0, r.fl - fw * 1.2, fx + fw * 2.2, h - r.fl + fw * 1.2);
+        for (i = 0; i < 3; i++) {
+          var cx = fx + fw * (0.34 + i * 0.16), base = r.fl - 8 * sc, hh = (30 + 16 * Math.sin(t * 0.009 + i * 2.1) + i % 2 * 8) * sc, ww = 13 * sc;
+          g.fillStyle = i === 1 ? '#ffd86b' : '#ff9a3c';
+          g.beginPath(); g.moveTo(cx - ww, base); g.quadraticCurveTo(cx - ww * 0.8, base - hh * 0.55, cx + Math.sin(t * 0.01 + i) * 5 * sc, base - hh); g.quadraticCurveTo(cx + ww * 0.9, base - hh * 0.5, cx + ww, base); g.closePath(); g.fill();
+        }
+        // twinkling lights on the tree and across the top
+        for (i = 0; i < r.tree.length; i++) {
+          f = 0.5 + 0.5 * Math.sin(t * 0.004 + i * 1.7);
+          g.fillStyle = LIGHT_COLORS[i % 5]; g.globalAlpha = 0.45 + 0.55 * f;
+          g.beginPath(); g.arc(r.tree[i][0], r.tree[i][1], 3.2 * Math.max(0.7, sc), 0, TAU); g.fill();
+          g.globalAlpha = 0.18 * f; g.beginPath(); g.arc(r.tree[i][0], r.tree[i][1], 10 * Math.max(0.7, sc), 0, TAU); g.fill();
+        }
+        g.globalAlpha = 1;
+        g.strokeStyle = 'rgba(30,20,12,0.7)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, h * 0.03); g.quadraticCurveTo(w * 0.5, h * 0.13, w, h * 0.03); g.stroke();
+        for (i = 1; i < 16; i++) {
+          var u = i / 16, bx = u * w, by = h * 0.03 + 2 * (1 - u) * u * (h * 0.13 - h * 0.03) * 1.0 + 0, tw = 0.5 + 0.5 * Math.sin(t * 0.003 + i * 2.3);
+          by = h * 0.03 * (1 - u) * (1 - u) + 2 * (1 - u) * u * h * 0.13 + h * 0.03 * u * u;
+          g.fillStyle = LIGHT_COLORS[i % 5]; g.globalAlpha = 0.5 + 0.5 * tw;
+          g.beginPath(); g.arc(bx, by + 6, 4 * Math.max(0.8, sc), 0, TAU); g.fill();
+          g.globalAlpha = 0.16 * tw + 0.04; g.beginPath(); g.arc(bx, by + 6, 14 * Math.max(0.8, sc), 0, TAU); g.fill();
+        }
+        g.globalAlpha = 1;
+      }
+
+      function mountDecorate(container, api) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Sticker (tap the box to place)'));
+        var chips = el('div', { class: 'mm-icon-chips' }), buttons = {};
+        Object.keys(STICKER_NAMES).forEach(function (type) {
+          var b = el('button', { class: 'mm-icon-chip', type: 'button', title: STICKER_NAMES[type], 'aria-pressed': String(type === stickerType), onclick: function () {
+            stickerType = type;
+            Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
+            api.toast(STICKER_NAMES[type] + ' sticker: tap the box or lid to place it');
+          } });
+          b.innerHTML = stickerIcon(type) + '<span>' + STICKER_NAMES[type] + '</span>';
+          buttons[type] = b; chips.appendChild(b);
+        });
+        container.appendChild(chips);
+        var count = el('p', { class: 'mm-note' }, '0 stickers placed');
+        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () {
+          if (!stickers.length) return;
+          stickers.pop(); api.rebuild(); api.toast('Removed the last sticker');
+        } }, 'Undo last sticker');
+        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () {
+          if (!stickers.length) return;
+          stickers = []; api.rebuild(); api.toast('Cleared all stickers');
+        } }, 'Clear stickers');
+        container.appendChild(count);
+        var row = el('div', { class: 'mm-export-row' });
+        row.appendChild(undo); row.appendChild(clear);
+        container.appendChild(row);
+        container.appendChild(el('p', { class: 'mm-note' }, 'The turntable pauses while your finger or mouse is over the box, so stickers land exactly where you tap. Stickers are raised 1.5 mm and are their own part in the Color tool.'));
+        refreshStickerUI = function () {
+          count.textContent = stickers.length + (stickers.length === 1 ? ' sticker placed' : ' stickers placed');
+          undo.disabled = stickers.length === 0; clear.disabled = stickers.length === 0;
+        };
+        refreshStickerUI();
+        wrapBody = container.closest('.mm-panel-body');
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-016',
+        category: 'CHRISTMAS // GIFTS',
+        title: 'Gift Box 2.0',
+        fileName: 'Gift_Box_2',
+        printerLink: '../index.html#map-screen',
+        customStage: true,
+        defaultColor: '#f87171',
+        palette: [
+          { name: 'Candy Red', color: '#f87171' },
+          { name: 'Gold', color: '#fde047' },
+          { name: 'Snow White', color: '#f1f5f9' },
+          { name: 'Pine Green', color: '#86efac' },
+          { name: 'Ice Blue', color: '#93c5fd' },
+          { name: 'Berry Purple', color: '#d8b4fe' },
+          { name: 'Carrot Orange', color: '#fdba74' },
+          { name: 'Midnight', color: '#334155' }
+        ],
+        partNames: { box: 'Box', lid: 'Lid', ribbon: 'Ribbon', bow: 'Bow loops and tails', knot: 'Bow knot', hook: 'Ornament hook', sticker: 'Sticker' },
+
+        parameters: PARAMS,
+        presets: STYLES.map(function (s) { return { label: s.name === 'Classic' ? 'Default gift box' : s.name, values: withDefaults(DEFAULTS, s.values) }; }),
+
+        tabs: [{
+          id: 'styles',
+          label: 'Styles',
+          hint: 'Pick a gift box style, then fine-tune the sliders',
+          mount: function (container, api) {
+            mountStyleCards(container, api, STYLES, cardSvg, DEFAULTS, 'Gift box styles', 'Cards set every slider; keep tuning by hand. Round, square and hexagon boxes all take the same lid, ribbon and bow.');
+          }
+        }, {
+          id: 'decorate',
+          label: 'Decorate',
+          hint: 'Tap the box or lid to stick on the chosen sticker',
+          mount: mountDecorate,
+          onHover: function (hit, api) {
+            hovering = !!hit;
+            if (!stickable(hit)) { api.setPreview(null); return; }
+            api.setPreview({ positions: stickerPositions({ type: stickerType, size: api.params.stickerSize, rotation: api.params.stickerRot, point: hit.point.toArray(), normal: worldNormal(hit).toArray() }) });
+          },
+          onPick: function (hit, api) {
+            if (!stickable(hit)) { api.toast('Tap the box or lid (not the ribbon or bow) to place a sticker'); return; }
+            var inv = new window.THREE.Matrix4();
+            if (modelGroup0) { modelGroup0.updateMatrixWorld(true); inv.copy(modelGroup0.matrixWorld).invert(); }
+            stickers.push({ type: stickerType, size: api.params.stickerSize, rotation: api.params.stickerRot, point: hit.point.clone().applyMatrix4(inv).toArray(), normal: hit.normal.toArray() });
+            api.setPreview(null);
+            api.rebuild();
+            api.toast(STICKER_NAMES[stickerType] + ' added');
+          }
+        }],
+
+        onStage: function (env) {
+          var T = env.THREE;
+          modelGroup0 = env.modelGroup;
+          env.plateMesh.visible = false; env.grid.visible = false;
+          // The wrapping table: a wooden top with a red felt mat, a ribbon spool and a few baubles.
+          var wood = new T.Mesh(new T.CylinderGeometry(106, 102, 5, 72), new T.MeshStandardMaterial({ color: 0x9a6a3e, roughness: 0.8 }));
+          wood.position.y = -3.4; wood.receiveShadow = true; env.scene.add(wood);
+          var mat = new T.Mesh(new T.CylinderGeometry(92, 92, 1.4, 72), new T.MeshStandardMaterial({ color: 0xa8312f, roughness: 0.95 }));
+          mat.position.y = -0.72; mat.receiveShadow = true; env.scene.add(mat);
+          var trim = new T.Mesh(new T.TorusGeometry(92, 0.9, 8, 96), new T.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.5, metalness: 0.4 }));
+          trim.rotation.x = Math.PI / 2; trim.position.y = -0.2; env.scene.add(trim);
+          var spool = new T.Group();
+          spool.add(new T.Mesh(new T.CylinderGeometry(7, 7, 11, 28), new T.MeshStandardMaterial({ color: 0x2f7a4f, roughness: 0.6 })));
+          [-6, 6].forEach(function (yy) { var d = new T.Mesh(new T.CylinderGeometry(9, 9, 1.2, 28), new T.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.4, metalness: 0.5 })); d.position.y = yy; spool.add(d); });
+          spool.position.set(70, 6, 58); env.scene.add(spool);
+          [[-72, 4.5, 50, 0xb8322f], [-62, 3.6, 68, 0x3f7d58], [-80, 3.2, 70, 0xe9c46a]].forEach(function (b) {
+            var s = new T.Mesh(new T.SphereGeometry(b[1], 24, 16), new T.MeshStandardMaterial({ color: b[3], roughness: 0.25, metalness: 0.5 }));
+            s.position.set(b[0], b[1], b[2]); s.castShadow = true; env.scene.add(s);
+          });
+          env.hemi.color.set(0xfff0d8); env.hemi.groundColor.set(0x8a5a3a); env.hemi.intensity = 0.8;
+          env.key.color.set(0xffe2b8); env.key.intensity = 0.95;
+          env.rim.color.set(0xff9a6a); env.rim.intensity = 0.4;
+          var cv = document.createElement('canvas'); cv.className = 'mm-backdrop';
+          env.container.insertBefore(cv, env.container.firstChild);
+          var ctx = cv.getContext('2d');
+          room = function (t) {
+            var w = env.container.clientWidth || 600, h = env.container.clientHeight || 400;
+            if (!room.r || w !== room.r.w || h !== room.r.h) { cv.width = w; cv.height = h; room.r = paintRoom(w, h); }
+            drawRoom(ctx, room.r, t, api0 && api0.params.snow >= 1);
+          };
+          var decorating = function () { return wrapBody && !wrapBody.hidden; };
+          spinOn = function (dt) {
+            if (hovering && decorating()) return;
+            env.modelGroup.rotation.y += (api0.params.spin / 100) * 0.02 * dt;
+          };
+          env.container.addEventListener('pointerleave', function () { hovering = false; });
+        },
+        onFrame: function () {
+          var now = performance.now();
+          if (room) room(now);
+          if (spinOn && api0) { spinOn(Math.min(3, (now - (onFrame0 || now)) / 16.7)); }
+          onFrame0 = now;
+        },
+
+        testSetup: function () { stickers = []; },
+
+        build: function (p, api) {
+          api0 = api;
+          var meshes = build(p);
+          if (window.THREE) stickers.forEach(function (s) { meshes.push({ name: 'sticker', positions: stickerPositions(s) }); });
+          if (refreshStickerUI) refreshStickerUI();
+          return meshes;
+        }
+      };
+      var onFrame0 = 0;
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
