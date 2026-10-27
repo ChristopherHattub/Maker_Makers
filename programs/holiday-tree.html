@@ -195,7 +195,164 @@
         return values;
       }
 
+      // Ornament hook: a small ring standing up on a model (plane faces +Z) so it can be hung from a string.
+      // Bottom of the ring sits `embed` mm inside the model at (cx, baseY, cz).
+      function hookRing(cx, baseY, cz, hole, tube, embed) {
+        var Rc = hole + tube, cy = baseY - embed + Rc + tube, N = 40, k, rings = [];
+        var oct = [[-1, -0.5], [-0.5, -1], [0.5, -1], [1, -0.5], [1, 0.5], [0.5, 1], [-0.5, 1], [-1, 0.5]];
+        for (k = 0; k < N; k++) {
+          var th = (k / N) * TAU, c = Math.cos(th), s = Math.sin(th), ring = [];
+          oct.forEach(function (q) {
+            ring.push([cx + (Rc + q[0] * tube) * c, cy + (Rc + q[0] * tube) * s, cz + q[1] * tube * 1.15]);
+          });
+          rings.push(ring);
+        }
+        return shell(rings, true);
+      }
+
+
+      // ---- Stamp library: flat shapes placed on the model surface by clicking ----
+      var STAMP_NAMES = { star: 'Star', snow: 'Snowflake', tree: 'Tree', heart: 'Heart', bell: 'Bell', cane: 'Candy cane', holly: 'Holly', gift: 'Gift', ball: 'Ball', diamond: 'Diamond' };
+      var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
+      var stampType = 'star';
+      var refreshStampPanel = null;
+
+      function strokeOutline(pts, hw) {
+        var left = [], right = [], i, a, b, dx, dy, l;
+        for (i = 0; i < pts.length; i++) {
+          a = pts[Math.max(0, i - 1)]; b = pts[Math.min(pts.length - 1, i + 1)];
+          dx = b[0] - a[0]; dy = b[1] - a[1]; l = Math.sqrt(dx * dx + dy * dy) || 1;
+          left.push([pts[i][0] - (dy / l) * hw, pts[i][1] + (dx / l) * hw]);
+          right.push([pts[i][0] + (dy / l) * hw, pts[i][1] - (dx / l) * hw]);
+        }
+        return left.concat(right.reverse());
+      }
+      function mirrorHalf(half) {
+        var out = half.slice(), i;
+        for (i = half.length - 1; i >= 1; i--) out.push([-half[i][0], half[i][1]]);
+        return out;
+      }
+      function leaf(angleDeg, len, wid, ox, oy) {
+        var up = [], dn = [], i, s, w, a = rad(angleDeg), c = Math.cos(a), sn = Math.sin(a);
+        for (i = 0; i <= 12; i++) {
+          s = i / 12; w = wid * Math.pow(Math.sin(Math.PI * s), 0.8);
+          up.push([s * len, w]); dn.push([s * len, -w]);
+        }
+        return up.concat(dn.reverse()).map(function (q) { return [ox + q[0] * c - q[1] * sn, oy + q[0] * sn + q[1] * c]; });
+      }
+      function disc(cx, cy, r, n) {
+        var out = [], i;
+        for (i = 0; i < n; i++) out.push([cx + r * Math.cos((i / n) * TAU), cy + r * Math.sin((i / n) * TAU)]);
+        return out;
+      }
+
+      // Outline polygons (unit radius). Each polygon is extruded as its own solid; overlaps are fine.
+      function stampPolys(type) {
+        var i, a, pts = [];
+        if (type === 'star') {
+          for (i = 0; i < 10; i++) { a = (i * Math.PI) / 5 + Math.PI / 2; pts.push([Math.cos(a) * (i % 2 ? 0.46 : 1), Math.sin(a) * (i % 2 ? 0.46 : 1)]); }
+          return [pts];
+        }
+        if (type === 'snow') {
+          var spec = [[-30, 0.3], [-17, 0.68], [-8, 0.5], [0, 1], [8, 0.5], [17, 0.68]];
+          for (i = 0; i < 6; i++) spec.forEach(function (sp) { var an = rad(90 + i * 60 + sp[0]); pts.push([Math.cos(an) * sp[1], Math.sin(an) * sp[1]]); });
+          return [pts];
+        }
+        if (type === 'tree') {
+          return [mirrorHalf([[0, 1], [0.42, 0.42], [0.2, 0.42], [0.68, -0.12], [0.3, -0.12], [0.86, -0.68], [0.14, -0.68], [0.14, -1]])];
+        }
+        if (type === 'heart') {
+          for (i = 0; i < 36; i++) {
+            a = (i / 36) * TAU;
+            pts.push([(16 * Math.pow(Math.sin(a), 3)) / 17, (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a) + 2.5) / 17]);
+          }
+          return [pts];
+        }
+        if (type === 'bell') {
+          return [mirrorHalf([[0, 1], [0.2, 0.94], [0.35, 0.74], [0.4, 0.35], [0.5, -0.1], [0.7, -0.45], [0.82, -0.58], [0.82, -0.7], [0.2, -0.7], [0.2, -0.82], [0.1, -1]])];
+        }
+        if (type === 'cane') {
+          var cl = [[0.32, -1], [0.32, -0.5], [0.32, 0]];
+          for (i = 0; i <= 14; i++) { a = (i / 14) * Math.PI; cl.push([-0.08 + 0.4 * Math.cos(a), 0 + 0.4 * Math.sin(a)]); }
+          cl.push([-0.48, -0.3]);
+          return [strokeOutline(cl, 0.17).map(function (q) { return [q[0] + 0.08, q[1] - 0.2]; })];
+        }
+        if (type === 'holly') {
+          return [leaf(38, 1.1, 0.34, 0, -0.45), leaf(142, 1.1, 0.34, 0, -0.45), disc(-0.16, -0.38, 0.17, 14), disc(0.16, -0.38, 0.17, 14), disc(0, -0.2, 0.17, 14)];
+        }
+        if (type === 'gift') {
+          var bowL = [], bowR = [];
+          for (i = 0; i < 16; i++) { a = (i / 16) * TAU; bowL.push([-0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); bowR.push([0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); }
+          return [[[-0.72, -1], [0.72, -1], [0.72, 0.06], [-0.72, 0.06]], [[-0.84, 0.06], [0.84, 0.06], [0.84, 0.42], [-0.84, 0.42]], bowL, bowR];
+        }
+        if (type === 'diamond') return [[[0, 1], [0.62, 0], [0, -1], [-0.62, 0]]];
+        return [disc(0, 0, 1, 24)];
+      }
+
+      function stampIcon(type) {
+        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true">' + stampPolys(type).map(function (poly) {
+          return '<polygon points="' + poly.map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ') + '"/>';
+        }).join('') + '</svg>';
+      }
+
+      // Stamp mesh in model space: sunk `embed` mm into the surface and standing `depth - embed` mm proud.
+      function stampPositions(stamp, depth, embed) {
+        if (stamp.type === 'ball') {
+          var br = stamp.size * 0.5, nb = vnorm(stamp.normal), c = vadd(stamp.point, vmul(nb, br * 0.3));
+          return ball(c[0], c[1], c[2], br, br, br, 28, 14);
+        }
+        var THREE = window.THREE, normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
+        var shapes = stampPolys(stamp.type).map(function (poly) {
+          var shape = new THREE.Shape();
+          poly.forEach(function (pt, i) { if (i === 0) shape.moveTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); else shape.lineTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); });
+          shape.closePath();
+          return shape;
+        });
+        var geo = new THREE.ExtrudeGeometry(shapes, { depth: depth, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.3, bevelSegments: 2, curveSegments: 12 });
+        geo.rotateZ((((stamp.rotation || 0) * Math.PI) / 180));
+        geo.translate(0, 0, -embed);
+        var upVec = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+        var tx = new THREE.Vector3().crossVectors(upVec, normal).normalize();
+        var ty = new THREE.Vector3().crossVectors(normal, tx).normalize();
+        var quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tx, ty, normal));
+        var matrix = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(stamp.point), quat, new THREE.Vector3(1, 1, 1));
+        var flat = geo.toNonIndexed();
+        flat.applyMatrix4(matrix);
+        return flat.attributes.position.array.slice();
+      }
+
+      // Panel for a stamp tab: shape chips, undo and clear (plus optional extra buttons).
+      function mountStampPanel(container, api, types, heading, noun, extraButtons) {
+        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
+        var chips = el('div', { class: 'mm-icon-chips' }), buttons = {};
+        types.forEach(function (type) {
+          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType), onclick: function () {
+            stampType = type;
+            Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
+            api.toast('Selected ' + STAMP_NAMES[type] + '. Click the model to place it.');
+          } });
+          btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
+          buttons[type] = btn;
+          chips.appendChild(btn);
+        });
+        container.appendChild(chips);
+        var count = el('p', { class: 'mm-note' }, '0 ' + noun + 's placed');
+        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps.pop(); api.rebuild(); api.toast('Removed last ' + noun); } } }, 'Undo last');
+        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps = []; api.rebuild(); api.toast('Cleared all ' + noun + 's'); } } }, 'Clear all');
+        container.appendChild(count);
+        var row = el('div', { class: 'mm-export-row' });
+        row.appendChild(undo); row.appendChild(clear);
+        (extraButtons || []).forEach(function (b) { row.appendChild(el('button', { class: 'mm-btn', type: 'button', onclick: function () { b.run(api); } }, b.label)); });
+        container.appendChild(row);
+        refreshStampPanel = function () {
+          count.textContent = stamps.length + ' ' + noun + (stamps.length === 1 ? '' : 's') + ' placed';
+          undo.disabled = stamps.length === 0;
+          clear.disabled = stamps.length === 0;
+        };
+        refreshStampPanel();
+      }
       var SEG = 96;
+      stampType = 'ball';
       var PARAMS = [
         { group: 'Tree', key: 'height', label: 'Total height', unit: ' mm', min: 60, max: 130, step: 1, value: 96 },
         { group: 'Tree', key: 'baseR', label: 'Bottom tier width (radius)', unit: ' mm', min: 16, max: 42, step: 1, value: 28 },
@@ -209,11 +366,15 @@
         { group: 'Trunk & base', key: 'trunkH', label: 'Trunk showing under tree', unit: ' mm', min: 3, max: 14, step: 1, value: 7 },
         { group: 'Trunk & base', key: 'basePct', label: 'Snow base (% of tree width, 0 = none)', unit: '%', min: 0, max: 100, step: 1, value: 62,
           format: function (v) { return v < 40 ? 'None' : v + '%'; } },
-        { group: 'Baubles & topper', key: 'baubles', label: 'Baubles', unit: '', min: 0, max: 24, step: 1, value: 10 },
-        { group: 'Baubles & topper', key: 'baubleR', label: 'Bauble size', unit: ' mm', min: 2.2, max: 5, step: 0.1, value: 3 },
-        { group: 'Baubles & topper', key: 'topper', label: 'Tree topper', unit: '', min: 0, max: 2, step: 1, value: 2,
+        { group: 'Topper', key: 'topper', label: 'Tree topper', unit: '', min: 0, max: 2, step: 1, value: 2,
           format: function (v) { return ['None', 'Ball', 'Sparkle'][Math.round(v)]; } },
-        { group: 'Baubles & topper', key: 'topperR', label: 'Topper size', unit: ' mm', min: 3, max: 9, step: 0.5, value: 5 }
+        { group: 'Topper', key: 'topperR', label: 'Topper size', unit: ' mm', min: 3, max: 9, step: 0.5, value: 5 },
+        { group: 'Ornament hook', key: 'hook', label: 'Ornament hook on top (replaces sparkle with ball)', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Ornament hook', key: 'hookHole', label: 'Hook hole size', unit: ' mm', min: 1.6, max: 3.6, step: 0.1, value: 2.4 },
+        { group: 'Ornament hook', key: 'hookTube', label: 'Hook ring thickness', unit: ' mm', min: 1.2, max: 2.4, step: 0.1, value: 1.6 },
+        { tab: 'ornaments', group: 'Ornament size & rotation', key: 'stampSize', label: 'Ornament size', unit: ' mm', min: 5, max: 20, step: 0.5, value: 8 },
+        { tab: 'ornaments', group: 'Ornament size & rotation', key: 'stampRotation', label: 'Ornament rotation (flat shapes)', unit: '°', min: 0, max: 355, step: 5, value: 0 }
       ];
       var DEFAULTS = {};
       PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
@@ -294,7 +455,7 @@
       }
 
       function build(p) {
-        var g = layout(p), out = [], i, N = g.N, lip = p.lipH;
+        var g = layout(p), out = [], N = g.N, lip = p.lipH;
         out.push({ name: 'tree', positions: treeShell(p, g), singlePart: true });
         var rtr = g.rtr;
         out.push({ name: 'trunk', positions: lathe([[0, 0], [rtr - 0.8, 0], [rtr, 0.8], [rtr, g.roof + 2], [0, g.roof + 2]], 40), singlePart: true });
@@ -302,23 +463,10 @@
           var Rb = Math.max(rtr + 6, g.tiers[0].R * p.basePct / 100), h0 = 1.4, top = h0 + (Rb - rtr) * 0.3;
           out.push({ name: 'base', positions: lathe([[0, 0], [Rb - 0.6, 0], [Rb, 0.6], [Rb, h0], [rtr + 1, top], [0, top]], SEG), singlePart: true });
         }
-        if (p.baubles > 0) {
-          var b = [], n = Math.round(p.baubles), rb = p.baubleR;
-          for (i = 0; i < n; i++) {
-            var ti = i % (N - 1 < 1 ? 1 : N - 1), t = g.tiers[ti];
-            var u = 0.1 + 0.5 * (((i * 7) % 10) / 10) * t.uX;
-            var a = i * 2.39996, w = lerp(1, 0.3, u / t.uX);
-            var r = lerp(t.R, t.rt, u) * wobble(p, w, ti * Math.PI / p.lobes, a), y = t.yl + lip + t.h * u;
-            var nrm = vnorm([t.h, (t.R - t.rt), 0]);   // outward-up normal in (r, y)
-            var cr = r - nrm[0] * rb * 0.4, cy = y + nrm[1] * -rb * 0.4 * -1 - nrm[1] * rb * 0.8;
-            cy = y - nrm[1] * rb * 0.4;
-            b.push(ball(cr * Math.cos(a), cy, cr * Math.sin(a), rb, rb, rb, 24, 12));
-          }
-          out.push({ name: 'baubles', positions: cat(b), singlePart: true });
-        }
+        var H = p.height, topTop = H;
         if (p.topper >= 1) {
-          var s = p.topperR, H = p.height;
-          if (Math.round(p.topper) === 1) out.push({ name: 'topper', positions: ball(0, H + s * 0.35, 0, s, s, s, 40, 20), singlePart: true });
+          var s = p.topperR, kind = p.hook >= 1 ? 1 : Math.round(p.topper);
+          if (kind === 1) { out.push({ name: 'topper', positions: ball(0, H + s * 0.35, 0, s, s, s, 40, 20), singlePart: true }); topTop = H + s * 1.35; }
           else {
             var yc = H + s * 0.45, pr = [[0, yc - 1.15 * s]], q;
             for (q = 1; q < 8; q++) pr.push([s * Math.pow(q / 8, 0.9), yc - 1.15 * s * (1 - q / 8)]);
@@ -328,30 +476,35 @@
             out.push({ name: 'topper', positions: lathe(pr, 48), singlePart: true });
           }
         }
+        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, topTop, 0, p.hookHole, p.hookTube, 1.8), singlePart: true });
+        if (!seeded) { seeded = true; stamps = autoDecorate(p, g, 9); }
+        stamps.forEach(function (st) { out.push({ name: 'ornament', positions: stampPositions(st, 3.4, 1.4), singlePart: true }); });
+        if (refreshStampPanel) refreshStampPanel();
         return out;
       }
 
-      function cardSvg(v) {
-        var N = Math.round(v.tiers), svg = '<svg viewBox="0 0 64 64" aria-hidden="true">', i;
-        var H = 46 * v.height / 96, W = 24 * v.baseR / 28, top = 58 - H, tl = [];
-        svg += '<rect x="29" y="52" width="6" height="7" fill="#a16207"/>';
-        for (i = 0; i < N; i++) {
-          var f = i / N, yb = 54 - (H - 4) * f * 0.8 - 2, ytop = yb - (H - 4) / N * 1.7;
-          var wb = (W * (1 - f * (1 - v.topPct / 100))) ;
-          svg += '<path d="M' + (32 - wb).toFixed(1) + ' ' + yb.toFixed(1) + 'L32 ' + Math.max(top, ytop).toFixed(1) + 'L' + (32 + wb).toFixed(1) + ' ' + yb.toFixed(1) + 'z" fill="' + (i % 2 ? '#4ade80' : '#22c55e') + '" stroke="#14532d" stroke-width="0.7" stroke-linejoin="round"/>';
-          if (v.baubles > 0 && i < v.baubles) svg += '<circle cx="' + (32 + (i % 2 ? 1 : -1) * wb * 0.45).toFixed(1) + '" cy="' + (yb - 3).toFixed(1) + '" r="' + (v.baubleR * 0.6).toFixed(1) + '" fill="' + (i % 2 ? '#f87171' : '#fde047') + '"/>';
+      var seeded = false;
+      // Evenly spread balls over the tier surfaces for the current tree shape.
+      function autoDecorate(p, g, count) {
+        var list = [], N = g.N, i;
+        for (i = 0; i < count; i++) {
+          var ti = i % Math.max(1, N - 1), t = g.tiers[ti];
+          var u = (0.12 + 0.46 * (((i * 7) % 10) / 10)) * t.uX, a = i * 2.39996;
+          var w = lerp(1, 0.3, u / t.uX);
+          var r = lerp(t.R, t.rt, u) * wobble(p, w, ti * Math.PI / p.lobes, a), y = t.yl + p.lipH + t.h * u;
+          var nr = vnorm([t.h, t.R - t.rt, 0]);
+          list.push({ type: 'ball', size: 6.4, rotation: 0, point: [r * Math.cos(a), y, r * Math.sin(a)], normal: [nr[0] * Math.cos(a), nr[1], nr[0] * Math.sin(a)] });
         }
-        if (v.topper >= 1) svg += '<path d="M32 ' + (top - 7) + 'l1.8 4.2l4.4 .4l-3.4 3l1 4.4l-3.8-2.4l-3.8 2.4l1-4.4l-3.4-3l4.4-.4z" fill="#fde047" stroke="#a16207" stroke-width="0.5"/>';
-        return svg + '</svg>';
+        return list;
       }
 
       var STYLES = [
         { name: 'Classic', values: {} },
-        { name: 'Slim spruce', values: { tiers: 7, baseR: 21, height: 112, topPct: 26, scallop: 3, trunkR: 7, baubles: 8, topper: 1, topperR: 4 } },
-        { name: 'Fat pine', values: { tiers: 4, baseR: 38, height: 84, topPct: 40, scallop: 5, lobes: 10, baubleR: 3.6, baubles: 12, topperR: 6 } },
-        { name: 'Frosty', values: { scallop: 9, lobes: 12, baubles: 0, topper: 2, topperR: 5.5 } },
-        { name: 'Party tree', values: { baubles: 22, baubleR: 3.2, tiers: 6, scallop: 2, topperR: 6 } },
-        { name: 'Mini 3-tier', values: { tiers: 3, height: 66, baseR: 22, topPct: 38, baubles: 5, baubleR: 2.6, topperR: 4, trunkH: 5, trunkR: 7 } }
+        { name: 'Slim spruce', values: { tiers: 7, baseR: 21, height: 112, topPct: 26, scallop: 3, trunkR: 7, topper: 1, topperR: 4 } },
+        { name: 'Fat pine', values: { tiers: 4, baseR: 38, height: 84, topPct: 40, scallop: 5, lobes: 10, topperR: 6 } },
+        { name: 'Frosty', values: { scallop: 9, lobes: 12, topper: 2, topperR: 5.5 } },
+        { name: 'Party tree', values: { tiers: 6, scallop: 2, topperR: 6 } },
+        { name: 'Mini 3-tier', values: { tiers: 3, height: 66, baseR: 22, topPct: 38, topperR: 4, trunkH: 5, trunkR: 7 } }
       ];
 
       window.MM_GENERATOR = {
@@ -371,7 +524,7 @@
           { name: 'Berry Purple', color: '#d8b4fe' },
           { name: 'Midnight', color: '#334155' }
         ],
-        partNames: { tree: 'Tree boughs', trunk: 'Trunk', base: 'Snow base', baubles: 'Baubles', topper: 'Topper' },
+        partNames: { tree: 'Tree boughs', trunk: 'Trunk', base: 'Snow base', ornament: 'Ornament', hook: 'Ornament hook', topper: 'Topper' },
         printSettings: {
           material: 'PLA',
           nozzle: 0.4,
@@ -382,18 +535,33 @@
           bottomLayers: 4,
           supports: false,
           brim: 3,
-          notes: 'Prints upright on its flat snow base. Every bough has a 45 degree or steeper underside, so no supports are needed. Keep the underside slope at 45 degrees or more, and keep the snow base on for the best bed grip.'
+          notes: 'Prints upright on its flat snow base. Every bough has a 45 degree or steeper underside, so no supports are needed. Ornaments are raised flat shapes or small balls on the upper boughs; avoid placing them underneath. The optional ornament hook is a small ring on top. Keep the underside slope at 45 degrees or more, and keep the snow base on for the best bed grip.'
         },
 
         parameters: PARAMS,
         presets: STYLES.map(function (s) { return { label: s.name === 'Classic' ? 'Default tree' : s.name, values: withDefaults(DEFAULTS, s.values) }; }),
 
         tabs: [{
-          id: 'styles',
-          label: 'Styles',
-          hint: 'Pick a tree style, then fine-tune the sliders',
+          id: 'ornaments',
+          label: 'Ornaments',
+          hint: 'Pick an ornament shape, then click the tree to hang it',
           mount: function (container, api) {
-            mountStyleCards(container, api, STYLES, cardSvg, DEFAULTS, 'Tree styles', 'Cards set every slider; keep tuning by hand. The boughs, trunk, snow base, baubles and topper are separate parts you can paint in the Color tool.');
+            mountStampPanel(container, api, ['ball', 'star', 'heart', 'diamond', 'bell', 'cane', 'snow'], 'Ornament shapes (click the tree to place)', 'ornament', [{
+              label: 'Auto-decorate',
+              run: function (a) { stamps = autoDecorate(a.params, layout(a.params), 12); a.rebuild(); a.toast('Added balls'); }
+            }]);
+            container.appendChild(el('p', { class: 'mm-note' }, 'Ornaments sit on the upper surface of the boughs. Each one is its own part you can paint. If you reshape the tree afterwards, clear and place them again.'));
+          },
+          onHover: function (hit, api) {
+            if (!hit || hit.meshName !== 'tree' || hit.normal.y < 0.12) { api.setPreview(null); return; }
+            api.setPreview({ positions: stampPositions({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() }, 3.4, 1.4) });
+          },
+          onPick: function (hit, api) {
+            if (hit.meshName !== 'tree') return;
+            if (hit.normal.y < 0.12) { api.toast('Tip: place ornaments on the top of the boughs, not underneath.'); return; }
+            stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
+            api.rebuild();
+            api.toast('Hung ' + STAMP_NAMES[stampType]);
           }
         }],
 

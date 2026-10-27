@@ -195,6 +195,21 @@
         return values;
       }
 
+      // Ornament hook: a small ring standing up on a model (plane faces +Z) so it can be hung from a string.
+      // Bottom of the ring sits `embed` mm inside the model at (cx, baseY, cz).
+      function hookRing(cx, baseY, cz, hole, tube, embed) {
+        var Rc = hole + tube, cy = baseY - embed + Rc + tube, N = 40, k, rings = [];
+        var oct = [[-1, -0.5], [-0.5, -1], [0.5, -1], [1, -0.5], [1, 0.5], [0.5, 1], [-0.5, 1], [-1, 0.5]];
+        for (k = 0; k < N; k++) {
+          var th = (k / N) * TAU, c = Math.cos(th), s = Math.sin(th), ring = [];
+          oct.forEach(function (q) {
+            ring.push([cx + (Rc + q[0] * tube) * c, cy + (Rc + q[0] * tube) * s, cz + q[1] * tube * 1.15]);
+          });
+          rings.push(ring);
+        }
+        return shell(rings, true);
+      }
+
       var PARAMS = [
         { group: 'Arms', key: 'armCount', label: 'Number of arms', unit: '', min: 5, max: 12, step: 1, value: 6 },
         { group: 'Arms', key: 'armLen', label: 'Arm length (from centre)', unit: ' mm', min: 22, max: 62, step: 1, value: 40 },
@@ -212,10 +227,10 @@
           format: function (v) { return v >= 40 ? 'Round' : v + ' sides'; } },
         { group: 'Centre & tips', key: 'tipR', label: 'Arm-tip discs (0 = none)', unit: ' mm', min: 0, max: 8, step: 0.5, value: 0,
           format: function (v) { return v < 2 ? 'None' : v + ' mm'; } },
-        { group: 'Hanging loop', key: 'loop', label: 'Hanging loop', unit: '', min: 0, max: 1, step: 1, value: 1,
+        { group: 'Ornament hook', key: 'loop', label: 'Ornament hook (hanging loop)', unit: '', min: 0, max: 1, step: 1, value: 1,
           format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
-        { group: 'Hanging loop', key: 'loopHole', label: 'Loop hole size', unit: ' mm', min: 1.5, max: 4.5, step: 0.1, value: 2.4 },
-        { group: 'Hanging loop', key: 'loopW', label: 'Loop ring width', unit: ' mm', min: 2, max: 5, step: 0.1, value: 3 }
+        { group: 'Ornament hook', key: 'loopHole', label: 'Loop hole size', unit: ' mm', min: 1.5, max: 4.5, step: 0.1, value: 2.4 },
+        { group: 'Ornament hook', key: 'loopW', label: 'Loop ring width', unit: ' mm', min: 2, max: 5, step: 0.1, value: 3 }
       ];
       var DEFAULTS = {};
       PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
@@ -318,7 +333,7 @@
           { name: 'Pine Green', color: '#86efac' },
           { name: 'Midnight', color: '#334155' }
         ],
-        partNames: { arms: 'Arms', branches: 'Branches', hub: 'Centre', tips: 'Arm tips', loop: 'Hanging loop' },
+        partNames: { arms: 'Arms', branches: 'Branches', hub: 'Centre', tips: 'Arm tips', loop: 'Ornament hook' },
         printSettings: {
           material: 'PLA',
           nozzle: 0.4,
