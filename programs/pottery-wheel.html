@@ -636,6 +636,13 @@
           pan.position.y = -3.2; pan.receiveShadow = true; env.scene.add(pan);
           var head = new T.Mesh(new T.CylinderGeometry(58, 58, 2.4, 64), new T.MeshStandardMaterial({ color: 0x7c7f86, roughness: 0.35, metalness: 0.6 }));
           head.position.y = -1.2; head.receiveShadow = true; env.scene.add(head);
+          // Marks on the wheel head turn with the pot, so the spin is easy to see even on a smooth pot.
+          var spinner = new T.Group(), markMat = new T.MeshStandardMaterial({ color: 0x3b3d44, roughness: 0.6 }), pale = new T.MeshStandardMaterial({ color: 0xe9e4da, roughness: 0.6 }), mk;
+          for (mk = 0; mk < 16; mk++) {
+            var bar = new T.Mesh(new T.BoxGeometry(mk % 4 === 0 ? 18 : 10, 0.5, 3), mk % 4 === 0 ? pale : markMat), an = (mk / 16) * TAU;
+            bar.position.set(Math.cos(an) * 50, 0.3, Math.sin(an) * 50); bar.rotation.y = -an; spinner.add(bar);
+          }
+          env.scene.add(spinner);
           env.hemi.color.set(0xfff0d8); env.hemi.groundColor.set(0xb98a5a); env.hemi.intensity = 0.8;
           env.key.color.set(0xffe2b8); env.key.intensity = 0.95;
           env.rim.color.set(0xffc98a); env.rim.intensity = 0.35;
@@ -647,7 +654,7 @@
             if (w !== cw || h !== ch) { cw = w; ch = h; cv.width = w; cv.height = h; cache = paintStudio(w, h); cv.getContext('2d').drawImage(cache, 0, 0); }
           };
           sculptFrame = setupSculpt(env);
-          wheelSpin = function () { env.modelGroup.rotation.y += (api0.params.speed / 100) * 0.04; };
+          wheelSpin = function () { env.modelGroup.rotation.y += (api0.params.speed / 100) * 0.04; spinner.rotation.y = env.modelGroup.rotation.y; };
         },
         onFrame: function () { if (studio) studio(); if (wheelSpin) wheelSpin(); if (sculptFrame) sculptFrame(); },
 
