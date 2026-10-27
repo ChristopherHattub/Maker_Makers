@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-012 Image Clicker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Image Clicker: turns a picture (PNG, JPG, SVG or one of the built-in shapes) into a print-in-place
+    // fidget clicker. The picture is read in the browser, turned into a distance field, and the outlines
+    // at several offsets become the housing, the button cap, the stem and the hinge. Nothing is uploaded.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      var TAU = Math.PI * 2;
+      var T = null; // api.THREE, set in build()
+
+      // ---- Picture sources ---------------------------------------------------------------------
+      // A source is { id, name, w, h, ink } where ink holds one value per pixel, 0..1, row 0 on top.
+      function pointInPoly(px, py, poly) {
+        var inside = false, i, j;
+        for (i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+          if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+      }
+
+      function inkFromFn(id, name, fn) {
+        var n = 200, ink = new Float32Array(n * n), r, c;
+        for (r = 0; r < n; r++) {
+          for (c = 0; c < n; c++) {
+            ink[r * n + c] = fn(((c + 0.5) / n) * 2 - 1, 1 - ((r + 0.5) / n) * 2) ? 1 : 0;
+          }
+        }
+        return { id: id, name: name, w: n, h: n, ink: ink };
+      }
+
+      var STAR = (function () {
+        var pts = [], k, a, r;
+        for (k = 0; k < 10; k++) {
+          a = Math.PI / 2 + (k * Math.PI) / 5; r = k % 2 ? 0.42 : 0.96;
+          pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+        }
+        return pts;
+      })();
+      var BOLT = [[0.26, 0.96], [-0.5, -0.04], [-0.06, -0.04], [-0.3, -0.96], [0.56, 0.2], [0.08, 0.2]];
+      var PAW_TOES = [[-0.64, 0.1, 0.27], [-0.23, 0.45, 0.28], [0.23, 0.45, 0.28], [0.64, 0.1, 0.27]];
+
+      var BUILTINS = [
+        { id: 'heart', name: 'Heart', icon: '<path d="M32 54C8 36 8 14 22 12c6-1 10 3 10 8 0-5 4-9 10-8 14 2 14 24-10 42z"/>',
+          src: inkFromFn('heart', 'Heart', function (x, y) {
+            var a = x * 1.25, b = y * 1.25 + 0.15, q = a * a + b * b - 1;
+            return q * q * q - a * a * b * b * b <= 0;
+          }) },
+        { id: 'star', name: 'Star', icon: '<path d="M32 6l7.5 17.5 19 1.7-14.4 12.4 4.4 18.6L32 46.5 15.5 56.2l4.4-18.6L5.5 25.2l19-1.7z"/>',
+          src: inkFromFn('star', 'Star', function (x, y) { return pointInPoly(x, y, STAR); }) },
+        { id: 'bolt', name: 'Bolt', icon: '<path d="M38 4L14 36h14l-6 24 28-34H35z"/>',
+          src: inkFromFn('bolt', 'Bolt', function (x, y) { return pointInPoly(x, y, BOLT); }) },
+        { id: 'paw', name: 'Paw', icon: '<ellipse cx="32" cy="42" rx="17" ry="14"/><circle cx="13" cy="26" r="7"/><circle cx="25" cy="14" r="7"/><circle cx="39" cy="14" r="7"/><circle cx="51" cy="26" r="7"/>',
+          src: inkFromFn('paw', 'Paw', function (x, y) {
+            var dx = x / 0.64, dy = (y + 0.3) / 0.5, k;
+            if (dx * dx + dy * dy <= 1) return true;
+            for (k = 0; k < PAW_TOES.length; k++) {
+              var tx = x - PAW_TOES[k][0], ty = y - PAW_TOES[k][1];
+              if (tx * tx + ty * ty <= PAW_TOES[k][2] * PAW_TOES[k][2]) return true;
+            }
+            return false;
+          }) }
+      ];
+
+      // Closure state, set by the Image tab.
+      var state = { src: BUILTINS[0].src, mode: 'outline', badge: 'circle', invert: false, fileName: '' };
+
+      // ---- Raster helpers ------------------------------------------------------------------------
+      function boxBlur(a, w, h, r) {
+        if (r < 1) return;
+        var tmp = new Float32Array(a.length), x, y, k, sum, n = 2 * r + 1;
+        for (y = 0; y < h; y++) {
+          sum = 0;
+          for (k = -r; k <= r; k++) sum += a[y * w + Math.min(w - 1, Math.max(0, k))];
+          for (x = 0; x < w; x++) {
+            tmp[y * w + x] = sum / n;
+            sum += a[y * w + Math.min(w - 1, x + r + 1)] - a[y * w + Math.max(0, x - r)];
+          }
+        }
+        for (x = 0; x < w; x++) {
+          sum = 0;
+          for (k = -r; k <= r; k++) sum += tmp[Math.min(h - 1, Math.max(0, k)) * w + x];
+          for (y = 0; y < h; y++) {
+            a[y * w + x] = sum / n;
+            sum += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x];
+          }
+        }
+      }
+
+      // Felzenszwalb squared distance transform. feature[i] = 1 marks the pixels distance is measured to.
+      function edt2d(feature, nx, ny) {
+        var INF = 1e12, f = new Float64Array(nx * ny), i, x, y;
+        for (i = 0; i < f.length; i++) f[i] = feature[i] ? 0 : INF;
+        var m = Math.max(nx, ny), col = new Float64Array(m), out = new Float64Array(m);
+        var v = new Int32Array(m), z = new Float64Array(m + 1);
+        function pass(n) {
+          var k = 0, q, s;
+          v[0] = 0; z[0] = -INF; z[1] = INF;
+          for (q = 1; q < n; q++) {
+            s = ((col[q] + q * q) - (col[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+            while (s <= z[k]) {
+              k--;
+              s = ((col[q] + q * q) - (col[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+            }
+            k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+          }
+          k = 0;
+          for (q = 0; q < n; q++) {
+            while (z[k + 1] < q) k++;
+            out[q] = (q - v[k]) * (q - v[k]) + col[v[k]];
+          }
+        }
+        for (x = 0; x < nx; x++) {
+          for (y = 0; y < ny; y++) col[y] = f[y * nx + x];
+          pass(ny);
+          for (y = 0; y < ny; y++) f[y * nx + x] = out[y];
+        }
+        for (y = 0; y < ny; y++) {
+          for (x = 0; x < nx; x++) col[x] = f[y * nx + x];
+          pass(nx);
+          for (x = 0; x < nx; x++) f[y * nx + x] = out[x];
+        }
+        return f;
+      }
+
+      // Picture -> black/white mask (cropped to the shape). keepLargest drops stray specks and islands.
+      function makeMask(p, pitchGuess, keepLargest) {
+        var s = state.src, w = s.w, h = s.h, a = new Float32Array(w * h), i;
+        for (i = 0; i < a.length; i++) a[i] = state.invert ? 1 - s.ink[i] : s.ink[i];
+        var r = Math.round(p.smooth / pitchGuess);
+        if (r > 0) { boxBlur(a, w, h, r); boxBlur(a, w, h, r); }
+        var cut = 1 - p.threshold / 100, bin = new Uint8Array(w * h);
+        for (i = 0; i < a.length; i++) bin[i] = a[i] >= cut ? 1 : 0;
+        if (keepLargest) {
+          var label = new Int32Array(w * h), best = 0, bestSize = 0, next = 0, stack = [], size, x, y, dx, dy;
+          for (i = 0; i < bin.length; i++) {
+            if (!bin[i] || label[i]) continue;
+            next++; size = 0; stack.length = 0; stack.push(i); label[i] = next;
+            while (stack.length) {
+              var cur = stack.pop(), cx = cur % w, cy = (cur - cx) / w;
+              size++;
+              for (dy = -1; dy <= 1; dy++) {
+                for (dx = -1; dx <= 1; dx++) {
+                  x = cx + dx; y = cy + dy;
+                  if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                  var k = y * w + x;
+                  if (bin[k] && !label[k]) { label[k] = next; stack.push(k); }
+                }
+              }
+            }
+            if (size > bestSize) { bestSize = size; best = next; }
+          }
+          for (i = 0; i < bin.length; i++) if (label[i] !== best) bin[i] = 0;
+        }
+        var minX = w, minY = h, maxX = -1, maxY = -1, x2, y2;
+        for (y2 = 0; y2 < h; y2++) {
+          for (x2 = 0; x2 < w; x2++) {
+            if (!bin[y2 * w + x2]) continue;
+            if (x2 < minX) minX = x2; if (x2 > maxX) maxX = x2;
+            if (y2 < minY) minY = y2; if (y2 > maxY) maxY = y2;
+          }
+        }
+        if (maxX < 0) return null;
+        var cw = maxX - minX + 1, ch = maxY - minY + 1, out = new Uint8Array(cw * ch);
+        for (y2 = 0; y2 < ch; y2++) for (x2 = 0; x2 < cw; x2++) out[y2 * cw + x2] = bin[(y2 + minY) * w + x2 + minX];
+        return { w: cw, h: ch, bin: out };
+      }
+
+      // ---- Distance field grid -------------------------------------------------------------------
+      // Grid: nx*ny values at x0 + i*s, y0 + j*s (y up). d > 0 is inside the shape, in millimetres.
+      function newGrid(extentX, extentY, s) {
+        var nx = Math.round(extentX / s) + 1, ny = Math.round(extentY / s) + 1;
+        return { nx: nx, ny: ny, s: s, x0: -((nx - 1) * s) / 2, y0: -((ny - 1) * s) / 2, d: new Float32Array(nx * ny), cache: {}, maxD: 0, ax: 0, ay: 0 };
+      }
+
+      function finishGrid(g) {
+        var i, best = -Infinity, bi = 0;
+        for (i = 0; i < g.d.length; i++) if (g.d[i] > best) { best = g.d[i]; bi = i; }
+        g.maxD = best;
+        g.ax = g.x0 + (bi % g.nx) * g.s;
+        g.ay = g.y0 + Math.floor(bi / g.nx) * g.s;
+        return g;
+      }
+
+      function gridFromMask(mask, pitch, margin) {
+        var pad = Math.ceil(margin / pitch) + 3, nx = mask.w + 2 * pad, ny = mask.h + 2 * pad;
+        var g = newGrid((nx - 1) * pitch - 1e-6, (ny - 1) * pitch - 1e-6, pitch);
+        var inside = new Uint8Array(nx * ny), outside = new Uint8Array(nx * ny), r, c, i;
+        for (r = 0; r < mask.h; r++) for (c = 0; c < mask.w; c++) if (mask.bin[r * mask.w + c]) inside[(r + pad) * nx + c + pad] = 1;
+        for (i = 0; i < inside.length; i++) outside[i] = inside[i] ? 0 : 1;
+        var dOut = edt2d(inside, nx, ny), dIn = edt2d(outside, nx, ny);
+        for (r = 0; r < ny; r++) {
+          var j = ny - 1 - r;
+          for (c = 0; c < nx; c++) {
+            var k = r * nx + c;
+            g.d[j * nx + c] = (inside[k] ? Math.sqrt(dIn[k]) - 0.5 : -(Math.sqrt(dOut[k]) - 0.5)) * pitch;
+          }
+        }
+        boxBlur(g.d, nx, ny, 1);
+        boxBlur(g.d, nx, ny, 1);
+        return finishGrid(g);
+      }
+
+      function sdPoly(px, py, v) {
+        var dmin = Infinity, i, j, inside = false;
+        for (i = 0, j = v.length - 1; i < v.length; j = i++) {
+          var ax = v[j][0], ay = v[j][1], bx = v[i][0], by = v[i][1], ex = bx - ax, ey = by - ay;
+          var t = Math.max(0, Math.min(1, ((px - ax) * ex + (py - ay) * ey) / (ex * ex + ey * ey)));
+          var dx = px - (ax + ex * t), dy = py - (ay + ey * t);
+          dmin = Math.min(dmin, dx * dx + dy * dy);
+          if ((ay > py) !== (by > py) && px < ((bx - ax) * (py - ay)) / (by - ay) + ax) inside = !inside;
+        }
+        return inside ? -Math.sqrt(dmin) : Math.sqrt(dmin);
+      }
+
+      function badgeGrid(kind, size, margin) {
+        var s = size <= 50 ? 0.2 : 0.26, ext = size + 2 * margin;
+        var g = newGrid(ext, ext, s), i, j, half = size / 2, rr, hex = null, k;
+        if (kind === 'hex') {
+          rr = 3;
+          hex = [];
+          for (k = 0; k < 6; k++) hex.push([Math.cos(k * Math.PI / 3) * (half - rr * 1.15), Math.sin(k * Math.PI / 3) * (half - rr * 1.15)]);
+        } else rr = Math.min(size * 0.2, 9);
+        for (j = 0; j < g.ny; j++) {
+          for (i = 0; i < g.nx; i++) {
+            var x = g.x0 + i * s, y = g.y0 + j * s, v;
+            if (kind === 'circle') v = half - Math.sqrt(x * x + y * y);
+            else if (kind === 'hex') v = rr - sdPoly(x, y, hex);
+            else {
+              var qx = Math.abs(x) - (half - rr), qy = Math.abs(y) - (half - rr);
+              v = rr - (Math.sqrt(Math.pow(Math.max(qx, 0), 2) + Math.pow(Math.max(qy, 0), 2)) + Math.min(Math.max(qx, qy), 0));
+            }
+            g.d[j * g.nx + i] = v;
+          }
+        }
+        return finishGrid(g);
+      }
+
+      function sample(g, x, y) {
+        var fx = (x - g.x0) / g.s, fy = (y - g.y0) / g.s, i = Math.floor(fx), j = Math.floor(fy);
+        if (i < 0 || j < 0 || i >= g.nx - 1 || j >= g.ny - 1) return -1e3;
+        var tx = fx - i, ty = fy - j, d = g.d, n = g.nx;
+        return (d[j * n + i] * (1 - tx) + d[j * n + i + 1] * tx) * (1 - ty) + (d[(j + 1) * n + i] * (1 - tx) + d[(j + 1) * n + i + 1] * tx) * ty;
+      }
+
+      // ---- Contours (marching squares) ----------------------------------------------------------
+      function dpOpen(pts, tol) {
+        var n = pts.length;
+        if (n < 3) return pts.slice();
+        var keep = new Uint8Array(n), stack = [[0, n - 1]], out = [], i;
+        keep[0] = keep[n - 1] = 1;
+        while (stack.length) {
+          var seg = stack.pop(), a = pts[seg[0]], b = pts[seg[1]], best = -1, bi = -1;
+          var ex = b[0] - a[0], ey = b[1] - a[1], len2 = ex * ex + ey * ey;
+          for (i = seg[0] + 1; i < seg[1]; i++) {
+            var t = len2 ? Math.max(0, Math.min(1, ((pts[i][0] - a[0]) * ex + (pts[i][1] - a[1]) * ey) / len2)) : 0;
+            var dx = pts[i][0] - (a[0] + ex * t), dy = pts[i][1] - (a[1] + ey * t), dd = dx * dx + dy * dy;
+            if (dd > best) { best = dd; bi = i; }
+          }
+          if (best > tol * tol) { keep[bi] = 1; stack.push([seg[0], bi], [bi, seg[1]]); }
+        }
+        for (i = 0; i < n; i++) if (keep[i]) out.push(pts[i]);
+        return out;
+      }
+
+      function simplifyClosed(pts, tol) {
+        var n = pts.length, far = 0, best = -1, i;
+        for (i = 1; i < n; i++) {
+          var dx = pts[i][0] - pts[0][0], dy = pts[i][1] - pts[0][1], dd = dx * dx + dy * dy;
+          if (dd > best) { best = dd; far = i; }
+        }
+        var a = dpOpen(pts.slice(0, far + 1), tol), b = dpOpen(pts.slice(far).concat([pts[0]]), tol);
+        return a.concat(b.slice(1, b.length - 1));
+      }
+
+      function areaOf(pts) {
+        var a = 0, i, j;
+        for (i = 0, j = pts.length - 1; i < pts.length; j = i++) a += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
+        return a / 2;
+      }
+
+      function loopsAt(g, iso) {
+        var key = iso.toFixed(3);
+        if (g.cache[key]) return g.cache[key];
+        var nx = g.nx, ny = g.ny, d = g.d, s = g.s, adj = new Map(), pos = new Map(), i, j;
+        function eid(horizontal, ci, cj) { return (cj * nx + ci) * 2 + (horizontal ? 0 : 1); }
+        function ept(id) {
+          var o = pos.get(id);
+          if (o) return o;
+          var k = id >> 1, ci = k % nx, cj = (k - ci) / nx, horizontal = (id & 1) === 0;
+          var a = d[cj * nx + ci], b = horizontal ? d[cj * nx + ci + 1] : d[(cj + 1) * nx + ci];
+          var t = (iso - a) / (b - a);
+          o = [g.x0 + ci * s + (horizontal ? t * s : 0), g.y0 + cj * s + (horizontal ? 0 : t * s)];
+          pos.set(id, o);
+          return o;
+        }
+        function link(a, b) {
+          if (!adj.has(a)) adj.set(a, []);
+          if (!adj.has(b)) adj.set(b, []);
+          adj.get(a).push(b); adj.get(b).push(a);
+        }
+        for (j = 0; j < ny - 1; j++) {
+          for (i = 0; i < nx - 1; i++) {
+            var va = d[j * nx + i], vb = d[j * nx + i + 1], vc = d[(j + 1) * nx + i + 1], vd = d[(j + 1) * nx + i];
+            var idx = (va > iso ? 1 : 0) | (vb > iso ? 2 : 0) | (vc > iso ? 4 : 0) | (vd > iso ? 8 : 0);
+            if (idx === 0 || idx === 15) continue;
+            var B = eid(true, i, j), Tp = eid(true, i, j + 1), L = eid(false, i, j), R = eid(false, i + 1, j);
+            switch (idx) {
+              case 1: case 14: link(L, B); break;
+              case 2: case 13: link(B, R); break;
+              case 3: case 12: link(L, R); break;
+              case 4: case 11: link(R, Tp); break;
+              case 6: case 9: link(B, Tp); break;
+              case 7: case 8: link(L, Tp); break;
+              case 5:
+                if ((va + vb + vc + vd) / 4 > iso) { link(B, R); link(Tp, L); } else { link(L, B); link(R, Tp); }
+                break;
+              case 10:
+                if ((va + vb + vc + vd) / 4 > iso) { link(L, B); link(R, Tp); } else { link(B, R); link(Tp, L); }
+                break;
+            }
+          }
+        }
+        var seen = new Set(), loops = [];
+        adj.forEach(function (nb, start) {
+          if (seen.has(start) || nb.length !== 2) return;
+          var pts = [], cur = start, prev = -1, guard = 0;
+          do {
+            seen.add(cur);
+            pts.push(ept(cur));
+            var n2 = adj.get(cur), nxt = n2[0] !== prev ? n2[0] : n2[1];
+            prev = cur; cur = nxt;
+          } while (cur !== start && !seen.has(cur) && ++guard < 200000);
+          if (pts.length < 4) return;
+          pts = simplifyClosed(pts, 0.035);
+          var area = areaOf(pts);
+          if (pts.length >= 3 && Math.abs(area) > 0.4) loops.push({ pts: pts, area: Math.abs(area) });
+        });
+        g.cache[key] = loops;
+        return loops;
+      }
+
+      // Nested loops -> shapes. Even nesting depth is solid, odd depth is a hole in its parent.
+      function shapesFromLoops(list) {
+        var n = list.length, depth = new Array(n), parent = new Array(n), i, j;
+        for (i = 0; i < n; i++) {
+          depth[i] = 0; parent[i] = -1;
+          var best = Infinity;
+          for (j = 0; j < n; j++) {
+            if (i === j || list[j].area <= list[i].area) continue;
+            if (pointInPoly(list[i].pts[0][0], list[i].pts[0][1], list[j].pts)) {
+              depth[i]++;
+              if (list[j].area < best) { best = list[j].area; parent[i] = j; }
+            }
+          }
+        }
+        var shapes = [], at = {};
+        for (i = 0; i < n; i++) if (depth[i] % 2 === 0) { at[i] = { outer: list[i].pts, holes: [] }; shapes.push(at[i]); }
+        for (i = 0; i < n; i++) if (depth[i] % 2 === 1 && at[parent[i]]) at[parent[i]].holes.push(list[i].pts);
+        return shapes;
+      }
+
+      function loopsBetween(g, isoOuter, isoInner) {
+        return shapesFromLoops(loopsAt(g, isoOuter).concat(loopsAt(g, isoInner)));
+      }
+
+      // ---- Extrusion -----------------------------------------------------------------------------
+      // Shape plane x,y becomes world x,-z (so the picture reads upright from above); z is world height.
+      function cleanRing(pts, ccw) {
+        var out = [], i;
+        for (i = 0; i < pts.length; i++) {
+          var q = pts[i], prev = out[out.length - 1];
+          if (!prev || Math.abs(prev[0] - q[0]) + Math.abs(prev[1] - q[1]) > 1e-4) out.push(q);
+        }
+        var first = out[0], last = out[out.length - 1];
+        if (out.length > 1 && Math.abs(first[0] - last[0]) + Math.abs(first[1] - last[1]) <= 1e-4) out.pop();
+        if ((areaOf(out) > 0) !== ccw) out.reverse();
+        return out;
+      }
+
+      function extrude(shapes, z0, z1) {
+        var out = [];
+        function put(a, z) { out.push(a[0], z, -a[1]); }
+        function tri(a, za, b, zb, c, zc) { put(a, za); put(b, zb); put(c, zc); }
+        shapes.forEach(function (sh) {
+          var outer = cleanRing(sh.outer, true), holes = sh.holes.map(function (hh) { return cleanRing(hh, false); });
+          if (outer.length < 3) return;
+          var all = outer.concat.apply(outer, holes);
+          var vc = outer.map(function (q) { return new T.Vector2(q[0], q[1]); });
+          var hv = holes.map(function (hh) { return hh.map(function (q) { return new T.Vector2(q[0], q[1]); }); });
+          var faces = T.ShapeUtils.triangulateShape(vc, hv);
+          faces.forEach(function (f) {
+            var a = all[f[0]], b = all[f[1]], c = all[f[2]];
+            var ar = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+            if (ar < 0) { var t = b; b = c; c = t; }
+            tri(a, z1, b, z1, c, z1);
+            tri(a, z0, c, z0, b, z0);
+          });
+          [outer].concat(holes).forEach(function (ring) {
+            var n = ring.length, i;
+            for (i = 0; i < n; i++) {
+              var a = ring[i], b = ring[(i + 1) % n];
+              tri(a, z0, b, z0, b, z1);
+              tri(a, z0, b, z1, a, z1);
+            }
+          });
+        });
+        return new Float32Array(out);
+      }
+
+      function polyShape(pts, holes) { return { outer: pts, holes: holes || [] }; }
+
+      function circlePts(cx, cy, r, n, cw) {
+        var out = [], k;
+        for (k = 0; k < n; k++) {
+          var a = (cw ? -1 : 1) * (k / n) * TAU;
+          out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+        }
+        return out;
+      }
+
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // ---- Cached grids ----------------------------------------------------------------------------
+      var cache = { key: '', grid: null, relKey: '', relGrid: null };
+
+      function silhouette(p, margin) {
+        var size = p.size;
+        var key = [state.mode, state.badge, state.src.id, state.invert, p.threshold, p.smooth, size, margin.toFixed(2)].join('|');
+        if (cache.key === key) return cache.grid;
+        var g = null;
+        if (state.mode === 'outline') {
+          var guess = size / Math.max(state.src.w, state.src.h);
+          var mask = makeMask(p, guess, true);
+          if (mask) g = gridFromMask(mask, size / Math.max(mask.w, mask.h), margin);
+        }
+        if (!g) g = badgeGrid(state.mode === 'outline' ? 'circle' : state.badge, size, margin);
+        cache.key = key; cache.grid = g;
+        return g;
+      }
+
+      function reliefGrid(p) {
+        var mm = p.size * p.imgSize / 100;
+        var key = [state.src.id, state.invert, p.threshold, p.smooth, mm.toFixed(2)].join('|');
+        if (cache.relKey === key) return cache.relGrid;
+        var mask = makeMask(p, mm / Math.max(state.src.w, state.src.h), false), g = null;
+        if (mask) g = gridFromMask(mask, mm / Math.max(mask.w, mask.h), 0.5);
+        cache.relKey = key; cache.relGrid = g;
+        return g;
+      }
+
+      // ---- Model -----------------------------------------------------------------------------------
+      function rectShape(ax, ay, bx, by, width) {
+        var ux = bx - ax, uy = by - ay, l = Math.sqrt(ux * ux + uy * uy) || 1, nx = (-uy / l) * width / 2, ny = (ux / l) * width / 2;
+        return polyShape([[ax + nx, ay + ny], [bx + nx, by + ny], [bx - nx, by - ny], [ax - nx, ay - ny]]);
+      }
+
+      function build(p, api) {
+        T = api.THREE;
+        var margin = p.clear + p.wall + 2;
+        var g = silhouette(p, margin);
+        var maxD = g.maxD;
+
+        var lip = Math.min(p.lip, maxD * 0.4);
+        var stemIso = Math.min(lip + p.hingeLen, maxD * 0.75);
+        var openIso = Math.max(0.4, Math.min(lip, stemIso - 1.2));
+        var wallO = -(p.clear + p.wall), midWall = -(p.clear + p.wall * 0.5), pocket = -p.clear;
+        var capZ0 = p.floor + p.travel, top = capZ0 + p.capT;
+
+        var meshes = [];
+
+        // Housing: the outer wall (full height) plus a ledge under the rim of the cap.
+        var wall = extrude(loopsBetween(g, wallO, pocket), 0, top);
+        var ledge = extrude(loopsBetween(g, midWall, openIso), 0, p.floor);
+        var parts = [wall, ledge];
+
+        if (p.loop >= 1) {
+          var lu = [Math.cos(p.loopAngle * Math.PI / 180), Math.sin(p.loopAngle * Math.PI / 180)], t = 0;
+          while (t < 300 && sample(g, g.ax + lu[0] * t, g.ay + lu[1] * t) > wallO) t += 0.1;
+          var earR = 6, holeR = 2.6, ec = [g.ax + lu[0] * (t + earR - 1.6), g.ay + lu[1] * (t + earR - 1.6)];
+          parts.push(extrude([polyShape(circlePts(ec[0], ec[1], earR, 72, false), [circlePts(ec[0], ec[1], holeR, 48, true)])], 0, Math.min(top, 2.2)));
+        }
+        meshes.push({ name: 'housing', positions: cat(parts), singlePart: true });
+
+        // Button: cap on top, stem down through the ledge opening.
+        var cap = extrude(shapesFromLoops(loopsAt(g, 0)), capZ0, top);
+        var stem = extrude(shapesFromLoops(loopsAt(g, stemIso)), 0, capZ0 + 0.4);
+        meshes.push({ name: 'button', positions: cat([cap, stem]), singlePart: true });
+
+        // Hinge: a thin strip bridging the gap between stem and ledge. It is what the button bends on.
+        var hu = [Math.cos(p.hingeAngle * Math.PI / 180), Math.sin(p.hingeAngle * Math.PI / 180)], tp = 0, tq = 0;
+        while (tp < 300 && sample(g, g.ax + hu[0] * tp, g.ay + hu[1] * tp) >= stemIso) tp += 0.1;
+        tq = tp;
+        while (tq < 300 && sample(g, g.ax + hu[0] * tq, g.ay + hu[1] * tq) > openIso) tq += 0.1;
+        var t0 = Math.max(0, tp - 1.6), t1 = tq + 1.3;
+        meshes.push({
+          name: 'hinge',
+          positions: extrude([rectShape(g.ax + hu[0] * t0, g.ay + hu[1] * t0, g.ax + hu[0] * t1, g.ay + hu[1] * t1, p.hingeW)], 0, Math.min(p.hingeT, p.floor)),
+          singlePart: true
+        });
+
+        // Picture relief on a badge.
+        if (state.mode === 'badge') {
+          var rg = reliefGrid(p);
+          if (rg) {
+            var rel = shapesFromLoops(loopsAt(rg, 0));
+            if (rel.length) meshes.push({ name: 'image', positions: extrude(rel, top - 0.3, top + p.relief), singlePart: true });
+          }
+        }
+        return meshes;
+      }
+
+      // ---- Parameters ------------------------------------------------------------------------------
+      var PARAMS = [
+        { group: 'Button', key: 'size', label: 'Button size (longest side)', unit: ' mm', min: 34, max: 90, step: 1, value: 56 },
+        { group: 'Button', key: 'capT', label: 'Button thickness', unit: ' mm', min: 2, max: 6, step: 0.2, value: 3 },
+        { group: 'Button', key: 'travel', label: 'Click travel (low = easier print)', unit: ' mm', min: 0.3, max: 1.2, step: 0.1, value: 0.6 },
+        { group: 'Housing', key: 'wall', label: 'Wall width', unit: ' mm', min: 1.2, max: 5, step: 0.2, value: 2.4 },
+        { group: 'Housing', key: 'clear', label: 'Gap around button', unit: ' mm', min: 0.3, max: 0.9, step: 0.05, value: 0.5 },
+        { group: 'Housing', key: 'floor', label: 'Floor thickness', unit: ' mm', min: 1, max: 2.6, step: 0.2, value: 1.4 },
+        { group: 'Housing', key: 'loop', label: 'Keyring loop', unit: '', min: 0, max: 1, step: 1, value: 1, format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Housing', key: 'loopAngle', label: 'Loop position (angle)', unit: '°', min: 0, max: 355, step: 5, value: 90 },
+        { group: 'Hinge', key: 'hingeAngle', label: 'Hinge position (angle)', unit: '°', min: 0, max: 355, step: 5, value: 270 },
+        { group: 'Hinge', key: 'hingeLen', label: 'Hinge length (longer = softer)', unit: ' mm', min: 2, max: 6, step: 0.2, value: 3 },
+        { group: 'Hinge', key: 'hingeW', label: 'Hinge width', unit: ' mm', min: 4, max: 24, step: 1, value: 10 },
+        { group: 'Hinge', key: 'hingeT', label: 'Hinge thickness (thin = softer)', unit: ' mm', min: 0.4, max: 1, step: 0.1, value: 0.6 },
+        { group: 'Hinge', key: 'lip', label: 'Cap rim over ledge', unit: ' mm', min: 0.8, max: 2.5, step: 0.1, value: 1.4 },
+        { tab: 'image', group: 'Picture', key: 'threshold', label: 'Detail cutoff (light ↔ dark)', unit: '%', min: 5, max: 95, step: 1, value: 50 },
+        { tab: 'image', group: 'Picture', key: 'smooth', label: 'Smoothing', unit: ' mm', min: 0, max: 3, step: 0.1, value: 0.6 },
+        { tab: 'image', group: 'Picture', key: 'imgSize', label: 'Picture size on badge', unit: '%', min: 30, max: 95, step: 1, value: 70 },
+        { tab: 'image', group: 'Picture', key: 'relief', label: 'Picture height on badge', unit: ' mm', min: 0.6, max: 3, step: 0.2, value: 1.2 }
+      ];
+
+      var DEFAULTS = {};
+      PARAMS.forEach(function (q) { DEFAULTS[q.key] = q.value; });
+      function withDefaults(over) {
+        var o = {}, k;
+        for (k in DEFAULTS) o[k] = DEFAULTS[k];
+        for (k in over) o[k] = over[k];
+        return o;
+      }
+
+      // ---- Picture tab -----------------------------------------------------------------------------
+      function mountPicture(container, api) {
+        var h = function (tag, attrs, text) {
+          var node = document.createElement(tag);
+          Object.keys(attrs || {}).forEach(function (k) {
+            if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+            else node.setAttribute(k, attrs[k]);
+          });
+          if (text) node.textContent = text;
+          return node;
+        };
+        var status = h('p', { class: 'mm-note' }, '');
+        var shapeBtns = {}, modeBtns = {}, badgeBtns = {}, invertBtn;
+
+        function refresh() {
+          Object.keys(shapeBtns).forEach(function (k) { shapeBtns[k].setAttribute('aria-pressed', String(!state.fileName && state.src.id === k)); });
+          Object.keys(modeBtns).forEach(function (k) { modeBtns[k].setAttribute('aria-pressed', String(state.mode === k)); });
+          Object.keys(badgeBtns).forEach(function (k) { badgeBtns[k].setAttribute('aria-pressed', String(state.badge === k)); });
+          invertBtn.setAttribute('aria-pressed', String(state.invert));
+          status.textContent = 'Picture: ' + (state.fileName || state.src.name) + '. It stays on your device; nothing is uploaded.';
+        }
+
+        function chipRow(items, store, onPick) {
+          var row = h('div', { class: 'mm-chips' });
+          items.forEach(function (it) {
+            var b = h('button', { class: 'mm-chip', type: 'button', onclick: function () { onPick(it.id); } }, it.label);
+            store[it.id] = b;
+            row.appendChild(b);
+          });
+          return row;
+        }
+
+        function loadFile(file) {
+          if (!file) return;
+          var url = URL.createObjectURL(file), img = new Image();
+          img.onload = function () {
+            var w0 = img.naturalWidth || img.width || 512, h0 = img.naturalHeight || img.height || 512;
+            var sc = 256 / Math.max(w0, h0), cw = Math.max(8, Math.round(w0 * sc)), ch = Math.max(8, Math.round(h0 * sc));
+            var cv = document.createElement('canvas');
+            cv.width = cw; cv.height = ch;
+            var ctx = cv.getContext('2d');
+            ctx.drawImage(img, 0, 0, cw, ch);
+            var data = ctx.getImageData(0, 0, cw, ch).data, ink = new Float32Array(cw * ch), i, clear = 0;
+            for (i = 0; i < ink.length; i++) if (data[i * 4 + 3] < 250) clear++;
+            var useAlpha = clear > ink.length * 0.01;
+            for (i = 0; i < ink.length; i++) {
+              ink[i] = useAlpha ? data[i * 4 + 3] / 255
+                : 1 - (0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]) / 255;
+            }
+            URL.revokeObjectURL(url);
+            state.src = { id: 'file:' + file.name + ':' + file.size + ':' + Date.now(), name: file.name, w: cw, h: ch, ink: ink };
+            state.fileName = file.name;
+            refresh();
+            api.rebuild();
+            api.toast('Loaded ' + file.name);
+          };
+          img.onerror = function () { URL.revokeObjectURL(url); api.toast('Could not read that image. Try a PNG, JPG or SVG.'); };
+          img.src = url;
+        }
+
+        container.appendChild(h('h3', { class: 'mm-group-title' }, 'Picture'));
+        container.appendChild(h('p', { class: 'mm-note' }, 'Upload a PNG, JPG or SVG (a bold logo or silhouette on a plain background works best), or pick a shape.'));
+        var file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/svg+xml,image/webp,image/gif', style: 'display:none', onchange: function (e) { loadFile(e.target.files[0]); e.target.value = ''; } });
+        container.appendChild(file);
+        container.appendChild(h('button', { class: 'mm-btn mm-btn--solid mm-btn--block', type: 'button', onclick: function () { file.click(); } }, 'Upload image'));
+        container.addEventListener('dragover', function (e) { e.preventDefault(); });
+        container.addEventListener('drop', function (e) {
+          e.preventDefault();
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+        });
+
+        var chips = h('div', { class: 'mm-icon-chips' });
+        BUILTINS.forEach(function (b) {
+          var btn = h('button', {
+            class: 'mm-icon-chip', type: 'button', title: b.name,
+            onclick: function () { state.src = b.src; state.fileName = ''; refresh(); api.rebuild(); }
+          });
+          btn.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true" fill="#e0f2fe">' + b.icon + '</svg><span>' + b.name + '</span>';
+          shapeBtns[b.id] = btn;
+          chips.appendChild(btn);
+        });
+        container.appendChild(chips);
+        container.appendChild(status);
+
+        container.appendChild(h('h3', { class: 'mm-group-title' }, 'How the picture is used'));
+        container.appendChild(chipRow([{ id: 'outline', label: 'Picture is the button shape' }, { id: 'badge', label: 'Picture raised on a badge' }], modeBtns,
+          function (id) { state.mode = id; refresh(); api.rebuild(); }));
+        container.appendChild(h('h3', { class: 'mm-group-title' }, 'Badge shape'));
+        container.appendChild(chipRow([{ id: 'circle', label: 'Circle' }, { id: 'square', label: 'Rounded square' }, { id: 'hex', label: 'Hexagon' }], badgeBtns,
+          function (id) { state.badge = id; refresh(); api.rebuild(); }));
+        invertBtn = h('button', { class: 'mm-chip', type: 'button', onclick: function () { state.invert = !state.invert; refresh(); api.rebuild(); } }, 'Swap light and dark');
+        var invertRow = h('div', { class: 'mm-chips' });
+        invertRow.appendChild(invertBtn);
+        container.appendChild(invertRow);
+        container.appendChild(h('p', { class: 'mm-note' }, 'Picture-as-shape keeps the biggest connected blob and needs a chunky shape (thin lines leave no room for the stem). Badge mode keeps every detail, so use it for fine artwork. Button, housing, hinge and picture are separate parts in the Color tool.'));
+        refresh();
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-012',
+        category: 'FIDGET // CLICKERS',
+        title: 'Image Clicker',
+        fileName: 'Image_Clicker',
+        printerLink: '../index.html#map-screen',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Bubblegum', color: '#fda4af' },
+          { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Sky Pop', color: '#93c5fd' },
+          { name: 'Sunny Yellow', color: '#fde047' },
+          { name: 'Tangerine', color: '#fdba74' },
+          { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { housing: 'Housing', button: 'Button', hinge: 'Hinge', image: 'Raised picture' },
+        parameters: PARAMS,
+        presets: [
+          { label: 'Default clicker', values: withDefaults({}) },
+          { label: 'Chunky button', values: withDefaults({ capT: 4.6, wall: 3.4, size: 64, travel: 0.8 }) },
+          { label: 'Slim pocket clicker', values: withDefaults({ size: 42, capT: 2.4, wall: 1.8, hingeW: 7, loop: 0 }) },
+          { label: 'Soft long hinge', values: withDefaults({ hingeLen: 5, hingeT: 0.5, hingeW: 14 }) }
+        ],
+        tabs: [{
+          id: 'image',
+          label: 'Picture',
+          hint: 'Upload an image or pick a shape; the clicker rebuilds from it',
+          mount: mountPicture
+        }],
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

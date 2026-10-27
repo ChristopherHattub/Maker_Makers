@@ -93,6 +93,14 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/name-keychain.svg',
     programUrl: 'programs/name-keychain.html',
     description: 'Personalised name keychain: type one or two lines, pick a lettering style, plate shape, border and key ring hole, then tune size and thickness. Prints flat with no supports. Paint plate, border and letters in the Color tool and export .STL.'
+  },
+  {
+    slot: 12,
+    title: 'Image Clicker',
+    category: 'FIDGET // CLICKERS',
+    thumbnailUrl: 'assets/thumbnails/image-clicker.svg',
+    programUrl: 'programs/image-clicker.html',
+    description: 'Upload a PNG, JPG or SVG, or pick a shape, and turn it into a print-in-place fidget clicker: the picture becomes the button outline or is raised on a badge. Set button size, travel, hinge softness, housing wall and an optional keyring loop. Everything runs in your browser. Paint parts in the Color tool and export .STL.'
   }
 ];
 
