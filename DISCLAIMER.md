@@ -15,6 +15,10 @@ Maker Makers and its models, generators, exports (.STL, .3MF), recommended print
 - deciding whether a printed object is safe and suitable for its use. Do not rely on a printed part where failure could cause injury or damage;
 - making sure what you print is legal where you are and that you have the right to print it.
 
+Printed parts are not tested or certified for any use. Keep small parts away from young children.
+
+Before any .STL or .3MF download, the generator shows a consent dialog that you must accept (it lives in `generator-core.js`, `confirmDownload`).
+
 ## Limitation of liability
 
 To the fullest extent permitted by law, the site owner and contributors are not liable for any direct, indirect, incidental, special or consequential loss or damage arising from use of the site or its files, including failed or defective prints, printer or equipment malfunction or damage, material damage or waste, personal injury, property damage, or incompatibility with your slicer or printer. Some jurisdictions do not allow certain exclusions or limits, so parts of this section may not apply to you.

@@ -152,7 +152,7 @@ A bundle groups generators under a theme (Halloween, Christmas...). Bundles live
 
 ## Visual style conventions (engine-owned, do not override)
 
-Every generator shows the engine's footer disclaimer (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together.
+Every generator shows the engine's footer disclaimer (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together. The engine also shows a consent modal (`confirmDownload`, must tick the checkbox) before every .STL/.3MF export; it is automatic, so never add a download button that bypasses it, never call export functions directly from generator code, and a new download type must go through `confirmDownload` too.
 
 
 Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool, footer with triangle count, file name, exports and standalone download. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Optional generator tabs (`tabs`, see Config) sit after Parametric. Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders and always-visible export buttons; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
@@ -170,6 +170,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] Print tab shows the realistic render (colors kept, material/layer-height/brim changes update it live) and your `printSettings` as defaults, edits change the 3MF, Reset restores them.
 - [ ] Export .STL and .3MF download and open (STL size ~ 84 + 50 x triangles bytes; model sits on the bed; 3MF has the colors; the zip lists `Metadata/Slic3r_PE.config`, `project_settings.config`, `print-settings.txt` with your `printSettings`).
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
+- [ ] Clicking Export .STL opens the consent modal; the download button stays disabled until the box is ticked; Cancel/Esc/backdrop close it without downloading.
 - [ ] The collapsed "Disclaimer" block shows under the panel footer buttons (engine-provided; never remove or override it in a generator page) and expands to readable text.
 - [ ] Phone width (resize to 375x667 and 390x844): no page scroll or horizontal scroll, model visible above the sliders, sheet handle drags, export buttons visible, accordion sections open/close.
 - [ ] Slot listing: title, category, description render as plain text; thumbnail not cropped badly.
