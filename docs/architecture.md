@@ -75,7 +75,6 @@ The site calls no first-party backend. Everything else is a public, keyless serv
 | Esri ArcGIS World Street Map tiles | Map tiles | `initLeafletMap()` |
 | OpenStreetMap Nominatim | Worldwide place search (geocoding) | `searchLocationWorldwide()` |
 | Overpass API (overpass-api.de) | Nearby hackerspaces, 3D printing shops and libraries | `scanGlobalPrintersNear()` |
-| Browser geolocation | "Use My GPS Location" | `locateUserGPS()` |
 
 If a service is unreachable, the map shows the verified listings and the status line says so. Overpass errors are caught silently.
 

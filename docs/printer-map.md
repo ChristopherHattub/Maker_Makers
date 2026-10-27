@@ -15,10 +15,10 @@ OpenStreetMap confirms that a space exists and where it is. It does not confirm 
 
 ## Screen layout
 
-- **Control bar.** "Use My GPS Location", "Reset to US & Canada", a search box with "Scan Sector", the candidates checkbox, and "Back to Grid".
+- **Control bar.** "Reset to US & Canada", a search box with "Scan Sector", the candidates checkbox, and "Back to Grid".
 - **Directory.** A list of cards, one per location, with the hub count ("N ACTIVE"). Clicking a card flies the map to that location and opens its popup.
 - **Map.** Markers for each location. Clicking a marker opens a popup with the name, type, address, equipment, public access, cost and verification details, and a link to the official site or submission page.
-- **Status line.** The meta tag at the top of the screen. It reports what the last action did: scanning, geocoding, GPS unavailable, no results, or the scan result.
+- **Status line.** The meta tag at the top of the screen. It reports what the last action did: scanning, geocoding, no results, or the scan result.
 
 ## Initialization
 
@@ -80,7 +80,7 @@ Since the data is loaded at run time, no code change is needed.
 
 Two entry points call the same function, `scanGlobalPrintersNear(lat, lng, label)`:
 
-- **GPS.** "Use My GPS Location" calls `navigator.geolocation` with an 8-second timeout. If it is denied or fails, the map falls back to the North America view and says so in the status line.
+- **No location request.** The site never calls `navigator.geolocation`. Location comes only from the optional search box; coordinates sent to Overpass are rounded to two decimals.
 - **Search.** Enter in the search box, or "Scan Sector", geocodes the text with OpenStreetMap Nominatim (`limit=1`) and scans around the first result.
 
 The scan builds its results in this order:
