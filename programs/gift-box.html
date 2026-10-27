@@ -195,6 +195,21 @@
         return values;
       }
 
+      // Ornament hook: a small ring standing up on a model (plane faces +Z) so it can be hung from a string.
+      // Bottom of the ring sits `embed` mm inside the model at (cx, baseY, cz).
+      function hookRing(cx, baseY, cz, hole, tube, embed) {
+        var Rc = hole + tube, cy = baseY - embed + Rc + tube, N = 40, k, rings = [];
+        var oct = [[-1, -0.5], [-0.5, -1], [0.5, -1], [1, -0.5], [1, 0.5], [0.5, 1], [-0.5, 1], [-1, 0.5]];
+        for (k = 0; k < N; k++) {
+          var th = (k / N) * TAU, c = Math.cos(th), s = Math.sin(th), ring = [];
+          oct.forEach(function (q) {
+            ring.push([cx + (Rc + q[0] * tube) * c, cy + (Rc + q[0] * tube) * s, cz + q[1] * tube * 1.15]);
+          });
+          rings.push(ring);
+        }
+        return shell(rings, true);
+      }
+
       var ARC = 6;
       var PARAMS = [
         { group: 'Box', key: 'boxW', label: 'Width', unit: ' mm', min: 30, max: 90, step: 1, value: 60 },
@@ -213,7 +228,11 @@
         { group: 'Bow', key: 'bowHeight', label: 'Bow loop height', unit: ' mm', min: 4, max: 14, step: 0.5, value: 8 },
         { group: 'Bow', key: 'bowSpread', label: 'Loop spread (narrow ↔ wide)', unit: '°', min: 12, max: 60, step: 1, value: 34 },
         { group: 'Bow', key: 'tails', label: 'Ribbon tails', unit: '', min: 0, max: 1, step: 1, value: 1,
-          format: function (v) { return v >= 1 ? 'On' : 'Off'; } }
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Ornament hook', key: 'hook', label: 'Ornament hook on top', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
+        { group: 'Ornament hook', key: 'hookHole', label: 'Hook hole size', unit: ' mm', min: 1.6, max: 3.6, step: 0.1, value: 2.4 },
+        { group: 'Ornament hook', key: 'hookTube', label: 'Hook ring thickness', unit: ' mm', min: 1.2, max: 2.4, step: 0.1, value: 1.6 }
       ];
       var DEFAULTS = {};
       PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
@@ -259,6 +278,7 @@
         if (p.ribbon >= 1) bands = bands.concat(band('z'));
         if (p.ribbon >= 2) bands = bands.concat(band('x'));
         if (bands.length) out.push({ name: 'ribbon', positions: cat(bands), singlePart: true });
+        var hookBase = top + (p.ribbon >= 1 ? pr : 0);
         // Bow on top: four soft loops, a knot and two tails.
         if (p.bow >= 1) {
           var yTop = top + (p.ribbon >= 1 ? pr : 0), y0 = yTop - 1, S = Math.min(p.bowSize, Math.min(W, D) * 1.9 + ov);
@@ -275,7 +295,9 @@
           out.push({ name: 'bow', positions: cat(lobes), singlePart: true });
           var kr = S * 0.13;
           out.push({ name: 'knot', positions: ball(0, y0 + hg * 0.55, 0, kr, hg * 0.62, kr, 36, 14), singlePart: true });
+          hookBase = y0 + hg * 1.17;
         }
+        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, hookBase, 0, p.hookHole, p.hookTube, p.bow >= 1 ? 2.2 : 1.2), singlePart: true });
         return out;
       }
 
@@ -322,7 +344,7 @@
           { name: 'Carrot Orange', color: '#fdba74' },
           { name: 'Midnight', color: '#334155' }
         ],
-        partNames: { box: 'Box', lid: 'Lid', ribbon: 'Ribbon', bow: 'Bow loops and tails', knot: 'Bow knot' },
+        partNames: { box: 'Box', lid: 'Lid', ribbon: 'Ribbon', bow: 'Bow loops and tails', knot: 'Bow knot', hook: 'Ornament hook' },
         printSettings: {
           material: 'PLA',
           nozzle: 0.4,
@@ -333,7 +355,7 @@
           bottomLayers: 4,
           supports: false,
           brim: 0,
-          notes: 'A solid box that prints flat on its bottom. The lid overhang grows at 45 degrees and the bow loops are domes with flat bottoms, so no supports are needed. A lid overhang above 4 mm is not offered because it would need supports.'
+          notes: 'A solid box that prints flat on its bottom. The lid overhang grows at 45 degrees and the bow loops are domes with flat bottoms, so no supports are needed. A lid overhang above 4 mm is not offered because it would need supports. The optional ornament hook is a small ring on top of the bow knot or lid.'
         },
 
         parameters: PARAMS,
