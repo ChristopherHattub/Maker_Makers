@@ -364,23 +364,6 @@ function initLeafletMap() {
   markersLayer = L.layerGroup().addTo(leafletMap);
   candidatesLayer = L.layerGroup();
   renderPrinterLocations(PUBLIC_PRINTERS);
-  centerMapOnUser();
-}
-
-// On first open, zoom to the visitor's position if they allow it. If permission
-// is denied or the position is unavailable, the North America view stays put.
-function centerMapOnUser() {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const { latitude, longitude } = pos.coords;
-      placeUserMarker(latitude, longitude, 'YOUR LOCATION');
-      leafletMap.flyTo([latitude, longitude], 11, { duration: 1.2 });
-      document.getElementById('map-status-tag').textContent = 'SECTOR: YOUR LOCATION (VERIFIED LISTINGS)';
-    },
-    () => {},
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
-  );
 }
 
 function placeUserMarker(lat, lng, label) {
@@ -496,25 +479,6 @@ function resetToNorthAmerica() {
   renderPrinterLocations(PUBLIC_PRINTERS);
 }
 
-function locateUserGPS() {
-  if (!navigator.geolocation) {
-    resetToNorthAmerica();
-    return;
-  }
-  document.getElementById('map-status-tag').textContent = 'ACQUIRING GPS TELEMETRY...';
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const { latitude, longitude } = pos.coords;
-      await scanGlobalPrintersNear(latitude, longitude, 'YOUR GPS LOCATION');
-    },
-    () => {
-      document.getElementById('map-status-tag').textContent = 'GPS UNAVAILABLE IN SANDBOX // SHOWING US & CANADA';
-      resetToNorthAmerica();
-    },
-    { enableHighAccuracy: true, timeout: 8000 }
-  );
-}
-
 async function searchLocationWorldwide() {
   const query = document.getElementById('map-search-input').value.trim();
   if (!query) return;
@@ -536,6 +500,8 @@ async function searchLocationWorldwide() {
 }
 
 async function scanGlobalPrintersNear(lat, lng, label) {
+  // Only a typed search reaches here. The lookup sends coordinates rounded to ~1 km.
+  const qLat = lat.toFixed(2), qLng = lng.toFixed(2);
   if (!leafletMap) initLeafletMap();
   leafletMap.flyTo([lat, lng], 13, { duration: 1 });
 
@@ -548,11 +514,11 @@ async function scanGlobalPrintersNear(lat, lng, label) {
   const overpassQuery = `
     [out:json][timeout:12];
     (
-      node["leisure"="hackerspace"](around:25000,${lat},${lng});
-      way["leisure"="hackerspace"](around:25000,${lat},${lng});
-      node["craft"="3d_printing"](around:25000,${lat},${lng});
-      node["amenity"="library"](around:15000,${lat},${lng});
-      way["amenity"="library"](around:15000,${lat},${lng});
+      node["leisure"="hackerspace"](around:25000,${qLat},${qLng});
+      way["leisure"="hackerspace"](around:25000,${qLat},${qLng});
+      node["craft"="3d_printing"](around:25000,${qLat},${qLng});
+      node["amenity"="library"](around:15000,${qLat},${qLng});
+      way["amenity"="library"](around:15000,${qLat},${qLng});
     );
     out center 25;
   `;

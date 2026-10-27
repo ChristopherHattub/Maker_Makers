@@ -138,13 +138,10 @@
       </div>
 
       <div class="map-controls-bar">
-        <button class="btn btn-green" onclick="locateUserGPS()">
-          &#9673; Use My GPS Location
-        </button>
         <button class="btn" onclick="resetToNorthAmerica()">
           &#8982; Reset to US & Canada
         </button>
-        <input type="text" id="map-search-input" class="bp-input" placeholder="Search any City, State, or ZIP worldwide (e.g., 03820, Boston, London)..." onkeydown="if(event.key==='Enter') searchLocationWorldwide()">
+        <input type="text" id="map-search-input" class="bp-input" placeholder="Optional: search a City, State, or ZIP worldwide (e.g., 03820, Boston, London)..." onkeydown="if(event.key==='Enter') searchLocationWorldwide()">
         <button class="btn btn-primary" onclick="searchLocationWorldwide()">Scan Sector</button>
         <label class="candidate-toggle">
           <input type="checkbox" onchange="toggleCandidates(this.checked)">
@@ -152,6 +149,7 @@
         </label>
         <button class="btn" onclick="showSplashScreen()">&#10006; Back to Generators</button>
       </div>
+      <p class="meta-tag" style="margin:0.4rem 0;">Your location is never requested or stored. Searching is optional and only sends the text you type to OpenStreetMap.</p>
 
       <div class="map-layout">
         <div class="printer-directory">
