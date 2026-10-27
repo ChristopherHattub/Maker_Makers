@@ -7,15 +7,38 @@
   <link rel="stylesheet" href="shared/generator.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap">
+  <style>
+    body.mm-soft.snow {
+      --s-bg: #cfe6fb; --s-panel: #ffffff; --s-panel-a: rgba(255,255,255,0.94); --s-accent: #e0475b; --s-accent-dim: rgba(224,71,91,0.35);
+      --s-text: #24324d; --s-muted: #5f7799; --s-amber: #e9892a; --s-green: #2f9e63; --s-edge: #b9d4ee;
+      --s-card: #eef6ff; --s-card-a: rgba(255,255,255,0.88); --s-stage: linear-gradient(#7fb2e5,#f1f8ff);
+      --s-font: 'Fredoka', 'Trebuchet MS', 'Segoe UI', sans-serif;
+      --s-bg-img: linear-gradient(#a9cdf0, #e6f2ff);
+    }
+    .snow .mm-gen-title { font-weight: 600; }
+    .sn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr)); gap: 0.55rem; margin-bottom: 0.9rem; }
+    .sn-card { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem 0.25rem 0.4rem; border: 2px solid var(--s-edge); border-radius: 16px;
+      background: #fff; color: var(--s-text); font: inherit; font-size: 0.78rem; cursor: pointer; min-height: 5.6rem; transition: transform .12s, box-shadow .12s; box-shadow: 0 3px 0 var(--s-edge); }
+    .sn-card svg { width: 3.4rem; height: 3.4rem; }
+    .sn-card:hover { transform: translateY(-2px); border-color: var(--s-accent); }
+    .sn-card:active { transform: translateY(2px); box-shadow: 0 0 0 var(--s-edge); }
+    .sn-card:focus-visible, .sn-mini:focus-visible { outline: 3px solid var(--s-accent); outline-offset: 2px; }
+    .sn-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
+    .sn-yours { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.7rem; min-height: 2.2rem; }
+    .sn-mini { width: 2.5rem; height: 2.5rem; padding: 0.15rem; border-radius: 12px; border: 2px solid var(--s-edge); background: #fff; cursor: pointer; }
+    .sn-mini svg { width: 100%; height: 100%; }
+    .sn-mini[aria-pressed="true"] { border-color: var(--s-accent); background: #ffe9ec; }
+  </style>
 </head>
-<body class="mm-gen">
+<body class="mm-gen mm-soft snow">
   <script>
-    // Ornament Stacker: a remix of Snowman Stacker. Instead of three fixed balls you build a tower from a
-    // tray of pieces (balls, eggs, drums, cones, domes, gems): add, reorder, resize and click them in the
-    // viewport. The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    // Ornament Stacker: a cozy snowman-building game. Tap pictures from the catalog to add hats, faces, scarves and
+    // arms as many times as you like, tap the snowman to place them. The page layout, the viewport, the Color tool
+    // and the exports come from shared/generator-core.js.
     (function () {
       'use strict';
-
       // ---- Geometry kit: closed shells built from rings (shared vertices, so always watertight) ----
       var TAU = Math.PI * 2;
       function rad(d) { return (d * Math.PI) / 180; }
@@ -158,10 +181,6 @@
         return shell(rings, false);
       }
 
-      function smootherstep(x) {
-        var t = Math.max(0, Math.min(1, x));
-        return t * t * t * (t * (t * 6 - 15) + 10);
-      }
       function el(tag, attrs, text) {
         var node = document.createElement(tag);
         Object.keys(attrs || {}).forEach(function (k) {
@@ -171,528 +190,541 @@
         if (text) node.textContent = text;
         return node;
       }
-      // Picture-card style picker for the "Styles" tab. cardSvg(values) draws a small icon.
-      function mountStyleCards(container, api, styles, cardSvg, defaults, heading, note) {
-        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
-        var grid = el('div', { class: 'mm-preset-cards' });
-        styles.forEach(function (s) {
-          var vals = {};
-          Object.keys(defaults).forEach(function (k) { vals[k] = defaults[k]; });
-          Object.keys(s.values).forEach(function (k) { vals[k] = s.values[k]; });
-          var card = el('button', { class: 'mm-preset-card', type: 'button', title: s.name, onclick: function () {
-            api.setParams(vals);
-            api.toast('Style: ' + s.name);
-          } });
-          card.innerHTML = cardSvg(vals) + '<span>' + s.name + '</span>';
-          grid.appendChild(card);
-        });
-        container.appendChild(grid);
-        container.appendChild(el('p', { class: 'mm-note' }, note));
-      }
-      function withDefaults(defaults, over) {
-        var values = {};
-        Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
-        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
-        return values;
-      }
 
-      // Ornament hook: a small ring standing up on a model (plane faces +Z) so it can be hung from a string.
-      // Bottom of the ring sits `embed` mm inside the model at (cx, baseY, cz).
-      function hookRing(cx, baseY, cz, hole, tube, embed) {
-        var Rc = hole + tube, cy = baseY - embed + Rc + tube, N = 40, k, rings = [];
-        var oct = [[-1, -0.5], [-0.5, -1], [0.5, -1], [1, -0.5], [1, 0.5], [0.5, 1], [-0.5, 1], [-1, 0.5]];
-        for (k = 0; k < N; k++) {
-          var th = (k / N) * TAU, c = Math.cos(th), s = Math.sin(th), ring = [];
-          oct.forEach(function (q) {
-            ring.push([cx + (Rc + q[0] * tube) * c, cy + (Rc + q[0] * tube) * s, cz + q[1] * tube * 1.15]);
-          });
-          rings.push(ring);
+      // ---- Small mesh helpers (all work on flat xyz Float32Arrays) ----
+      function mapPts(arr, fn) {
+        var out = new Float32Array(arr.length), q, i;
+        for (i = 0; i < arr.length; i += 3) {
+          q = fn(arr[i], arr[i + 1], arr[i + 2]);
+          out[i] = q[0]; out[i + 1] = q[1]; out[i + 2] = q[2];
         }
-        return shell(rings, true);
-      }
-
-
-      // ---- Stamp library: flat shapes placed on the model surface by clicking ----
-      var STAMP_NAMES = { star: 'Star', snow: 'Snowflake', tree: 'Tree', heart: 'Heart', bell: 'Bell', cane: 'Candy cane', holly: 'Holly', gift: 'Gift', ball: 'Ball', diamond: 'Diamond' };
-      var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
-      var stampType = 'star';
-      var refreshStampPanel = null;
-
-      function strokeOutline(pts, hw) {
-        var left = [], right = [], i, a, b, dx, dy, l;
-        for (i = 0; i < pts.length; i++) {
-          a = pts[Math.max(0, i - 1)]; b = pts[Math.min(pts.length - 1, i + 1)];
-          dx = b[0] - a[0]; dy = b[1] - a[1]; l = Math.sqrt(dx * dx + dy * dy) || 1;
-          left.push([pts[i][0] - (dy / l) * hw, pts[i][1] + (dx / l) * hw]);
-          right.push([pts[i][0] + (dy / l) * hw, pts[i][1] - (dx / l) * hw]);
-        }
-        return left.concat(right.reverse());
-      }
-      function mirrorHalf(half) {
-        var out = half.slice(), i;
-        for (i = half.length - 1; i >= 1; i--) out.push([-half[i][0], half[i][1]]);
         return out;
       }
-      function leaf(angleDeg, len, wid, ox, oy) {
-        var up = [], dn = [], i, s, w, a = rad(angleDeg), c = Math.cos(a), sn = Math.sin(a);
-        for (i = 0; i <= 12; i++) {
-          s = i / 12; w = wid * Math.pow(Math.sin(Math.PI * s), 0.8);
-          up.push([s * len, w]); dn.push([s * len, -w]);
+      function rotZ(arr, deg) { var c = Math.cos(rad(deg)), s = Math.sin(rad(deg)); return mapPts(arr, function (x, y, z) { return [x * c - y * s, x * s + y * c, z]; }); }
+      function rotX(arr, deg) { var c = Math.cos(rad(deg)), s = Math.sin(rad(deg)); return mapPts(arr, function (x, y, z) { return [x, y * c - z * s, y * s + z * c]; }); }
+      function rotY(arr, deg) { var c = Math.cos(rad(deg)), s = Math.sin(rad(deg)); return mapPts(arr, function (x, y, z) { return [x * c + z * s, y, -x * s + z * c]; }); }
+      function moveBy(arr, dx, dy, dz) { return mapPts(arr, function (x, y, z) { return [x + dx, y + dy, z + dz]; }); }
+      function scaleBy(arr, sx, sy, sz) { return mapPts(arr, function (x, y, z) { return [x * sx, y * sy, z * sz]; }); }
+
+      // Sphere with a flat cut at the bottom (so it sits on the plate without a point contact).
+      function ballCut(cx, cy, cz, r, cutFrac, seg, steps) {
+        var t0 = Math.acos(cutFrac), rings = [{ pole: [cx, cy - r * cutFrac, cz] }], k, t;
+        for (k = 0; k <= steps; k++) {
+          t = t0 + (k / steps) * (Math.PI - t0);
+          if (k === steps) rings.push({ pole: [cx, cy + r, cz] });
+          else rings.push(loopXZ(r * Math.sin(t), cy - r * Math.cos(t), seg, { cx: cx, cz: cz }));
         }
-        return up.concat(dn.reverse()).map(function (q) { return [ox + q[0] * c - q[1] * sn, oy + q[0] * sn + q[1] * c]; });
+        return shell(rings, false);
       }
-      function disc(cx, cy, r, n) {
-        var out = [], i;
-        for (i = 0; i < n; i++) out.push([cx + r * Math.cos((i / n) * TAU), cy + r * Math.sin((i / n) * TAU)]);
+
+      // Colours of the cartoon parts (shown in the viewport and used as the starting paint; the STL has no colour).
+      var COL = { snow: '#f4f9ff', coal: '#2b3445', orange: '#ff9a3c', red: '#ef5b5b', green: '#4fae6a', blue: '#7ec3f0', pink: '#ff9fb5', gold: '#ffd24a', brown: '#9a6a3f', white: '#ffffff', purple: '#a98af0', tan: '#e2b886' };
+
+      // ---- Item catalog. build() returns [{ c: colour, p: positions }] ----
+      // Surface items are authored in a local frame: +Y points out of the snowman, -Z is "up the snowman", +X is to the viewer's right.
+      // mode: 'surf' (sticks on the surface where you tap), 'top' (stacks on the head, as many as you like), 'neck' (a ring at the height you tap).
+      function bead(x, y, z, r) { return ball(x, y, z, r, r, r, 10, 6); }
+      var ITEMS = [
+        // ---- Hats ----
+        { id: 'tophat', cat: 'Hats', name: 'Top hat', mode: 'top', h: 13.5, sink: 3,
+          icon: '<ellipse cx="24" cy="38" rx="17" ry="5" fill="#3a4256"/><rect x="14" y="10" width="20" height="28" rx="3" fill="#4a546d"/><rect x="14" y="29" width="20" height="6" fill="#ef5b5b"/><ellipse cx="24" cy="10" rx="10" ry="3" fill="#5b6785"/>',
+          build: function () {
+            return [{ c: 'coal', p: lathe([[0, 0], [9.2, 0], [9.2, 1.4], [6.6, 1.4], [6.6, 13.5], [0, 13.5]], 32) },
+                    { c: 'red', p: bandRing([[6.3, 1.2], [6.95, 1.2], [6.95, 3.8], [6.3, 3.8]], 32) }];
+          } },
+        { id: 'beanie', cat: 'Hats', name: 'Beanie', mode: 'top', h: 11, sink: 2.4,
+          icon: '<path d="M8 34a16 16 0 0132 0z" fill="#4aa3e0"/><rect x="6" y="32" width="36" height="9" rx="4" fill="#ffffff"/><circle cx="24" cy="10" r="5" fill="#ffffff"/><path d="M16 32l1-12M24 32V17M32 32l-1-12" stroke="#2e7fb8" stroke-width="2" stroke-linecap="round"/>',
+          build: function () {
+            var prof = [[0, 0], [8.6, 0], [8.6, 3]], k, a;
+            for (k = 1; k <= 8; k++) { a = (k / 8) * (Math.PI / 2); prof.push([8.6 * Math.cos(a), 3 + 6.5 * Math.sin(a)]); }
+            prof[prof.length - 1][0] = 0;
+            return [{ c: 'blue', p: lathe(prof, 28) },
+                    { c: 'white', p: bandRing([[8.3, -0.3], [9.7, -0.3], [9.7, 3.3], [8.3, 3.3]], 28) },
+                    { c: 'white', p: ball(0, 10.6, 0, 2.9, 2.9, 2.9, 16, 10) }];
+          } },
+        { id: 'santa', cat: 'Hats', name: 'Santa hat', mode: 'top', h: 16, sink: 2.6,
+          icon: '<path d="M10 36C10 22 20 8 38 12c-6 2-6 8-4 24z" fill="#ef5b5b"/><rect x="7" y="33" width="34" height="9" rx="4.5" fill="#fff"/><circle cx="38" cy="12" r="5" fill="#fff"/>',
+          build: function () {
+            return [{ c: 'red', p: lathe([[0, 0], [8.8, 0], [7.8, 4], [6, 8], [3.8, 12], [1.6, 15.5], [0, 17]], 28) },
+                    { c: 'white', p: bandRing([[8.4, -0.4], [9.9, -0.4], [9.9, 2.8], [8.4, 2.8]], 28) },
+                    { c: 'white', p: ball(0, 17.4, 0, 2.6, 2.6, 2.6, 16, 10) }];
+          } },
+        { id: 'crown', cat: 'Hats', name: 'Crown', mode: 'top', h: 6.5, sink: 2.2,
+          icon: '<path d="M8 36V16l9 9 7-13 7 13 9-9v20z" fill="#ffd24a" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/><circle cx="24" cy="30" r="3" fill="#ef5b5b"/><circle cx="14" cy="31" r="2" fill="#7ec3f0"/><circle cx="34" cy="31" r="2" fill="#7ec3f0"/>',
+          build: function () {
+            var out = [{ c: 'gold', p: bandRing([[7.0, 0], [8.2, 0], [8.2, 3.2], [7.0, 3.2]], 32) }], i, a;
+            for (i = 0; i < 6; i++) {
+              a = (i / 6) * TAU;
+              out.push({ c: 'gold', p: lathe([[0, 2.4], [2.0, 2.4], [0, 7.2]], 12, { cx: 7.6 * Math.cos(a), cz: 7.6 * Math.sin(a) }) });
+              out.push({ c: 'red', p: ball(7.6 * Math.cos(a), 7.6, 7.6 * Math.sin(a), 0.9, 0.9, 0.9, 8, 6) });
+            }
+            return out;
+          } },
+        { id: 'party', cat: 'Hats', name: 'Party hat', mode: 'top', h: 19, sink: 2.2,
+          icon: '<path d="M24 6l12 32H12z" fill="#a98af0"/><path d="M19 24h10M16 31h16" stroke="#ffd24a" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="6" r="4" fill="#ffd24a"/><rect x="11" y="37" width="26" height="5" rx="2.5" fill="#7d5ad6"/>',
+          build: function () {
+            return [{ c: 'purple', p: lathe([[0, 0], [6.4, 0], [5.2, 4], [3.4, 10], [1.6, 15.5], [0, 18]], 24) },
+                    { c: 'gold', p: ball(0, 18.4, 0, 2.1, 2.1, 2.1, 14, 8) }];
+          } },
+        // ---- Faces ----
+        { id: 'coaleyes', cat: 'Face', name: 'Coal eyes', mode: 'surf', mirror: true,
+          icon: '<circle cx="15" cy="24" r="6.5" fill="#2b3445"/><circle cx="33" cy="24" r="6.5" fill="#2b3445"/><circle cx="13" cy="22" r="2" fill="#fff"/><circle cx="31" cy="22" r="2" fill="#fff"/>',
+          build: function () { return [{ c: 'coal', p: ball(0, 0.4, 0, 1.9, 1.7, 2.1, 16, 10) }]; } },
+        { id: 'bigeyes', cat: 'Face', name: 'Googly eyes', mode: 'surf', mirror: true,
+          icon: '<circle cx="15" cy="24" r="9" fill="#fff" stroke="#2b3445" stroke-width="2.5"/><circle cx="33" cy="24" r="9" fill="#fff" stroke="#2b3445" stroke-width="2.5"/><circle cx="17" cy="26" r="4" fill="#2b3445"/><circle cx="35" cy="26" r="4" fill="#2b3445"/>',
+          build: function () { return [{ c: 'white', p: ball(0, 0.3, 0, 3.1, 2.1, 3.3, 20, 12) }, { c: 'coal', p: ball(0.3, 2.0, 0.8, 1.7, 0.9, 1.7, 14, 8) }]; } },
+        { id: 'carrot', cat: 'Face', name: 'Carrot nose', mode: 'surf',
+          icon: '<path d="M6 20c0-4 8-6 34 2 2 1 2 3 0 4C14 34 6 32 6 28z" fill="#ff9a3c"/><path d="M14 22l4 5M22 24l3 4M30 25l2 3" stroke="#e17a1c" stroke-width="2" stroke-linecap="round"/><path d="M6 24c-3-3-3-6 0-8 0 3 2 4 4 5z" fill="#4fae6a"/>',
+          build: function () { return [{ c: 'orange', p: lathe([[0, -1.5, 0, 0], [3.0, -1.5, 0, 0], [2.6, 2, 0, 0.5], [1.5, 7, 0, 2], [0, 13, 0, 4]], 20) }]; } },
+        { id: 'buttonnose', cat: 'Face', name: 'Button nose', mode: 'surf',
+          icon: '<circle cx="24" cy="24" r="10" fill="#ef5b5b"/><ellipse cx="21" cy="20" rx="3" ry="2" fill="#ff9a9a"/>',
+          build: function () { return [{ c: 'red', p: ball(0, 0.8, 0, 2.7, 2.6, 2.7, 16, 10) }]; } },
+        { id: 'smile', cat: 'Face', name: 'Coal smile', mode: 'surf',
+          icon: '<g fill="#2b3445"><circle cx="9" cy="19" r="3"/><circle cx="16" cy="26" r="3"/><circle cx="24" cy="29" r="3"/><circle cx="32" cy="26" r="3"/><circle cx="39" cy="19" r="3"/></g>',
+          build: function () {
+            var out = [], i, x;
+            for (i = 0; i < 5; i++) { x = -5.5 + i * 2.75; out.push({ c: 'coal', p: bead(x, 0.5, 1.6 - 0.09 * x * x, 1.15) }); }
+            return out;
+          } },
+        { id: 'cheeks', cat: 'Face', name: 'Rosy cheeks', mode: 'surf', mirror: true,
+          icon: '<circle cx="14" cy="24" r="8" fill="#ff9fb5"/><circle cx="34" cy="24" r="8" fill="#ff9fb5"/><path d="M10 22l2 3M14 21l2 3M18 22l2 3" stroke="#ff6f93" stroke-width="1.5" stroke-linecap="round"/>',
+          build: function () { return [{ c: 'pink', p: ball(0, 0, 0, 3.1, 1.3, 3.1, 18, 8) }]; } },
+        { id: 'glasses', cat: 'Face', name: 'Round glasses', mode: 'surf',
+          icon: '<circle cx="14" cy="26" r="9" fill="#cfeaff" stroke="#2b3445" stroke-width="3"/><circle cx="34" cy="26" r="9" fill="#cfeaff" stroke="#2b3445" stroke-width="3"/><path d="M23 25h2" stroke="#2b3445" stroke-width="3" stroke-linecap="round"/>',
+          build: function () {
+            return [{ c: 'coal', p: cat([ball(-4.0, 0.2, 0, 3.4, 1.2, 3.4, 20, 8), ball(4.0, 0.2, 0, 3.4, 1.2, 3.4, 20, 8), capsule([-3, 0.6, 0], [3, 0.6, 0], 0.8, 0.8, 8, 3)]) }];
+          } },
+        { id: 'pipe', cat: 'Face', name: 'Corn-cob pipe', mode: 'surf',
+          icon: '<path d="M6 34c10 0 18-2 24-10" stroke="#9a6a3f" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M28 24h12l-2 12H30z" fill="#e2b886" stroke="#b98a52" stroke-width="2" stroke-linejoin="round"/><path d="M33 14c-2 3 2 4 0 7" stroke="#b6c4d9" stroke-width="2.5" stroke-linecap="round" fill="none"/>',
+          build: function () {
+            var bowl = rotX(lathe([[0, 0], [2.2, 0.2], [2.9, 5], [0, 5.2]], 16), -90);
+            return [{ c: 'brown', p: capsule([2.5, -1, 1.5], [8.5, 5.5, 1.5], 0.9, 0.9, 10, 4) },
+                    { c: 'tan', p: moveBy(bowl, 8.5, 5.5, 1.5) }];
+          } },
+        // ---- Neck and body ----
+        { id: 'scarf', cat: 'Body', name: 'Scarf', mode: 'neck',
+          icon: '<path d="M6 16c10 8 26 8 36 0v10c-10 8-26 8-36 0z" fill="#ef5b5b"/><path d="M6 21c10 8 26 8 36 0" stroke="#fff" stroke-width="3" fill="none"/><path d="M30 28l6 14 7-3-4-13z" fill="#d94848"/>',
+          build: null },
+        { id: 'bowtie', cat: 'Body', name: 'Bow tie', mode: 'surf',
+          icon: '<path d="M24 24L6 13v22z" fill="#a98af0"/><path d="M24 24l18-11v22z" fill="#a98af0"/><rect x="20" y="19" width="8" height="10" rx="3" fill="#7d5ad6"/>',
+          build: function () {
+            var wing = scaleBy(lathe([[0, 0], [0.8, 0.6], [3.4, 5], [0, 5.2]], 16), 1, 0.6, 1);
+            return [{ c: 'purple', p: moveBy(rotZ(wing, -90), 0.8, 1.6, 0) }, { c: 'purple', p: moveBy(rotZ(wing, 90), -0.8, 1.6, 0) },
+                    { c: 'purple', p: ball(0, 1.4, 0, 1.9, 1.7, 1.9, 14, 8) }];
+          } },
+        { id: 'button', cat: 'Body', name: 'Coal button', mode: 'surf',
+          icon: '<circle cx="24" cy="24" r="11" fill="#2b3445"/><circle cx="20" cy="22" r="1.8" fill="#78839a"/><circle cx="28" cy="22" r="1.8" fill="#78839a"/><circle cx="20" cy="27" r="1.8" fill="#78839a"/><circle cx="28" cy="27" r="1.8" fill="#78839a"/>',
+          build: function () { return [{ c: 'coal', p: ball(0, 0.2, 0, 2.5, 1.5, 2.5, 18, 8) }]; } },
+        { id: 'bigbutton', cat: 'Body', name: 'Big red button', mode: 'surf',
+          icon: '<circle cx="24" cy="24" r="14" fill="#ef5b5b"/><circle cx="24" cy="24" r="9" fill="none" stroke="#c63f3f" stroke-width="2"/><circle cx="21" cy="22" r="2" fill="#fff"/><circle cx="27" cy="22" r="2" fill="#fff"/>',
+          build: function () { return [{ c: 'red', p: ball(0, 0.4, 0, 3.7, 2.0, 3.7, 20, 8) }]; } },
+        { id: 'snowflake', cat: 'Body', name: 'Snowflake pin', mode: 'surf',
+          icon: '<g stroke="#7ec3f0" stroke-width="4" stroke-linecap="round"><path d="M24 7v34M9 15.5l30 17M39 15.5l-30 17"/></g><circle cx="24" cy="24" r="4" fill="#fff"/>',
+          build: function () {
+            var out = [], i, a;
+            for (i = 0; i < 3; i++) { a = i * 60 * Math.PI / 180; out.push({ c: 'blue', p: capsule([-5.2 * Math.cos(a), 0.8, -5.2 * Math.sin(a)], [5.2 * Math.cos(a), 0.8, 5.2 * Math.sin(a)], 0.7, 0.7, 8, 3) }); }
+            out.push({ c: 'blue', p: ball(0, 0.8, 0, 1.5, 1.5, 1.5, 12, 8) });
+            return out;
+          } },
+        { id: 'holly', cat: 'Body', name: 'Holly leaves', mode: 'surf',
+          icon: '<path d="M24 28C12 28 6 20 6 16c8-1 14 3 18 12zM24 28c12 0 18-8 18-12-8-1-14 3-18 12z" fill="#4fae6a"/><circle cx="21" cy="29" r="4.5" fill="#ef5b5b"/><circle cx="28" cy="29" r="4.5" fill="#ef5b5b"/><circle cx="24.5" cy="34" r="4.5" fill="#ef5b5b"/>',
+          build: function () {
+            return [{ c: 'green', p: rotY(moveBy(ball(0, 0, 0, 4, 0.8, 1.6, 14, 8), -3.2, 0.5, 0), 25) }, { c: 'green', p: rotY(moveBy(ball(0, 0, 0, 4, 0.8, 1.6, 14, 8), 3.2, 0.5, 0), -25) },
+                    { c: 'red', p: bead(-1.3, 1.4, 0.9, 1.3) }, { c: 'red', p: bead(1.4, 1.4, 0.9, 1.3) }, { c: 'red', p: bead(0, 1.6, -1.2, 1.3) }];
+          } },
+        // ---- Arms ----
+        { id: 'arms', cat: 'Arms', name: 'Stick arms', mode: 'surf', mirror: true,
+          icon: '<path d="M6 40L30 14M24 21l-1-9M18 28l-9-4M30 14l8-1" stroke="#9a6a3f" stroke-width="4" stroke-linecap="round" fill="none"/>',
+          build: function () {
+            var d = vnorm([0, 0.86, -0.5]), e = vmul(d, 21), br1 = vmul(d, 12), br2 = vmul(d, 16);
+            return [{ c: 'brown', p: cat([capsule([0, -2, 0], e, 1.3, 0.8, 10, 4), capsule(br1, vadd(br1, [1.8, 3.2, -4.8]), 0.8, 0.5, 8, 3), capsule(br2, vadd(br2, [-1.8, 3.4, -4.4]), 0.7, 0.45, 8, 3)]) }];
+          } },
+        { id: 'mittens', cat: 'Arms', name: 'Red mittens', mode: 'surf', mirror: true,
+          icon: '<path d="M14 40V22c0-6 4-10 8-10 5 0 8 4 8 10v18z" fill="#ef5b5b"/><path d="M30 28c4 0 8 0 8-4 0-2-3-2-8 2z" fill="#ef5b5b"/><rect x="13" y="34" width="18" height="6" rx="3" fill="#fff"/>',
+          build: function () {
+            return [{ c: 'red', p: cat([ball(0, 3.5, 0, 3.6, 4.6, 3.0, 18, 10), ball(2.8, 3.6, -1.2, 1.5, 1.5, 1.2, 10, 6)]) },
+                    { c: 'white', p: bandRing([[2.9, -0.4], [4.2, -0.4], [4.2, 1.2], [2.9, 1.2]], 18) }];
+          } }
+      ];
+      var ITEM_BY_ID = {};
+      ITEMS.forEach(function (it) { ITEM_BY_ID[it.id] = it; });
+      var CATEGORIES = ['Hats', 'Face', 'Body', 'Arms'];
+
+      // ---- Snowman geometry ----
+      function computeBalls(p) {
+        var n = Math.round(p.bodyIdx) + 1, r = p.baseR, base = p.mound >= 1 ? 2.4 : 0, list = [], i, cy;
+        for (i = 0; i < n; i++) {
+          cy = i === 0 ? base + r * 0.7 : list[i - 1].cy + (list[i - 1].r + r) * 0.8;
+          list.push({ r: r, cy: cy });
+          r = r * (p.taper / 100);
+        }
+        return list;
+      }
+      function radAt(balls, y) {
+        var best = 0;
+        balls.forEach(function (b) { var d = b.r * b.r - sqr(y - b.cy); if (d > 0) best = Math.max(best, Math.sqrt(d)); });
+        return best;
+      }
+
+      // ---- Placement ----
+      var items = [];      // { id, p: [x,y,z], n: [x,y,z], size: 1, twist: 0 }
+      var sel = -1;
+      var meshOwner = {};  // mesh name -> item index
+      var lastParams = null;
+
+      function surfacePoint(ball, elevDeg, azimDeg) {
+        var e = rad(elevDeg), a = rad(azimDeg);
+        var n = [Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a)];
+        return { p: [n[0] * ball.r, ball.cy + n[1] * ball.r, n[2] * ball.r], n: n };
+      }
+
+      function countOf(id) { return items.filter(function (it) { return it.id === id; }).length; }
+
+      function defaultPlace(def, p) {
+        var balls = computeBalls(p), head = balls[balls.length - 1], mid = balls[Math.max(0, balls.length - 2)];
+        var n = countOf(def.id), side = (n % 2 ? 1 : -1) * Math.ceil(n / 2);
+        var elev = 0, az = 0, on = head, many = balls.length > 1;
+        switch (def.id) {
+          case 'coaleyes': case 'bigeyes': elev = 20; az = 26; break;
+          case 'carrot': case 'buttonnose': elev = 4; break;
+          case 'smile': elev = -17; break;
+          case 'cheeks': elev = -6; az = 40; break;
+          case 'glasses': elev = 19; break;
+          case 'pipe': elev = -22; az = -24; break;
+          case 'bowtie': on = many ? mid : head; elev = many ? 62 : -55; break;
+          case 'button': case 'bigbutton': on = many ? mid : head; elev = 38 - 26 * (n % 3); az = 12 * Math.floor(n / 3); break;
+          case 'snowflake': case 'holly': on = many ? mid : head; elev = -12; az = -30 + 24 * side; break;
+          case 'arms': case 'mittens': on = many ? mid : head; elev = 14; az = 86; break;
+        }
+        if (def.mirror) side = 0;
+        if (side && def.id !== 'snowflake' && def.id !== 'holly' && def.id !== 'button' && def.id !== 'bigbutton') az += side * 18;
+        if (def.mode === 'neck') {
+          var yy = head.cy - head.r * 0.82 + 1.5 * n;
+          return { p: [0, yy, 0], n: [0, 0, 1] };
+        }
+        return surfacePoint(on, elev, az);
+      }
+
+      function basisFor(n) {
+        var ref = Math.abs(n[1]) > 0.95 ? [0, 0, -1] : [0, 1, 0];
+        var X = vnorm(vcross(ref, n)), Y = n, Z = vcross(X, Y);
+        return { X: X, Y: Y, Z: Z };
+      }
+
+      // Move a local-frame item onto the surface at pt with outward normal nrm.
+      function placeLocal(parts, scale, twist, pt, nrm) {
+        var B = basisFor(nrm), c = Math.cos(rad(twist)), s = Math.sin(rad(twist));
+        return parts.map(function (part) {
+          return { c: part.c, p: mapPts(part.p, function (x, y, z) {
+            x *= scale; y *= scale; z *= scale;
+            var tx = x * c + z * s, tz = -x * s + z * c;
+            return [pt[0] + B.X[0] * tx + B.Y[0] * y + B.Z[0] * tz, pt[1] + B.X[1] * tx + B.Y[1] * y + B.Z[1] * tz, pt[2] + B.X[2] * tx + B.Y[2] * y + B.Z[2] * tz];
+          }) };
+        });
+      }
+
+      function buildScarf(balls, scale, y) {
+        var R = radAt(balls, y) + 0.9 * scale, t = 2.1 * scale, poly = [], k;
+        for (k = 0; k < 10; k++) poly.push([R + t * Math.cos((k / 10) * TAU), y + t * 0.9 * Math.sin((k / 10) * TAU)]);
+        var out = [{ c: 'red', p: bandRing(poly, 48) }];
+        var tx = R * 0.5, tz = Math.sqrt(Math.max(1, R * R - tx * tx)) + 0.8 * scale;
+        var w = 2.7 * scale, th = 1.2 * scale, len = 15 * scale;
+        out.push({ c: 'red', p: loftCapped([rrect(w, th, th * 0.9, y + 1.2 * scale, 4, tx, tz), rrect(w, th, th * 0.9, y - len * 0.5, 4, tx, tz + 0.4 * scale), rrect(w, th, th * 0.9, y - len, 4, tx, tz + 0.7 * scale)]) });
         return out;
       }
 
-      // Outline polygons (unit radius). Each polygon is extruded as its own solid; overlaps are fine.
-      function stampPolys(type) {
-        var i, a, pts = [];
-        if (type === 'star') {
-          for (i = 0; i < 10; i++) { a = (i * Math.PI) / 5 + Math.PI / 2; pts.push([Math.cos(a) * (i % 2 ? 0.46 : 1), Math.sin(a) * (i % 2 ? 0.46 : 1)]); }
-          return [pts];
-        }
-        if (type === 'snow') {
-          var spec = [[-30, 0.3], [-17, 0.68], [-8, 0.5], [0, 1], [8, 0.5], [17, 0.68]];
-          for (i = 0; i < 6; i++) spec.forEach(function (sp) { var an = rad(90 + i * 60 + sp[0]); pts.push([Math.cos(an) * sp[1], Math.sin(an) * sp[1]]); });
-          return [pts];
-        }
-        if (type === 'tree') {
-          return [mirrorHalf([[0, 1], [0.42, 0.42], [0.2, 0.42], [0.68, -0.12], [0.3, -0.12], [0.86, -0.68], [0.14, -0.68], [0.14, -1]])];
-        }
-        if (type === 'heart') {
-          for (i = 0; i < 36; i++) {
-            a = (i / 36) * TAU;
-            pts.push([(16 * Math.pow(Math.sin(a), 3)) / 17, (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a) + 2.5) / 17]);
-          }
-          return [pts];
-        }
-        if (type === 'bell') {
-          return [mirrorHalf([[0, 1], [0.2, 0.94], [0.35, 0.74], [0.4, 0.35], [0.5, -0.1], [0.7, -0.45], [0.82, -0.58], [0.82, -0.7], [0.2, -0.7], [0.2, -0.82], [0.1, -1]])];
-        }
-        if (type === 'cane') {
-          var cl = [[0.32, -1], [0.32, -0.5], [0.32, 0]];
-          for (i = 0; i <= 14; i++) { a = (i / 14) * Math.PI; cl.push([-0.08 + 0.4 * Math.cos(a), 0 + 0.4 * Math.sin(a)]); }
-          cl.push([-0.48, -0.3]);
-          return [strokeOutline(cl, 0.17).map(function (q) { return [q[0] + 0.08, q[1] - 0.2]; })];
-        }
-        if (type === 'holly') {
-          return [leaf(38, 1.1, 0.34, 0, -0.45), leaf(142, 1.1, 0.34, 0, -0.45), disc(-0.16, -0.38, 0.17, 14), disc(0.16, -0.38, 0.17, 14), disc(0, -0.2, 0.17, 14)];
-        }
-        if (type === 'gift') {
-          var bowL = [], bowR = [];
-          for (i = 0; i < 16; i++) { a = (i / 16) * TAU; bowL.push([-0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); bowR.push([0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); }
-          return [[[-0.72, -1], [0.72, -1], [0.72, 0.06], [-0.72, 0.06]], [[-0.84, 0.06], [0.84, 0.06], [0.84, 0.42], [-0.84, 0.42]], bowL, bowR];
-        }
-        if (type === 'diamond') return [[[0, 1], [0.62, 0], [0, -1], [-0.62, 0]]];
-        return [disc(0, 0, 1, 24)];
-      }
-
-      function stampIcon(type) {
-        return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true">' + stampPolys(type).map(function (poly) {
-          return '<polygon points="' + poly.map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ') + '"/>';
-        }).join('') + '</svg>';
-      }
-
-      // Stamp mesh in model space: sunk `embed` mm into the surface and standing `depth - embed` mm proud.
-      function stampPositions(stamp, depth, embed) {
-        if (stamp.type === 'ball') {
-          var br = stamp.size * 0.5, nb = vnorm(stamp.normal), c = vadd(stamp.point, vmul(nb, br * 0.3));
-          return ball(c[0], c[1], c[2], br, br, br, 28, 14);
-        }
-        var THREE = window.THREE, normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
-        var shapes = stampPolys(stamp.type).map(function (poly) {
-          var shape = new THREE.Shape();
-          poly.forEach(function (pt, i) { if (i === 0) shape.moveTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); else shape.lineTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); });
-          shape.closePath();
-          return shape;
-        });
-        var geo = new THREE.ExtrudeGeometry(shapes, { depth: depth, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.3, bevelSegments: 2, curveSegments: 12 });
-        geo.rotateZ((((stamp.rotation || 0) * Math.PI) / 180));
-        geo.translate(0, 0, -embed);
-        var upVec = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
-        var tx = new THREE.Vector3().crossVectors(upVec, normal).normalize();
-        var ty = new THREE.Vector3().crossVectors(normal, tx).normalize();
-        var quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tx, ty, normal));
-        var matrix = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(stamp.point), quat, new THREE.Vector3(1, 1, 1));
-        var flat = geo.toNonIndexed();
-        flat.applyMatrix4(matrix);
-        return flat.attributes.position.array.slice();
-      }
-
-      // Panel for a stamp tab: shape chips, undo and clear (plus optional extra buttons).
-      function mountStampPanel(container, api, types, heading, noun, extraButtons) {
-        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
-        var chips = el('div', { class: 'mm-icon-chips' }), buttons = {};
-        types.forEach(function (type) {
-          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType), onclick: function () {
-            stampType = type;
-            Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
-            api.toast('Selected ' + STAMP_NAMES[type] + '. Click the model to place it.');
-          } });
-          btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
-          buttons[type] = btn;
-          chips.appendChild(btn);
-        });
-        container.appendChild(chips);
-        var count = el('p', { class: 'mm-note' }, '0 ' + noun + 's placed');
-        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps.pop(); api.rebuild(); api.toast('Removed last ' + noun); } } }, 'Undo last');
-        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps = []; api.rebuild(); api.toast('Cleared all ' + noun + 's'); } } }, 'Clear all');
-        container.appendChild(count);
-        var row = el('div', { class: 'mm-export-row' });
-        row.appendChild(undo); row.appendChild(clear);
-        (extraButtons || []).forEach(function (b) { row.appendChild(el('button', { class: 'mm-btn', type: 'button', onclick: function () { b.run(api); } }, b.label)); });
-        container.appendChild(row);
-        refreshStampPanel = function () {
-          count.textContent = stamps.length + ' ' + noun + (stamps.length === 1 ? '' : 's') + ' placed';
-          undo.disabled = stamps.length === 0;
-          clear.disabled = stamps.length === 0;
-        };
-        refreshStampPanel();
-      }
-
-      // ---- Pieces: each type is a profile [[r, y], ...] from a bottom pole to a top pole ----
-      var TYPES = ['ball', 'egg', 'drum', 'cone', 'dome', 'gem'];
-      var TYPE_NAMES = { ball: 'Ball', egg: 'Egg', drum: 'Drum', cone: 'Cone', dome: 'Dome', gem: 'Gem' };
-      var MAX_PIECES = 8;
-      var PIECE_LABELS = ['Piece 1 (bottom)', 'Piece 2', 'Piece 3', 'Piece 4', 'Piece 5', 'Piece 6', 'Piece 7', 'Piece 8'];
-
-      function pieceProfile(type, R, sq) {
-        var pts = [], k, n = 16, t, a, c, h, y;
-        if (type === 'ball' || type === 'egg') {
-          var tall = type === 'egg' ? 1.14 : 1;
-          for (k = 0; k <= n; k++) {
-            t = (k / n) * Math.PI;
-            pts.push([k === 0 || k === n ? 0 : R * Math.sin(t) * (type === 'egg' ? 1 + 0.16 * Math.cos(t) : 1), R * sq * tall * (1 - Math.cos(t))]);
-          }
-        } else if (type === 'drum') {
-          h = R * 1.1 * sq; c = Math.min(R * 0.3, 3, h * 0.4);
-          pts.push([0, 0], [R - c, 0]);
-          for (k = 1; k <= 6; k++) { a = (k / 6) * Math.PI / 2; pts.push([R - c + c * Math.sin(a), c - c * Math.cos(a)]); }
-          for (k = 0; k <= 6; k++) { a = (k / 6) * Math.PI / 2; pts.push([R - c + c * Math.cos(a), h - c + c * Math.sin(a)]); }
-          pts.push([0, h]);
-        } else if (type === 'cone') {
-          h = R * 1.9 * sq;
-          pts.push([0, 0], [R - 1.5, 0], [R, 1.5]);
-          for (k = 1; k <= 8; k++) { y = 1.5 + (h - 1.5) * 0.97 * (k / 8); pts.push([R * (1 - (y - 1.5) / (h - 1.5)) + 0.6, y]); }
-          pts.push([0, h]);
-        } else if (type === 'dome') {
-          h = R * 0.85 * sq;
-          pts.push([0, 0], [R - 0.8, 0], [R, 0.8]);
-          for (k = 1; k <= 14; k++) { a = (k / 14) * Math.PI / 2; pts.push([k === 14 ? 0 : R * Math.cos(a), 0.8 + (h - 0.8) * Math.sin(a)]); }
+      function itemParts(it, idx, balls, hatState) {
+        var def = ITEM_BY_ID[it.id], head = balls[balls.length - 1], k = head.r / 11, scale = k * it.size, parts;
+        if (def.mode === 'top') {
+          var base = hatState.y - def.sink * scale;
+          parts = def.build().map(function (pt) { return { c: pt.c, p: moveBy(scaleBy(pt.p, scale, scale, scale), 0, base, 0) }; });
+          hatState.y = base + def.h * scale - 0.8 * scale;
+        } else if (def.mode === 'neck') {
+          parts = buildScarf(balls, scale, it.p[1]);
         } else {
-          h = R * 2.1 * sq;
-          for (k = 0; k <= 14; k++) {
-            var s = k / 14, f = s < 0.42 ? s / 0.42 : (1 - s) / 0.58;
-            pts.push([k === 0 || k === 14 ? 0 : R * Math.pow(f, 0.8), h * s]);
-          }
+          parts = placeLocal(def.build(), scale, it.twist, it.p, it.n);
+          if (def.mirror) parts = parts.concat(placeLocal(def.build(), scale, -it.twist, [-it.p[0], it.p[1], it.p[2]], [-it.n[0], it.n[1], it.n[2]]));
         }
-        return pts;
+        return parts;
       }
-
-      // Cuts a pointed bottom flat so the first piece stands on a wide base.
-      function flatten(prof, flat) {
-        if (prof[1][1] < 0.01) return prof;
-        var rmax = 0, i;
-        prof.forEach(function (q) { rmax = Math.max(rmax, q[0]); });
-        var want = rmax * flat;
-        for (i = 1; i < prof.length; i++) { if (prof[i][0] >= want) break; }
-        if (i >= prof.length || i < 1) return prof;
-        var a = prof[i - 1], b = prof[i], u = (want - a[0]) / Math.max(1e-6, b[0] - a[0]);
-        var yc = a[1] + (b[1] - a[1]) * u, out = [[0, 0], [want, 0]];
-        for (var j = i + 1; j < prof.length; j++) out.push([prof[j][0], prof[j][1] - yc]);
-        return out;
-      }
-      function profR(prof, y) {
-        for (var i = 1; i < prof.length; i++) {
-          if (y <= prof[i][1] + 1e-9) {
-            var a = prof[i - 1], b = prof[i], d = b[1] - a[1];
-            return d < 1e-9 ? Math.max(a[0], b[0]) : a[0] + (b[0] - a[0]) * Math.max(0, Math.min(1, (y - a[1]) / d));
-          }
-        }
-        return 0;
-      }
-      function typeIcon(type) {
-        var prof = pieceProfile(type, 12, 1).map(function (q) { return [q[0] / 12, q[1] / 12]; }), hh = prof[prof.length - 1][1], pts = [];
-        prof.forEach(function (q) { pts.push([q[0], -q[1] + hh / 2]); });
-        prof.slice().reverse().forEach(function (q) { pts.push([-q[0], -q[1] + hh / 2]); });
-        return '<svg viewBox="-1.1 -1.4 2.2 2.8" aria-hidden="true"><polygon points="' + pts.map(function (q) { return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join(' ') + '"/></svg>';
-      }
-
-      // ---- State: the stack itself (top of the array = top of the tower) ----
-      var LAYOUTS = [
-        { name: 'Triple ball', pieces: [['ball', 22, 1], ['ball', 17, 1], ['ball', 12.5, 1]] },
-        { name: 'Egg tower', pieces: [['egg', 20, 1], ['egg', 15, 1], ['egg', 10.5, 1]] },
-        { name: 'Totem', pieces: [['drum', 18, 1], ['gem', 14, 1], ['drum', 14, 0.8], ['dome', 11, 1]] },
-        { name: 'Gem stack', pieces: [['gem', 17, 1], ['gem', 13, 1], ['gem', 9, 1]] },
-        { name: 'Pine tower', pieces: [['drum', 15, 0.7], ['cone', 17, 0.9], ['cone', 12, 0.9], ['cone', 7.5, 1]] },
-        { name: 'Mushroom', pieces: [['drum', 9, 1.2], ['dome', 22, 1.1]] }
-      ];
-      var pieces = [], sel = 0, refreshStack = null;
-      function loadLayout(i) {
-        pieces = LAYOUTS[i].pieces.map(function (q) { return { type: q[0], size: q[1], squash: q[2] }; });
-        sel = 0;
-      }
-      loadLayout(0);
-
-      var TOPPERS = ['None', 'Ball', 'Star', 'Spike'];
-      var PARAMS = [
-        { group: 'Stack', key: 'stackScale', label: 'Overall size', unit: '%', min: 60, max: 140, step: 1, value: 100 },
-        { group: 'Stack', key: 'joinDepth', label: 'Join depth (light touch ↔ sunk in)', unit: '%', min: 8, max: 40, step: 1, value: 22 },
-        { group: 'Stack', key: 'baseFlat', label: 'Flat base (wider = safer print)', unit: '%', min: 60, max: 96, step: 1, value: 80 },
-        { group: 'Stack', key: 'facets', label: 'Facets (smooth ↔ low-poly)', unit: '', min: 0, max: 12, step: 1, value: 0,
-          format: function (v) { return v < 3 ? 'Smooth' : Math.round(v) + ' sides'; } },
-        { group: 'Stack', key: 'bandT', label: 'Neck bands (0 = none)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 0,
-          format: function (v) { return v < 1 ? 'None' : v + ' mm'; } },
-        { group: 'Topper & hook', key: 'topper', label: 'Topper', unit: '', min: 0, max: 3, step: 1, value: 2,
-          format: function (v) { return TOPPERS[Math.round(v)]; } },
-        { group: 'Topper & hook', key: 'topperSize', label: 'Topper size', unit: ' mm', min: 5, max: 20, step: 1, value: 11 },
-        { group: 'Topper & hook', key: 'hook', label: 'Ornament hook on top', unit: '', min: 0, max: 1, step: 1, value: 0,
-          format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
-        { group: 'Topper & hook', key: 'hookHole', label: 'Hook hole size', unit: ' mm', min: 1.6, max: 3.6, step: 0.1, value: 2.4 },
-        { group: 'Topper & hook', key: 'hookTube', label: 'Hook ring thickness', unit: ' mm', min: 1.2, max: 2.4, step: 0.1, value: 1.6 },
-        { tab: 'stack', group: 'Selected piece', key: 'selSize', label: 'Piece size', unit: ' mm', min: 5, max: 36, step: 0.5, value: 22 },
-        { tab: 'stack', group: 'Selected piece', key: 'selSquash', label: 'Piece height (squashed ↔ stretched)', unit: '%', min: 50, max: 170, step: 1, value: 100 },
-        { tab: 'stamps', group: 'Stamp size & rotation', key: 'stampSize', label: 'Stamp size', unit: ' mm', min: 6, max: 24, step: 1, value: 12 },
-        { tab: 'stamps', group: 'Stamp size & rotation', key: 'stampRotation', label: 'Stamp rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 }
-      ];
-      var DEFAULTS = {};
-      PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
 
       var lastMeshes = [];
       function build(p) {
-        var out = [], i, k;
-        if (sel >= pieces.length) sel = pieces.length - 1;
-        if (pieces[sel]) { pieces[sel].size = p.selSize; pieces[sel].squash = p.selSquash / 100; }
-        var seg = p.facets >= 3 ? Math.round(p.facets) : 72;
-        var sc = p.stackScale / 100, y0 = 0, prevTop = 0, prevProf = null, prevBase = 0, topY = 0;
-        var bands = [];
-        for (i = 0; i < pieces.length; i++) {
-          var pc = pieces[i], prof = pieceProfile(pc.type, pc.size * sc, pc.squash);
-          if (i === 0) prof = flatten(prof, p.baseFlat / 100);
-          var h = prof[prof.length - 1][1];
-          if (i > 0) {
-            var ov = (p.joinDepth / 100) * Math.min(prevTop - prevBase, h);
-            y0 = prevTop - ov;
-            if (p.bandT >= 1) {
-              var yj = y0 + ov * 0.5, rj = Math.min(profR(prevProf, yj - prevBase), profR(prof, yj - y0)) + p.bandT * 0.35, T = p.bandT, poly = [], b;
-              for (b = 0; b < 12; b++) poly.push([rj + T * 1.1 * Math.cos((b / 12) * TAU), yj + T * 0.9 * Math.sin((b / 12) * TAU)]);
-              bands.push(bandRing(poly, seg));
-            }
-          }
-          var shifted = prof.map(function (q) { return [q[0], q[1] + y0]; });
-          out.push({ name: 'piece' + i, positions: lathe(shifted, seg), singlePart: true });
-          prevProf = prof; prevBase = y0; prevTop = y0 + h; topY = prevTop;
+        lastParams = p;
+        var balls = computeBalls(p), head = balls[balls.length - 1], meshes = [], bodyParts = [];
+        balls.forEach(function (b, idx) {
+          bodyParts.push(idx === 0 ? ballCut(0, b.cy, 0, b.r, 0.7, 40, 20) : ball(0, b.cy, 0, b.r, b.r, b.r, 40, 20));
+        });
+        meshes.push({ name: 'Snowman', positions: cat(bodyParts), color: COL.snow });
+        if (p.mound >= 1) {
+          var R = balls[0].r * 1.7;
+          meshes.push({ name: 'Snow mound', positions: scaleBy(ballCut(0, 0, 0, 1, 0, 48, 14), R, 3.4, R), color: '#cfe6fb' });
         }
-        if (bands.length) out.push({ name: 'bands', positions: cat(bands), singlePart: true });
-        var hookY = topY, tz = p.topperSize, tpos = null;
-        if (p.topper >= 1) {
-          var tt = Math.round(p.topper);
-          if (tt === 1) {
-            tpos = ball(0, topY + tz * 0.55, 0, tz * 0.55, tz * 0.55, tz * 0.55, seg > 20 ? seg : 28, 14);
-            hookY = topY + tz * 1.1;
-          } else if (tt === 2) {
-            var starPoly = stampPolys('star')[0], cy2 = topY + tz * 0.42 - 0.8;
-            tpos = loftCapped([-1.6, 1.6].map(function (zz) { return starPoly.map(function (q) { return [q[0] * tz * 0.5, cy2 + q[1] * tz * 0.5, zz]; }); }));
-            hookY = topY + tz * 0.92;
-          } else {
-            tpos = lathe([[0, topY - 1], [tz * 0.34, topY - 1], [tz * 0.3, topY + tz * 0.1], [0.5, topY + tz * 1.25], [0, topY + tz * 1.4]], seg > 20 ? seg : 28);
-            hookY = topY + tz * 1.4;
-          }
-          out.push({ name: 'topper', positions: tpos, singlePart: true });
-        }
-        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, hookY, 0, p.hookHole, p.hookTube, 1.8), singlePart: true });
-        stamps.forEach(function (st) { out.push({ name: 'stamp', positions: stampPositions(st, 3.3, 1.8), singlePart: true }); });
-        lastMeshes = out;
-        if (refreshStamp2) refreshStamp2();
-        if (refreshStack) refreshStack();
-        return out;
+        meshOwner = {};
+        var hatState = { y: head.cy + head.r };
+        items.forEach(function (it, idx) {
+          var def = ITEM_BY_ID[it.id], label = def.name + ' ' + (idx + 1);
+          itemParts(it, idx, balls, hatState).forEach(function (part, pi) {
+            var name = label + (pi ? ' (' + (pi + 1) + ')' : '');
+            meshes.push({ name: name, positions: part.p, color: COL[part.c] || part.c });
+            meshOwner[name] = idx;
+          });
+        });
+        lastMeshes = meshes;
+        return meshes;
       }
-      var refreshStamp2 = null;
 
-      // Piece index from a mesh name such as "piece2", or -1.
-      function pieceIndex(name) { return /^piece\d$/.test(name || '') ? parseInt(name.slice(5), 10) : -1; }
-      function highlight(api, idx) {
-        if (idx < 0 || idx >= pieces.length) { api.setPreview(null); return; }
-        var m = lastMeshes.filter(function (e) { return e.name === 'piece' + idx; })[0];
-        if (!m) { api.setPreview(null); return; }
-        var src = m.positions, out = new Float32Array(src.length), cx = 0, cy = 0, cz = 0, i, n = src.length / 3;
-        for (i = 0; i < src.length; i += 3) { cx += src[i]; cy += src[i + 1]; cz += src[i + 2]; }
+      // Slightly enlarged copy of the selected item, drawn as the ghost outline.
+      function outlineFor(idx) {
+        var names = Object.keys(meshOwner).filter(function (n) { return meshOwner[n] === idx; });
+        var list = lastMeshes.filter(function (m) { return names.indexOf(m.name) >= 0; });
+        if (!list.length) return null;
+        var all = cat(list.map(function (m) { return m.positions; })), cx = 0, cy = 0, cz = 0, i, n = all.length / 3, out = new Float32Array(all.length);
+        for (i = 0; i < all.length; i += 3) { cx += all[i]; cy += all[i + 1]; cz += all[i + 2]; }
         cx /= n; cy /= n; cz /= n;
-        for (i = 0; i < src.length; i += 3) { out[i] = cx + (src[i] - cx) * 1.035; out[i + 1] = cy + (src[i + 1] - cy) * 1.02; out[i + 2] = cz + (src[i + 2] - cz) * 1.035; }
-        api.setPreview({ positions: out });
+        for (i = 0; i < all.length; i += 3) { out[i] = cx + (all[i] - cx) * 1.06; out[i + 1] = cy + (all[i + 1] - cy) * 1.06; out[i + 2] = cz + (all[i + 2] - cz) * 1.06; }
+        return { positions: out };
       }
 
-      function stackWarnings() {
-        // A piece much wider than the one under it hangs over empty space and needs supports.
-        return pieces.map(function (pc, i) { return i > 0 && pc.size * (pc.type === 'cone' ? 1 : 0.9) > pieces[i - 1].size * 1.18 && pieces[i - 1].type !== 'drum'; });
-      }
-
-      function mountStack(container, api) {
-        function syncSliders() { api.setParams({ selSize: pieces[sel].size, selSquash: Math.round(pieces[sel].squash * 100) }); }
-        function select(i) { sel = Math.max(0, Math.min(pieces.length - 1, i)); syncSliders(); api.toast('Selected ' + (sel + 1) + ': ' + TYPE_NAMES[pieces[sel].type]); }
-
-        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Piece tray (tap to add on top)'));
-        var tray = el('div', { class: 'mm-icon-chips' });
-        TYPES.forEach(function (type) {
-          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: 'Add ' + TYPE_NAMES[type], onclick: function () {
-            if (pieces.length >= MAX_PIECES) { api.toast('The stack holds up to ' + MAX_PIECES + ' pieces'); return; }
-            var top = pieces[pieces.length - 1];
-            pieces.push({ type: type, size: Math.max(6, Math.round(top.size * 0.78 * 2) / 2), squash: 1 });
-            sel = pieces.length - 1; syncSliders(); api.rebuild(); api.toast('Added ' + TYPE_NAMES[type]);
-          } });
-          btn.innerHTML = typeIcon(type) + '<span>' + TYPE_NAMES[type] + '</span>';
-          tray.appendChild(btn);
-        });
-        container.appendChild(tray);
-
-        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Your stack (top first, tap to select)'));
-        var list = el('div', { class: 'mm-chips' });
-        container.appendChild(list);
-        var note = el('p', { class: 'mm-note' }, '');
-        container.appendChild(note);
-
-        function act(label, fn) { return el('button', { class: 'mm-btn', type: 'button', onclick: fn }, label); }
-        var row1 = el('div', { class: 'mm-export-row' }), row2 = el('div', { class: 'mm-export-row' });
-        row1.appendChild(act('Move up', function () {
-          if (sel < pieces.length - 1) { var t = pieces[sel]; pieces[sel] = pieces[sel + 1]; pieces[sel + 1] = t; sel++; api.rebuild(); }
-        }));
-        row1.appendChild(act('Move down', function () {
-          if (sel > 0) { var t = pieces[sel]; pieces[sel] = pieces[sel - 1]; pieces[sel - 1] = t; sel--; api.rebuild(); }
-        }));
-        row1.appendChild(act('Duplicate', function () {
-          if (pieces.length >= MAX_PIECES) { api.toast('The stack holds up to ' + MAX_PIECES + ' pieces'); return; }
-          pieces.splice(sel + 1, 0, { type: pieces[sel].type, size: pieces[sel].size, squash: pieces[sel].squash });
-          sel++; api.rebuild();
-        }));
-        row2.appendChild(act('Next shape', function () {
-          pieces[sel].type = TYPES[(TYPES.indexOf(pieces[sel].type) + 1) % TYPES.length]; api.rebuild();
-        }));
-        row2.appendChild(act('Remove', function () {
-          if (pieces.length <= 1) { api.toast('Keep at least one piece'); return; }
-          pieces.splice(sel, 1); sel = Math.min(sel, pieces.length - 1); syncSliders(); api.rebuild();
-        }));
-        container.appendChild(row1); container.appendChild(row2);
-
-        refreshStack = function () {
-          list.innerHTML = '';
-          var warn = stackWarnings(), any = false, i;
-          for (i = pieces.length - 1; i >= 0; i--) {
-            (function (idx) {
-              var pc = pieces[idx];
-              var b = el('button', { class: 'mm-chip', type: 'button', 'aria-pressed': String(idx === sel), onclick: function () { select(idx); api.rebuild(); } },
-                (idx + 1) + ' ' + TYPE_NAMES[pc.type] + ' ' + (Math.round(pc.size * 2) / 2) + (warn[idx] ? ' !' : ''));
-              if (warn[idx]) any = true;
-              list.appendChild(b);
-            })(i);
+      // ---- Snowy backdrop: painted hills and pines behind the transparent 3D view, with falling flakes ----
+      var backdrop = null;
+      function paintScenery(w, h) {
+        var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        var g = cv.getContext('2d'), i, x, y, s;
+        var sky = g.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, '#7fb2e5'); sky.addColorStop(0.55, '#bfdcf5'); sky.addColorStop(1, '#f1f8ff');
+        g.fillStyle = sky; g.fillRect(0, 0, w, h);
+        g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.arc(w * 0.82, h * 0.18, Math.min(w, h) * 0.06, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.arc(w * 0.82, h * 0.18, Math.min(w, h) * 0.095, 0, TAU); g.fill();
+        function hill(base, amp, col, ph) {
+          g.fillStyle = col; g.beginPath(); g.moveTo(0, h);
+          for (x = 0; x <= w; x += 8) g.lineTo(x, h * base + Math.sin(x / w * 5 + ph) * amp * h + Math.sin(x / w * 11 + ph * 2) * amp * h * 0.35);
+          g.lineTo(w, h); g.closePath(); g.fill();
+        }
+        function pine(px, py, sz, col) {
+          g.fillStyle = col;
+          for (i = 0; i < 4; i++) {
+            var tw = sz * (0.38 + i * 0.2), ty = py - sz * (1.15 - i * 0.28);
+            g.beginPath(); g.moveTo(px, ty - sz * 0.42); g.lineTo(px + tw, ty + sz * 0.22); g.lineTo(px - tw, ty + sz * 0.22); g.closePath(); g.fill();
           }
-          note.textContent = any ? '"!" marks a piece much wider than the one under it, which overhangs and may need supports. Make the lower piece bigger, or swap a drum underneath.' : 'Pieces sit on each other like a snowman, no supports needed. Click a piece in the viewport to select it.';
-        };
-        refreshStack();
-
-        // Picture cards for whole-tower looks.
-        container.appendChild(el('h3', { class: 'mm-group-title' }, 'Starter towers'));
-        var grid = el('div', { class: 'mm-preset-cards' });
-        LAYOUTS.forEach(function (lay, li) {
-          var card = el('button', { class: 'mm-preset-card', type: 'button', title: lay.name, onclick: function () {
-            loadLayout(li); syncSliders(); api.rebuild(); api.toast('Tower: ' + lay.name);
-          } });
-          var y = 0, shapes = lay.pieces.map(function (q) {
-            var pr = pieceProfile(q[0], q[1], q[2]), top = pr[pr.length - 1][1], ov = 0.22 * Math.min(top, 20), base = y;
-            y += top - ov; return { pr: pr, base: base };
-          });
-          var total = y + 8, svg = '<svg viewBox="-26 -4 52 ' + (Math.max(30, total) + 4) + '" aria-hidden="true">';
-          shapes.forEach(function (s) {
-            var pts = [];
-            s.pr.forEach(function (q) { pts.push([q[0], total - s.base - q[1]]); });
-            s.pr.slice().reverse().forEach(function (q) { pts.push([-q[0], total - s.base - q[1]]); });
-            svg += '<polygon points="' + pts.map(function (q) { return q[0].toFixed(2) + ',' + q[1].toFixed(2); }).join(' ') + '"/>';
-          });
-          card.innerHTML = svg + '</svg><span>' + lay.name + '</span>';
-          grid.appendChild(card);
-        });
-        container.appendChild(grid);
+          g.fillStyle = '#8a6b52'; g.fillRect(px - sz * 0.05, py - sz * 0.1, sz * 0.1, sz * 0.2);
+        }
+        hill(0.5, 0.05, '#dcecfa', 0.4);
+        for (i = 0; i < 9; i++) pine(w * (0.04 + i * 0.12 + (i % 2) * 0.03), h * 0.56 + (i % 3) * h * 0.012, h * (0.1 + (i % 3) * 0.02), '#9dbbd6');
+        hill(0.62, 0.04, '#eef6fe', 1.7);
+        for (i = 0; i < 6; i++) pine(w * (0.08 + i * 0.19 + (i % 2) * 0.06), h * 0.7 + (i % 2) * h * 0.02, h * (0.16 + (i % 2) * 0.03), '#6f9bb8');
+        hill(0.78, 0.035, '#ffffff', 3.1);
+        return cv;
       }
 
-      var STYLES = [
-        { name: 'Default stacker', values: {} },
-        { name: 'Low-poly gems', values: { facets: 6, bandT: 1.6, topper: 3, baseFlat: 76 } },
-        { name: 'Banded ball tower', values: { bandT: 2.4, topper: 1, topperSize: 8 } },
-        { name: 'Hanging ornament', values: { hook: 1, topper: 0, stackScale: 80 } },
-        { name: 'Big and chunky', values: { stackScale: 125, joinDepth: 30, baseFlat: 90, topperSize: 14 } }
+      function startBackdrop(env) {
+        var cv = document.createElement('canvas');
+        cv.className = 'mm-backdrop';
+        env.container.insertBefore(cv, env.container.firstChild);
+        var flakes = [], i, scenery = null, sw = 0, sh = 0;
+        for (i = 0; i < 110; i++) flakes.push({ x: Math.random(), y: Math.random(), r: 1 + Math.random() * 2.6, v: 0.04 + Math.random() * 0.1, ph: Math.random() * 6 });
+        var last = performance.now();
+        backdrop = function () {
+          var w = env.container.clientWidth || 600, h = env.container.clientHeight || 400, now = performance.now(), dt = Math.min(0.1, (now - last) / 1000);
+          last = now;
+          if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; scenery = null; }
+          if (!scenery || sw !== w || sh !== h) { scenery = paintScenery(w, h); sw = w; sh = h; }
+          var g = cv.getContext('2d');
+          g.drawImage(scenery, 0, 0);
+          g.fillStyle = 'rgba(255,255,255,0.95)';
+          flakes.forEach(function (f) {
+            f.y += f.v * dt * (0.6 + f.r * 0.3); f.ph += dt;
+            if (f.y > 1.02) { f.y = -0.02; f.x = Math.random(); }
+            g.beginPath(); g.arc((f.x + Math.sin(f.ph) * 0.012) * w, f.y * h, f.r * (w > 700 ? 1.2 : 1), 0, TAU); g.fill();
+          });
+        };
+      }
+
+      // ---- The Build tab ----
+      var refreshBuild = function () {};
+      var apiRef = null;
+
+      function selectItem(i, quiet) {
+        sel = i;
+        if (i >= 0 && apiRef) apiRef.setParams({ itemSize: Math.round(items[i].size * 100), itemTwist: items[i].twist });
+        else if (apiRef) apiRef.rebuild();
+        refreshBuild();
+        if (!quiet && i >= 0 && apiRef) {
+          var def = ITEM_BY_ID[items[i].id];
+          apiRef.toast(def.mode === 'top' ? def.name + ' selected. Hats stack on top, use Size to change it.' : def.name + ' selected. Tap the snowman to move it.');
+        }
+      }
+
+      function addItem(def, api) {
+        var pl = defaultPlace(def, api.params);
+        items.push({ id: def.id, p: pl.p, n: pl.n, size: 1, twist: 0 });
+        sel = items.length - 1;
+        api.setParams({ itemSize: 100, itemTwist: 0 });
+        refreshBuild();
+        api.toast(def.name + ' added' + (def.mode === 'surf' ? '. Tap the snowman to move it.' : ''));
+      }
+
+      function nearestBall(balls, pt) {
+        var best = balls[0], bd = Infinity;
+        balls.forEach(function (b) {
+          var d = Math.abs(Math.sqrt(pt[0] * pt[0] + sqr(pt[1] - b.cy) + pt[2] * pt[2]) - b.r);
+          if (d < bd) { bd = d; best = b; }
+        });
+        return best;
+      }
+
+      function hitPlacement(hit) {
+        var pt = [hit.point.x, hit.point.y, hit.point.z], b = nearestBall(computeBalls(lastParams), pt);
+        var n = vnorm([pt[0], pt[1] - b.cy, pt[2]]);
+        return { p: pt, n: n };
+      }
+
+      function mountBuild(container, api) {
+        apiRef = api;
+        container.appendChild(el('h2', { class: 'mm-section-title' }, 'Build your snowman'));
+        container.appendChild(el('p', { class: 'mm-note' }, 'Tap a picture to add it. Add as many as you like. Then tap the snowman to move the last thing you added, or tap any piece to pick it again.'));
+
+        var list = el('div', { class: 'sn-yours' });
+        var tools = el('div', { class: 'sn-tools' });
+        function tool(label, fn) { var b = el('button', { class: 'mm-btn', type: 'button' }, label); b.addEventListener('click', fn); tools.appendChild(b); return b; }
+        tool('Undo', function () { if (!items.length) return; items.pop(); sel = Math.min(sel, items.length - 1); if (sel >= 0) selectItem(sel, true); else { api.rebuild(); refreshBuild(); } });
+        tool('Remove picked', function () {
+          if (sel < 0) { api.toast('Pick something on the snowman first'); return; }
+          items.splice(sel, 1); sel = Math.min(sel, items.length - 1);
+          if (sel >= 0) selectItem(sel, true); else { api.rebuild(); refreshBuild(); }
+        });
+        tool('Clear all', function () { items = []; sel = -1; api.rebuild(); refreshBuild(); });
+        tool('Done', function () { selectItem(-1, true); });
+        container.appendChild(tools);
+        container.appendChild(list);
+
+        CATEGORIES.forEach(function (cat) {
+          container.appendChild(el('h3', { class: 'mm-group-title' }, { Hats: 'Hats (stack as high as you like)', Face: 'Faces', Body: 'Neck and tummy', Arms: 'Arms' }[cat]));
+          var grid = el('div', { class: 'sn-grid' });
+          ITEMS.filter(function (d) { return d.cat === cat; }).forEach(function (def) {
+            var b = el('button', { class: 'sn-card', type: 'button', title: 'Add ' + def.name });
+            b.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true">' + def.icon + '</svg><span>' + def.name + '</span>';
+            b.addEventListener('click', function () { addItem(def, api); });
+            grid.appendChild(b);
+          });
+          container.appendChild(grid);
+        });
+        container.appendChild(el('p', { class: 'mm-note' }, 'Everything is fused to the snowman so it prints as one piece. Hat brims and stick arms stick out, so print with supports on. Paint every part in the Color tool.'));
+
+        refreshBuild = function () {
+          list.innerHTML = '';
+          if (!items.length) { list.appendChild(el('p', { class: 'mm-note' }, 'Nothing added yet. Try a hat or a carrot nose!')); return; }
+          items.forEach(function (it, i) {
+            var def = ITEM_BY_ID[it.id], b = el('button', { class: 'sn-mini', type: 'button', title: def.name, 'aria-pressed': String(i === sel) });
+            b.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true">' + def.icon + '</svg>';
+            b.addEventListener('click', function () { selectItem(i === sel ? -1 : i); });
+            list.appendChild(b);
+          });
+        };
+        refreshBuild();
+      }
+
+      function ghostFor(hit) {
+        if (sel < 0) return null;
+        var it = items[sel], def = ITEM_BY_ID[it.id];
+        if (def.mode === 'top') return outlineFor(sel);
+        var balls = computeBalls(lastParams), pl = hitPlacement(hit), ghost = { id: it.id, p: pl.p, n: pl.n, size: it.size, twist: it.twist };
+        if (def.mode === 'neck') ghost.p = [0, pl.p[1], 0];
+        var parts = itemParts(ghost, sel, balls, { y: 0 });
+        return { positions: cat(parts.map(function (q) { return q.p; })) };
+      }
+
+      var BODY_ICON = function (n) {
+        var r = [13, 10, 8, 6], y = 42, out = '', i;
+        for (i = 0; i < n; i++) { y -= r[i] * 1.5; out += '<circle cx="24" cy="' + (y + r[i] * 0.5 + 3) + '" r="' + r[i] + '" fill="#f4f9ff" stroke="currentColor" stroke-width="2"/>'; }
+        return out;
+      };
+      var PARAMS = [
+        { group: 'Snowman', key: 'bodyIdx', label: 'Snowballs', unit: '', min: 0, max: 3, step: 1, value: 2,
+          choices: [{ label: '1 ball', svg: BODY_ICON(1) }, { label: '2 balls', svg: BODY_ICON(2) }, { label: '3 balls', svg: BODY_ICON(3) }, { label: '4 balls', svg: BODY_ICON(4) }] },
+        { group: 'Snowman', key: 'baseR', label: 'Bottom ball size', unit: ' mm', min: 14, max: 30, step: 1, value: 22 },
+        { group: 'Snowman', key: 'taper', label: 'Each ball is this big next to the one below', unit: '%', min: 55, max: 90, step: 1, value: 72 },
+        { group: 'Snowman', key: 'mound', label: 'Snow mound', unit: '', min: 0, max: 1, step: 1, value: 1,
+          choices: [{ label: 'No mound', svg: '<circle cx="20" cy="18" r="10" fill="#f4f9ff" stroke="currentColor" stroke-width="2"/><path d="M8 34h24" stroke="currentColor" stroke-width="2"/>' },
+                    { label: 'Mound', svg: '<circle cx="20" cy="16" r="9" fill="#f4f9ff" stroke="currentColor" stroke-width="2"/><path d="M4 34q16-14 32 0z" fill="#cfe6fb" stroke="currentColor" stroke-width="2"/>' }] },
+        { tab: 'build', group: 'Picked item', key: 'itemSize', label: 'Size', unit: '%', min: 50, max: 220, step: 5, value: 100 },
+        { tab: 'build', group: 'Picked item', key: 'itemTwist', label: 'Turn', unit: '°', min: -180, max: 180, step: 5, value: 0 }
       ];
 
       window.MM_GENERATOR = {
         code: 'MM-013',
-        category: 'ORNAMENTS // STACKERS',
+        category: 'ORNAMENTS // SNOWMAN',
         title: 'Ornament Stacker',
-        fileName: 'Ornament_Stacker',
+        fileName: 'Snowman',
         printerLink: '../index.html#map-screen',
-        defaultColor: '#f1f5f9',
+        customStage: true,
+        tabsFirst: true,
+        defaultColor: '#f4f9ff',
         palette: [
-          { name: 'Snow White', color: '#f1f5f9' },
-          { name: 'Candy Red', color: '#f87171' },
-          { name: 'Pine Green', color: '#86efac' },
-          { name: 'Carrot Orange', color: '#fdba74' },
-          { name: 'Coal Black', color: '#334155' },
-          { name: 'Ice Blue', color: '#93c5fd' },
-          { name: 'Gold', color: '#fde047' },
-          { name: 'Berry Purple', color: '#d8b4fe' }
+          { name: 'Snow White', color: '#f4f9ff' }, { name: 'Candy Red', color: '#ef5b5b' },
+          { name: 'Pine Green', color: '#4fae6a' }, { name: 'Carrot Orange', color: '#ff9a3c' },
+          { name: 'Coal Black', color: '#2b3445' }, { name: 'Ice Blue', color: '#7ec3f0' },
+          { name: 'Gold', color: '#ffd24a' }, { name: 'Berry Purple', color: '#a98af0' }
         ],
-        partNames: (function () {
-          var names = { bands: 'Neck bands', topper: 'Topper', hook: 'Ornament hook', stamp: 'Stamp' };
-          PIECE_LABELS.forEach(function (l, i) { names['piece' + i] = l; });
-          return names;
-        })(),
-
         parameters: PARAMS,
-
-        presets: STYLES.map(function (s) { return { label: s.name, values: withDefaults(DEFAULTS, s.values) }; }),
-
-        testSetup: function () { loadLayout(0); },
+        presets: [
+          { label: 'Classic trio', values: { bodyIdx: 2, baseR: 22, taper: 72, mound: 1 } },
+          { label: 'Tiny buddy', values: { bodyIdx: 1, baseR: 20, taper: 72, mound: 1 } },
+          { label: 'Tall stack', values: { bodyIdx: 3, baseR: 22, taper: 78, mound: 1 } }
+        ],
 
         tabs: [{
-          id: 'stack',
-          label: 'Stack',
-          hint: 'Add pieces from the tray, then click a piece to resize it',
-          mount: mountStack,
+          id: 'build',
+          label: 'Build',
+          hint: 'Tap a picture to add it, then tap the snowman to place it',
+          mount: mountBuild,
           onHover: function (hit, api) {
-            var i = hit ? pieceIndex(hit.meshName) : -1;
-            highlight(api, i);
+            if (!hit || sel < 0 || !(hit.meshName === 'Snowman' || hit.meshName === 'Snow mound')) { api.setPreview(outlineFor(sel)); return; }
+            if (hit.meshName === 'Snow mound' || hit.normal.y < -0.5) { api.setPreview(outlineFor(sel)); return; }
+            api.setPreview(ghostFor(hit));
           },
           onPick: function (hit, api) {
-            var i = pieceIndex(hit.meshName);
-            if (i < 0) return;
-            sel = i;
-            api.setParams({ selSize: pieces[sel].size, selSquash: Math.round(pieces[sel].squash * 100) });
-            api.toast('Selected piece ' + (sel + 1) + ': ' + TYPE_NAMES[pieces[sel].type]);
+            var owner = meshOwner[hit.meshName];
+            if (owner !== undefined) { selectItem(owner); return; }
+            if (hit.meshName !== 'Snowman') return;
+            if (sel < 0) { api.toast('Add something from the pictures first'); return; }
+            var it = items[sel], def = ITEM_BY_ID[it.id];
+            if (def.mode === 'top') { api.toast('Hats always sit on top of the head'); return; }
+            var pl = hitPlacement(hit);
+            if (def.mode === 'neck') it.p = [0, pl.p[1], 0];
+            else { it.p = pl.p; it.n = pl.n; }
             api.rebuild();
-          }
-        }, {
-          id: 'stamps',
-          label: 'Stamps',
-          hint: 'Pick a holiday stamp, then click the stack to place it',
-          mount: function (container, api) {
-            mountStampPanel(container, api, ['star', 'snow', 'tree', 'heart', 'bell', 'cane', 'holly', 'gift'], 'Holiday stamps (click the stack to place)', 'stamp');
-            refreshStamp2 = refreshStampPanel;
-            container.appendChild(el('p', { class: 'mm-note' }, 'Stamps stand 1.5 mm proud of the surface and are separate parts you can paint in the Color tool. Set size and rotation below.'));
-          },
-          onHover: function (hit, api) {
-            if (!hit || pieceIndex(hit.meshName) < 0 || hit.normal.y < -0.5 || hit.point.y < 5) { api.setPreview(null); return; }
-            api.setPreview({ positions: stampPositions({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() }, 3.3, 1.8) });
-          },
-          onPick: function (hit, api) {
-            if (pieceIndex(hit.meshName) < 0) return;
-            if (hit.normal.y < -0.5 || hit.point.y < 5) { api.toast('Tip: stamp on the sides or top, not the underside.'); return; }
-            stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
-            api.rebuild();
-            api.toast('Stamped ' + STAMP_NAMES[stampType]);
           }
         }],
 
-        build: build
+        onStage: function (env) {
+          var T = env.THREE;
+          env.container.style.background = 'linear-gradient(#7fb2e5,#f1f8ff)';
+          env.plateMesh.visible = false; env.grid.visible = false;
+          var ground = new T.Mesh(new T.CircleGeometry(78, 64), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 }));
+          ground.rotation.x = -Math.PI / 2; ground.position.y = -0.05; ground.receiveShadow = true;
+          env.scene.add(ground);
+          env.hemi.color.set(0xe3f0ff); env.hemi.groundColor.set(0xffffff); env.hemi.intensity = 0.95;
+          env.key.color.set(0xfff4e0); env.key.intensity = 0.8;
+          env.rim.color.set(0x9fc7ff); env.rim.intensity = 0.4;
+          startBackdrop(env);
+        },
+        onFrame: function () { if (backdrop) backdrop(); },
+
+        build: function (p, api) {
+          lastParams = p;
+          if (sel >= 0 && items[sel]) { items[sel].size = p.itemSize / 100; items[sel].twist = p.itemTwist; }
+          var out = build(p);
+          if (api && api.setPreview) api.setPreview(sel >= 0 ? outlineFor(sel) : null);
+          return out;
+        },
+        testSetup: function () {
+          items = [];
+          [['tophat'], ['coaleyes'], ['carrot'], ['smile'], ['scarf'], ['button'], ['button'], ['arms']].forEach(function (e) {
+            var pl = defaultPlace(ITEM_BY_ID[e[0]], { bodyIdx: 2, baseR: 22, taper: 72, mound: 1 });
+            items.push({ id: e[0], p: pl.p, n: pl.n, size: 1, twist: 0 });
+          });
+        }
       };
     })();
   </script>

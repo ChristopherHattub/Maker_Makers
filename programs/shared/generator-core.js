@@ -214,7 +214,7 @@
 
     var panel = el('aside', { class: 'mm-panel' }, [
       sheetHandle,
-      el('div', { class: 'mm-tabs', role: 'tablist' }, [tabModel].concat(extraTabs.map(function (t) { return t.btn; }), [tabColor, tabPrint])),
+      el('div', { class: 'mm-tabs', role: 'tablist' }, (cfg.hideModelTab ? [] : (cfg.tabsFirst ? [] : [tabModel])).concat(extraTabs.map(function (t) { return t.btn; }), cfg.hideModelTab ? [] : (cfg.tabsFirst ? [tabModel] : []), [tabColor, tabPrint])),
       modelBody
     ].concat(extraTabs.map(function (t) { return t.body; }), [
       colorBody,
@@ -288,7 +288,6 @@
 
     // Generator-specific extras (for example the Ghost Builder stamp tools).
     var extras = el('div', { id: 'mm-extras' });
-    renderExtraTabs();
     if (typeof cfg.mount === 'function') {
       dom.modelBody.appendChild(accordion(cfg.extrasTitle || 'Stamps & tools', extras, false));
       cfg.mount(extras, api);
@@ -304,6 +303,7 @@
       el('p', { class: 'mm-note', text: 'Wireframe shows the triangles the model is built from. It is only a view; exports are unchanged.' })
     ]), false));
 
+    renderExtraTabs();
   }
 
   // Generator tabs: the tab's own controls (mount) first, then its sliders (parameters with tab: id) as open sections.
@@ -349,7 +349,33 @@
     dom.printBody.appendChild(el('div', { class: 'mm-group' }, [el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Material' })]), sel])]));
   }
 
+  // A parameter with `choices: [{ label, svg }]` is picked from a grid of icon buttons (value = index) instead of a slider.
+  function choicesFor(p) {
+    var btns = [];
+    var label = el('span', { class: 'mm-slider-value' });
+    function sync() {
+      var cur = Math.round(params[p.key]);
+      btns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(i === cur)); });
+      label.textContent = p.choices[cur] ? p.choices[cur].label : '';
+    }
+    p.choices.forEach(function (c, i) {
+      var b = el('button', {
+        type: 'button', class: 'mm-choice', title: c.label, 'aria-label': p.label + ': ' + c.label,
+        onclick: function () { params[p.key] = i; sync(); scheduleRebuild(); }
+      });
+      b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true">' + c.svg + '</svg><span>' + c.label + '</span>';
+      btns.push(b);
+    });
+    sliderRefs[p.key] = { choices: true, sync: sync };
+    sync();
+    return el('div', { class: 'mm-slider' }, [
+      el('div', { class: 'mm-slider-head' }, [el('label', { text: p.label }), label]),
+      el('div', { class: 'mm-choices' }, btns)
+    ]);
+  }
+
   function sliderFor(p) {
+    if (p.choices) return choicesFor(p);
     var output = el('span', { class: 'mm-slider-value', text: formatParam(p, params[p.key]) });
     var input = el('input', {
       type: 'range', min: String(p.min), max: String(p.max), step: String(p.step || 1), value: String(params[p.key]),
@@ -370,6 +396,7 @@
   function syncSliders() {
     Object.keys(sliderRefs).forEach(function (key) {
       var ref = sliderRefs[key];
+      if (ref.choices) { ref.sync(); return; }
       ref.input.value = String(params[key]);
       ref.output.textContent = formatParam(ref.def, params[key]);
     });
@@ -435,7 +462,7 @@
           onclick: function () { paintPart(part, selectedColor); }
         }, [
           el('span', {}, [document.createTextNode(part.label)]),
-          el('span', { class: 'mm-part-chip', style: 'background:' + (part.color || DEFAULT_COLOR) })
+          el('span', { class: 'mm-part-chip', style: 'background:' + (part.color || part.def || DEFAULT_COLOR) })
         ])
       ]));
     });
@@ -486,10 +513,10 @@
   // ---------------------------------------------------------------------------
   var container = dom.stage;
   var scene = new T.Scene();
-  scene.background = new T.Color(0x0b1120);
+  scene.background = cfg.customStage ? null : new T.Color(0x0b1120);
 
   var camera = new T.PerspectiveCamera(40, 1, 1, 2000);
-  var renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  var renderer = new T.WebGLRenderer({ antialias: true, alpha: !!cfg.customStage, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -664,10 +691,12 @@
     hemi.intensity = on ? 0.5 : 0.75;
     key.intensity = on ? 0.85 : 0.85;
     rim.intensity = on ? 0.3 : 0.42;
-    scene.background.set(on ? 0x161d2c : 0x0b1120);
-    plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
-    plateMesh.material.roughness = on ? 0.55 : 0.85;
-    grid.visible = !on;
+    if (!cfg.customStage) {
+      scene.background.set(on ? 0x161d2c : 0x0b1120);
+      plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
+      plateMesh.material.roughness = on ? 0.55 : 0.85;
+      grid.visible = !on;
+    }
     if (on) $('mm-hint').textContent = 'Realistic preview: ' + printSettings.material;
   }
 
@@ -912,6 +941,7 @@
           triangles: mp.triangles,
           centroid: [mp.sum[0] / count, mp.sum[1] / count, mp.sum[2] / count],
           color: null,
+          def: entry.color || null,
           label: labelFor(kind, index, count)
         });
       });
@@ -951,7 +981,7 @@
       for (var t = 0; t < triCount; t++) {
         var c = base;
         if (colorTab) {
-          c = new T.Color(parts[globalPartIndex(meshIndex, t)].color || DEFAULT_COLOR);
+          c = new T.Color(parts[globalPartIndex(meshIndex, t)].color || parts[globalPartIndex(meshIndex, t)].def || DEFAULT_COLOR);
         }
         for (var v = 0; v < 3; v++) {
           var vert = t * 3 + v;
@@ -1090,7 +1120,7 @@
   // ---------------------------------------------------------------------------
   // 6. Tabs, toast, export
   // ---------------------------------------------------------------------------
-  var activeTab = 'model';
+  var activeTab = (cfg.hideModelTab || cfg.tabsFirst) && cfg.tabs && cfg.tabs.length ? cfg.tabs[0].id : 'model';
 
   // Crosshair only where a click places something. Painting uses a pointer, plain orbiting a grab hand.
   function updateCursor() {
@@ -1223,7 +1253,13 @@
     rebuild: scheduleRebuild,
     setPreview: setPreview,
     toast: toast,
-    centerCamera: centerCamera
+    centerCamera: centerCamera,
+    // Moves the Parametric controls (presets, groups, View) out of the hidden Parametric tab, for a generator tab's own menu.
+    takeParams: function () {
+      var f = document.createDocumentFragment();
+      while (dom.modelBody.firstChild) f.appendChild(dom.modelBody.firstChild);
+      return f;
+    }
   };
 
   function handleResize() {
@@ -1242,6 +1278,7 @@
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    if (typeof cfg.onFrame === 'function') cfg.onFrame();
     renderer.render(scene, camera);
   }
 
@@ -1253,6 +1290,8 @@
     handleResize();
     rebuild();
     centerCamera('front');
+    if (cfg.hideModelTab || cfg.tabsFirst) setTab(activeTab);
+    if (typeof cfg.onStage === 'function') cfg.onStage({ THREE: T, scene: scene, camera: camera, renderer: renderer, controls: controls, hemi: hemi, key: key, rim: rim, plateMesh: plateMesh, grid: grid, container: container, modelGroup: modelGroup });
     animate();
   }
 

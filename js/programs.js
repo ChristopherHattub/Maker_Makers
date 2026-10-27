@@ -87,14 +87,6 @@ const GENERATORS = [
     description: 'Solid gift box with a lid, ribbon bands and a bow: set width, depth, height, corner rounding, lid overhang, ribbon width and raise, and bow size, height and spread. A Styles tab of picture cards (tall, flat, cube, plain) sets a whole look. Paint parts in the Color tool and export .STL.'
   },
   {
-    slot: 14,
-    title: 'Wind Chime Composer',
-    category: 'ORNAMENTS // MOBILES',
-    thumbnailUrl: 'assets/thumbnails/wind-chime.svg',
-    programUrl: 'programs/wind-chime.html',
-    description: 'Compose a flat mobile on a live canvas: tap the bar to add hangers, drag charms to move them and lengthen their strings, and pick stars, hearts, drops, tubes and more. The hanging loop balances itself. Prints flat in one plate, paint parts in the Color tool and export .STL.'
-  },
-  {
     slot: 15,
     title: 'Pottery Wheel',
     category: 'POTTERY // WHEEL',
