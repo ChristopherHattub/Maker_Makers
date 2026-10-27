@@ -412,9 +412,15 @@ header {
   text-align: left;
 }
 
+.site-disclaimer-lead {
+  margin: 0 0 0.4rem;
+  text-align: center;
+}
+
 .site-disclaimer summary {
   cursor: pointer;
   text-align: center;
+  color: var(--bp-cyan);
 }
 
 .site-disclaimer-body {
@@ -1106,3 +1112,41 @@ footer {
   color: var(--bp-cyan);
   cursor: pointer;
 }
+
+.site-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 10, 24, 0.82);
+}
+
+.site-modal-box {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.1rem;
+  background: var(--bp-bg-panel);
+  border: 2px solid var(--bp-cyan);
+  box-shadow: 0 0 24px var(--bp-cyan-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.site-modal-box h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bp-cyan);
+}
+
+.site-modal-box p { margin: 0 0 0.5rem; }
+.site-modal-agree { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.8rem 0; cursor: pointer; }
+.site-modal-agree input { margin-top: 0.2rem; accent-color: var(--bp-cyan); }
+.site-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; }
+.site-modal-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
