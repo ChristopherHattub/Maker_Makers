@@ -131,7 +131,7 @@ const GENERATORS = [
     category: 'CHRISTMAS // GIFTS',
     thumbnailUrl: 'assets/thumbnails/gift-box-2.svg',
     programUrl: 'programs/gift-box-2.html',
-    description: 'Wrap a gift box in a cozy Christmas workshop with a turning table, fireplace, tree and falling snow. Pick a square, round or hexagon box, set lid, ribbon bands and a classic, pom-pom or flat bow, then tap the box to stick on stars, hearts, trees and more. Paint parts in the Color tool and export .STL.'
+    description: 'A working gift box with a lid that slips over a hollow box, shown in a cozy Christmas workshop with a turning table, fireplace, tree and falling snow. Ten presets plus square, round or hexagon shapes, wall, lid fit, ribbon bands and a classic, pom-pom or flat bow, then tap the box to stick on stars, hearts, trees and more. Paint parts in the Color tool and export .STL.'
   }
 ];
 

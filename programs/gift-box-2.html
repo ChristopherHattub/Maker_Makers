@@ -227,8 +227,12 @@
         { group: 'Box', key: 'boxD', label: 'Depth', unit: ' mm', min: 30, max: 90, step: 1, value: 60 },
         { group: 'Box', key: 'boxH', label: 'Box height', unit: ' mm', min: 20, max: 80, step: 1, value: 40 },
         { group: 'Box', key: 'corner', label: 'Corner rounding (square)', unit: ' mm', min: 1, max: 10, step: 0.5, value: 4 },
-        { group: 'Lid', key: 'lidH', label: 'Lid height', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
-        { group: 'Lid', key: 'lidOver', label: 'Lid overhang (0 = flush)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 2.2 },
+        { group: 'Box', key: 'wall', label: 'Wall thickness', unit: ' mm', min: 2, max: 5, step: 0.2, value: 2.4 },
+        { group: 'Lid', key: 'layout', label: 'Layout', unit: '', min: 0, max: 1, step: 1, value: 0,
+          format: function (v) { return v >= 1 ? 'Lid on (display only)' : 'Lid beside (prints)'; } },
+        { group: 'Lid', key: 'lidH', label: 'Lid depth (slips over the box)', unit: ' mm', min: 8, max: 24, step: 1, value: 14 },
+        { group: 'Lid', key: 'fit', label: 'Lid fit (snug ↔ loose)', unit: ' mm', min: 0.2, max: 0.8, step: 0.05, value: 0.4 },
+        { group: 'Lid', key: 'lidOver', label: 'Lid flare (0 = straight)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 1 },
         { group: 'Ribbon', key: 'ribbon', label: 'Ribbon', unit: '', min: 0, max: 2, step: 1, value: 2,
           format: function (v) { return ['None', 'One band', 'Cross'][Math.round(v)]; } },
         { group: 'Ribbon', key: 'ribbonW', label: 'Ribbon width', unit: ' mm', min: 6, max: 22, step: 1, value: 12 },
@@ -309,35 +313,57 @@
         return lathe(prof, seg, { cx: cx, cz: cz, sx: a, sz: b, rot: ang });
       }
 
-      function build(p) {
-        var out = [], W = p.boxW / 2, D = p.boxD / 2, H = p.boxH;
-        var ov = p.lidOver, lh = p.lidH, c = Math.min(1.2, H * 0.1), pr = p.proud;
-        // Box: small chamfer at the bottom so the first layer does not flare out.
-        out.push({ name: 'box', positions: loftCapped([shapeLoop(p, -c, 0), shapeLoop(p, 0, c), shapeLoop(p, 0, H + 1)]), singlePart: true });
-        // Lid: starts flush with the box, then grows out at 45 degrees (so the overhang needs no support).
-        var yb = H - 0.3, top = H + lh, tc = Math.min(1.4, lh * 0.2);
-        var lidRings = [shapeLoop(p, 0, yb)];
-        if (ov > 0.05) lidRings.push(shapeLoop(p, ov, yb + ov));
-        lidRings.push(shapeLoop(p, ov, top - tc), shapeLoop(p, ov - tc, top));
-        out.push({ name: 'lid', positions: loftCapped(lidRings), singlePart: true });
-        // Ribbon bands: slabs that wrap box and lid, slightly raised, following the outline.
-        var rw = p.ribbonW / 2, bands = [], bodyL = shapeLoop(p, 0, 0), lidL = shapeLoop(p, ov, 0);
-        function band(axis) {
-          var res = [];
-          res.push(loftCapped([stripRing(bodyL, axis, rw - 0.5, pr - 0.5, 0), stripRing(bodyL, axis, rw, pr, 0.5), stripRing(bodyL, axis, rw, pr, H + 0.6)]));
-          var l = [stripRing(bodyL, axis, rw, pr, yb)];
-          if (ov > 0.05) l.push(stripRing(lidL, axis, rw, pr, yb + ov));
-          l.push(stripRing(lidL, axis, rw, pr, top - 0.2), stripRing(lidL, axis, rw, pr, top + pr - 0.6), stripRing(lidL, axis, rw - 0.6, pr - 0.6, top + pr));
-          res.push(loftCapped(l));
-          return res;
+      // One ring across a ribbon plate on one side of the box (side +1 or -1): thin, so the box stays hollow.
+      function plateRing(loop, axis, side, half, off, emb, y) {
+        var K = 4, outer = [], inner = [], k, t, s, e, sg = side > 0 ? 1 : -1;
+        for (k = 0; k <= K; k++) {
+          t = -half + (2 * half * k) / K;
+          s = span(loop, axis, t);
+          e = side > 0 ? s[1] : s[0];
+          if (axis === 'z') { outer.push([t, y, e + sg * off]); inner.push([t, y, e - sg * emb]); }
+          else { outer.push([e + sg * off, y, t]); inner.push([e - sg * emb, y, t]); }
         }
-        if (p.ribbon >= 1) bands = bands.concat(band('z'));
-        if (p.ribbon >= 2) bands = bands.concat(band('x'));
-        if (bands.length) out.push({ name: 'ribbon', positions: cat(bands), singlePart: true });
-        var hookBase = top + (p.ribbon >= 1 ? pr : 0);
-        // Bow on top: soft loops (classic four, pom-pom eight, or a flat pair), a knot and two tails.
+        return outer.concat(inner.reverse());
+      }
+      function move(arr, o) {
+        var out = new Float32Array(arr.length), i;
+        for (i = 0; i < arr.length; i += 3) { out[i] = arr[i] + o[0]; out[i + 1] = arr[i + 1] + o[1]; out[i + 2] = arr[i + 2] + o[2]; }
+        return out;
+      }
+      var ROOF = 2.2;
+      // Heights and positions shared by the build and the sticker tool.
+      function layoutOf(p) {
+        var H = p.boxH, Lh = Math.max(ROOF + 5, Math.min(p.lidH, H - 10)), go = p.fit + p.wall + p.lidOver;
+        var sleeve = Lh - ROOF, sep = p.boxW + go + 12, closed = p.layout >= 1;
+        return { H: H, Lh: Lh, go: go, sleeve: sleeve,
+          boxOff: closed ? [0, 0, 0] : [-sep / 2, 0, 0], lidOff: closed ? [0, H - sleeve, 0] : [sep / 2, 0, 0] };
+      }
+
+      function build(p) {
+        var out = [], W = p.boxW / 2, D = p.boxD / 2, lay = layoutOf(p), H = lay.H, Lh = lay.Lh, go = lay.go, gi = p.fit;
+        var wall = p.wall, c = Math.min(1.2, H * 0.1), pr = p.proud, floorT = Math.max(2.4, wall);
+        function L(grow, y) { return shapeLoop(p, grow, y); }
+        // Box: hollow and open at the top, with a small chamfer at the bottom so the first layer does not flare out.
+        out.push({ name: 'box', positions: move(shell([{ pole: [0, 0, 0] }, L(-c, 0), L(0, c), L(0, H), L(-wall, H), L(-wall, floorT), { pole: [0, floorT, 0] }], false), lay.boxOff), singlePart: true });
+        // Lid: a cap that slips over the box top, with a solid roof. It prints right way up on its rim.
+        var tc = Math.min(1.4, Lh * 0.2);
+        out.push({ name: 'lid', positions: move(shell([{ pole: [0, Lh, 0] }, L(go - tc, Lh), L(go, Lh - tc), L(go, 0), L(gi, 0), L(gi, Lh - ROOF), { pole: [0, Lh - ROOF, 0] }], false), lay.lidOff), singlePart: true });
+        // Ribbon: thin plates on the sides and a strap over the lid top, following the outline. It stops under the lid so the lid still fits.
+        var rw = p.ribbonW / 2, ribs = [], emb = Math.min(1.4, wall - 0.8), bodyL = L(0, 0), lidL = L(go, 0), bandTop = H - lay.sleeve - 0.6;
+        function band(axis) {
+          [1, -1].forEach(function (side) {
+            ribs.push(move(loftCapped([plateRing(bodyL, axis, side, rw - 0.5, pr - 0.5, emb, 0), plateRing(bodyL, axis, side, rw, pr, emb, 0.5), plateRing(bodyL, axis, side, rw, pr, emb, bandTop - 0.5), plateRing(bodyL, axis, side, rw - 0.5, pr - 0.5, emb, bandTop)]), lay.boxOff));
+            ribs.push(move(loftCapped([plateRing(lidL, axis, side, rw - 0.5, pr - 0.5, emb, 0), plateRing(lidL, axis, side, rw, pr, emb, 0.5), plateRing(lidL, axis, side, rw, pr, emb, Lh + pr - 0.73)]), lay.lidOff));
+          });
+          ribs.push(move(loftCapped([stripRing(lidL, axis, rw, pr, Lh - 1), stripRing(lidL, axis, rw, pr, Lh + pr - 0.6), stripRing(lidL, axis, rw - 0.6, pr - 0.6, Lh + pr)]), lay.lidOff));
+        }
+        if (p.ribbon >= 1) band('z');
+        if (p.ribbon >= 2) band('x');
+        if (ribs.length) out.push({ name: 'ribbon', positions: cat(ribs), singlePart: true });
+        var hookBase = Lh + (p.ribbon >= 1 ? pr : 0);
+        // Bow on the lid: soft loops (classic four, pom-pom eight, or a flat pair), a knot and two tails.
         if (p.bow >= 1) {
-          var yTop = top + (p.ribbon >= 1 ? pr : 0), y0 = yTop - 1, S = Math.min(p.bowSize, Math.min(W, D) * 1.9 + ov);
+          var yTop = Lh + (p.ribbon >= 1 ? pr : 0), y0 = yTop - 1, S = Math.min(p.bowSize, Math.min(W, D) * 1.9 + go);
           var a = S * 0.32, b = S * 0.2, off = a * 0.8, hg = p.bowHeight, sp = rad(p.bowSpread), lobes = [], angs;
           if (p.bow >= 3) { angs = [0, Math.PI]; a = S * 0.34; b = S * 0.22; off = a * 0.85; }
           else if (p.bow >= 2) {
@@ -351,12 +377,12 @@
               lobes.push(domeLobe(Math.cos(th) * ta * 0.85, Math.sin(th) * ta * 0.85, th, ta, tb, Math.min(3, hg * 0.4), y0, 32));
             });
           }
-          out.push({ name: 'bow', positions: cat(lobes), singlePart: true });
+          out.push({ name: 'bow', positions: move(cat(lobes), lay.lidOff), singlePart: true });
           var kr = S * 0.13;
-          out.push({ name: 'knot', positions: ball(0, y0 + hg * 0.55, 0, kr, hg * 0.62, kr, 36, 14), singlePart: true });
+          out.push({ name: 'knot', positions: move(ball(0, y0 + hg * 0.55, 0, kr, hg * 0.62, kr, 36, 14), lay.lidOff), singlePart: true });
           hookBase = y0 + hg * 1.17;
         }
-        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, hookBase, 0, p.hookHole, p.hookTube, p.bow >= 1 ? 2.2 : 1.2), singlePart: true });
+        if (p.hook >= 1) out.push({ name: 'hook', positions: move(hookRing(0, hookBase, 0, p.hookHole, p.hookTube, p.bow >= 1 ? 2.2 : 1.2), lay.lidOff), singlePart: true });
         return out;
       }
 
@@ -451,12 +477,16 @@
 
       var STYLES = [
         { name: 'Classic', values: {} },
-        { name: 'Round hatbox', values: { shape: 1, boxW: 64, boxD: 64, boxH: 34, lidH: 14, ribbon: 1, ribbonW: 10, bow: 2, bowSize: 26, bowHeight: 9 } },
-        { name: 'Hexagon treasure', values: { shape: 2, boxW: 66, boxD: 58, boxH: 44, lidH: 12, ribbon: 1, ribbonW: 12, bow: 1, bowSize: 28 } },
-        { name: 'Tall tower', values: { boxW: 44, boxD: 44, boxH: 66, bowSize: 22, ribbonW: 10 } },
-        { name: 'Flat box', values: { boxW: 80, boxD: 62, boxH: 24, lidH: 9, bow: 3, bowSize: 34, ribbonW: 14 } },
+        { name: 'Round hatbox', values: { shape: 1, boxW: 64, boxD: 64, boxH: 38, lidH: 14, ribbon: 1, ribbonW: 10, bow: 2, bowSize: 26, bowHeight: 9 } },
+        { name: 'Hexagon treasure', values: { shape: 2, boxW: 66, boxD: 58, boxH: 46, lidH: 14, ribbon: 1, ribbonW: 12, bow: 1, bowSize: 28 } },
+        { name: 'Tall tower', values: { boxW: 44, boxD: 44, boxH: 66, lidH: 16, bowSize: 22, ribbonW: 10 } },
+        { name: 'Flat box', values: { boxW: 80, boxD: 62, boxH: 30, lidH: 12, bow: 3, bowSize: 34, ribbonW: 14 } },
         { name: 'Pom-pom present', values: { boxW: 54, boxD: 54, corner: 6, bow: 2, bowSize: 30, bowHeight: 11, ribbonW: 10 } },
-        { name: 'Plain box', values: { ribbon: 0, bow: 0, lidOver: 3, corner: 6 } }
+        { name: 'Jewelry box', values: { boxW: 44, boxD: 36, boxH: 28, corner: 3, lidH: 10, ribbon: 0, bow: 0, lidOver: 0.6, wall: 2 } },
+        { name: 'Candy tin', values: { shape: 1, boxW: 56, boxD: 56, boxH: 34, lidH: 12, ribbon: 0, bow: 0, lidOver: 0, wall: 2.2 } },
+        { name: 'Shoebox', values: { boxW: 84, boxD: 50, boxH: 34, corner: 3, lidH: 14, ribbon: 1, ribbonW: 16, bow: 0, lidOver: 0.6 } },
+        { name: 'Plain box', values: { ribbon: 0, bow: 0, lidOver: 0.6, corner: 6 } },
+        { name: 'Closed (display)', values: { layout: 1 } }
       ];
 
       // ---- The workshop: a night window, a fireplace, a tree and string lights behind the box ----
@@ -607,7 +637,7 @@
         var row = el('div', { class: 'mm-export-row' });
         row.appendChild(undo); row.appendChild(clear);
         container.appendChild(row);
-        container.appendChild(el('p', { class: 'mm-note' }, 'The turntable pauses while your finger or mouse is over the box, so stickers land exactly where you tap. Stickers are raised 1.5 mm and are their own part in the Color tool.'));
+        container.appendChild(el('p', { class: 'mm-note' }, 'The turntable pauses while your finger or mouse is over the box, so stickers land exactly where you tap. Stickers follow the box or lid they sit on and are raised 1.5 mm and are their own part in the Color tool.'));
         refreshStickerUI = function () {
           count.textContent = stickers.length + (stickers.length === 1 ? ' sticker placed' : ' stickers placed');
           undo.disabled = stickers.length === 0; clear.disabled = stickers.length === 0;
@@ -644,7 +674,7 @@
           label: 'Styles',
           hint: 'Pick a gift box style, then fine-tune the sliders',
           mount: function (container, api) {
-            mountStyleCards(container, api, STYLES, cardSvg, DEFAULTS, 'Gift box styles', 'Cards set every slider; keep tuning by hand. Round, square and hexagon boxes all take the same lid, ribbon and bow.');
+            mountStyleCards(container, api, STYLES, cardSvg, DEFAULTS, 'Gift box styles', 'Cards set every slider; keep tuning by hand. Every box is hollow with a lid that slips over it. The lid prints beside the box; use Layout in the Lid group to see it closed.');
           }
         }, {
           id: 'decorate',
@@ -660,7 +690,8 @@
             if (!stickable(hit)) { api.toast('Tap the box or lid (not the ribbon or bow) to place a sticker'); return; }
             var inv = new window.THREE.Matrix4();
             if (modelGroup0) { modelGroup0.updateMatrixWorld(true); inv.copy(modelGroup0.matrixWorld).invert(); }
-            stickers.push({ type: stickerType, size: api.params.stickerSize, rotation: api.params.stickerRot, point: hit.point.clone().applyMatrix4(inv).toArray(), normal: hit.normal.toArray() });
+            var lay = layoutOf(api.params), onLid = hit.meshName === 'lid', off = onLid ? lay.lidOff : lay.boxOff, at = hit.point.clone().applyMatrix4(inv).toArray();
+            stickers.push({ type: stickerType, size: api.params.stickerSize, rotation: api.params.stickerRot, onLid: onLid, point: [at[0] - off[0], at[1] - off[1], at[2] - off[2]], normal: hit.normal.toArray() });
             api.setPreview(null);
             api.rebuild();
             api.toast(STICKER_NAMES[stickerType] + ' added');
@@ -703,6 +734,7 @@
             env.modelGroup.rotation.y += (api0.params.spin / 100) * 0.02 * dt;
           };
           env.container.addEventListener('pointerleave', function () { hovering = false; });
+          if (api0) api0.centerCamera('iso');
         },
         onFrame: function () {
           var now = performance.now();
@@ -716,7 +748,13 @@
         build: function (p, api) {
           api0 = api;
           var meshes = build(p);
-          if (window.THREE) stickers.forEach(function (s) { meshes.push({ name: 'sticker', positions: stickerPositions(s) }); });
+          if (window.THREE) {
+            var lay = layoutOf(p);
+            stickers.forEach(function (s) {
+              var off = s.onLid ? lay.lidOff : lay.boxOff;
+              meshes.push({ name: 'sticker', positions: stickerPositions({ type: s.type, size: s.size, rotation: s.rotation, normal: s.normal, point: [s.point[0] + off[0], s.point[1] + off[1], s.point[2] + off[2]] }) });
+            });
+          }
           if (refreshStickerUI) refreshStickerUI();
           return meshes;
         }
