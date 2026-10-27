@@ -56,7 +56,7 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `defaultColor` | no | Paint color used for parts with no paint. Defaults to the first palette entry. |
 | `palette` | yes | `[{ name, color }]`. Shown as swatches in the Color tool. Eight entries lay out as two rows. |
 | `partNames` | no | Maps a mesh name to a label, for example `{ body: 'Ghost body', detail: 'Stamp' }`. |
-| `printSettings` | no | Recommended print settings, written into the .3MF. See [Print settings](#print-settings-in-the-3mf). |
+| `printSettings` | no | Only `material` is read (default `'PLA'`): the Print tab's starting material. |
 | `parameters` | yes | The sliders. See below. |
 | `presets` | no | `[{ label, values }]`. Each preset sets some parameters. |
 | `build(params, api)` | yes | Returns the mesh list. See [build()](#build-params-api). |
@@ -150,36 +150,15 @@ Paint resets when the page reloads. The engine does not save it.
 | Button | Output |
 | --- | --- |
 | Export .STL | Binary STL, one solid, Z-up, on the bed. No color (STL cannot carry color). |
-| Export .3MF | 3MF package with the paint: one base material per color, one color per triangle. |
 | Download standalone .html generator | A single HTML file that contains the generator, the shared styles and the engine. |
 
 The file name is the `File name` field in the panel footer, which starts from `fileName`.
 
-Both model exports apply the same transform: Y-up becomes Z-up (`x, y, z` becomes `x, -z, y`), and the lowest point sits on the bed. Keep this in mind when you compare an export with the viewport.
+The STL export applies this transform: Y-up becomes Z-up (`x, y, z` becomes `x, -z, y`), and the lowest point sits on the bed. Keep this in mind when you compare an export with the viewport.
 
-### Print settings in the 3MF
+### Print tab
 
-The **Print** tab (engine-owned) lets the user edit slicer settings: material, nozzle, layer height, infill, walls, top/bottom layers, brim, speed (0 = slicer default) and supports. Each field starts at the generator's recommended value from `printSettings`, and "Reset to recommended" restores it. The .3MF export writes whatever is set in the tab at that moment. Settings are not saved between page loads. Without `printSettings` the tab starts from the engine defaults, so every 3MF carries settings.
-
-```js
-printSettings: {
-  material: 'PLA', nozzle: 0.4, layerHeight: 0.2, infill: 15, walls: 3,
-  topLayers: 5, bottomLayers: 4, supports: false, brim: 0,
-  speed: 60,          // optional, mm/s
-  notes: 'Prints upright on its flat base.' // optional, free text
-}
-```
-
-Every field is optional (`notes` is shown under the fields and written to the summary); the defaults are PLA, 0.4 mm nozzle, 0.2 mm layers, 15% infill, 3 walls, 5 top / 4 bottom layers, no supports, no brim. The export writes the same values in four places:
-
-| Where | What | Read by |
-| --- | --- | --- |
-| `3D/3dmodel.model` `<metadata name="Description">` | Human-readable summary (also `Title`, `Designer`) | Anything that shows 3MF metadata (standard 3MF field) |
-| `Metadata/Slic3r_PE.config` | `; key = value` lines using PrusaSlicer option names | Meant for PrusaSlicer project import |
-| `Metadata/project_settings.config` | JSON using Bambu Studio / OrcaSlicer option names | Meant for Bambu Studio / OrcaSlicer |
-| `Metadata/print-settings.txt` | The same summary as plain text | People: rename the file to `.zip` and open it |
-
-**Not tested.** These file names and keys follow what those slicers write themselves, but no slicer import was tried. Treat the settings as a recommendation: a slicer may ignore them, apply only some, or keep the user's own profile (Bambu Studio in particular may expect a full project and only read the model). The text summary and the Description metadata are the dependable part.
+The **Print** tab (engine-owned) has a single option, **Material** (PLA, PETG, ABS, ASA, TPU), which changes the finish of the realistic preview. There are no slicer settings and no .3MF export: the only export is .STL. A generator may set `printSettings: { material: 'TPU' }` to change the starting material; nothing else is read.
 
 ## Standalone download
 
@@ -206,7 +185,7 @@ The engine applies these. A generator should not restyle the page.
 - **Colors and fonts.** Blueprint palette from `css/styles.css`: deep navy background, cyan for lines and active states, green and amber for the two secondary actions. Monospace font throughout.
 - **Build plate.** A 160 mm square plate, drawn for every generator, so a model's size is easy to judge.
 - **Accordion sections.** Every slider group (by its `group` name), the Presets, the generator's `mount()` extras (titled `cfg.extrasTitle`, default "Stamps & tools") and the View switch are collapsible `<details class="mm-acc">` sections. The first parameter group is open by default; set `openGroups: ['Shape', 'Ribs']` in the config to open others. Order slider groups so the most-used one comes first.
-- **Print tab = realistic render.** Selecting the Print tab switches the viewport to a realistic look for every generator, automatically: the painted colors from the Color tool, a material finish (PLA satin, PETG glossy with clearcoat, ABS/ASA matte, TPU soft), faint horizontal layer lines whose spacing follows the layer height, a flat brim ring when brim > 0, a studio reflection environment and a lighter bed. It updates live as the print settings change. It is a preview only; nothing changes in the export. Generators need to do nothing except set sensible `printSettings`.
+- **Print tab = realistic render.** Selecting the Print tab switches the viewport to a realistic look for every generator, automatically: the painted colors from the Color tool, a material finish (PLA satin, PETG glossy with clearcoat, ABS/ASA matte, TPU soft), faint horizontal layer lines, a studio reflection environment and a lighter bed. It updates live when the material changes. It is a preview only; nothing changes in the export. Generators need to do nothing.
 - **Extra tabs.** A generator can add its own editor tabs with `tabs: [{ id, label, hint, mount, onHover, onPick }]`; they appear after Parametric. Parameters with `tab: '<id>'` render as open accordion sections in that tab, below the tab's `mount()` content. Pumpkin Plotter uses this for its Carve tab (shape picker, tap-to-carve, auto face).
 - **Phone width (860 px and below).** Mandatory for every generator and provided by the engine; never add generator-specific mobile CSS. The page never scrolls. The viewport is pinned to the top (40% of the height) and the panel becomes a sheet below it: a drag handle (drag to resize, tap to flip between big model and big controls), a fixed tab bar (Parametric / Color tool / Print), the scrolling controls, and a footer that always shows the triangle count and the two export buttons. File name, standalone download and disclaimer sit behind the footer's "More" button. Sliders get 36 px touch targets, the canvas uses `touch-action: none` so orbit gestures never scroll the page, and the header shrinks to a single line with only *Back to grid*. Nothing scrolls sideways.
 
@@ -237,7 +216,7 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 6. Add `mount`, `onHover` and `onPick` only if the user needs to place things on the model.
 7. Add a slot entry in `js/programs.js`, pointing `programUrl` at the page (see [generator-registry.md](generator-registry.md)).
 8. Do nothing for the footer disclaimer: the engine adds it.
-9. Open the page in the preview. Check that the Color tool lists sensible parts, that paint survives a slider change, that the STL and 3MF open, and that the standalone download runs.
+9. Open the page in the preview. Check that the Color tool lists sensible parts, that paint survives a slider change, that the STL opens, and that the standalone download runs.
 
 ## Footer disclaimer
 
@@ -247,6 +226,4 @@ The engine adds a collapsed "Disclaimer" block under the panel footer buttons of
 
 - Paint is not saved. Reloading the page clears it.
 - Part detection uses fixed thresholds. A very coarse mesh can split into more or fewer parts than expected. Use a finer mesh for parts that must be painted separately.
-- 3MF print settings are metadata only and slicer support is untested (see above).
-- 3MF colors are per triangle. Slicers that ignore per-triangle colors will show the base color only.
 - `build()` runs on every slider move. Keep it fast: a few tens of thousands of triangles rebuild comfortably. Much larger models will feel slow.

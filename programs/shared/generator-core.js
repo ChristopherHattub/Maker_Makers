@@ -183,8 +183,7 @@
     var footer = el('div', { class: 'mm-panel-footer' }, [
       el('div', { class: 'mm-stats', id: 'mm-stats', text: 'Geometry ready' }),
       el('div', { class: 'mm-export-row' }, [
-        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } }),
-        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF', onclick: function () { confirmDownload('.3MF', export3mf); } })
+        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } })
       ]),
       el('button', { class: 'mm-btn mm-footer-toggle', type: 'button', text: 'More: file name, standalone, disclaimer', 'aria-expanded': 'false', onclick: function (e) {
         var open = footer.classList.toggle('is-expanded');
@@ -329,63 +328,21 @@
 
   var sliderRefs = {};
 
-  // Print settings tab: editable copy of the generator's recommended settings (cfg.printSettings).
-  // The 3MF export writes whatever is set here.
-  var printSettings = printSettingsFor(cfg.printSettings);
-  var PRINT_FIELDS = [
-    { key: 'material', label: 'Material', type: 'select', options: ['PLA', 'PETG', 'ABS', 'ASA', 'TPU'] },
-    { key: 'nozzle', label: 'Nozzle', type: 'select', options: [0.2, 0.4, 0.6, 0.8], unit: ' mm' },
-    { key: 'layerHeight', label: 'Layer height', type: 'range', min: 0.08, max: 0.4, step: 0.04, unit: ' mm' },
-    { key: 'infill', label: 'Infill', type: 'range', min: 0, max: 100, step: 5, unit: '%' },
-    { key: 'walls', label: 'Walls (perimeters)', type: 'range', min: 1, max: 8, step: 1 },
-    { key: 'topLayers', label: 'Top layers', type: 'range', min: 0, max: 12, step: 1 },
-    { key: 'bottomLayers', label: 'Bottom layers', type: 'range', min: 0, max: 12, step: 1 },
-    { key: 'brim', label: 'Brim width (0 = none)', type: 'range', min: 0, max: 10, step: 1, unit: ' mm' },
-    { key: 'speed', label: 'Print speed (0 = slicer default)', type: 'range', min: 0, max: 300, step: 10, unit: ' mm/s' },
-    { key: 'supports', label: 'Supports', type: 'check' }
-  ];
+  // Print tab: material only. It picks the finish of the realistic render (cfg.printSettings.material sets the default).
+  var printSettings = { material: (cfg.printSettings && cfg.printSettings.material) || 'PLA' };
+  var PRINT_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU'];
 
   function renderPrintPanel() {
     dom.printBody.innerHTML = '';
-    dom.printBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Print settings' }));
-    dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'Recommended slicer settings for this model. They are saved inside the exported .3MF; your slicer may or may not use them. The 3D view shows a realistic preview: material finish, layer lines, brim and your painted colors.' }));
-    var group = el('div', { class: 'mm-group' });
-    PRINT_FIELDS.forEach(function (f) {
-      if (f.type === 'range') {
-        var out = el('span', { class: 'mm-slider-value', text: '' });
-        var show = function () { out.textContent = (Number(printSettings[f.key]) || 0) + (f.unit || ''); };
-        var input = el('input', {
-          type: 'range', min: String(f.min), max: String(f.max), step: String(f.step), 'aria-label': f.label,
-          oninput: function () { printSettings[f.key] = Number(input.value); show(); updatePrintLook(); }
-        });
-        input.value = String(printSettings[f.key] || 0);
-        show();
-        group.appendChild(el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: f.label }), out]), input]));
-      } else if (f.type === 'select') {
-        var sel = el('select', { 'aria-label': f.label, onchange: function () {
-          printSettings[f.key] = typeof f.options[0] === 'number' ? Number(sel.value) : sel.value;
-          updatePrintLook();
-        } }, f.options.map(function (o) { return el('option', { value: String(o), text: o + (f.unit || '') }); }));
-        sel.value = String(printSettings[f.key]);
-        if (sel.value !== String(printSettings[f.key])) {
-          sel.appendChild(el('option', { value: String(printSettings[f.key]), text: printSettings[f.key] + (f.unit || '') }));
-          sel.value = String(printSettings[f.key]);
-        }
-        group.appendChild(el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: f.label })]), sel]));
-      } else {
-        var box = el('input', { type: 'checkbox', 'aria-label': f.label, onchange: function () { printSettings[f.key] = box.checked; updatePrintLook(); } });
-        box.checked = !!printSettings[f.key];
-        group.appendChild(el('label', { class: 'mm-check' }, [box, document.createTextNode(f.label)]));
-      }
-    });
-    dom.printBody.appendChild(group);
-    if (printSettings.notes) dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'Note: ' + printSettings.notes }));
-    dom.printBody.appendChild(el('button', { class: 'mm-btn mm-btn--block', type: 'button', text: 'Reset to recommended', onclick: function () {
-      printSettings = printSettingsFor(cfg.printSettings);
-      renderPrintPanel();
+    dom.printBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Print' }));
+    dom.printBody.appendChild(el('p', { class: 'mm-note', text: 'The 3D view shows a realistic preview with your painted colors. Pick a material to change its finish.' }));
+    var sel = el('select', { 'aria-label': 'Material', onchange: function () {
+      printSettings.material = sel.value;
       updatePrintLook();
-      toast('Print settings reset');
-    } }));
+    } }, PRINT_MATERIALS.map(function (o) { return el('option', { value: o, text: o }); }));
+    sel.value = printSettings.material;
+    if (sel.value !== printSettings.material) { printSettings.material = 'PLA'; sel.value = 'PLA'; }
+    dom.printBody.appendChild(el('div', { class: 'mm-group' }, [el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Material' })]), sel])]));
   }
 
   function sliderFor(p) {
@@ -583,7 +540,7 @@
   var viewMode = 'solid';
 
   var modelMaterial = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.03, vertexColors: true });
-  // Print tab: a more realistic render driven by the Print settings (material, layer height, brim) and the painted colors.
+  // Print tab: a more realistic render driven by the Print settings (material) and the painted colors.
   var PRINT_LOOKS = {
     PLA: { roughness: 0.5, clearcoat: 0.1, clearcoatRoughness: 0.55, env: 0.35 },
     PETG: { roughness: 0.2, clearcoat: 0.7, clearcoatRoughness: 0.12, env: 0.55 },
@@ -607,7 +564,6 @@
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(normal + (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz * (lband * uStrength * lfade * 0.8));');
   };
   var studioEnv = null;
-  var brimMesh = null;
 
   function makeStudioEnv() {
     var room = new T.Scene();
@@ -685,11 +641,11 @@
     return activeTab === 'print' ? printMaterial : modelMaterial;
   }
 
-  // Apply the Print tab's settings to the realistic render: material finish, layer lines, brim, lighting.
+  // Apply the Print tab's settings to the realistic render: material finish, layer lines, lighting.
   function updatePrintLook() {
     var on = activeTab === 'print';
     var look = PRINT_LOOKS[printSettings.material] || PRINT_LOOKS.PLA;
-    var lh = Math.max(0.04, Number(printSettings.layerHeight) || 0.2);
+    var lh = 0.2;
     printMaterial.roughness = look.roughness;
     printMaterial.clearcoat = look.clearcoat;
     printMaterial.clearcoatRoughness = look.clearcoatRoughness;
@@ -708,39 +664,7 @@
     plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
     plateMesh.material.roughness = on ? 0.55 : 0.85;
     grid.visible = !on;
-    if (brimMesh) { plate.remove(brimMesh); brimMesh.geometry.dispose(); brimMesh.material.dispose(); brimMesh = null; }
-    if (on && Number(printSettings.brim) > 0) addBrim(Number(printSettings.brim));
-    if (on) $('mm-hint').textContent = 'Realistic preview: ' + printSettings.material + ', ' + lh + ' mm layers' + (Number(printSettings.brim) > 0 ? ', ' + printSettings.brim + ' mm brim' : '');
-  }
-
-  // Flat first-layer brim ring around the footprint (approximated as a circle around the lowest vertices).
-  function addBrim(width) {
-    var minY = Infinity;
-    modelData.forEach(function (entry) {
-      var p = entry.positions;
-      for (var i = 1; i < p.length; i += 3) if (p[i] < minY) minY = p[i];
-    });
-    if (!isFinite(minY)) return;
-    var sx = 0, sz = 0, n = 0;
-    modelData.forEach(function (entry) {
-      var p = entry.positions;
-      for (var i = 0; i < p.length; i += 3) if (p[i + 1] < minY + 0.6) { sx += p[i]; sz += p[i + 2]; n++; }
-    });
-    if (!n) return;
-    var cx = sx / n, cz = sz / n, radius = 0;
-    modelData.forEach(function (entry) {
-      var p = entry.positions;
-      for (var i = 0; i < p.length; i += 3) {
-        if (p[i + 1] < minY + 0.6) radius = Math.max(radius, Math.sqrt(Math.pow(p[i] - cx, 2) + Math.pow(p[i + 2] - cz, 2)));
-      }
-    });
-    var ring = new T.RingGeometry(Math.max(0, radius - 0.4), radius + width, 96);
-    ring.rotateX(-Math.PI / 2);
-    var base = new T.Color(DEFAULT_COLOR);
-    brimMesh = new T.Mesh(ring, new T.MeshStandardMaterial({ color: base, roughness: 0.6, side: T.DoubleSide }));
-    brimMesh.position.set(cx, 0.12, cz);
-    brimMesh.receiveShadow = true;
-    plate.add(brimMesh);
+    if (on) $('mm-hint').textContent = 'Realistic preview: ' + printSettings.material;
   }
 
   function applyModelMaterial() {
@@ -1252,174 +1176,6 @@
     toast('Saved ' + safeFileName($('mm-file-name').value) + '.stl');
   }
 
-  // 3MF with per-part colors: one base material per distinct color, one pid per triangle.
-  function export3mf() {
-    ensureParts();
-    // Same Y-up -> Z-up mapping and bed offset as the STL export.
-    var minY = Infinity;
-    modelData.forEach(function (entry) {
-      var p = entry.positions;
-      for (var i = 1; i < p.length; i += 3) if (p[i] < minY) minY = p[i];
-    });
-    if (!isFinite(minY)) minY = 0;
-
-    var colorIndex = {};
-    var colorList = [];
-    var vertexXml = [];
-    var triangleXml = [];
-    var vertexOffset = 0;
-
-    modelData.forEach(function (entry, meshIndex) {
-      var p = entry.positions;
-      var triCount = p.length / 9;
-      var localVerts = {};
-      var localIndex = 0;
-
-      function vertexId(x, y, z) {
-        var key = x.toFixed(4) + ',' + y.toFixed(4) + ',' + z.toFixed(4);
-        if (localVerts[key] === undefined) {
-          localVerts[key] = localIndex++;
-          vertexXml.push('<vertex x="' + x.toFixed(4) + '" y="' + (-z).toFixed(4) + '" z="' + (y - minY).toFixed(4) + '"/>');
-        }
-        return localVerts[key] + vertexOffset;
-      }
-
-      for (var t = 0; t < triCount; t++) {
-        var b = t * 9;
-        var v1 = vertexId(p[b], p[b + 1], p[b + 2]);
-        var v2 = vertexId(p[b + 3], p[b + 4], p[b + 5]);
-        var v3 = vertexId(p[b + 6], p[b + 7], p[b + 8]);
-        var color = (parts[globalPartIndex(meshIndex, t)].color || DEFAULT_COLOR).toUpperCase();
-        if (colorIndex[color] === undefined) {
-          colorIndex[color] = colorList.length;
-          colorList.push(color);
-        }
-        triangleXml.push('<triangle v1="' + v1 + '" v2="' + v2 + '" v3="' + v3 + '" pid="1" p1="' + colorIndex[color] + '"/>');
-      }
-      vertexOffset += localIndex;
-    });
-
-    var baseXml = colorList.map(function (c) {
-      return '<base name="' + c + '" displaycolor="' + c + '"/>';
-    }).join('');
-
-    var ps = printSettings;
-    var modelXml = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
-      '<metadata name="Title">' + escapeXml(cfg.title) + '</metadata>' +
-      '<metadata name="Designer">Maker Makers</metadata>' +
-      (ps ? '<metadata name="Description">' + escapeXml(printNote(ps)) + '</metadata>' : '') +
-      '<resources>' +
-      '<basematerials id="1">' + baseXml + '</basematerials>' +
-      '<object id="2" name="' + escapeXml(safeFileName($('mm-file-name').value)) + '" type="model" pid="1" pindex="0">' +
-      '<mesh><vertices>' + vertexXml.join('') + '</vertices><triangles>' + triangleXml.join('') + '</triangles></mesh>' +
-      '</object></resources>' +
-      '<build><item objectid="2"/></build></model>';
-
-    var contentTypes = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>' +
-      '<Default Extension="config" ContentType="text/plain"/>' +
-      '<Default Extension="txt" ContentType="text/plain"/>' +
-      '<Default Extension="json" ContentType="application/json"/>' +
-      '</Types>';
-    var rels = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>' +
-      '</Relationships>';
-
-    var files = [
-      { name: '[Content_Types].xml', data: utf8(contentTypes) },
-      { name: '_rels/.rels', data: utf8(rels) },
-      { name: '3D/3dmodel.model', data: utf8(modelXml) }
-    ];
-    if (ps) {
-      files.push({ name: 'Metadata/Slic3r_PE.config', data: utf8(prusaConfig(ps)) });
-      files.push({ name: 'Metadata/project_settings.config', data: utf8(JSON.stringify(bambuConfig(ps), null, 2)) });
-      files.push({ name: 'Metadata/print-settings.txt', data: utf8(printNote(ps) + '\n') });
-    }
-    var zip = makeZip(files);
-    var name = safeFileName($('mm-file-name').value);
-    saveBlob(new Blob([zip], { type: 'application/octet-stream' }), name + '.3mf');
-    toast('Saved ' + name + '.3mf with colors' + (ps ? ' and print settings' : ''));
-  }
-
-  // Recommended print settings declared by the generator (cfg.printSettings), with defaults.
-  // Generators that declare none get these defaults.
-  function printSettingsFor(raw) {
-    var ps = {
-      layerHeight: 0.2, infill: 15, walls: 3, topLayers: 5, bottomLayers: 4,
-      supports: false, brim: 0, material: 'PLA', nozzle: 0.4, notes: ''
-    };
-    Object.keys(raw || {}).forEach(function (k) { ps[k] = raw[k]; });
-    return ps;
-  }
-
-  function printNote(ps) {
-    var lines = [
-      'Recommended print settings for ' + cfg.title + ' (Maker Makers)',
-      'Material: ' + ps.material,
-      'Nozzle: ' + ps.nozzle + ' mm',
-      'Layer height: ' + ps.layerHeight + ' mm',
-      'Infill: ' + ps.infill + '%',
-      'Walls: ' + ps.walls,
-      'Top / bottom layers: ' + ps.topLayers + ' / ' + ps.bottomLayers,
-      'Supports: ' + (ps.supports ? 'yes' : 'no'),
-      'Brim: ' + (ps.brim ? ps.brim + ' mm' : 'none')
-    ];
-    if (ps.speed) lines.push('Print speed: ' + ps.speed + ' mm/s');
-    if (ps.notes) lines.push(ps.notes);
-    return lines.join('\n');
-  }
-
-  // PrusaSlicer-style project config ("; key = value" lines, keys as in a PrusaSlicer .ini).
-  function prusaConfig(ps) {
-    var lines = [
-      ['layer_height', ps.layerHeight],
-      ['perimeters', ps.walls],
-      ['top_solid_layers', ps.topLayers],
-      ['bottom_solid_layers', ps.bottomLayers],
-      ['fill_density', ps.infill + '%'],
-      ['support_material', ps.supports ? 1 : 0],
-      ['brim_width', ps.brim || 0],
-      ['filament_type', ps.material],
-      ['nozzle_diameter', ps.nozzle]
-    ];
-    if (ps.speed) lines.push(['perimeter_speed', ps.speed], ['infill_speed', ps.speed]);
-    return lines.map(function (l) { return '; ' + l[0] + ' = ' + l[1]; }).join('\n') + '\n';
-  }
-
-  // Bambu Studio / OrcaSlicer-style project settings (JSON, keys as in their process/filament presets).
-  function bambuConfig(ps) {
-    var cfgOut = {
-      layer_height: String(ps.layerHeight),
-      wall_loops: String(ps.walls),
-      top_shell_layers: String(ps.topLayers),
-      bottom_shell_layers: String(ps.bottomLayers),
-      sparse_infill_density: ps.infill + '%',
-      enable_support: ps.supports ? '1' : '0',
-      brim_width: String(ps.brim || 0),
-      filament_type: [ps.material],
-      nozzle_diameter: [String(ps.nozzle)]
-    };
-    if (ps.speed) {
-      cfgOut.outer_wall_speed = String(ps.speed);
-      cfgOut.sparse_infill_speed = String(ps.speed);
-    }
-    return cfgOut;
-  }
-
-  function escapeXml(text) {
-    return String(text).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c];
-    });
-  }
-
-  function utf8(text) {
-    return new TextEncoder().encode(text);
-  }
-
   function saveBlob(blob, fileName) {
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
@@ -1429,71 +1185,6 @@
     link.click();
     document.body.removeChild(link);
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-  }
-
-  // Minimal ZIP writer (store, no compression), enough for a .3mf package.
-  function makeZip(files) {
-    var crcTable = makeZip.table || (makeZip.table = (function () {
-      var table = new Uint32Array(256);
-      for (var n = 0; n < 256; n++) {
-        var c = n;
-        for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-        table[n] = c >>> 0;
-      }
-      return table;
-    })());
-    function crc32(data) {
-      var crc = 0xffffffff;
-      for (var i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
-      return (crc ^ 0xffffffff) >>> 0;
-    }
-
-    var locals = [];
-    var centrals = [];
-    var offset = 0;
-    files.forEach(function (file) {
-      var nameBytes = utf8(file.name);
-      var crc = crc32(file.data);
-      var local = new DataView(new ArrayBuffer(30));
-      local.setUint32(0, 0x04034b50, true);
-      local.setUint16(4, 20, true);
-      local.setUint16(6, 0x0800, true);
-      local.setUint16(8, 0, true);
-      local.setUint32(14, crc, true);
-      local.setUint32(18, file.data.length, true);
-      local.setUint32(22, file.data.length, true);
-      local.setUint16(26, nameBytes.length, true);
-      locals.push(new Uint8Array(local.buffer), nameBytes, file.data);
-
-      var central = new DataView(new ArrayBuffer(46));
-      central.setUint32(0, 0x02014b50, true);
-      central.setUint16(4, 20, true);
-      central.setUint16(6, 20, true);
-      central.setUint16(8, 0x0800, true);
-      central.setUint32(16, crc, true);
-      central.setUint32(20, file.data.length, true);
-      central.setUint32(24, file.data.length, true);
-      central.setUint16(28, nameBytes.length, true);
-      central.setUint32(42, offset, true);
-      centrals.push(new Uint8Array(central.buffer), nameBytes);
-
-      offset += 30 + nameBytes.length + file.data.length;
-    });
-
-    var centralSize = centrals.reduce(function (s, a) { return s + a.length; }, 0);
-    var end = new DataView(new ArrayBuffer(22));
-    end.setUint32(0, 0x06054b50, true);
-    end.setUint16(8, files.length, true);
-    end.setUint16(10, files.length, true);
-    end.setUint32(12, centralSize, true);
-    end.setUint32(16, offset, true);
-
-    var parts = locals.concat(centrals, [new Uint8Array(end.buffer)]);
-    var total = parts.reduce(function (s, a) { return s + a.length; }, 0);
-    var out = new Uint8Array(total);
-    var pos = 0;
-    parts.forEach(function (a) { out.set(a, pos); pos += a.length; });
-    return out;
   }
 
   // Standalone file: fetch this page, then inline the shared CSS and engine.

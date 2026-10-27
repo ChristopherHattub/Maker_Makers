@@ -13,7 +13,7 @@ Sources of truth (read them before changing anything, they may have moved on sin
 ## Workflow
 
 1. **Copy** `programs/ghost-builder.html` to `programs/<kebab-name>.html`. Keep the head and tail exactly (see Page rules). Delete the ghost geometry, stamps, `mount`, `onHover`, `onPick` unless the new model needs them.
-2. **Config**: set `code` (next free `MM-00N`, matches slot number), `category` (`UPPER // CASE` label, e.g. `SPOOKY // FIGURES`), `title`, `fileName` (no extension), `palette`, `partNames`, `printSettings`, `parameters`, `presets`.
+2. **Config**: set `code` (next free `MM-00N`, matches slot number), `category` (`UPPER // CASE` label, e.g. `SPOOKY // FIGURES`), `title`, `fileName` (no extension), `palette`, `partNames`, `parameters`, `presets`.
 3. **Write `build(params, api)`** (contract below). Aim for one closed, watertight surface per printable solid.
 4. **Check printability** with the script: `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html ["Preset label"]`. Run it for the defaults and for every preset, plus slider extremes (temporarily edit values).
 5. **Register the slot and thumbnail** (below).
@@ -26,7 +26,7 @@ Every generator, new or existing, **must** use the shared phone layout from `gen
 
 ## Print tab realistic render is engine-owned
 
-Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, layer lines from the layer height, brim ring, studio lighting). Every generator gets it for free, so: set accurate `printSettings` (material, `layerHeight`, `brim`) because the preview reflects them, never add your own print preview, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change material, layer height and brim, and confirm the model looks right.
+Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**; there are no slicer settings and no .3MF export. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
 
 ## Page rules (the standalone bundler depends on these)
 
@@ -45,7 +45,7 @@ Opening the Print tab automatically switches the viewport to a realistic render 
 | `code`, `category`, `title`, `fileName` | Required. `fileName` is the default export name; the engine strips spaces/symbols. |
 | `palette` | Required `[{ name, color }]`. Use **eight** entries (two tidy rows). Pastel/matte, printable filament-like colors with friendly names (Ghost Builder: Bone White, Glow Mint, Pumpkin Matte...). Include one dark and one light. |
 | `defaultColor` | Optional; defaults to first palette entry. |
-| `printSettings` | Recommended slicer settings written into the .3MF (`material`, `nozzle`, `layerHeight`, `infill`, `walls`, `topLayers`, `bottomLayers`, `supports`, `brim`, optional `speed`, `notes`). Seeds the engine's **Print** tab (users can edit every value there; the export writes their edits). Always set it with values right for the model (supports/brim if it has overhangs or a small base). Slicer import is untested; do not claim it works. |
+| `printSettings` | Optional. Only `material` is read (`'PLA'` default); it picks the Print tab's starting material. Leave it out unless the model needs a different default. |
 | `partNames` | Mesh name -> label, e.g. `{ body: 'Ghost body', face: 'Eyes & mouth', detail: 'Stamp' }`. Every mesh name you return should have one. |
 | `parameters` | `{ group, key, label, unit, min, max, step, value, format? }`. `unit` includes its leading space (`' mm'`) or is `'°'`/`'%'`. Plain-word group names (engine upper-cases them). Sensible defaults that already look good. |
 | `presets` | `[{ label, values }]`, values override only some keys. Include a "Default ..." preset that restores everything, including non-visual params. |
@@ -89,7 +89,7 @@ So, to make a feature independently paintable:
 
 ## Exports and printability
 
-- **STL**: binary, one solid, no color. **3MF**: one base material per color, per-triangle color. File name from the panel field. Both use the same Z-up transform.
+- **STL**: binary, one solid, no color. File name from the panel field. Uses the Z-up transform above.
 - Every closed solid must be **watertight and manifold**: no open edges, no edge shared by more than two triangles, no degenerate (zero-area) or NaN triangles. `check-mesh.mjs` tests this after welding. It reports per mesh and per `smoothGroup`: a mesh that is only part of a split surface legitimately shows open edges alone, the combined smoothGroup line is what must be OK. Independent solids (stamps, separate parts) must each pass alone.
 - Overlapping shells (a stamp embedded 1.8 mm into the body) are acceptable; slicers union them. Embed placed features into the surface (no gaps, no hairline contact) and keep them proud enough to print (>= 0.8 mm).
 - **Smooth holes and cut-outs**: no stair-stepped or jagged edges. Use a smooth falloff (`smootherstep`: zero slope/curvature at both ends) so cut-outs blend into the surface; pack angular segments toward where detail is (Ghost Builder `FRONT_BIAS`); use enough segments that circles/ellipses look round (>= 48 per full circle; Ghost Builder uses 160 around). Holes must keep a printable wall: do not let `effectiveR`-style depth cut through (clamp with `Math.max`).
@@ -101,7 +101,7 @@ So, to make a feature independently paintable:
 Every generator's **defaults and presets must print with no supports, or as few as possible**: Chris's rule is to prevent supports wherever the geometry allows. So design low and flat first:
 - Rest on a flat base or a flat-cut belly (clamp the lowest vertices to the bed plane, as Spider does) instead of floating on thin legs or a point. Keep a wide first layer.
 - Keep slopes and overhangs gentle (about 45° from vertical or less); round or chamfer the unavoidable ones. Limbs, arms and legs should lie along the bed or rise at a steep angle, never arch high over empty space.
-- Set `printSettings.supports` to `false` unless a preset truly needs them, and say in `notes` which slider extremes (raised body, high arches, long overhangs) bring supports back. Label such sliders so users see the trade-off, e.g. `Body height (low = no supports)`.
+- Say in the `description` or a slider label which slider extremes (raised body, high arches, long overhangs) bring supports back, e.g. `Body height (low = no supports)`. There is no per-generator print-notes field.
 - Check the **lowest point stays at the bed** for defaults, presets and slider min/max (the sweep that matches the manifold check), and that nothing floats.
 
 ## Slot and thumbnail
@@ -115,7 +115,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
   category: 'HOOKS & WALL STORAGE',
   thumbnailUrl: 'assets/thumbnails/honeycomb-hook.svg',
   programUrl: 'programs/honeycomb-hook.html',
-  description: 'One sentence of what it makes, the main knobs, and that parts can be painted and exported as .STL or .3MF.'
+  description: 'One sentence of what it makes, the main knobs, and that parts can be painted and exported as .STL.'
 }
 ```
 
@@ -167,8 +167,8 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
-- [ ] Print tab shows the realistic render (colors kept, material/layer-height/brim changes update it live) and your `printSettings` as defaults, edits change the 3MF, Reset restores them.
-- [ ] Export .STL and .3MF download and open (STL size ~ 84 + 50 x triangles bytes; model sits on the bed; 3MF has the colors; the zip lists `Metadata/Slic3r_PE.config`, `project_settings.config`, `print-settings.txt` with your `printSettings`).
+- [ ] Print tab shows the realistic render (colors kept, changing Material updates it live) and has no other options.
+- [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed). There is no .3MF export.
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] Clicking Export .STL opens the consent modal; the download button stays disabled until the box is ticked; Cancel/Esc/backdrop close it without downloading.
 - [ ] The collapsed "Disclaimer" block shows under the panel footer buttons (engine-provided; never remove or override it in a generator page) and expands to readable text.

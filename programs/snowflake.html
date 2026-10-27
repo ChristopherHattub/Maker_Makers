@@ -334,18 +334,6 @@
           { name: 'Midnight', color: '#334155' }
         ],
         partNames: { arms: 'Arms', branches: 'Branches', hub: 'Centre', tips: 'Arm tips', loop: 'Ornament hook' },
-        printSettings: {
-          material: 'PLA',
-          nozzle: 0.4,
-          layerHeight: 0.2,
-          infill: 20,
-          walls: 3,
-          topLayers: 5,
-          bottomLayers: 5,
-          supports: false,
-          brim: 0,
-          notes: 'Prints flat on the bed with chamfered 45 degree edges and nothing hanging in the air, so no supports or brim are needed. Very thin lace styles (arm width under 3.6 mm) can use a brim for adhesion.'
-        },
 
         parameters: PARAMS,
         presets: STYLES.map(function (s) { return { label: s.name === 'Classic' ? 'Default snowflake' : s.name, values: withDefaults(DEFAULTS, s.values) }; }),

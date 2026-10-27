@@ -345,18 +345,6 @@
           { name: 'Midnight', color: '#334155' }
         ],
         partNames: { box: 'Box', lid: 'Lid', ribbon: 'Ribbon', bow: 'Bow loops and tails', knot: 'Bow knot', hook: 'Ornament hook' },
-        printSettings: {
-          material: 'PLA',
-          nozzle: 0.4,
-          layerHeight: 0.2,
-          infill: 10,
-          walls: 3,
-          topLayers: 5,
-          bottomLayers: 4,
-          supports: false,
-          brim: 0,
-          notes: 'A solid box that prints flat on its bottom. The lid overhang grows at 45 degrees and the bow loops are domes with flat bottoms, so no supports are needed. A lid overhang above 4 mm is not offered because it would need supports. The optional ornament hook is a small ring on top of the bow knot or lid.'
-        },
 
         parameters: PARAMS,
         presets: STYLES.map(function (s) { return { label: s.name === 'Classic' ? 'Default gift box' : s.name, values: withDefaults(DEFAULTS, s.values) }; }),
