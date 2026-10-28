@@ -328,6 +328,14 @@
         });
       }
 
+      // Sit the finished model on the bed (y = 0) so the preview shows it the way it prints.
+      function dropToBed(list) {
+        var lo = 1e9, i, k;
+        list.forEach(function (e) { for (i = 1; i < e.positions.length; i += 3) if (e.positions[i] < lo) lo = e.positions[i]; });
+        list.forEach(function (e) { for (i = 1; i < e.positions.length; i += 3) e.positions[i] -= lo; });
+        return list;
+      }
+
       function buildRattle(p) {
         var D = shapeData(Math.round(p.shape)), Rc = p.size, rs = p.strut, rj = rs * 1.35, gap = p.gap;
         var V = rotateTo(D.V, D.normal).map(function (q) { return [q[0] * Rc, q[1] * Rc, q[2] * Rc]; });
@@ -359,7 +367,7 @@
           out.push({ name: 'raft', positions: toF32(cylY(rr + rj + 2.5, ymin, ymin + 1.0, 48)) });
           if (p.pin >= 1) out.push({ name: 'pin', positions: toF32(cylY(0.65, ymin + 0.6, yBallBottom + 0.4, 10)) });
         }
-        return out;
+        return dropToBed(out);
       }
 
       window.MM_GENERATOR = {

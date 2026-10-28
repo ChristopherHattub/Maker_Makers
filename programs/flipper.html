@@ -273,6 +273,14 @@
         return m;
       }
 
+      // Sit the finished model on the bed (y = 0) so the preview shows it the way it prints.
+      function dropToBed(list) {
+        var lo = 1e9, i, k;
+        list.forEach(function (e) { for (i = 1; i < e.positions.length; i += 3) if (e.positions[i] < lo) lo = e.positions[i]; });
+        list.forEach(function (e) { for (i = 1; i < e.positions.length; i += 3) e.positions[i] -= lo; });
+        return list;
+      }
+
       function buildFlipper(p) {
         var dd = p.size, l = p.ratio * dd, Rb = p.hinge, g = 0.5, rp = Math.max(1.1, Rb - 1.8), hole = rp + p.pinClear;
         var s = 1 - 2 * (Rb + 1.5) / dd;
@@ -340,7 +348,7 @@
           });
           out.push({ name: 'tetra' + j, positions: toF32(m) });
         }
-        return out;
+        return dropToBed(out);
       }
 
       window.MM_GENERATOR = {
