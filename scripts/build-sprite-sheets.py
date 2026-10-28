@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'assets/thumbnails/sprites'
 CELL, INSET, TILE, FRAMES, ROWS, FPS = 256, 8, 240, 6, 4, 8
 
+# Optional per-tile recolour of the hologram, applied here so the raw sheets never need regenerating.
+# Edit scripts/sprite-tints.json: { "pumpkin-plotter": { "hue": 28 } }  (hue in degrees: 28 orange, 120 green, 280 purple)
+TINTS = json.loads((ROOT / 'scripts/sprite-tints.json').read_text()) if (ROOT / 'scripts/sprite-tints.json').exists() else {}
+
 def generators():
     src = (ROOT / 'js/programs.js').read_text()
     block = src[src.index('const GENERATORS'):src.index('const SLOT_COUNT') if 'const SLOT_COUNT' in src else None]
@@ -44,7 +48,18 @@ def erode(m, n):
         m = m & np.roll(m, 1, 0) & np.roll(m, -1, 0) & np.roll(m, 1, 1) & np.roll(m, -1, 1)
     return m
 
-def process(path, rows):
+def tint(rgb, alpha, hue):
+    """Rotate bright cyan (the hologram) to `hue` degrees; frame, rim, grey label and dark background stay put."""
+    h, w = alpha.shape
+    hsv = np.asarray(Image.fromarray(rgb, 'RGB').convert('HSV')).astype(float)
+    yy, xx = np.mgrid[0:h, 0:w]
+    inner = (xx > w * .13) & (xx < w * .87) & (yy > h * .09) & (yy < h * .8)   # inside the metal frame, above the label
+    cyan = (hsv[..., 0] > 100) & (hsv[..., 0] < 150) & (hsv[..., 1] > 60) & (hsv[..., 2] > 75)
+    m = inner & cyan
+    hsv[..., 0] = np.where(m, hue / 360 * 255, hsv[..., 0])
+    return np.asarray(Image.fromarray(hsv.astype(np.uint8), 'HSV').convert('RGB'))
+
+def process(path, rows, hues=()):
     im = Image.open(path).convert('RGB')
     a = np.asarray(im)
     solid = ~magenta(a)
@@ -59,6 +74,8 @@ def process(path, rows):
             ty0, ty1, tx0, tx1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
             crop = a[y0:y1 + 1, x0:x1 + 1][ty0:ty1, tx0:tx1]
             alpha = erode(m[ty0:ty1, tx0:tx1], 3).astype(np.uint8) * 255
+            if hues and hues[r] is not None:
+                crop = tint(np.ascontiguousarray(crop), alpha, hues[r])
             rgba = np.dstack([crop, alpha])
             t = Image.fromarray(rgba, 'RGBA').resize((TILE, TILE), Image.LANCZOS)
             sheet.paste(t, (c * CELL + INSET, r * CELL + INSET))
@@ -73,7 +90,8 @@ def main():
     while (src / f'sheet-{n:02d}.jpg').exists() or (src / f'sheet-{n:02d}.png').exists():
         f = next(p for p in (src / f'sheet-{n:02d}.jpg', src / f'sheet-{n:02d}.png') if p.exists())
         group = gens[(n - 1) * ROWS:n * ROWS]
-        sheet = process(f, len(group))
+        hues = [TINTS.get(g[2], {}).get('hue') for g in group]
+        sheet = process(f, len(group), hues)
         name = f'sheet-{n:02d}.webp'
         sheet.save(OUT / name, 'WEBP', quality=92, alpha_quality=100, method=6)
         sheets.append({'file': name, 'width': sheet.width, 'height': sheet.height})
