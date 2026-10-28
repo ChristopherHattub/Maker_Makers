@@ -119,11 +119,7 @@ function wsCatalog() {
   const functional = new Set(['SLOT-27', 'SLOT-41']);
   const gens = PROGRAMS.filter(p => p.programUrl && !(p.bundles || []).includes('fidgets') && !functional.has(p.id));
   sets.push({ id: 'generators', name: 'Generators', items: gens.map(p => ({
-    id: 'gen:' + p.id, name: p.title, img: p.thumbnailUrl, gen: p.id, params: null,
-    build: () => { const t = textGeo({ text: p.title.length > 16 ? p.title.replace(/ /, '\n') : p.title, size: 5.5, thickness: 1.4, bold: true }, 3);
-      const w = Math.max(40, t.w + 8), h = Math.max(24, t.h + 8);
-      t.geo.translate(-t.w / 2, t.h / 2, 0);
-      return merge([at(new T.BoxGeometry(w, h, 3), 0, 0, 1.5), t.geo]); }
+    id: 'gen:' + p.id, name: p.title, img: p.thumbnailUrl, gen: p.id, params: null, build: null
   })) });
   return sets;
 }
@@ -166,16 +162,16 @@ function wsInit(root) {
     <div class="ws-top">
       <div class="ws-top-row">
         <strong style="letter-spacing:3px;color:var(--bp-cyan)">WORKSHOP</strong>
-        <button class="ws-btn" data-a="import">Import STL</button>
-        <button class="ws-btn" data-a="export">Export STL</button>
-        <button class="ws-btn" data-a="undo" title="Ctrl+Z">Undo</button>
-        <button class="ws-btn" data-a="redo" title="Ctrl+Shift+Z">Redo</button>
-        <button class="ws-btn" data-a="clear">Clear</button>
+        <button class="ws-btn" data-a="import" title="Open an STL file">📂<small>Open STL</small></button>
+        <button class="ws-btn" data-a="export" title="Save everything as an STL file">💾<small>Save STL</small></button>
+        <button class="ws-btn" data-a="undo" title="Undo (Ctrl+Z)">↩️<small>Undo</small></button>
+        <button class="ws-btn" data-a="redo" title="Redo">↪️<small>Redo</small></button>
+        <button class="ws-btn" data-a="clear" title="Remove everything">🧹<small>Clear</small></button>
         <label>Bed <select id="ws-bed" class="bp-input"><option>180</option><option>220</option><option selected>256</option><option>350</option></select> mm</label>
         <span class="ws-spacer"></span>
-        <input id="ws-q" type="search" class="bp-input" placeholder="Search shapes..." style="width:150px" aria-label="Search shapes">
-        <button class="ws-btn" data-a="tabtoggle" title="Collapse or expand the shape tab" id="ws-tabtoggle">▾ All sets</button>
-        <button class="ws-btn" data-a="back">✕ Back to map</button>
+        <input id="ws-q" type="search" class="bp-input" placeholder="🔍 Find a shape" style="width:150px" aria-label="Search shapes">
+        <button class="ws-btn" data-a="tabtoggle" title="Show all the shape sets" id="ws-tabtoggle">▾ All sets</button>
+        <button class="ws-btn" data-a="back">🗺️<small>Map</small></button>
       </div>
       <div id="ws-sets" class="ws-top-row" style="padding-top:0"></div>
       <div id="ws-strip" class="ws-strip"></div>
@@ -184,12 +180,15 @@ function wsInit(root) {
     <div class="ws-main">
       <div class="ws-stage" id="ws-stage">
         <div class="ws-tools">
-          <button data-m="translate" class="on" title="Move (W) — or just drag a shape">Move</button>
-          <button data-m="rotate" title="Rotate (E)">Rotate</button>
-          <button data-m="scale" title="Scale (R)">Scale</button>
-          <button data-a="snap" class="on" title="Snap to grid (G)">Snap</button>
-          <button data-v="top">Top</button><button data-v="front">Front</button><button data-v="iso">Iso</button>
+          <button data-m="translate" class="on" title="Move (W). You can also just drag a shape.">✋<small>Move</small></button>
+          <button data-m="rotate" title="Turn it round (E)">🔄<small>Turn</small></button>
+          <button data-m="scale" title="Make it bigger or smaller (R)">⤢<small>Size</small></button>
+          <button data-a="snap" class="on" title="Snap to the grid (G)">🧲<small>Snap</small></button>
+          <button data-v="top" title="Look from above">⬆️<small>Top</small></button>
+          <button data-v="front" title="Look from the front">👀<small>Front</small></button>
+          <button data-v="iso" title="3D view">🧊<small>3D</small></button>
         </div>
+        <div class="ws-mini" id="ws-mini" hidden><div class="ws-mini-head"><b></b><button data-a="miniclose">✅ Done</button></div><div class="ws-mini-body"></div></div>
         <div class="ws-toast" id="ws-toast"></div>
         <div class="ws-drop">Drop an .stl file to import</div>
       </div>
@@ -216,9 +215,11 @@ function wsInit(root) {
   Object.assign(WS, { r, scene, cam, orbit, tc, grid: null, pivot: new T.Object3D() });
   scene.add(WS.pivot);
 
+  window.addEventListener('message', wsMiniMessage);
   wsBuildBed();
   wsView('iso');
   wsBindUI();
+  wsMakeThumbs();
   wsRenderCatalog();
   if (!wsLoad()) { /* empty scene */ }
   wsCommit(true);
@@ -230,11 +231,43 @@ function wsInit(root) {
   wsToast('Pick a shape from the tab above, or drop an STL file here.');
 }
 
+// Catalog pictures are small renders of the real 3D shapes, made once with a throwaway renderer.
+function wsMakeThumbs() {
+  try {
+    const T = THREE, S = 160, r = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.setSize(S, S, false); r.setPixelRatio(1);
+    const sc = new T.Scene(), cam = new T.PerspectiveCamera(30, 1, 0.1, 2000); cam.up.set(0, 0, 1);
+    sc.add(new T.HemisphereLight(0xffffff, 0x445577, 1.0));
+    const dl = new T.DirectionalLight(0xffffff, 0.9); dl.position.set(1, -1.5, 2); sc.add(dl);
+    const mat = new T.MeshStandardMaterial({ color: 0x5fc4ff, roughness: 0.45, metalness: 0.05, side: T.DoubleSide });
+    WS.sets.forEach(set => set.items.forEach(item => {
+      if (item.gen || !item.build) return;
+      try {
+        const g = wsCentre(item.build(item.params ? { ...item.params } : undefined)), mesh = new T.Mesh(g, mat);
+        sc.add(mesh);
+        const rad = g.boundingBox.getSize(new T.Vector3()).length() / 2;
+        cam.position.set(1, -1.25, 0.9).normalize().multiplyScalar(rad * 3.1); cam.lookAt(0, 0, 0);
+        r.render(sc, cam); item.thumb = r.domElement.toDataURL('image/png');
+        sc.remove(mesh); g.dispose();
+      } catch (err) { /* keep the emoji icon */ }
+    }));
+    r.dispose();
+  } catch (err) { /* thumbnails are optional */ }
+}
+
 function wsResize() {
   if (!WS.r) return;
   const w = wsEl.stage.clientWidth, h = wsEl.stage.clientHeight;
   if (!w || !h) return;
   WS.r.setSize(w, h); WS.cam.aspect = w / h; WS.cam.updateProjectionMatrix();
+  wsViewShift();
+}
+
+// While the mini editor covers the right of the view, slide the picture left so the shape stays in the clear part.
+function wsViewShift() {
+  const w = wsEl.stage.clientWidth, h = wsEl.stage.clientHeight, sh = WS.mini && w > 760 ? Math.min(360, w * 0.6) / 2 : 0;
+  if (sh) WS.cam.setViewOffset(w, h, sh, 0, w, h); else WS.cam.clearViewOffset();
+  WS.cam.updateProjectionMatrix();
 }
 
 function wsBuildBed() {
@@ -277,7 +310,7 @@ function wsCentre(geo) {
 }
 
 function wsAddObject(spec) {
-  const o = { id: spec.id || WS.nextId++, name: spec.name, cat: spec.cat || null, params: spec.params || null, gen: spec.gen || null,
+  const o = { id: spec.id || WS.nextId++, name: spec.name, cat: spec.cat || null, params: spec.params || null, gen: spec.gen || null, genParams: spec.genParams || null,
               geo: spec.geo || null, color: spec.color || 0x7ab3ff, locked: !!spec.locked, hidden: !!spec.hidden };
   WS.nextId = Math.max(WS.nextId, o.id + 1);
   if (o.cat && !o.geo) o.geo = wsCentre(WS.cat[o.cat].build(o.params));
@@ -289,12 +322,96 @@ function wsAddObject(spec) {
   return o;
 }
 
+// Generator shapes carry the generator's real default model. A hidden copy of the generator page (?embed=workshop) builds it and
+// posts the triangles back; double-clicking the shape opens the same page as a mini editor (see wsOpenMini).
+function wsGenGeometry(parts) {
+  const n = parts.reduce((a, p) => a + p.positions.length, 0), pos = new Float32Array(n);
+  let k = 0;
+  parts.forEach(p => { for (let i = 0; i < p.positions.length; i += 3) { pos[k++] = p.positions[i]; pos[k++] = -p.positions[i + 2]; pos[k++] = p.positions[i + 1]; } });   // Y-up -> Z-up
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return wsCentre(g);
+}
+
+function wsGenFrame(item, visible) {
+  const f = document.createElement('iframe');
+  f.title = item.name + ' editor';
+  f.src = PROGRAMS.find(p => p.id === item.gen).programUrl + '?embed=workshop';
+  if (!visible) f.style.cssText = 'position:fixed;left:-2000px;top:0;width:700px;height:700px;border:0;visibility:hidden';
+  return f;
+}
+
+function wsAddGenerator(item) {
+  wsToast('Making ' + item.name + '…');
+  const f = wsGenFrame(item, false);
+  const done = (ok, msg) => { window.removeEventListener('message', onMsg); clearTimeout(timer); f.remove(); if (!ok) wsToast('Could not load ' + item.name + '.'); };
+  const onMsg = e => {
+    if (e.source !== f.contentWindow || !e.data || e.data.type !== 'mm-model') return;
+    const o = wsAddObject({ name: item.name, gen: item.gen, genParams: e.data.params, geo: wsGenGeometry(e.data.parts), color: 0x7ab3ff });
+    wsToBed(o); wsPlaceFree(o); wsSelect([o]); wsCommit(); wsFocus();
+    wsToast(item.name + ' added. Double-click it to edit it.');
+    done(true);
+  };
+  const timer = setTimeout(() => done(false), 20000);
+  window.addEventListener('message', onMsg);
+  document.body.appendChild(f);
+}
+
+// Mini editor: zoom in on the shape and show the generator's own controls beside it. Changes rebuild the shape in place.
+function wsOpenMini(o) {
+  wsCloseMini();
+  const item = WS.cat['gen:' + o.gen];
+  wsSelect([o]); wsZoomTo(o);
+  const f = wsGenFrame(item, true);
+  f.className = 'ws-mini-frame';
+  WS.mini = { o, f, first: true, t: 0 };
+  const box = document.getElementById('ws-mini');
+  box.querySelector('b').textContent = '✏️ ' + o.name;
+  box.querySelector('.ws-mini-body').replaceChildren(f);
+  box.hidden = false;
+  wsViewShift();
+}
+
+function wsCloseMini() {
+  if (!WS.mini) return;
+  WS.mini.f.remove(); WS.mini = null;
+  document.getElementById('ws-mini').hidden = true;
+  wsViewShift();
+}
+
+function wsMiniMessage(e) {
+  const m = WS.mini;
+  if (!m || e.source !== m.f.contentWindow || !e.data || e.data.type !== 'mm-model') return;
+  const o = m.o;
+  if (m.first) { m.first = false; if (o.genParams) { m.f.contentWindow.postMessage({ type: 'mm-set-params', params: o.genParams }, '*'); return; } }
+  const old = wsBox(o), c = old.getCenter(new THREE.Vector3());
+  const g = wsGenGeometry(e.data.parts);
+  o.mesh.geometry.dispose(); o.geo = o.mesh.geometry = g;
+  o.genParams = e.data.params;
+  o.mesh.position.x += c.x - wsBox(o).getCenter(new THREE.Vector3()).x; o.mesh.position.y += c.y - wsBox(o).getCenter(new THREE.Vector3()).y;
+  wsToBed(o); wsAttachGizmo(); wsOutOfBed();
+  clearTimeout(m.t); m.t = setTimeout(() => { wsCommit(); }, 600);
+}
+
+// Smoothly centre the camera on a shape.
+function wsZoomTo(o) {
+  const b = wsBox(o), c = b.getCenter(new THREE.Vector3()), d = Math.max(b.getSize(new THREE.Vector3()).length() * 2.2, 70);
+  const dir = WS.cam.position.clone().sub(WS.orbit.target).normalize();
+  const t0 = WS.orbit.target.clone(), p0 = WS.cam.position.clone(), p1 = c.clone().add(dir.multiplyScalar(d)), s = performance.now();
+  const step = now => {
+    const t = Math.min(1, (now - s) / 500), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    WS.orbit.target.lerpVectors(t0, c, e); WS.cam.position.lerpVectors(p0, p1, e);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function wsAddFromCatalog(id) {
   const item = WS.cat[id];
+  if (item.gen) { wsAddGenerator(item); return; }
   const o = wsAddObject({ name: item.name, cat: id, params: item.params ? { ...item.params } : null, gen: item.gen, color: item.gen ? 0x4aa3ff : 0x7ab3ff });
   wsToBed(o); wsPlaceFree(o);
   wsSelect([o]); wsCommit();
-  wsToast(item.gen ? item.name + ' added. Double-click it to open its generator.' : item.name + ' added.');
+  wsToast(item.name + ' added.');
 }
 
 // Put a new shape on the nearest clear spot to the middle of the bed, so added shapes do not stack on each other.
@@ -329,7 +446,7 @@ function wsRemove(o) {
 
 function wsDuplicate() {
   const copies = WS.sel.map(o => {
-    const c = wsAddObject({ name: o.name + ' copy', cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, geo: o.cat ? null : o.geo, color: o.color,
+    const c = wsAddObject({ name: o.name + ' copy', cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams && JSON.parse(JSON.stringify(o.genParams)), geo: o.cat ? null : o.geo, color: o.color,
       pos: o.mesh.position.toArray(), quat: o.mesh.quaternion.toArray(), scale: o.mesh.scale.toArray() });
     c.mesh.position.x += 12; c.mesh.position.y -= 12;
     return c;
@@ -347,6 +464,7 @@ function wsDelete() {
 
 function wsSelect(list) {
   WS.sel = list;
+  if (WS.mini && !list.includes(WS.mini.o)) wsCloseMini();
   WS.objs.forEach(o => o.mesh.material.emissive.setHex(WS.sel.includes(o) ? 0x0b6a80 : 0x000000));
   wsAttachGizmo();
   wsRenderSide();
@@ -422,7 +540,7 @@ function wsBindUI() {
   el.addEventListener('dblclick', e => {
     const p = wsPick(e);
     if (!p.o) return;
-    if (p.o.gen) { location.hash = '#/generator/' + encodeURIComponent(p.o.gen); return; }
+    if (p.o.gen) { wsOpenMini(p.o); return; }
     const t = document.getElementById('ws-text');
     if (t) { t.focus(); t.select(); } else wsToast('This shape has no generator yet.');
   });
@@ -463,12 +581,15 @@ function wsBindUI() {
 }
 
 function wsAction(a) {
+  if (/^(nudge|turn|grow|color):/.test(a)) { wsVisualAction(a); return; }
+  if (a === 'edit') { const o = WS.sel[0]; if (o && o.gen) wsOpenMini(o); return; }
   if (a === 'import') document.getElementById('ws-file').click();
   else if (a === 'export') wsExport();
   else if (a === 'undo') wsUndo();
   else if (a === 'redo') wsRedo();
   else if (a === 'clear') { if (!WS.objs.length || confirm('Remove everything from the Workshop?')) { WS.objs.slice().forEach(wsRemove); wsSelect([]); wsCommit(); } }
   else if (a === 'back') location.hash = '';
+  else if (a === 'miniclose') wsCloseMini();
   else if (a === 'snap') { WS.snap = !WS.snap; wsEl.root.querySelector('[data-a="snap"]').classList.toggle('on', WS.snap); wsAttachGizmo(); wsToast('Snap ' + (WS.snap ? 'on (5 mm, 15°)' : 'off')); }
   else if (a === 'tabtoggle') { WS.open = WS.open === 'all' ? 'strip' : 'all'; wsRenderCatalog(); }
   else if (a.startsWith('bool-')) wsBoolean(a.slice(5));
@@ -500,7 +621,7 @@ function wsToggle(key) {
 // ---------------------------------------------------------------- catalog UI
 
 function wsCard(i) {
-  const ic = i.img ? `<img class="ws-ic" src="${i.img}" alt="" draggable="false">` : `<span class="ws-ic">${i.icon}</span>`;
+  const ic = (i.img || i.thumb) ? `<img class="ws-ic" src="${i.img || i.thumb}" alt="" draggable="false">` : `<span class="ws-ic">${i.icon}</span>`;
   return `<button class="ws-card" data-add="${escapeHTML(i.id)}" title="${escapeHTML(i.name)}${i.gen ? ' (has a generator)' : ''}">${ic}<span class="ws-nm">${escapeHTML(i.name)}</span></button>`;
 }
 
@@ -526,27 +647,34 @@ function wsRenderSide() {
   const side = wsEl.side, sel = WS.sel;
   const list = WS.objs.slice().reverse().map(o => `<li data-id="${o.id}" class="${sel.includes(o) ? 'sel' : ''}"><span class="n">${escapeHTML(o.name)}${o.gen ? ' ⚙' : ''}</span>
       <button data-t="hidden" title="Hide / show (H)">${o.hidden ? '◌' : '◉'}</button><button data-t="locked" title="Lock">${o.locked ? '🔒' : '🔓'}</button></li>`).join('');
-  let insp = '<p class="ws-note">Select a shape to edit it. Drag a shape to move it, drag empty space to orbit, right-drag to pan, scroll to zoom. Shift-click selects several. Double-click a ⚙ shape to open its generator.</p>';
+  let insp = '<p class="ws-note">👆 Tap a shape to pick it. Drag it to move it. Drag empty space to look around. Hold Shift and tap to pick more than one. Double-click a ⚙ shape to edit it.</p>';
   if (sel.length) {
     const o = sel[0], one = sel.length === 1;
-    insp = `<h4>${one ? escapeHTML(o.name) : sel.length + ' selected'}</h4>
+    const B = (a, ic, label, tip) => `<button class="ws-big" data-a="${a}" title="${tip || label}"><span>${ic}</span><small>${label}</small></button>`;
+    const colors = ['#ff5252', '#ff9f1c', '#ffd400', '#7bd34a', '#00c2a8', '#4aa3ff', '#7a5cff', '#ff6ec7', '#ffffff', '#9aa5b1', '#6b4a2f', '#222222'];
+    insp = `<h4>${one ? escapeHTML(o.name) : sel.length + ' shapes'}</h4>
       ${one ? `<input type="text" id="ws-name" value="${escapeHTML(o.name)}" aria-label="Name">` : ''}
-      ${one ? ['Position', 'Rotation', 'Size'].map(g => `<div class="ws-note">${g} ${g === 'Rotation' ? '(°)' : '(mm)'}</div><div class="ws-row"><span></span>${'xyz'.split('').map(a => `<input type="number" step="${g === 'Rotation' ? 5 : 1}" data-f="${g[0]}${a}">`).join('')}</div>`).join('') +
-        '<label><input type="checkbox" id="ws-lockprop" checked> Keep proportions</label>' : ''}
+      <div class="ws-note" id="ws-dims"></div>
       ${one && o.params ? wsParamHTML(o) : ''}
-      ${one ? `<label>Colour <input type="color" id="ws-color" value="#${o.color.toString(16).padStart(6, '0')}"></label>` : ''}
-      <div class="ws-btns">
-        <button data-a="dup" title="Ctrl+D">Duplicate</button><button data-a="del" title="Delete">Delete</button>
-        <button data-a="drop" title="B">Drop to bed</button><button data-a="center">Centre</button>
-        <button data-a="mirror">Mirror X</button><button data-a="resetrot">Reset rotation</button>
-        <button data-a="focus" title="F">Focus</button>
+      ${one && o.gen ? `<button class="ws-big ws-wide" data-a="edit" title="Edit this shape (or double-click it)"><span>✏️</span><small>Edit this shape</small></button>` : ''}
+      <div class="ws-note">Move it</div>
+      <div class="ws-pad">
+        ${B('nudge:0,5,0', '⬆️', 'Back')}${B('nudge:0,0,5', '🛗', 'Up')}<span></span>
+        ${B('nudge:-5,0,0', '⬅️', 'Left')}${B('nudge:0,-5,0', '⬇️', 'Front')}${B('nudge:5,0,0', '➡️', 'Right')}
       </div>
-      <div class="ws-note">Combine ${sel.length > 1 ? '(first selected is the base)' : '(select 2 or more shapes)'}</div>
-      <div class="ws-btns">
-        <button data-a="bool-union" ${sel.length < 2 ? 'disabled' : ''}>Merge</button>
-        <button data-a="bool-subtract" ${sel.length < 2 ? 'disabled' : ''}>Cut</button>
-        <button data-a="bool-intersect" ${sel.length < 2 ? 'disabled' : ''}>Intersect</button>
-      </div>${one && o.gen ? `<p class="ws-note">This shape has a generator. <a href="#/generator/${encodeURIComponent(o.gen)}" style="color:var(--bp-cyan)">Open its editor</a> (or double-click it).</p>` : ''}`;
+      <div class="ws-note">Turn it</div>
+      <div class="ws-btns3">${B('turn:z,15', '↺', 'Spin left')}${B('turn:z,-15', '↻', 'Spin right')}${B('turn:z,90', '⟲', 'Quarter')}
+        ${B('turn:x,90', '🤸', 'Tip over')}${B('turn:y,90', '🎡', 'Roll')}${B('turn:x,180', '🙃', 'Flip')}</div>
+      <div class="ws-note">Make it …</div>
+      <div class="ws-btns3">${B('grow:1.25,1.25,1.25', '🐘', 'Bigger')}${B('grow:0.8,0.8,0.8', '🐜', 'Smaller')}${B('grow:1,1,1.25', '🦒', 'Taller')}
+        ${B('grow:1,1,0.8', '🥞', 'Flatter')}${B('grow:1.25,1,1', '↔️', 'Wider')}${B('grow:0.8,1,1', '🤏', 'Thinner')}</div>
+      <div class="ws-note">Colour</div>
+      <div class="ws-colors">${colors.map(c => `<button class="ws-sw" data-a="color:${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}</div>
+      <div class="ws-note">Do more</div>
+      <div class="ws-btns3">${B('dup', '👯', 'Copy', 'Duplicate (Ctrl+D)')}${B('del', '🗑️', 'Delete', 'Delete')}${B('drop', '⏬', 'To bed', 'Put it on the bed (B)')}
+        ${B('center', '🎯', 'Centre')}${B('mirror', '🪞', 'Mirror')}${B('focus', '🔍', 'Zoom', 'Zoom to it (F)')}</div>
+      <div class="ws-note">Join shapes ${sel.length > 1 ? '(the first one you picked is the base)' : '(pick 2 or more)'}</div>
+      <div class="ws-btns3">${B('bool-union', '🧩', 'Merge')}${B('bool-subtract', '✂️', 'Cut')}${B('bool-intersect', '🔗', 'Overlap')}</div>`;
   }
   side.innerHTML = `<div><h4>Selection</h4>${insp}</div><div><h4>Scene (${WS.objs.length})</h4><ul class="ws-list">${list || '<li class="ws-note">Empty</li>'}</ul>
     <p class="ws-note">Keys: W move · E rotate · R scale · G snap · B drop to bed · H hide · F focus · Ctrl+D duplicate · Ctrl+Z undo · Del delete</p>
@@ -559,7 +687,7 @@ function wsRenderSide() {
     else wsSelect(e.shiftKey ? WS.sel.concat(o) : [o]);
   };
   side.oninput = wsSideInput;
-  side.onchange = e => { if (e.target.id === 'ws-color' || e.target.id === 'ws-name' || e.target.dataset.p) wsCommit(); };
+  side.onchange = e => { if (e.target.id === 'ws-name' || e.target.dataset.p) wsCommit(); };
   wsInspectorValues();
 }
 
@@ -573,38 +701,35 @@ function wsParamHTML(o) {
 }
 
 function wsInspectorValues() {
-  const o = WS.sel[0];
-  if (!o || WS.sel.length !== 1) return;
-  const set = (f, v) => { const i = wsEl.side.querySelector(`[data-f="${f}"]`); if (i && document.activeElement !== i) i.value = Math.round(v * 100) / 100; };
-  const m = o.mesh, b = new THREE.Box3().setFromObject(m), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
-  set('Px', c.x); set('Py', c.y); set('Pz', c.z);
-  const D = 180 / Math.PI; set('Rx', m.rotation.x * D); set('Ry', m.rotation.y * D); set('Rz', m.rotation.z * D);
-  const g = o.geo.boundingBox.getSize(new THREE.Vector3());
-  set('Sx', g.x * Math.abs(m.scale.x)); set('Sy', g.y * Math.abs(m.scale.y)); set('Sz', g.z * Math.abs(m.scale.z));
+  const d = document.getElementById('ws-dims');
+  if (!d || !WS.sel.length) return;
+  const b = new THREE.Box3(); WS.sel.forEach(o => b.union(wsBox(o)));
+  const z = b.getSize(new THREE.Vector3());
+  d.textContent = `${z.x.toFixed(0)} × ${z.y.toFixed(0)} × ${z.z.toFixed(0)} mm`;
 }
 
 function wsSideInput(e) {
   const t = e.target, o = WS.sel[0];
   if (!o) return;
   if (t.id === 'ws-name') { o.name = t.value; wsEl.side.querySelector('h4').textContent = o.name; }
-  else if (t.id === 'ws-color') { o.color = parseInt(t.value.slice(1), 16); o.mesh.material.color.setHex(o.color); }
   else if (t.dataset.p) {
     o.params[t.dataset.p] = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) || 1 : t.value;
     const g = wsCentre(WS.cat[o.cat].build(o.params)); o.mesh.geometry.dispose(); o.geo = o.mesh.geometry = g;
     wsToBed(o); wsAttachGizmo(); wsInspectorValues();
-  } else if (t.dataset.f) {
-    const k = t.dataset.f, v = Number(t.value);
-    if (!isFinite(v)) return;
-    const m = o.mesh, D = Math.PI / 180;
-    if (k[0] === 'P') { const b = wsBox(o), c = b.getCenter(new THREE.Vector3()); m.position[k[1]] += v - c[k[1]]; }
-    else if (k[0] === 'R') m.rotation[k[1]] = v * D;
-    else if (k[0] === 'S' && v > 0.01) {
-      const g = o.geo.boundingBox.getSize(new THREE.Vector3()), a = k[1], f = v / (g[a] * Math.abs(m.scale[a]));
-      if (document.getElementById('ws-lockprop').checked) m.scale.multiplyScalar(f); else m.scale[a] *= f;
-    }
-    wsKeepOnBed(); wsAttachGizmo();
-    clearTimeout(wsSideInput.t); wsSideInput.t = setTimeout(() => { wsCommit(); wsInspectorValues(); }, 400);
   }
+}
+
+// Big visual buttons: "nudge:x,y,z", "turn:axis,degrees", "grow:sx,sy,sz", "color:#hex".
+function wsVisualAction(a) {
+  const [kind, arg] = a.split(':'), v = arg.split(',');
+  const list = WS.sel.filter(o => !o.locked);
+  if (!list.length) return;
+  if (kind === 'nudge') list.forEach(o => { const n = v.map(Number); o.mesh.position.add(new THREE.Vector3(...n)); });
+  else if (kind === 'turn') list.forEach(o => o.mesh.rotateOnWorldAxis(new THREE.Vector3(v[0] === 'x' ? 1 : 0, v[0] === 'y' ? 1 : 0, v[0] === 'z' ? 1 : 0), Number(v[1]) * Math.PI / 180));
+  else if (kind === 'grow') list.forEach(o => o.mesh.scale.multiply(new THREE.Vector3(...v.map(Number))));
+  else if (kind === 'color') list.forEach(o => { o.color = parseInt(v[0].slice(1), 16); o.mesh.material.color.setHex(o.color); });
+  if (kind !== 'color') { wsKeepOnBed(); wsAttachGizmo(); }
+  wsCommit(); wsInspectorValues();
 }
 
 // ---------------------------------------------------------------- boolean merge / cut
@@ -663,12 +788,13 @@ async function wsBoolean(op) {
 // ---------------------------------------------------------------- history and autosave
 
 function wsSnapshot() {
-  return WS.objs.map(o => ({ id: o.id, name: o.name, cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, geo: o.geo, color: o.color, locked: o.locked, hidden: o.hidden,
+  return WS.objs.map(o => ({ id: o.id, name: o.name, cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams, geo: o.geo, color: o.color, locked: o.locked, hidden: o.hidden,
     pos: o.mesh.position.toArray(), quat: o.mesh.quaternion.toArray(), scale: o.mesh.scale.toArray() }));
 }
 
 function wsRestore(snap) {
   WS.objs.slice().forEach(wsRemove);
+  wsCloseMini();
   snap.forEach(s => wsAddObject({ ...s, geo: s.cat ? null : s.geo }));
   wsSelect([]); wsOutOfBed();
 }

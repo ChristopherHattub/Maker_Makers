@@ -705,7 +705,21 @@
     updateStats();
     rebuildWire();
     if (activeTab === 'print') updatePrintLook();
+    postEmbedModel();
   }
+
+  // Workshop embed (?embed=workshop): the page shows only the Parametric controls and sends the built model to the parent
+  // after every rebuild, so the Workshop can place and edit it. The parent can send { type: 'mm-set-params', params }.
+  var EMBED = /[?&]embed=workshop\b/.test(location.search);
+  if (EMBED) document.body.classList.add('mm-embed');
+  function postEmbedModel() {
+    if (!EMBED || window.parent === window) return;
+    window.parent.postMessage({ type: 'mm-model', params: JSON.parse(JSON.stringify(params)),
+      parts: modelData.map(function (e) { return { name: e.name || 'body', positions: e.positions.slice() }; }) }, '*');
+  }
+  if (EMBED) window.addEventListener('message', function (e) {
+    if (e.source === window.parent && e.data && e.data.type === 'mm-set-params') setParams(e.data.params || {});
+  });
 
   // View modes: 'solid', 'wire' (triangle edges only) and 'edges' (solid with edges on top).
   // The wire lines are only built while a mode needs them. Painting always shows the solid.

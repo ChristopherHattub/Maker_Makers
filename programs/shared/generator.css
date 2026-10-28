@@ -762,3 +762,13 @@ body.mm-soft {
 .mm-soft .mm-viewport { background: var(--s-stage); }
 .mm-soft .mm-stage canvas:not(.mm-backdrop) { position: relative; z-index: 1; }
 .mm-soft .mm-stage canvas.mm-backdrop { position: absolute; inset: 0; z-index: 0; cursor: default; pointer-events: none; }
+
+/* ---------- Workshop embed (?embed=workshop): only the Parametric controls, filling the frame ---------- */
+body.mm-gen.mm-embed .mm-gen-header,
+body.mm-gen.mm-embed .mm-viewport,
+body.mm-gen.mm-embed #mm-tab-color,
+body.mm-gen.mm-embed #mm-tab-print,
+body.mm-gen.mm-embed .mm-sheet-handle { display: none !important; }
+body.mm-gen.mm-embed { height: 100vh; overflow: hidden; }
+body.mm-gen.mm-embed .mm-main { display: block !important; margin: 0 !important; height: 100vh; }
+body.mm-gen.mm-embed .mm-panel { height: 100vh; width: 100%; max-width: none; border-width: 0; }
