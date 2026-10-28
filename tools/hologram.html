@@ -182,7 +182,10 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
     try { config = await (await fetch('../scripts/hologram-config.json')).json(); } catch (e) {}
     var want = q.get('gen') || 'ghost-builder';
     var list = GENERATORS.filter(function (g) { return g.programUrl; });
-    if (want !== 'all') list = list.filter(function (g) { return thumbId(g) === want || g.programUrl.indexOf('/' + want + '.html') >= 0; });
+    if (want !== 'all') {   // one id, or several separated by commas
+      var ids = want.split(',');
+      list = list.filter(function (g) { return ids.some(function (w) { return thumbId(g) === w || g.programUrl.indexOf('/' + w + '.html') >= 0; }); });
+    }
     var k = 0;
     for (var g of list) {
       var id = thumbId(g), cfg = config[id] || {};
