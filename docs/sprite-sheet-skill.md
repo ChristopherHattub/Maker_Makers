@@ -1,6 +1,6 @@
 # Tile hover assets skill v3 (for Gemini)
 
-Version 3 asks Gemini for **one generator per image, 16 rotation frames**, because two generators and 24 frames per image gave uneven, repeated frames. It supersedes v1 (scan-line sheets) and v2 (two generators per sheet). The base tile is unchanged.
+Version 3 asks Gemini for **one generator per image, a 16-frame half turn (0–180°) that the site mirrors for the rest**, because two generators and 24 frames per image gave uneven, repeated frames, and Gemini cannot draw the second half of a turn (270–360°) reliably. It supersedes v1 (scan-line sheets) and v2 (two generators per sheet). The base tile is unchanged.
 
 Source of truth for the list is `js/programs.js` on `origin/main`: **42 generators** (slots 1–43; slot 14 unused).
 
@@ -9,19 +9,19 @@ Source of truth for the list is `js/programs.js` on `origin/main`: **42 generato
 | Piece | What Gemini draws | Count |
 |---|---|---|
 | Base tile | One empty tile: steel frame, orange rim, HUD, glow pool, no text | 1 (done, shared by all tiles) |
-| Object image | One cyan wireframe hologram on pure black, 16 frames turning 360° (22.5° per frame) | 1 per generator, 42 total |
+| Object image | One cyan wireframe hologram on pure black, 16 frames turning 0°→180° (12° per frame), front to back | 1 per generator, 42 total |
 
-The site draws the label, slot number, rim colour, hologram tint and the pop-out (scale up, lift, overflow the frame), then loops the 16 frames at about 16 fps.
+The site draws the label, slot number, rim colour, hologram tint and the pop-out (scale up, lift, overflow the frame), then plays f0→f15 followed by f14→f1 flipped left to right (30 frames per full turn at about 24 fps), so the spin is continuous.
 
 | Item | Value |
 |---|---|
 | Object image | 1152 × 1152 (1:1), 4 × 4 grid of 288 px cells, pure black, no gaps |
-| Frames | 16, left to right then top to bottom, 22.5° apart, clockwise seen from above |
-| Landmarks | f0 front (three-quarter), f4 side with front pointing left, f8 back, f12 side with front pointing right |
+| Frames | 16, left to right then top to bottom, 12° apart, 0° to 180°, clockwise seen from above (f0 front, f7–f8 side profile, f15 back) |
+| Landmarks | f0 front (three-quarter), f7–f8 side with front pointing left, f15 back. Nothing is drawn past 180°. |
 | Object size | Largest dimension 245–252 px (85–88% of the cell), centred, 18 px black margin |
 | File name | `<id>-3d.jpg` (for example `ghost-builder-3d.jpg`) saved to Downloads, id from the manifest |
 
-Each manifest row lists what the **front** (f0) and **back** (f8) look like, so Gemini has a visible landmark for every angle.
+Each manifest row lists what the **front** (f0) and **back** (f15) look like, so Gemini has a visible landmark for every angle.
 
 ## 1. Gem instructions (paste into the Gem)
 
@@ -67,51 +67,51 @@ Never add decoration or extra objects.
 
 ## 2. Manifest (paste into the Gem as knowledge)
 
-Format: `Slot | id | subject | front (f0) | back (f8)`.
+Format: `Slot | id | subject | front (f0) | back (f15)`.
 
 ```
-Slot 01 | ghost-builder | a rounded ghost with a wavy hem and two stubby arms | front f0: two round eyes, a smile and both arms visible | back f8: a smooth blank dome, no face, wavy hem
-Slot 02 | pumpkin-plotter | a ribbed pumpkin with a curly stem | front f0: a carved jack-o-lantern face (triangle eyes and nose, jagged smile) | back f8: plain vertical ribs, no face, stem curl pointing the other way
-Slot 03 | spider | a spider with a round abdomen and eight bent legs | front f0: a cluster of eyes and two fangs | back f8: the rear of the abdomen with an hourglass marking, legs trailing
-Slot 04 | snowman | a three-ball snowman with a top hat, scarf and carrot nose | front f0: carrot nose, coal eyes, buttons, scarf knot | back f8: plain back of the balls, scarf tail hanging, back of the hat
-Slot 05 | witch-hat | a tall bent witch hat with a wide curled brim | front f0: a buckle on the hat band, brim curling toward the viewer | back f8: the bent tip pointing away, no buckle
-Slot 06 | snowflake | a flat six-armed snowflake ornament with a hanging loop | front f0: the flat face with the hanging loop at the top (it turns edge-on at 90 and 270 degrees, nearly a thin line) | back f8: the mirrored back face
-Slot 07 | skull-sculptor | a skull with eye sockets, nose cavity and teeth | front f0: eye sockets, nose cavity and teeth | back f8: smooth back of the cranium with a small crack
-Slot 08 | holiday-tree | a tiered Christmas tree with baubles and a star topper | front f0: a garland swag, baubles and the star | back f8: plain boughs with fewer baubles
-Slot 09 | gift-box | a gift box with a lid and a ribbon bow | front f0: the bow knot and a hanging tag | back f8: plain ribbon seam, no tag
-Slot 10 | key-clicker | a row of mechanical keyboard keycaps | front f0: the keycap tops with symbols | back f8: the back edge with a cable port
-Slot 11 | name-keychain | a rounded name plate with raised NAME letters and a key ring | front f0: raised letters with the key ring on the right | back f8: flat back of the plate with the ring on the left
-Slot 12 | image-clicker | a flat print-in-place fidget clicker slab with an embossed picture | front f0: an embossed mountain-and-sun picture | back f8: a plain smooth back (turns edge-on at 90 and 270 degrees)
-Slot 13 | ornament-stacker | a stacked ornament-style snowman with a hanging loop | front f0: a face with a button row | back f8: plain back, the hanging loop at the top
-Slot 15 | pottery-wheel | a vase on a pottery wheel with one side handle | front f0: the handle on the right and a carved band | back f8: no handle, plain curve of the vase
-Slot 16 | gift-box-2 | a gift box with a hinged lid and a bow | front f0: the bow and a tag | back f8: the hinge side, no bow
-Slot 17 | turkey-builder | a turkey with a fan of tail feathers | front f0: the face with a wattle | back f8: the full fan of tail feathers
-Slot 18 | cornucopia | a horn-of-plenty basket spilling fruit and gourds | front f0: the open mouth with spilling fruit | back f8: the woven horn tip curling away
-Slot 19 | leaf-press | a flat leaf ornament with raised veins | front f0: the leaf face with raised veins (turns edge-on at 90 and 270 degrees) | back f8: the back face
-Slot 20 | pumpkin-pie-slice | a slice of pumpkin pie with a crust edge | front f0: the pointed tip toward the viewer with the crust arc behind | back f8: the crust arc facing the viewer
-Slot 21 | acorn-pinecone-set | an acorn and a pinecone side by side | front f0: the acorn on the left, the pinecone on the right | back f8: the two swapped sides, caps from behind
-Slot 22 | scarecrow-stacker | a stacked scarecrow with a straw hat and patched body | front f0: a stitched face and body patches | back f8: plain back with straw tufts
-Slot 23 | gratitude-place-cards | a standing folded place card with a leaf motif | front f0: the leaf motif on the front panel | back f8: the plain back panel
-Slot 24 | countdown-clock | a clock face with chunky numerals as a cake topper | front f0: the clock face | back f8: the plain casing with a stand
-Slot 25 | confetti-cannon | a party-popper cone bursting confetti | front f0: the cone mouth with confetti bursting toward the viewer | back f8: the closed tip of the cone
-Slot 26 | party-hat | a striped party hat on a spinning base | front f0: the seam of the stripes and a pom-pom | back f8: the opposite side of the cone
-Slot 27 | party-whistle | a curly party blower whistle | front f0: the mouthpiece and the curl | back f8: the other side of the curl
-Slot 28 | conversation-hearts | a pile of heart-shaped candies with short embossed words | front f0: hearts with embossed words | back f8: plain backs of the hearts
-Slot 29 | valentines-card | a folded card with a heart cut-out | front f0: the heart cut-out in the front panel | back f8: plain back, closed fold
-Slot 30 | egg-decorator | a decorated egg on a stand with patterned bands | front f0: a zigzag band | back f8: a small flower pattern
-Slot 31 | bunny-builder | a bunny with long ears and a round tail | front f0: the face with whiskers | back f8: the round fluffy tail
-Slot 32 | chick-hatcher | a chick emerging from a cracked egg | front f0: the chick face and beak | back f8: the jagged edge of the shell
-Slot 33 | flower-pot | a planter pot with a flower growing out | front f0: the flower bloom facing the viewer | back f8: a leaf and the plain pot back
-Slot 34 | butterfly-wings | a butterfly with patterned open wings | front f0: the open wings facing the viewer | back f8: wings edge-on at 90 and 270 degrees, body from behind at 180
-Slot 35 | egg-basket | a woven basket with a handle holding eggs | front f0: the handle and eggs | back f8: the plain weave side
-Slot 36 | cake-stacker | a tiered cake with frosting drips and a cherry | front f0: the cherry and the longest drip | back f8: the back drips
-Slot 37 | candle-number | a numeral 7 candle topper with a flame | front f0: the numeral face with the flame | back f8: the mirrored back of the numeral
-Slot 38 | pinata | a donkey-shaped pinata with a pull string | front f0: the donkey face | back f8: the tail and the pull string
-Slot 39 | balloon-twister | a twisted balloon dog | front f0: the dog face | back f8: the twisted tail
-Slot 40 | banner-letters | a row of bunting flags with letters | front f0: the lettered flags facing the viewer | back f8: the plain backs of the flags
-Slot 41 | party-popper | a party popper spinner fidget | front f0: the popper mouth | back f8: the closed tip
-Slot 42 | cupcake-maker | a cupcake with swirled frosting and a cherry | front f0: the cherry and frosting swirl | back f8: the wrapper pleats from behind
-Slot 43 | birthday-crown | a spiked birthday crown with gems | front f0: a large central gem | back f8: a plain band with a clasp
+Slot 01 | ghost-builder | a rounded ghost with a wavy hem and two stubby arms | front f0: two round eyes, a smile and both arms visible | back f15: a smooth blank dome, no face, wavy hem
+Slot 02 | pumpkin-plotter | a ribbed pumpkin with a curly stem | front f0: a carved jack-o-lantern face (triangle eyes and nose, jagged smile) | back f15: plain vertical ribs, no face, stem curl pointing the other way
+Slot 03 | spider | a spider with a round abdomen and eight bent legs | front f0: a cluster of eyes and two fangs | back f15: the rear of the abdomen with an hourglass marking, legs trailing
+Slot 04 | snowman | a three-ball snowman with a top hat, scarf and carrot nose | front f0: carrot nose, coal eyes, buttons, scarf knot | back f15: plain back of the balls, scarf tail hanging, back of the hat
+Slot 05 | witch-hat | a tall bent witch hat with a wide curled brim | front f0: a buckle on the hat band, brim curling toward the viewer | back f15: the bent tip pointing away, no buckle
+Slot 06 | snowflake | a flat six-armed snowflake ornament with a hanging loop | front f0: the flat face with the hanging loop at the top (it turns edge-on at about 90 degrees, nearly a thin line) | back f15: the mirrored back face
+Slot 07 | skull-sculptor | a skull with eye sockets, nose cavity and teeth | front f0: eye sockets, nose cavity and teeth | back f15: smooth back of the cranium with a small crack
+Slot 08 | holiday-tree | a tiered Christmas tree with baubles and a star topper | front f0: a garland swag, baubles and the star | back f15: plain boughs with fewer baubles
+Slot 09 | gift-box | a gift box with a lid and a ribbon bow | front f0: the bow knot and a hanging tag | back f15: plain ribbon seam, no tag
+Slot 10 | key-clicker | a row of mechanical keyboard keycaps | front f0: the keycap tops with symbols | back f15: the back edge with a cable port
+Slot 11 | name-keychain | a rounded name plate with raised NAME letters and a key ring | front f0: raised letters with the key ring on the right | back f15: flat back of the plate with the ring on the left
+Slot 12 | image-clicker | a flat print-in-place fidget clicker slab with an embossed picture | front f0: an embossed mountain-and-sun picture | back f15: a plain smooth back (turns edge-on at about 90 degrees)
+Slot 13 | ornament-stacker | a stacked ornament-style snowman with a hanging loop | front f0: a face with a button row | back f15: plain back, the hanging loop at the top
+Slot 15 | pottery-wheel | a vase on a pottery wheel with one side handle | front f0: the handle on the right and a carved band | back f15: no handle, plain curve of the vase
+Slot 16 | gift-box-2 | a gift box with a hinged lid and a bow | front f0: the bow and a tag | back f15: the hinge side, no bow
+Slot 17 | turkey-builder | a turkey with a fan of tail feathers | front f0: the face with a wattle | back f15: the full fan of tail feathers
+Slot 18 | cornucopia | a horn-of-plenty basket spilling fruit and gourds | front f0: the open mouth with spilling fruit | back f15: the woven horn tip curling away
+Slot 19 | leaf-press | a flat leaf ornament with raised veins | front f0: the leaf face with raised veins (turns edge-on at about 90 degrees) | back f15: the back face
+Slot 20 | pumpkin-pie-slice | a slice of pumpkin pie with a crust edge | front f0: the pointed tip toward the viewer with the crust arc behind | back f15: the crust arc facing the viewer
+Slot 21 | acorn-pinecone-set | an acorn and a pinecone side by side | front f0: the acorn on the left, the pinecone on the right | back f15: the two swapped sides, caps from behind
+Slot 22 | scarecrow-stacker | a stacked scarecrow with a straw hat and patched body | front f0: a stitched face and body patches | back f15: plain back with straw tufts
+Slot 23 | gratitude-place-cards | a standing folded place card with a leaf motif | front f0: the leaf motif on the front panel | back f15: the plain back panel
+Slot 24 | countdown-clock | a clock face with chunky numerals as a cake topper | front f0: the clock face | back f15: the plain casing with a stand
+Slot 25 | confetti-cannon | a party-popper cone bursting confetti | front f0: the cone mouth with confetti bursting toward the viewer | back f15: the closed tip of the cone
+Slot 26 | party-hat | a striped party hat on a spinning base | front f0: the seam of the stripes and a pom-pom | back f15: the opposite side of the cone
+Slot 27 | party-whistle | a curly party blower whistle | front f0: the mouthpiece and the curl | back f15: the other side of the curl
+Slot 28 | conversation-hearts | a pile of heart-shaped candies with short embossed words | front f0: hearts with embossed words | back f15: plain backs of the hearts
+Slot 29 | valentines-card | a folded card with a heart cut-out | front f0: the heart cut-out in the front panel | back f15: plain back, closed fold
+Slot 30 | egg-decorator | a decorated egg on a stand with patterned bands | front f0: a zigzag band | back f15: a small flower pattern
+Slot 31 | bunny-builder | a bunny with long ears and a round tail | front f0: the face with whiskers | back f15: the round fluffy tail
+Slot 32 | chick-hatcher | a chick emerging from a cracked egg | front f0: the chick face and beak | back f15: the jagged edge of the shell
+Slot 33 | flower-pot | a planter pot with a flower growing out | front f0: the flower bloom facing the viewer | back f15: a leaf and the plain pot back
+Slot 34 | butterfly-wings | a butterfly with patterned open wings | front f0: the open wings facing the viewer | back f15: wings edge-on at about 90 degrees, body from behind at 180
+Slot 35 | egg-basket | a woven basket with a handle holding eggs | front f0: the handle and eggs | back f15: the plain weave side
+Slot 36 | cake-stacker | a tiered cake with frosting drips and a cherry | front f0: the cherry and the longest drip | back f15: the back drips
+Slot 37 | candle-number | a numeral 7 candle topper with a flame | front f0: the numeral face with the flame | back f15: the mirrored back of the numeral
+Slot 38 | pinata | a donkey-shaped pinata with a pull string | front f0: the donkey face | back f15: the tail and the pull string
+Slot 39 | balloon-twister | a twisted balloon dog | front f0: the dog face | back f15: the twisted tail
+Slot 40 | banner-letters | a row of bunting flags with letters | front f0: the lettered flags facing the viewer | back f15: the plain backs of the flags
+Slot 41 | party-popper | a party popper spinner fidget | front f0: the popper mouth | back f15: the closed tip
+Slot 42 | cupcake-maker | a cupcake with swirled frosting and a cherry | front f0: the cherry and frosting swirl | back f15: the wrapper pleats from behind
+Slot 43 | birthday-crown | a spiked birthday crown with gems | front f0: a large central gem | back f15: a plain band with a clasp
 ```
 
 ## 3. How to run it
@@ -127,9 +127,9 @@ Slot 43 | birthday-crown | a spiked birthday crown with gems | front f0: a large
 - [ ] One object, same design, size, brightness and line density in all 16 frames; cyan only; no text, pool, grid or particles.
 - [ ] Largest dimension 245–252 px, centred, 18 px margin, glow fades to black inside the cell.
 - [ ] All 16 frames look different from their neighbours. Flip through them: a smooth even turn with no repeated or held frames.
-- [ ] f0 shows the front features, f4 a left-facing profile, f8 the back (front features hidden), f12 a right-facing profile.
-- [ ] Clockwise seen from above (front moves from the viewer's right to left); f15 flows into f0.
+- [ ] f0 shows the front features, f7–f8 a left-facing profile, f15 the back (front features hidden). Nothing is drawn past 180°.
+- [ ] Clockwise seen from above (front moves from the viewer's right to left), steadily from f0 to f15 with no reversal.
 
 ## 4. Homepage handoff
 
-Playback is built for v2 (24-frame sheets of two generators). For v3 the build script and `manifest-v2.json` change to one file per generator: `assets/thumbnails/sprites/obj-<id>.webp` (1152 × 1152, brightness to alpha, per-block normalising, optional hue), with each tile entry `{ "slot": 1, "file": "obj-ghost-builder.webp" }`, `cols` 4, `frames` 16, `rowsPerBlock` 4, `fps` 16. Loading one small file per tile on first hover is lighter than the shared sheets. Everything else (base tile, rim hues, pop-out, label and slot text, reduced motion) stays as in v2.
+Playback is built for v2 (24-frame sheets of two generators). For v3 the build script and `manifest-v2.json` change to one file per generator: `assets/thumbnails/sprites/obj-<id>.webp` (1152 × 1152, brightness to alpha, per-block normalising, optional hue), with each tile entry `{ "slot": 1, "file": "obj-ghost-builder.webp" }`, `cols` 4, `frames` 16, `rowsPerBlock` 4, `fps` 24, `mirror: true` (play f0..f15 then f14..f1 with `transform: scaleX(-1)`). Loading one small file per tile on first hover is lighter than the shared sheets. Everything else (base tile, rim hues, pop-out, label and slot text, reduced motion) stays as in v2.
