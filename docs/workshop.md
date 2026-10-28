@@ -10,6 +10,7 @@ A large tile in the middle of the homepage map opens `#/workshop`, a 3D editor f
 - **Generators:** the Generators set lists the finished generators (fidgets, clickers and other functional models are left out for now). Double-click one in the scene to open its generator.
 - **Text:** the Text shape accepts any keyboard character; edit text, height and thickness in the inspector.
 - **Quality of life:** undo/redo, duplicate, delete, multi-select (shift-click), drop to bed, centre, mirror, hide, lock, colour, snap, top/front/iso views, a build-plate size with out-of-bounds warning, autosave.
+- **Merge / Cut / Intersect:** select two or more shapes (the first selected is the base) and use the Combine buttons in the inspector. The result is one new shape; Ctrl+Z restores the originals. It uses three-bvh-csg, loaded from esm.sh on first use, and works best on closed shapes.
 - **Keys:** W/E/R move/rotate/scale, G snap, B drop to bed, H hide, F focus, Ctrl+D duplicate, Ctrl+Z / Ctrl+Shift+Z undo / redo, Del delete.
 
 ## Privacy
@@ -28,4 +29,4 @@ Add an entry to a set in `wsCatalog()`: `{ id, name, icon, build(params) }`, whe
 
 ## Not done yet
 
-Generator shapes are plinth placeholders with the generator's name. The real geometry only exists inside each generator page, so double-click opens it rather than editing in place, and nothing brings a generator's result back into the Workshop. Booleans (merge/cut) and per-part colour in the export are also not done.
+Generator shapes are plinth placeholders with the generator's name. The real geometry only exists inside each generator page, so double-click opens it rather than editing in place, and nothing brings a generator's result back into the Workshop. Per-part colour in the export are also not done.

@@ -471,6 +471,7 @@ function wsAction(a) {
   else if (a === 'back') location.hash = '';
   else if (a === 'snap') { WS.snap = !WS.snap; wsEl.root.querySelector('[data-a="snap"]').classList.toggle('on', WS.snap); wsAttachGizmo(); wsToast('Snap ' + (WS.snap ? 'on (5 mm, 15°)' : 'off')); }
   else if (a === 'tabtoggle') { WS.open = WS.open === 'all' ? 'strip' : 'all'; wsRenderCatalog(); }
+  else if (a.startsWith('bool-')) wsBoolean(a.slice(5));
   else if (a === 'dup') wsDuplicate();
   else if (a === 'del') wsDelete();
   else if (a === 'drop') wsDropSelected();
@@ -539,6 +540,12 @@ function wsRenderSide() {
         <button data-a="drop" title="B">Drop to bed</button><button data-a="center">Centre</button>
         <button data-a="mirror">Mirror X</button><button data-a="resetrot">Reset rotation</button>
         <button data-a="focus" title="F">Focus</button>
+      </div>
+      <div class="ws-note">Combine ${sel.length > 1 ? '(first selected is the base)' : '(select 2 or more shapes)'}</div>
+      <div class="ws-btns">
+        <button data-a="bool-union" ${sel.length < 2 ? 'disabled' : ''}>Merge</button>
+        <button data-a="bool-subtract" ${sel.length < 2 ? 'disabled' : ''}>Cut</button>
+        <button data-a="bool-intersect" ${sel.length < 2 ? 'disabled' : ''}>Intersect</button>
       </div>${one && o.gen ? `<p class="ws-note">This shape has a generator. <a href="#/generator/${encodeURIComponent(o.gen)}" style="color:var(--bp-cyan)">Open its editor</a> (or double-click it).</p>` : ''}`;
   }
   side.innerHTML = `<div><h4>Selection</h4>${insp}</div><div><h4>Scene (${WS.objs.length})</h4><ul class="ws-list">${list || '<li class="ws-note">Empty</li>'}</ul>
@@ -598,6 +605,59 @@ function wsSideInput(e) {
     wsKeepOnBed(); wsAttachGizmo();
     clearTimeout(wsSideInput.t); wsSideInput.t = setTimeout(() => { wsCommit(); wsInspectorValues(); }, 400);
   }
+}
+
+// ---------------------------------------------------------------- boolean merge / cut
+
+// CSG comes from three-bvh-csg, loaded on first use from its own module build (it needs a newer three than the editor,
+// so shapes are passed across as plain vertex arrays). Works best on closed shapes; open or self-overlapping meshes may
+// give rough results.
+let wsCsgLib = null;
+function wsCsg() {
+  if (!wsCsgLib) wsCsgLib = Promise.all([
+    import('https://esm.sh/three@0.160.0'),
+    import('https://esm.sh/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js'),
+    import('https://esm.sh/three-bvh-csg@0.0.16?deps=three@0.160.0,three-mesh-bvh@0.7.3')
+  ]).then(([three, utils, csg]) => ({ three, utils, csg }));
+  return wsCsgLib;
+}
+
+async function wsBoolean(op) {
+  const parts = WS.sel.filter(o => o.mesh.visible && !o.locked);
+  if (parts.length < 2) { wsToast('Select two or more shapes first.'); return; }
+  wsToast('Combining shapes…');
+  let lib;
+  try { lib = await wsCsg(); } catch (err) { wsToast('Could not load the boolean tool. Check your connection.'); return; }
+  const { three: T2, utils, csg } = lib;
+  const brush = o => {
+    o.mesh.updateMatrixWorld(true);
+    const src = o.geo.index ? o.geo.toNonIndexed() : o.geo, p = src.attributes.position, v = new THREE.Vector3(), arr = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.mesh.matrixWorld); arr.set([v.x, v.y, v.z], i * 3); }
+    if (o.mesh.matrixWorld.determinant() < 0) for (let i = 0; i < p.count; i += 3) { const t = arr.slice(i * 3 + 3, i * 3 + 6); arr.copyWithin(i * 3 + 3, i * 3 + 6, i * 3 + 9); arr.set(t, i * 3 + 6); }
+    let g = new T2.BufferGeometry(); g.setAttribute('position', new T2.BufferAttribute(arr, 3));
+    g.setAttribute('normal', new T2.BufferAttribute(new Float32Array(arr.length), 3));
+    g.setAttribute('uv', new T2.BufferAttribute(new Float32Array(p.count * 2), 2));
+    g = utils.mergeVertices(g, 1e-4); g.computeVertexNormals();
+    const b = new csg.Brush(g); b.updateMatrixWorld(); return b;
+  };
+  try {
+    const ev = new csg.Evaluator(), type = { union: csg.ADDITION, subtract: csg.SUBTRACTION, intersect: csg.INTERSECTION }[op];
+    let acc = brush(parts[0]);
+    for (const o of parts.slice(1)) { acc = ev.evaluate(acc, brush(o), type); acc.updateMatrixWorld(); }
+    const pos = acc.geometry.getAttribute('position'), idx = acc.geometry.index;
+    if (!pos || pos.count < 3) { wsToast(op === 'intersect' ? 'Those shapes do not overlap, so nothing is left.' : 'The result is empty.'); return; }
+    const g = new THREE.BufferGeometry();
+    const flat = new Float32Array((idx ? idx.count : pos.count) * 3);
+    for (let i = 0; i < flat.length / 3; i++) { const k = idx ? idx.getX(i) : i; flat.set([pos.getX(k), pos.getY(k), pos.getZ(k)], i * 3); }
+    g.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+    const box = new THREE.Box3().setFromBufferAttribute(g.attributes.position), c = box.getCenter(new THREE.Vector3());
+    wsCentre(g);
+    const name = { union: 'Merged', subtract: 'Cut', intersect: 'Intersection' }[op];
+    parts.forEach(wsRemove);
+    const r = wsAddObject({ name, geo: g, color: parts[0].color, pos: c.toArray(), quat: [0, 0, 0, 1], scale: [1, 1, 1] });
+    wsSelect([r]); wsCommit();
+    wsToast(name + ' done. Press Ctrl+Z to undo.');
+  } catch (err) { wsToast('Could not combine those shapes (they may not be closed solids).'); }
 }
 
 // ---------------------------------------------------------------- history and autosave
