@@ -101,9 +101,9 @@
       "slot": 4,
       "file": "obj-snowman.webp",
       "width": 1152,
-      "height": 1152,
+      "height": 2304,
       "cols": 4,
-      "frames": 16,
+      "frames": 32,
       "order": [
         0,
         1,
@@ -112,19 +112,19 @@
         4,
         5,
         6,
-        7,
-        8,
         9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15
+        15,
+        19,
+        21,
+        22,
+        23,
+        26,
+        27,
+        30
       ],
-      "rowsPerBlock": 4,
+      "rowsPerBlock": 8,
       "block": 0,
-      "mirror": true
+      "mirror": false
     },
     "witch-hat": {
       "slot": 5,
