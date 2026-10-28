@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-044 Gear Train Spinner // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Gear Train Spinner: a chain of meshing involute gears that each turn on their own fixed pin.
+    // Everything prints in one go: the pins grow out of the base plate, every gear floats on its pin with a
+    // small clearance, and a cone-shaped pin head (45 degree underside, no supports) keeps it from lifting off.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Mesh toolkit. A mesh is a flat array of triangle corners (x,y,z per corner, 9 per triangle),
+      // Y-up, millimetres, counter-clockwise seen from outside. Every primitive returns one or more
+      // closed shells; shells may overlap each other (slicers union them).
+      // -----------------------------------------------------------------------
+      var PI = Math.PI, TAU = Math.PI * 2;
+
+      function tri(m, a, b, c) {
+        // Skip zero-area triangles (poles of a lathe share one point).
+        if ((a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) || (b[0] === c[0] && b[1] === c[1] && b[2] === c[2]) ||
+            (a[0] === c[0] && a[1] === c[1] && a[2] === c[2])) return;
+        m.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(m, a, b, c, d) { tri(m, a, b, c); tri(m, a, c, d); }
+      function append(dst, src) { for (var i = 0; i < src.length; i++) dst.push(src[i]); return dst; }
+
+      // Apply f(x,y,z) -> [x,y,z] to every corner. Pass mirror = true when f flips handedness.
+      function xf(m, f, mirror) {
+        var out = new Array(m.length);
+        for (var i = 0; i < m.length; i += 3) {
+          var p = f(m[i], m[i + 1], m[i + 2]);
+          out[i] = p[0]; out[i + 1] = p[1]; out[i + 2] = p[2];
+        }
+        if (mirror) {
+          for (var k = 0; k < out.length; k += 9) {
+            for (var q = 0; q < 3; q++) { var t = out[k + 3 + q]; out[k + 3 + q] = out[k + 6 + q]; out[k + 6 + q] = t; }
+          }
+        }
+        return out;
+      }
+      function mv(m, x, y, z) { return xf(m, function (a, b, c) { return [a + x, b + y, c + z]; }); }
+      function rotY(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [c * x + s * z, y, -s * x + c * z]; });
+      }
+      function rotX(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [x, c * y - s * z, s * y + c * z]; });
+      }
+      function rotZ(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [c * x - s * y, s * x + c * y, z]; });
+      }
+      // Rotate by angle a about an arbitrary unit axis (ux,uy,uz) through the origin.
+      function rotAxis(m, ux, uy, uz, a) {
+        var c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+        return xf(m, function (x, y, z) {
+          return [(t * ux * ux + c) * x + (t * ux * uy - s * uz) * y + (t * ux * uz + s * uy) * z,
+                  (t * ux * uy + s * uz) * x + (t * uy * uy + c) * y + (t * uy * uz - s * ux) * z,
+                  (t * ux * uz - s * uy) * x + (t * uy * uz + s * ux) * y + (t * uz * uz + c) * z];
+        });
+      }
+      // Rotate so that +Y points along (dx,dy,dz); keeps shells watertight and outward.
+      function aimY(m, dx, dy, dz) {
+        var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        dx /= len; dy /= len; dz /= len;
+        // axis = Y x d, angle = acos(dy)
+        var ax = dz, az = -dx, al = Math.sqrt(ax * ax + az * az);
+        if (al < 1e-9) return dy > 0 ? m : rotX(m, PI);
+        return rotAxis(m, ax / al, 0, az / al, Math.acos(Math.max(-1, Math.min(1, dy))));
+      }
+
+      function box(x0, y0, z0, x1, y1, z1) {
+        var m = [];
+        quad(m, [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]);
+        quad(m, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
+        quad(m, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]);
+        quad(m, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]);
+        quad(m, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
+        quad(m, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]);
+        return m;
+      }
+      function boxC(cx, cy, cz, sx, sy, sz) { return box(cx - sx / 2, cy - sy / 2, cz - sz / 2, cx + sx / 2, cy + sy / 2, cz + sz / 2); }
+
+      // Solid of revolution about the Y axis. prof = [[r, y], ...] closed outline, counter-clockwise in
+      // the (r right, y up) plane (interior on the left). Points on the axis (r = 0) make poles.
+      function lathe(prof, seg) {
+        var m = [], n = prof.length, j, k;
+        for (k = 0; k < n; k++) {
+          var p1 = prof[k], p2 = prof[(k + 1) % n];
+          if (p1[0] === 0 && p2[0] === 0) continue;
+          for (j = 0; j < seg; j++) {
+            var f0 = TAU * j / seg, f1 = TAU * (j + 1) / seg;
+            var c0 = Math.cos(f0), s0 = Math.sin(f0), c1 = Math.cos(f1), s1 = Math.sin(f1);
+            if (j === seg - 1) { c1 = 1; s1 = 0; }
+            quad(m, [p1[0] * c0, p1[1], p1[0] * s0], [p2[0] * c0, p2[1], p2[0] * s0],
+                    [p2[0] * c1, p2[1], p2[0] * s1], [p1[0] * c1, p1[1], p1[0] * s1]);
+          }
+        }
+        return m;
+      }
+      function cylY(r, y0, y1, seg) { return lathe([[0, y0], [r, y0], [r, y1], [0, y1]], seg); }
+      // Cylinder between two points (a to b) with radius r.
+      function cylAB(a, b, r, seg) {
+        var dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return mv(aimY(cylY(r, 0, len, seg), dx, dy, dz), a[0], a[1], a[2]);
+      }
+      function sphere(r, rings, seg) {
+        var prof = [];
+        for (var i = 0; i <= rings; i++) {
+          var a = -PI / 2 + PI * i / rings;
+          prof.push([i === 0 || i === rings ? 0 : r * Math.cos(a), r * Math.sin(a)]);
+        }
+        return lathe(prof, seg);
+      }
+
+      // Signed area of a polygon given as [x, z] pairs; negative = clockwise in the (x,z) plane,
+      // which is the order the code below keeps (it faces +Y for the top cap).
+      function area2(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s;
+      }
+      function cw(poly) { return area2(poly) < 0 ? poly : poly.slice().reverse(); }
+
+      // Ear clipping triangulation of a simple clockwise polygon [x, z]. Returns index triples.
+      function earClip(P) {
+        var n = P.length, idx = [], i, out = [];
+        for (i = 0; i < n; i++) idx.push(i);
+        var guard = 0;
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); }
+        while (idx.length > 3 && guard++ < 20000) {
+          var clipped = false;
+          for (i = 0; i < idx.length; i++) {
+            var ia = idx[(i + idx.length - 1) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+            var a = P[ia], b = P[ib], c = P[ic];
+            if (cross(a, b, c) > -1e-9) continue; // reflex or flat corner
+            var inside = false;
+            for (var k = 0; k < idx.length && !inside; k++) {
+              var id = idx[k];
+              if (id === ia || id === ib || id === ic) continue;
+              var p = P[id];
+              if (cross(a, b, p) <= 1e-9 && cross(b, c, p) <= 1e-9 && cross(c, a, p) <= 1e-9) inside = true;
+            }
+            if (inside) continue;
+            out.push([ia, ib, ic]);
+            idx.splice(i, 1);
+            clipped = true;
+            break;
+          }
+          if (!clipped) { // degenerate input: drop a flat corner so the loop always ends
+            idx.splice(0, 1);
+          }
+        }
+        if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+        return out;
+      }
+
+      // Prism: a simple polygon [x, z] extruded from y0 to y1.
+      function extrude(poly, y0, y1) {
+        var P = cw(poly), m = [], n = P.length, i;
+        var T = earClip(P);
+        for (i = 0; i < T.length; i++) {
+          var t = T[i];
+          tri(m, [P[t[0]][0], y1, P[t[0]][1]], [P[t[1]][0], y1, P[t[1]][1]], [P[t[2]][0], y1, P[t[2]][1]]);
+          tri(m, [P[t[0]][0], y0, P[t[0]][1]], [P[t[2]][0], y0, P[t[2]][1]], [P[t[1]][0], y0, P[t[1]][1]]);
+        }
+        for (i = 0; i < n; i++) {
+          var a = P[i], b = P[(i + 1) % n];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        return m;
+      }
+      // Prism along any axis: poly is [u, v] pairs in the profile plane; the profile is extruded from
+      // t0 to t1 along the named axis. Axis 'x': profile (z,y); 'z': profile (x,y).
+      function extrudeAxis(poly, axis, t0, t1) {
+        var m = extrude(poly, t0, t1); // profile in (x,z) extruded along y
+        if (axis === 'y') return m;
+        if (axis === 'x') return xf(m, function (x, y, z) { return [y, z, x]; }); // (u,t,v)->(x=t,y=v,z=u)
+        return xf(m, function (x, y, z) { return [x, z, y]; }, true); // 'z': (u,v,t)
+      }
+
+      // Star-shaped ring: outer and inner loops ([x, z], any start, any winding) around the origin,
+      // extruded from y0 to y1. The hole is open. Used for gears, bands and bearings.
+      function ring(outer, inner, y0, y1) {
+        var O = cw(outer), I = cw(inner), m = [], i, j;
+        var ang = function (p) { return Math.atan2(p[1], p[0]); };
+        var a0 = ang(O[0]);
+        var prog = function (p) { var d = a0 - ang(p); d = d % TAU; if (d < 0) d += TAU; return d; };
+        // first inner point at or just ahead of the start angle
+        var j0 = 0, best = 1e9;
+        for (j = 0; j < I.length; j++) { var pr = prog(I[j]); if (pr < best) { best = pr; j0 = j; } }
+        var nO = O.length, nI = I.length, oi = 0, ii = 0;
+        // Unwrapped progress of inner point ii (0..nI) relative to O[0].
+        var ip = function (k) { var p = prog(I[(j0 + k) % nI]); if (k >= nI) p += TAU; else if (k > 0 && p < prog(I[j0])) p += TAU; return p; };
+        var op = function (k) { return k >= nO ? TAU : prog(O[k % nO]); };
+        function strip(y, up) {
+          oi = 0; ii = 0;
+          while (oi < nO || ii < nI) {
+            var po = oi < nO ? op(oi + 1) : 1e9, pi = ii < nI ? ip(ii + 1) : 1e9;
+            var o0 = O[oi % nO], o1 = O[(oi + 1) % nO], i0 = I[(j0 + ii) % nI], i1 = I[(j0 + ii + 1) % nI];
+            var A, B, C;
+            if (oi < nO && (po <= pi || ii >= nI)) { A = o0; B = o1; C = i0; oi++; }
+            else { A = o0; B = i1; C = i0; ii++; }
+            var pa = [A[0], y, A[1]], pb = [B[0], y, B[1]], pc = [C[0], y, C[1]];
+            if (up) tri(m, pa, pb, pc); else tri(m, pa, pc, pb);
+          }
+        }
+        strip(y1, true);
+        strip(y0, false);
+        for (i = 0; i < nO; i++) {
+          var a = O[i], b = O[(i + 1) % nO];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        for (i = 0; i < nI; i++) {
+          var c = I[i], d = I[(i + 1) % nI];
+          quad(m, [c[0], y0, c[1]], [c[0], y1, c[1]], [d[0], y1, d[1]], [d[0], y0, d[1]]);
+        }
+        return m;
+      }
+      function circlePts(r, n, rot) {
+        var pts = [];
+        for (var i = 0; i < n; i++) { var a = (rot || 0) + TAU * i / n; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+
+      function toF32(m) { return new Float32Array(m); }
+      function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+      var MAX_GEARS = 7;
+      var LAYOUT_NAMES = ['Line', 'Zigzag', 'Arc'];
+
+      // Gear outline around the origin: involute flanks, flat tips, rounded roots. Tooth centres sit at
+      // angle phi + i * 2pi/z. Returns [x, z] points counter-clockwise.
+      function gearOutline(z, mod, phi, backlash) {
+        var rp = mod * z / 2, ra = rp + mod, rd = Math.max(rp - 1.25 * mod, rp * 0.45);
+        var rb = rp * Math.cos(20 * PI / 180);
+        var inv = function (a) { return Math.tan(a) - a; };
+        var thP = PI / (2 * z) - backlash / (4 * rp);
+        var half = function (r) {
+          if (r <= rb) return thP + inv(20 * PI / 180);          // radial flank below the base circle
+          return thP - (inv(Math.acos(rb / r)) - inv(20 * PI / 180));
+        };
+        var radii = [rd];
+        var r0 = Math.max(rd, rb), k;
+        for (k = 0; k <= 5; k++) radii.push(r0 + (ra - r0) * k / 5);
+        var pts = [], pitch = TAU / z, i;
+        for (i = 0; i < z; i++) {
+          var c = phi + i * pitch;
+          for (k = 0; k < radii.length; k++) { var a = c - half(radii[k]); pts.push([radii[k] * Math.cos(a), radii[k] * Math.sin(a)]); }
+          for (k = radii.length - 1; k >= 0; k--) { var b = c + half(radii[k]); pts.push([radii[k] * Math.cos(b), radii[k] * Math.sin(b)]); }
+          // root arc up to the next tooth
+          var rs = c + half(rd), re = c + pitch - half(rd);
+          for (k = 1; k <= 2; k++) { var t = rs + (re - rs) * k / 3; pts.push([rd * Math.cos(t), rd * Math.sin(t)]); }
+        }
+        return pts;
+      }
+
+      function layoutCentres(n, kind, d) {
+        var pts = [[0, 0]], ang = 0, i;
+        for (i = 1; i < n; i++) {
+          if (kind === 1) ang = (i % 2 ? 1 : -1) * 35 * PI / 180;
+          else if (kind === 2) ang = (i - 1) * 28 * PI / 180 - (n - 2) * 14 * PI / 180;
+          var p = pts[i - 1];
+          pts.push([p[0] + d * Math.cos(ang), p[1] + d * Math.sin(ang)]);
+        }
+        var cx = 0, cz = 0;
+        pts.forEach(function (p) { cx += p[0]; cz += p[1]; });
+        cx /= n; cz /= n;
+        return pts.map(function (p) { return [p[0] - cx, p[1] - cz]; });
+      }
+
+      function buildGears(p) {
+        var n = Math.round(p.count), z = Math.round(p.teeth), mod = p.module, rp = mod * z / 2, ra = rp + mod;
+        var d = 2 * rp, tb = 2.4, gz = p.zGap, tg = p.thickness;
+        var pinR = clamp(rp * 0.2, 1.6, 3.2), holeR = pinR + p.pinClear;
+        var C = layoutCentres(n, Math.round(p.layout), d);
+        var out = [], base = [], pins = [], knob = [], i;
+
+        // Base plate: a disc under every gear plus a strap between neighbours.
+        for (i = 0; i < n; i++) {
+          append(base, mv(cylY(ra + 2.5, 0, tb, 64), C[i][0], 0, C[i][1]));
+          if (i > 0) {
+            var dx = C[i][0] - C[i - 1][0], dz = C[i][1] - C[i - 1][1], len = Math.sqrt(dx * dx + dz * dz);
+            var strap = rotY(box(-0.37, 0, -4, len + 0.37, tb, 4), -Math.atan2(dz, dx));
+            append(base, mv(strap, C[i - 1][0], 0, C[i - 1][1]));
+          }
+        }
+        out.push({ name: 'base', positions: toF32(base) });
+
+        // Gears with the tooth phase carried from one gear to the next so every pair really meshes.
+        var pitch = TAU / z, phi = 0, y0 = tb + gz;
+        for (i = 0; i < n; i++) {
+          if (i > 0) {
+            var psi = Math.atan2(C[i][1] - C[i - 1][1], C[i][0] - C[i - 1][0]);
+            var s = (((psi - phi) % pitch) + pitch) % pitch;
+            phi = psi + PI - (pitch / 2 - s);
+          }
+          var g = ring(gearOutline(z, mod, phi, p.backlash), circlePts(holeR, 40, 0), y0, y0 + tg);
+          out.push({ name: 'gear' + i, positions: toF32(mv(g, C[i][0], 0, C[i][1])) });
+          var head0 = y0 + tg + gz, hr = pinR + 1.7;
+          var pin = lathe([[0, 0], [pinR, 0], [pinR, head0], [hr, head0 + (hr - pinR)], [hr, head0 + (hr - pinR) + 0.8], [0, head0 + (hr - pinR) + 0.8]], 28);
+          append(pins, mv(pin, C[i][0], 0, C[i][1]));
+        }
+        out.push({ name: 'pins', positions: toF32(pins) });
+
+        if (p.crank >= 1) {
+          var kr = Math.max(2.4, rp * 0.2), off = Math.max(rp * 0.62, pinR + 1.7 + kr + 0.6), ky0 = y0 + tg - 1.2, kh = 9;
+          var k = lathe([[0, ky0], [kr, ky0], [kr, ky0 + kh + 1.2 - 1], [kr - 0.9, ky0 + kh + 1.2], [0, ky0 + kh + 1.2]], 28);
+          knob = mv(k, C[0][0] + off, 0, C[0][1]);
+          out.push({ name: 'knob', positions: toF32(knob) });
+        }
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-044',
+        category: 'DESK // FIDGETS',
+        title: 'Gear Train Spinner',
+        fileName: 'Gear_Train_Spinner',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { base: 'Base plate', pins: 'Pins', knob: 'Crank knob', gear0: 'Gear 1', gear1: 'Gear 2', gear2: 'Gear 3', gear3: 'Gear 4', gear4: 'Gear 5', gear5: 'Gear 6', gear6: 'Gear 7' },
+        parameters: [
+          { group: 'Gears', key: 'count', label: 'Gears', unit: '', min: 3, max: MAX_GEARS, step: 1, value: 4 },
+          { group: 'Gears', key: 'teeth', label: 'Teeth per gear', unit: '', min: 10, max: 24, step: 1, value: 14 },
+          { group: 'Gears', key: 'module', label: 'Tooth size', unit: ' mm', min: 1, max: 2, step: 0.1, value: 1.5 },
+          { group: 'Gears', key: 'thickness', label: 'Gear thickness', unit: ' mm', min: 3, max: 10, step: 0.5, value: 5 },
+          { group: 'Gears', key: 'layout', label: 'Layout', unit: '', min: 0, max: 2, step: 1, value: 1, format: function (v) { return LAYOUT_NAMES[Math.round(v)]; } },
+          { group: 'Gears', key: 'crank', label: 'Crank knob', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+          { group: 'Fit', key: 'backlash', label: 'Tooth play (looser = easier)', unit: ' mm', min: 0.2, max: 0.7, step: 0.05, value: 0.4 },
+          { group: 'Fit', key: 'pinClear', label: 'Pin gap (sideways)', unit: ' mm', min: 0.25, max: 0.7, step: 0.05, value: 0.4 },
+          { group: 'Fit', key: 'zGap', label: 'Gap above and below (height)', unit: ' mm', min: 0.25, max: 0.6, step: 0.05, value: 0.4 }
+        ],
+        presets: [
+          { label: 'Default gear train', values: { count: 4, teeth: 14, module: 1.5, thickness: 5, layout: 1, crank: 1, backlash: 0.4, pinClear: 0.4, zGap: 0.4 } },
+          { label: 'Straight line of five', values: { count: 5, teeth: 12, module: 1.5, thickness: 5, layout: 0, crank: 1, backlash: 0.4, pinClear: 0.4, zGap: 0.4 } },
+          { label: 'Big three', values: { count: 3, teeth: 22, module: 1.6, thickness: 6, layout: 2, crank: 1, backlash: 0.45, pinClear: 0.45, zGap: 0.4 } },
+          { label: 'Tiny seven', values: { count: 7, teeth: 10, module: 1.2, thickness: 4, layout: 2, crank: 0, backlash: 0.4, pinClear: 0.35, zGap: 0.35 } }
+        ],
+        build: function (p) { return buildGears(p); }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-050 Flip-Flop Flipper // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Flip-Flop Kaleidoscope Flipper: a ring of six hinged tetrahedra (a kaleidocycle). Push it and the whole
+    // ring turns itself inside out, again and again. Every tetrahedron is joined to the next along one edge by a
+    // pin hinge that prints in place (pin and end knuckles belong to one tetrahedron, the barrel to the next).
+    // The tetrahedra are shrunk a little away from the hinge lines so their corners never touch the neighbours.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    
+    // One loop of closed-ring hinge angles in degrees, [a, b] for the pairs (a, b, a, b, a, b) of the six hinges.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Mesh toolkit. A mesh is a flat array of triangle corners (x,y,z per corner, 9 per triangle),
+      // Y-up, millimetres, counter-clockwise seen from outside. Every primitive returns one or more
+      // closed shells; shells may overlap each other (slicers union them).
+      // -----------------------------------------------------------------------
+      var PI = Math.PI, TAU = Math.PI * 2;
+
+      function tri(m, a, b, c) {
+        // Skip zero-area triangles (poles of a lathe share one point).
+        if ((a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) || (b[0] === c[0] && b[1] === c[1] && b[2] === c[2]) ||
+            (a[0] === c[0] && a[1] === c[1] && a[2] === c[2])) return;
+        m.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(m, a, b, c, d) { tri(m, a, b, c); tri(m, a, c, d); }
+      function append(dst, src) { for (var i = 0; i < src.length; i++) dst.push(src[i]); return dst; }
+
+      // Apply f(x,y,z) -> [x,y,z] to every corner. Pass mirror = true when f flips handedness.
+      function xf(m, f, mirror) {
+        var out = new Array(m.length);
+        for (var i = 0; i < m.length; i += 3) {
+          var p = f(m[i], m[i + 1], m[i + 2]);
+          out[i] = p[0]; out[i + 1] = p[1]; out[i + 2] = p[2];
+        }
+        if (mirror) {
+          for (var k = 0; k < out.length; k += 9) {
+            for (var q = 0; q < 3; q++) { var t = out[k + 3 + q]; out[k + 3 + q] = out[k + 6 + q]; out[k + 6 + q] = t; }
+          }
+        }
+        return out;
+      }
+      function mv(m, x, y, z) { return xf(m, function (a, b, c) { return [a + x, b + y, c + z]; }); }
+      function rotY(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [c * x + s * z, y, -s * x + c * z]; });
+      }
+      function rotX(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [x, c * y - s * z, s * y + c * z]; });
+      }
+      function rotZ(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [c * x - s * y, s * x + c * y, z]; });
+      }
+      // Rotate by angle a about an arbitrary unit axis (ux,uy,uz) through the origin.
+      function rotAxis(m, ux, uy, uz, a) {
+        var c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+        return xf(m, function (x, y, z) {
+          return [(t * ux * ux + c) * x + (t * ux * uy - s * uz) * y + (t * ux * uz + s * uy) * z,
+                  (t * ux * uy + s * uz) * x + (t * uy * uy + c) * y + (t * uy * uz - s * ux) * z,
+                  (t * ux * uz - s * uy) * x + (t * uy * uz + s * ux) * y + (t * uz * uz + c) * z];
+        });
+      }
+      // Rotate so that +Y points along (dx,dy,dz); keeps shells watertight and outward.
+      function aimY(m, dx, dy, dz) {
+        var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        dx /= len; dy /= len; dz /= len;
+        // axis = Y x d, angle = acos(dy)
+        var ax = dz, az = -dx, al = Math.sqrt(ax * ax + az * az);
+        if (al < 1e-9) return dy > 0 ? m : rotX(m, PI);
+        return rotAxis(m, ax / al, 0, az / al, Math.acos(Math.max(-1, Math.min(1, dy))));
+      }
+
+      function box(x0, y0, z0, x1, y1, z1) {
+        var m = [];
+        quad(m, [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]);
+        quad(m, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
+        quad(m, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]);
+        quad(m, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]);
+        quad(m, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
+        quad(m, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]);
+        return m;
+      }
+      function boxC(cx, cy, cz, sx, sy, sz) { return box(cx - sx / 2, cy - sy / 2, cz - sz / 2, cx + sx / 2, cy + sy / 2, cz + sz / 2); }
+
+      // Solid of revolution about the Y axis. prof = [[r, y], ...] closed outline, counter-clockwise in
+      // the (r right, y up) plane (interior on the left). Points on the axis (r = 0) make poles.
+      function lathe(prof, seg) {
+        var m = [], n = prof.length, j, k;
+        for (k = 0; k < n; k++) {
+          var p1 = prof[k], p2 = prof[(k + 1) % n];
+          if (p1[0] === 0 && p2[0] === 0) continue;
+          for (j = 0; j < seg; j++) {
+            var f0 = TAU * j / seg, f1 = TAU * (j + 1) / seg;
+            var c0 = Math.cos(f0), s0 = Math.sin(f0), c1 = Math.cos(f1), s1 = Math.sin(f1);
+            if (j === seg - 1) { c1 = 1; s1 = 0; }
+            quad(m, [p1[0] * c0, p1[1], p1[0] * s0], [p2[0] * c0, p2[1], p2[0] * s0],
+                    [p2[0] * c1, p2[1], p2[0] * s1], [p1[0] * c1, p1[1], p1[0] * s1]);
+          }
+        }
+        return m;
+      }
+      function cylY(r, y0, y1, seg) { return lathe([[0, y0], [r, y0], [r, y1], [0, y1]], seg); }
+      // Cylinder between two points (a to b) with radius r.
+      function cylAB(a, b, r, seg) {
+        var dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return mv(aimY(cylY(r, 0, len, seg), dx, dy, dz), a[0], a[1], a[2]);
+      }
+      function sphere(r, rings, seg) {
+        var prof = [];
+        for (var i = 0; i <= rings; i++) {
+          var a = -PI / 2 + PI * i / rings;
+          prof.push([i === 0 || i === rings ? 0 : r * Math.cos(a), r * Math.sin(a)]);
+        }
+        return lathe(prof, seg);
+      }
+
+      // Signed area of a polygon given as [x, z] pairs; negative = clockwise in the (x,z) plane,
+      // which is the order the code below keeps (it faces +Y for the top cap).
+      function area2(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s;
+      }
+      function cw(poly) { return area2(poly) < 0 ? poly : poly.slice().reverse(); }
+
+      // Ear clipping triangulation of a simple clockwise polygon [x, z]. Returns index triples.
+      function earClip(P) {
+        var n = P.length, idx = [], i, out = [];
+        for (i = 0; i < n; i++) idx.push(i);
+        var guard = 0;
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); }
+        while (idx.length > 3 && guard++ < 20000) {
+          var clipped = false;
+          for (i = 0; i < idx.length; i++) {
+            var ia = idx[(i + idx.length - 1) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+            var a = P[ia], b = P[ib], c = P[ic];
+            if (cross(a, b, c) > -1e-9) continue; // reflex or flat corner
+            var inside = false;
+            for (var k = 0; k < idx.length && !inside; k++) {
+              var id = idx[k];
+              if (id === ia || id === ib || id === ic) continue;
+              var p = P[id];
+              if (cross(a, b, p) <= 1e-9 && cross(b, c, p) <= 1e-9 && cross(c, a, p) <= 1e-9) inside = true;
+            }
+            if (inside) continue;
+            out.push([ia, ib, ic]);
+            idx.splice(i, 1);
+            clipped = true;
+            break;
+          }
+          if (!clipped) { // degenerate input: drop a flat corner so the loop always ends
+            idx.splice(0, 1);
+          }
+        }
+        if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+        return out;
+      }
+
+      // Prism: a simple polygon [x, z] extruded from y0 to y1.
+      function extrude(poly, y0, y1) {
+        var P = cw(poly), m = [], n = P.length, i;
+        var T = earClip(P);
+        for (i = 0; i < T.length; i++) {
+          var t = T[i];
+          tri(m, [P[t[0]][0], y1, P[t[0]][1]], [P[t[1]][0], y1, P[t[1]][1]], [P[t[2]][0], y1, P[t[2]][1]]);
+          tri(m, [P[t[0]][0], y0, P[t[0]][1]], [P[t[2]][0], y0, P[t[2]][1]], [P[t[1]][0], y0, P[t[1]][1]]);
+        }
+        for (i = 0; i < n; i++) {
+          var a = P[i], b = P[(i + 1) % n];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        return m;
+      }
+      // Prism along any axis: poly is [u, v] pairs in the profile plane; the profile is extruded from
+      // t0 to t1 along the named axis. Axis 'x': profile (z,y); 'z': profile (x,y).
+      function extrudeAxis(poly, axis, t0, t1) {
+        var m = extrude(poly, t0, t1); // profile in (x,z) extruded along y
+        if (axis === 'y') return m;
+        if (axis === 'x') return xf(m, function (x, y, z) { return [y, z, x]; }); // (u,t,v)->(x=t,y=v,z=u)
+        return xf(m, function (x, y, z) { return [x, z, y]; }, true); // 'z': (u,v,t)
+      }
+
+      // Star-shaped ring: outer and inner loops ([x, z], any start, any winding) around the origin,
+      // extruded from y0 to y1. The hole is open. Used for gears, bands and bearings.
+      function ring(outer, inner, y0, y1) {
+        var O = cw(outer), I = cw(inner), m = [], i, j;
+        var ang = function (p) { return Math.atan2(p[1], p[0]); };
+        var a0 = ang(O[0]);
+        var prog = function (p) { var d = a0 - ang(p); d = d % TAU; if (d < 0) d += TAU; return d; };
+        // first inner point at or just ahead of the start angle
+        var j0 = 0, best = 1e9;
+        for (j = 0; j < I.length; j++) { var pr = prog(I[j]); if (pr < best) { best = pr; j0 = j; } }
+        var nO = O.length, nI = I.length, oi = 0, ii = 0;
+        // Unwrapped progress of inner point ii (0..nI) relative to O[0].
+        var ip = function (k) { var p = prog(I[(j0 + k) % nI]); if (k >= nI) p += TAU; else if (k > 0 && p < prog(I[j0])) p += TAU; return p; };
+        var op = function (k) { return k >= nO ? TAU : prog(O[k % nO]); };
+        function strip(y, up) {
+          oi = 0; ii = 0;
+          while (oi < nO || ii < nI) {
+            var po = oi < nO ? op(oi + 1) : 1e9, pi = ii < nI ? ip(ii + 1) : 1e9;
+            var o0 = O[oi % nO], o1 = O[(oi + 1) % nO], i0 = I[(j0 + ii) % nI], i1 = I[(j0 + ii + 1) % nI];
+            var A, B, C;
+            if (oi < nO && (po <= pi || ii >= nI)) { A = o0; B = o1; C = i0; oi++; }
+            else { A = o0; B = i1; C = i0; ii++; }
+            var pa = [A[0], y, A[1]], pb = [B[0], y, B[1]], pc = [C[0], y, C[1]];
+            if (up) tri(m, pa, pb, pc); else tri(m, pa, pc, pb);
+          }
+        }
+        strip(y1, true);
+        strip(y0, false);
+        for (i = 0; i < nO; i++) {
+          var a = O[i], b = O[(i + 1) % nO];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        for (i = 0; i < nI; i++) {
+          var c = I[i], d = I[(i + 1) % nI];
+          quad(m, [c[0], y0, c[1]], [c[0], y1, c[1]], [d[0], y1, d[1]], [d[0], y0, d[1]]);
+        }
+        return m;
+      }
+      function circlePts(r, n, rot) {
+        var pts = [];
+        for (var i = 0; i < n; i++) { var a = (rot || 0) + TAU * i / n; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+
+      function toF32(m) { return new Float32Array(m); }
+      function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+      var FAM = [-113.13,-49.67,-112.34,-52.20,-111.48,-54.70,-110.58,-57.19,-109.61,-59.65,-108.59,-62.09,-107.51,-64.51,-106.37,-66.90,-105.16,-69.25,-103.90,-71.57,-102.56,-73.86,-101.16,-76.11,-99.70,-78.31,-98.17,-80.47,-96.57,-82.58,-94.90,-84.64,-93.18,-86.64,-91.38,-88.58,-89.53,-90.47,-87.61,-92.30,-85.63,-94.06,-83.60,-95.75,-81.52,-97.38,-79.39,-98.95,-77.20,-100.45,-74.98,-101.88,-72.71,-103.24,-70.41,-104.54,-68.07,-105.78,-65.69,-106.95,-63.29,-108.06,-60.86,-109.11,-58.41,-110.11,-55.93,-111.04,-53.44,-111.92,-50.92,-112.75,-48.39,-113.52,-45.85,-114.24,-43.29,-114.91,-40.72,-115.54,-38.13,-116.12,-35.54,-116.66,-32.94,-117.15,-30.33,-117.60,-27.72,-118.01,-25.10,-118.37,-22.47,-118.70,-19.84,-118.99,-17.21,-119.25,-14.57,-119.46,-11.93,-119.64,-9.29,-119.78,-6.64,-119.89,-4.00,-119.96,-1.35,-120.00,1.29,-120.00,3.94,-119.96,6.58,-119.89,9.23,-119.78,11.87,-119.64,14.51,-119.47,17.15,-119.25,19.78,-119.00,22.41,-118.71,25.04,-118.38,27.66,-118.01,30.28,-117.61,32.88,-117.16,35.48,-116.67,38.08,-116.13,40.66,-115.55,43.23,-114.93,45.79,-114.26,48.34,-113.54,50.87,-112.76,53.38,-111.94,55.88,-111.06,58.35,-110.13,60.81,-109.14,63.24,-108.09,65.64,-106.98,68.01,-105.81,70.35,-104.57,72.66,-103.27,74.93,-101.91,77.15,-100.48,79.34,-98.98,81.47,-97.42,83.56,-95.79,85.59,-94.10,87.57,-92.34,89.48,-90.51,91.34,-88.63,93.14,-86.68,94.87,-84.68,96.53,-82.62,98.13,-80.52,99.67,-78.36,101.13,-76.16,102.53,-73.91,103.87,-71.63,105.14,-69.30,106.34,-66.95,107.49,-64.56,108.57,-62.15,109.59,-59.71,110.55,-57.24,111.46,-54.76,112.32,-52.25,113.12,-49.73,113.87,-47.19,114.57,-44.64,115.22,-42.07,115.82,-39.50,116.38,-36.91,116.89,-34.32,117.37,-31.71,117.80,-29.10,118.18,-26.48,118.53,-23.86,118.84,-21.23,119.12,-18.60,119.35,-15.96,119.55,-13.32,119.71,-10.68,119.84,-8.04,119.93,-5.39,119.98,-2.75,120.00,-0.10,119.98,2.54,119.93,5.19,119.85,7.83,119.72,10.48,119.56,13.12,119.37,15.76,119.14,18.40,118.87,21.03,118.56,23.66,118.21,26.28,117.83,28.90,117.40,31.51,116.93,34.11,116.42,36.71,115.87,39.30,115.26,41.88,114.62,44.44,113.92,46.99,113.18,49.53,112.38,52.06,111.53,54.56,110.63,57.05,109.67,59.52,108.65,61.96,107.57,64.38,106.43,66.77,105.23,69.12,103.97,71.45,102.64,73.74,101.24,75.99,99.78,78.19,98.25,80.35,96.66,82.46,95.00,84.52,93.27,86.53,91.48,88.48,89.63,90.37,87.72,92.20,85.74,93.96,83.72,95.66,81.63,97.30,79.50,98.86,77.32,100.37,75.10,101.80,72.84,103.17,70.53,104.47,68.20,105.71,65.83,106.89,63.42,108.00,61.00,109.06,58.55,110.05,56.07,110.99,53.58,111.87,51.06,112.70,48.53,113.48,45.99,114.20,43.43,114.88,40.86,115.51,38.28,116.09,35.69,116.63,33.09,117.12,30.48,117.57,27.86,117.98,25.24,118.35,22.62,118.69,19.99,118.98,17.35,119.23,14.72,119.45,12.08,119.63,9.43,119.78,6.79,119.88,4.14,119.96,1.50,119.99,-1.15,120.00,-3.79,119.96,-6.44,119.90,-9.08,119.79,-11.73,119.65,-14.37,119.48,-17.01,119.26,-19.64,119.01,-22.27,118.73,-24.90,118.40,-27.52,118.04,-30.13,117.63,-32.74,117.18,-35.34,116.70,-37.93,116.16,-40.52,115.59,-43.09,114.96,-45.65,114.29,-48.20,113.58,-50.73,112.81,-53.24,111.99,-55.74,111.11,-58.22,110.18,-60.67,109.19,-63.11,108.15,-65.51,107.04,-67.88,105.87,-70.23,104.64,-72.53,103.35,-74.80,101.99,-77.03,100.56,-79.22,99.07,-81.36,97.51,-83.44,95.88,-85.48,94.19,-87.46,92.43,-89.38,90.61,-91.24,88.73,-93.04,86.79,-94.77,84.79,-96.44,82.74,-98.05,80.63,-99.58,78.48,-101.05,76.28,-102.46,74.04,-103.80,71.75,-105.07,69.43,-106.28,67.08,-107.42,64.69,-108.51,62.28,-109.54,59.84,-110.50,57.38,-111.41,54.89,-112.27,52.39,-113.07,49.87,-113.83,47.33,-114.53,44.78,-115.18,42.22,-115.79,39.64,-116.35,37.05,-116.87,34.46,-117.34,31.85,-117.77,29.24,-118.16,26.63,-118.52,24.00,-118.83,21.38,-119.10,18.74,-119.34,16.11,-119.54,13.47,-119.70,10.83,-119.83,8.18,-119.92,5.54,-119.98,2.89,-120.00,0.25,-119.99,-2.40,-119.94,-5.04,-119.85,-7.69,-119.73,-10.33,-119.57,-12.98,-119.38,-15.61,-119.15,-18.25,-118.88,-20.88,-118.58,-23.51,-118.23,-26.14,-117.85,-28.75,-117.42,-31.37,-116.96,-33.97,-116.45,-36.57,-115.90,-39.16,-115.30,-41.73,-114.65,-44.30,-113.96,-46.86];
+      var POSES = FAM.length / 2;
+      var SIGNS = [1, -1, 1, -1, 1, -1];
+
+      function mI() { return [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]; }
+      function mmul(A, B) {
+        var C = [], i, j, k;
+        for (i = 0; i < 4; i++) { C.push([0, 0, 0, 0]); for (j = 0; j < 4; j++) { var s = 0; for (k = 0; k < 4; k++) s += A[i][k] * B[k][j]; C[i][j] = s; } }
+        return C;
+      }
+      function mapp(M, p) {
+        return [M[0][0] * p[0] + M[0][1] * p[1] + M[0][2] * p[2] + M[0][3], M[1][0] * p[0] + M[1][1] * p[1] + M[1][2] * p[2] + M[1][3],
+                M[2][0] * p[0] + M[2][1] * p[1] + M[2][2] * p[2] + M[2][3]];
+      }
+      function mRx(t) { var c = Math.cos(t), s = Math.sin(t); return [[1, 0, 0, 0], [0, c, -s, 0], [0, s, c, 0], [0, 0, 0, 1]]; }
+      function mRz(t) { var c = Math.cos(t), s = Math.sin(t); return [[c, -s, 0, 0], [s, c, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]; }
+      function mTz(z) { return [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, z], [0, 0, 0, 1]]; }
+
+      function sub3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function add3(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function mul3(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function len3(a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); }
+
+      // Convex body of four points, wound outward.
+      function tetraMesh(V) {
+        var m = [], cen = mul3(add3(add3(V[0], V[1]), add3(V[2], V[3])), 0.25), f = [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]], i;
+        for (i = 0; i < 4; i++) {
+          var a = V[f[i][0]], b = V[f[i][1]], c = V[f[i][2]], u = sub3(b, a), w = sub3(c, a);
+          var n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+          var mid = mul3(add3(add3(a, b), c), 1 / 3), out = sub3(mid, cen);
+          if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0) tri(m, a, c, b); else tri(m, a, b, c);
+        }
+        return m;
+      }
+
+      function buildFlipper(p) {
+        var dd = p.size, l = p.ratio * dd, Rb = p.hinge, g = 0.5, rp = Math.max(1.1, Rb - 1.8), hole = rp + p.pinClear;
+        var s = 1 - 2 * (Rb + 1.5) / dd;
+        var k = Math.round(p.pose) % POSES, th = [], i;
+        for (i = 0; i < 6; i++) th.push((i % 2 === 0 ? FAM[2 * k] : FAM[2 * k + 1]) * PI / 180);
+        var F = [mI()];
+        for (i = 0; i < 6; i++) F.push(mmul(mmul(mmul(F[i], mTz(dd)), mRz(SIGNS[i] * PI / 2)), mRx(th[i])));
+
+        var cen = [0, 0, dd / 2];
+        var shrink = function (v) { return add3(cen, mul3(sub3(v, cen), s)); };
+        var A = [[l, 0, 0], [-l, 0, 0]], B = [[0, l, dd], [0, -l, dd]];
+        var meshes = [], j;
+        for (j = 0; j < 6; j++) meshes.push([]);
+        var W = function (j, q) { return mapp(F[j], q); };
+
+        for (j = 0; j < 6; j++) {
+          var verts = [shrink(A[0]), shrink(A[1]), shrink(B[0]), shrink(B[1])].map(function (q) { return W(j, q); });
+          append(meshes[j], tetraMesh(verts));
+        }
+        // Hinge j joins tetra j (pin and end knuckles, on its B edge) with tetra j+1 (barrel, on its A edge).
+        // Knuckles sit where the shrunk body has its corners, so each is carried by a short straight post.
+        var ya = Math.min(s * l * 0.88, l - Rb * 0.7 - 0.3), by = Math.max(2.5, ya - Rb * 0.7 - g);
+        for (j = 0; j < 6; j++) {
+          var n = (j + 1) % 6, P0 = W(j, [0, -l, dd]), P1 = W(j, [0, l, dd]), L = 2 * l;
+          var u = mul3(sub3(P1, P0), 1 / L), at = function (t) { return add3(P0, mul3(u, t)); };
+          var ea = Rb * 1.4;
+          [-ya, ya].forEach(function (yy) {
+            append(meshes[j], cylAB(at(l + yy - ea / 2), at(l + yy + ea / 2), Rb, 20));
+            var tgt = [0, yy, dd / 2 + s * dd / 2], inward = sub3(cen, tgt);
+            tgt = add3(tgt, mul3(inward, 0.9 / len3(inward)));
+            append(meshes[j], cylAB(W(j, [0, yy, dd]), W(j, tgt), Rb * 0.5, 10));
+          });
+          append(meshes[j], cylAB(at(l - ya - ea / 2 + 0.5), at(l + ya + ea / 2 - 0.5), rp, 14));
+          // barrel (tetra j+1)
+          var tube = lathe([[hole, 0], [Rb, 0], [Rb, 2 * by], [hole, 2 * by]], 22);
+          append(meshes[n], mv(aimY(rotY(tube, 0.4), u[0], u[1], u[2]), at(l - by)[0], at(l - by)[1], at(l - by)[2]));
+          [-by * 0.5, by * 0.5].forEach(function (xl) {
+            var tgt = [xl, 0, (1 - s) * dd / 2], inward = sub3(cen, tgt);
+            tgt = add3(tgt, mul3(inward, 0.9 / len3(inward)));
+            var q = W(n, [xl, 0, 0]), tw = W(n, tgt), dir = sub3(tw, q), dl = len3(dir);
+            append(meshes[n], cylAB(add3(q, mul3(dir, (Rb - 0.5) / dl)), tw, Rb * 0.5, 10));
+          });
+        }
+        // Stand the ring on its 3-fold axis.
+        var R = F[2], ax = [R[2][1] - R[1][2], R[0][2] - R[2][0], R[1][0] - R[0][1]], al = len3(ax);
+        ax = mul3(ax, 1 / al);
+        var allc = [0, 0, 0], cnt = 0;
+        for (j = 0; j < 6; j++) { var pc = W(j, cen); allc = add3(allc, pc); cnt++; }
+        allc = mul3(allc, 1 / cnt);
+        var v = [-ax[2], 0, ax[0]], sv = len3(v), cc = ax[1], rot;
+        if (sv < 1e-9) rot = cc > 0 ? [[1, 0, 0], [0, 1, 0], [0, 0, 1]] : [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
+        else {
+          var vx = [[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]], f2 = (1 - cc) / (sv * sv);
+          rot = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+          for (var r = 0; r < 3; r++) for (var c = 0; c < 3; c++) {
+            var vv = 0; for (var q2 = 0; q2 < 3; q2++) vv += vx[r][q2] * vx[q2][c];
+            rot[r][c] = (r === c ? 1 : 0) + vx[r][c] + vv * f2;
+          }
+        }
+        var out = [];
+        for (j = 0; j < 6; j++) {
+          var m = xf(meshes[j], function (x, y, z) {
+            var a = x - allc[0], b = y - allc[1], c2 = z - allc[2];
+            return [rot[0][0] * a + rot[0][1] * b + rot[0][2] * c2, rot[1][0] * a + rot[1][1] * b + rot[1][2] * c2, rot[2][0] * a + rot[2][1] * b + rot[2][2] * c2];
+          });
+          out.push({ name: 'tetra' + j, positions: toF32(m) });
+        }
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-050',
+        category: 'DESK // FIDGETS',
+        title: 'Flip-Flop Flipper',
+        fileName: 'Flip_Flop_Flipper',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { tetra0: 'Piece 1', tetra1: 'Piece 2', tetra2: 'Piece 3', tetra3: 'Piece 4', tetra4: 'Piece 5', tetra5: 'Piece 6' },
+        parameters: [
+          { group: 'Shape', key: 'size', label: 'Piece length (hinge to hinge)', unit: ' mm', min: 28, max: 56, step: 1, value: 38 },
+          { group: 'Shape', key: 'ratio', label: 'Slimness (hinge length / length)', unit: '', min: 0.38, max: 0.55, step: 0.01, value: 0.5, format: function (v) { return Math.round(v * 100) + '%'; } },
+          { group: 'Shape', key: 'pose', label: 'Print pose (turn the ring)', unit: '', min: 0, max: POSES - 1, step: 1, value: 0, format: function (v) { return Math.round(v / (POSES - 1) * 100) + '%'; } },
+          { group: 'Hinges', key: 'hinge', label: 'Hinge size', unit: ' mm', min: 2.8, max: 4.4, step: 0.1, value: 3.4 },
+          { group: 'Hinges', key: 'pinClear', label: 'Pin gap (looser = turns easier)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: 0.4 }
+        ],
+        presets: [
+          { label: 'Default flipper', values: { size: 38, ratio: 0.5, pose: 0, hinge: 3.4, pinClear: 0.4 } },
+          { label: 'Squashed pose', values: { size: 38, ratio: 0.5, pose: 75, hinge: 3.4, pinClear: 0.4 } },
+          { label: 'Tall pose', values: { size: 38, ratio: 0.5, pose: 150, hinge: 3.4, pinClear: 0.4 } },
+          { label: 'Mini', values: { size: 30, ratio: 0.46, pose: 0, hinge: 3, pinClear: 0.35 } }
+        ],
+        build: function (p) { return buildFlipper(p); }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

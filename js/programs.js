@@ -375,6 +375,69 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/birthday-crown.svg',
     programUrl: 'programs/birthday-crown.html',
     description: 'A wearable birthday crown sized by head circumference: choose points, arches, castle or wave peaks, add jewels, band dots and a front plaque with the age. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 44,
+    title: 'Gear Train Spinner',
+    bundle: 'fidgets',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/gear-train.svg',
+    programUrl: 'programs/gear-train.html',
+    description: 'A chain of meshing involute gears that each turn on their own pin, with an optional crank knob. Set the number of gears, teeth, tooth size and layout (line, zigzag or arc). Gears print already on their pins with cone-shaped pin heads, no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 45,
+    title: 'Fidget Slider',
+    bundle: 'fidgets',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/fidget-slider.svg',
+    programUrl: 'programs/fidget-slider.html',
+    description: 'A flared knob that slides along a dovetail track and clicks over bumps in the floor. Set travel, click spacing, click strength, slot width and knob height. The slider prints already captured in its track on 45 degree flanks, no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 46,
+    title: 'Spinner Ring',
+    bundle: 'fidgets',
+    category: 'WEARABLE // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/spinner-ring.svg',
+    programUrl: 'programs/spinner-ring.html',
+    description: 'A finger ring whose outer band spins around the inner band on a locked V rib, with optional raised pixel text wrapped around it. Set finger size, band width, thickness, fit gap and type your own text. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 47,
+    title: 'Twisty Spiral Tower',
+    bundle: 'fidgets',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/spiral-tower.svg',
+    programUrl: 'programs/spiral-tower.html',
+    description: 'A tapered stack of polygon tiers that each spin freely on one central post, so one flick twists the tower into a spiral. Set tiers, shape (3 sides to round), size, taper, thickness and starting twist. Prints in place with a cone-shaped head on the post. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 48,
+    title: 'Rattle Ball Cage',
+    bundle: 'fidgets',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/rattle-ball.svg',
+    programUrl: 'programs/rattle-ball.html',
+    description: 'A loose ball trapped inside a lattice cage built from an octahedron, icosahedron, dodecahedron or cuboctahedron. Set cage size, bar thickness, ball size and rattle room. The diamond ball is held by a thin snap-off pin for printing. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 49,
+    title: 'Chain-Link Fidget Chain',
+    bundle: 'fidgets',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/chain.svg',
+    programUrl: 'programs/chain.html',
+    description: 'Flat links that print already hooked together: each link is a frame at one end and a tent-shaped tunnel at the other. Set the number of links, width, thickness, looseness and an optional key ring. Prints flat with 45 degree tunnel roofs, no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 50,
+    title: 'Flip-Flop Flipper',
+    bundle: 'fidgets',
+    category: 'DESK // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/flipper.svg',
+    programUrl: 'programs/flipper.html',
+    description: 'A kaleidocycle: a ring of six hinged tetrahedra with print-in-place pin hinges that turns itself inside out when you push it. Set piece length, slimness, hinge size, pin gap and the pose it prints in. Hinge barrels may want small supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -414,8 +477,8 @@ const BUNDLES = [
     description: 'Cakes, cupcakes, candles, pinatas, balloons, banners, a popper spinner and a crown.',
     generators: ['SLOT-36', 'SLOT-37', 'SLOT-42', 'SLOT-38', 'SLOT-39', 'SLOT-40', 'SLOT-41', 'SLOT-43'] },
   // Fidgets & personal
-  { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [4, 2],
-    description: 'Print-in-place clickers and keycap pads.',
+  { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [6, 2],
+    description: 'Print-in-place clickers, keycap pads, gears, sliders, spinners and rattles.',
     generators: ['SLOT-10', 'SLOT-12'] },
   { id: 'personal', name: 'Personalised', accent: '#ffae00', at: [13, 3], size: [3, 1],
     description: 'Name plates and keychains.',

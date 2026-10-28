@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-048 Rattle Ball Cage // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Rattle Ball Cage: a loose ball trapped inside a lattice cage built from the edges of a polyhedron.
+    // The ball is bigger than any opening in the cage, so it can never escape, and it rattles when shaken.
+    // The cage sits on a flat face on a thin raft. The ball is a diamond (45 degree cones) and is held by a thin
+    // snap-off pin until you break it free, so the model needs no supports.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Mesh toolkit. A mesh is a flat array of triangle corners (x,y,z per corner, 9 per triangle),
+      // Y-up, millimetres, counter-clockwise seen from outside. Every primitive returns one or more
+      // closed shells; shells may overlap each other (slicers union them).
+      // -----------------------------------------------------------------------
+      var PI = Math.PI, TAU = Math.PI * 2;
+
+      function tri(m, a, b, c) {
+        // Skip zero-area triangles (poles of a lathe share one point).
+        if ((a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) || (b[0] === c[0] && b[1] === c[1] && b[2] === c[2]) ||
+            (a[0] === c[0] && a[1] === c[1] && a[2] === c[2])) return;
+        m.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(m, a, b, c, d) { tri(m, a, b, c); tri(m, a, c, d); }
+      function append(dst, src) { for (var i = 0; i < src.length; i++) dst.push(src[i]); return dst; }
+
+      // Apply f(x,y,z) -> [x,y,z] to every corner. Pass mirror = true when f flips handedness.
+      function xf(m, f, mirror) {
+        var out = new Array(m.length);
+        for (var i = 0; i < m.length; i += 3) {
+          var p = f(m[i], m[i + 1], m[i + 2]);
+          out[i] = p[0]; out[i + 1] = p[1]; out[i + 2] = p[2];
+        }
+        if (mirror) {
+          for (var k = 0; k < out.length; k += 9) {
+            for (var q = 0; q < 3; q++) { var t = out[k + 3 + q]; out[k + 3 + q] = out[k + 6 + q]; out[k + 6 + q] = t; }
+          }
+        }
+        return out;
+      }
+      function mv(m, x, y, z) { return xf(m, function (a, b, c) { return [a + x, b + y, c + z]; }); }
+      function rotY(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [c * x + s * z, y, -s * x + c * z]; });
+      }
+      function rotX(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [x, c * y - s * z, s * y + c * z]; });
+      }
+      function rotZ(m, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        return xf(m, function (x, y, z) { return [c * x - s * y, s * x + c * y, z]; });
+      }
+      // Rotate by angle a about an arbitrary unit axis (ux,uy,uz) through the origin.
+      function rotAxis(m, ux, uy, uz, a) {
+        var c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+        return xf(m, function (x, y, z) {
+          return [(t * ux * ux + c) * x + (t * ux * uy - s * uz) * y + (t * ux * uz + s * uy) * z,
+                  (t * ux * uy + s * uz) * x + (t * uy * uy + c) * y + (t * uy * uz - s * ux) * z,
+                  (t * ux * uz - s * uy) * x + (t * uy * uz + s * ux) * y + (t * uz * uz + c) * z];
+        });
+      }
+      // Rotate so that +Y points along (dx,dy,dz); keeps shells watertight and outward.
+      function aimY(m, dx, dy, dz) {
+        var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        dx /= len; dy /= len; dz /= len;
+        // axis = Y x d, angle = acos(dy)
+        var ax = dz, az = -dx, al = Math.sqrt(ax * ax + az * az);
+        if (al < 1e-9) return dy > 0 ? m : rotX(m, PI);
+        return rotAxis(m, ax / al, 0, az / al, Math.acos(Math.max(-1, Math.min(1, dy))));
+      }
+
+      function box(x0, y0, z0, x1, y1, z1) {
+        var m = [];
+        quad(m, [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]);
+        quad(m, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
+        quad(m, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]);
+        quad(m, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]);
+        quad(m, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
+        quad(m, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]);
+        return m;
+      }
+      function boxC(cx, cy, cz, sx, sy, sz) { return box(cx - sx / 2, cy - sy / 2, cz - sz / 2, cx + sx / 2, cy + sy / 2, cz + sz / 2); }
+
+      // Solid of revolution about the Y axis. prof = [[r, y], ...] closed outline, counter-clockwise in
+      // the (r right, y up) plane (interior on the left). Points on the axis (r = 0) make poles.
+      function lathe(prof, seg) {
+        var m = [], n = prof.length, j, k;
+        for (k = 0; k < n; k++) {
+          var p1 = prof[k], p2 = prof[(k + 1) % n];
+          if (p1[0] === 0 && p2[0] === 0) continue;
+          for (j = 0; j < seg; j++) {
+            var f0 = TAU * j / seg, f1 = TAU * (j + 1) / seg;
+            var c0 = Math.cos(f0), s0 = Math.sin(f0), c1 = Math.cos(f1), s1 = Math.sin(f1);
+            if (j === seg - 1) { c1 = 1; s1 = 0; }
+            quad(m, [p1[0] * c0, p1[1], p1[0] * s0], [p2[0] * c0, p2[1], p2[0] * s0],
+                    [p2[0] * c1, p2[1], p2[0] * s1], [p1[0] * c1, p1[1], p1[0] * s1]);
+          }
+        }
+        return m;
+      }
+      function cylY(r, y0, y1, seg) { return lathe([[0, y0], [r, y0], [r, y1], [0, y1]], seg); }
+      // Cylinder between two points (a to b) with radius r.
+      function cylAB(a, b, r, seg) {
+        var dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return mv(aimY(cylY(r, 0, len, seg), dx, dy, dz), a[0], a[1], a[2]);
+      }
+      function sphere(r, rings, seg) {
+        var prof = [];
+        for (var i = 0; i <= rings; i++) {
+          var a = -PI / 2 + PI * i / rings;
+          prof.push([i === 0 || i === rings ? 0 : r * Math.cos(a), r * Math.sin(a)]);
+        }
+        return lathe(prof, seg);
+      }
+
+      // Signed area of a polygon given as [x, z] pairs; negative = clockwise in the (x,z) plane,
+      // which is the order the code below keeps (it faces +Y for the top cap).
+      function area2(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s;
+      }
+      function cw(poly) { return area2(poly) < 0 ? poly : poly.slice().reverse(); }
+
+      // Ear clipping triangulation of a simple clockwise polygon [x, z]. Returns index triples.
+      function earClip(P) {
+        var n = P.length, idx = [], i, out = [];
+        for (i = 0; i < n; i++) idx.push(i);
+        var guard = 0;
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); }
+        while (idx.length > 3 && guard++ < 20000) {
+          var clipped = false;
+          for (i = 0; i < idx.length; i++) {
+            var ia = idx[(i + idx.length - 1) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+            var a = P[ia], b = P[ib], c = P[ic];
+            if (cross(a, b, c) > -1e-9) continue; // reflex or flat corner
+            var inside = false;
+            for (var k = 0; k < idx.length && !inside; k++) {
+              var id = idx[k];
+              if (id === ia || id === ib || id === ic) continue;
+              var p = P[id];
+              if (cross(a, b, p) <= 1e-9 && cross(b, c, p) <= 1e-9 && cross(c, a, p) <= 1e-9) inside = true;
+            }
+            if (inside) continue;
+            out.push([ia, ib, ic]);
+            idx.splice(i, 1);
+            clipped = true;
+            break;
+          }
+          if (!clipped) { // degenerate input: drop a flat corner so the loop always ends
+            idx.splice(0, 1);
+          }
+        }
+        if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+        return out;
+      }
+
+      // Prism: a simple polygon [x, z] extruded from y0 to y1.
+      function extrude(poly, y0, y1) {
+        var P = cw(poly), m = [], n = P.length, i;
+        var T = earClip(P);
+        for (i = 0; i < T.length; i++) {
+          var t = T[i];
+          tri(m, [P[t[0]][0], y1, P[t[0]][1]], [P[t[1]][0], y1, P[t[1]][1]], [P[t[2]][0], y1, P[t[2]][1]]);
+          tri(m, [P[t[0]][0], y0, P[t[0]][1]], [P[t[2]][0], y0, P[t[2]][1]], [P[t[1]][0], y0, P[t[1]][1]]);
+        }
+        for (i = 0; i < n; i++) {
+          var a = P[i], b = P[(i + 1) % n];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        return m;
+      }
+      // Prism along any axis: poly is [u, v] pairs in the profile plane; the profile is extruded from
+      // t0 to t1 along the named axis. Axis 'x': profile (z,y); 'z': profile (x,y).
+      function extrudeAxis(poly, axis, t0, t1) {
+        var m = extrude(poly, t0, t1); // profile in (x,z) extruded along y
+        if (axis === 'y') return m;
+        if (axis === 'x') return xf(m, function (x, y, z) { return [y, z, x]; }); // (u,t,v)->(x=t,y=v,z=u)
+        return xf(m, function (x, y, z) { return [x, z, y]; }, true); // 'z': (u,v,t)
+      }
+
+      // Star-shaped ring: outer and inner loops ([x, z], any start, any winding) around the origin,
+      // extruded from y0 to y1. The hole is open. Used for gears, bands and bearings.
+      function ring(outer, inner, y0, y1) {
+        var O = cw(outer), I = cw(inner), m = [], i, j;
+        var ang = function (p) { return Math.atan2(p[1], p[0]); };
+        var a0 = ang(O[0]);
+        var prog = function (p) { var d = a0 - ang(p); d = d % TAU; if (d < 0) d += TAU; return d; };
+        // first inner point at or just ahead of the start angle
+        var j0 = 0, best = 1e9;
+        for (j = 0; j < I.length; j++) { var pr = prog(I[j]); if (pr < best) { best = pr; j0 = j; } }
+        var nO = O.length, nI = I.length, oi = 0, ii = 0;
+        // Unwrapped progress of inner point ii (0..nI) relative to O[0].
+        var ip = function (k) { var p = prog(I[(j0 + k) % nI]); if (k >= nI) p += TAU; else if (k > 0 && p < prog(I[j0])) p += TAU; return p; };
+        var op = function (k) { return k >= nO ? TAU : prog(O[k % nO]); };
+        function strip(y, up) {
+          oi = 0; ii = 0;
+          while (oi < nO || ii < nI) {
+            var po = oi < nO ? op(oi + 1) : 1e9, pi = ii < nI ? ip(ii + 1) : 1e9;
+            var o0 = O[oi % nO], o1 = O[(oi + 1) % nO], i0 = I[(j0 + ii) % nI], i1 = I[(j0 + ii + 1) % nI];
+            var A, B, C;
+            if (oi < nO && (po <= pi || ii >= nI)) { A = o0; B = o1; C = i0; oi++; }
+            else { A = o0; B = i1; C = i0; ii++; }
+            var pa = [A[0], y, A[1]], pb = [B[0], y, B[1]], pc = [C[0], y, C[1]];
+            if (up) tri(m, pa, pb, pc); else tri(m, pa, pc, pb);
+          }
+        }
+        strip(y1, true);
+        strip(y0, false);
+        for (i = 0; i < nO; i++) {
+          var a = O[i], b = O[(i + 1) % nO];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        for (i = 0; i < nI; i++) {
+          var c = I[i], d = I[(i + 1) % nI];
+          quad(m, [c[0], y0, c[1]], [c[0], y1, c[1]], [d[0], y1, d[1]], [d[0], y0, d[1]]);
+        }
+        return m;
+      }
+      function circlePts(r, n, rot) {
+        var pts = [];
+        for (var i = 0; i < n; i++) { var a = (rot || 0) + TAU * i / n; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+
+      function toF32(m) { return new Float32Array(m); }
+      function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+      var PHI = (1 + Math.sqrt(5)) / 2;
+      var SHAPE_NAMES = ['Octahedron', 'Icosahedron', 'Dodecahedron', 'Cuboctahedron'];
+      // esc = inradius of the largest face opening and face = distance to the nearest face plane, both per unit circumradius.
+      var SHAPES = [
+        { v: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], esc: 0.408, face: 0.577 },
+        { v: (function () { var a = []; [-1, 1].forEach(function (s) { [-1, 1].forEach(function (t) {
+            a.push([0, s, t * PHI], [s, t * PHI, 0], [t * PHI, 0, s]); }); }); return a; })(), esc: 0.3035, face: 0.7947 },
+        { v: (function () { var a = [], s, t, u; for (s = -1; s <= 1; s += 2) for (t = -1; t <= 1; t += 2) { for (u = -1; u <= 1; u += 2) a.push([s, t, u]);
+            a.push([0, s / PHI, t * PHI], [s / PHI, t * PHI, 0], [t * PHI, 0, s / PHI]); } return a; })(), esc: 0.491, face: 0.7947 },
+        { v: (function () { var a = []; [-1, 1].forEach(function (s) { [-1, 1].forEach(function (t) {
+            a.push([s, t, 0], [s, 0, t], [0, s, t]); }); }); return a; })(), esc: 0.5, face: 0.707 }
+      ];
+      var SHAPE_CACHE = {};
+
+      function shapeData(idx) {
+        if (SHAPE_CACHE[idx]) return SHAPE_CACHE[idx];
+        var S = SHAPES[idx], V = S.v.map(function (p) { var l = Math.sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]); return [p[0] / l, p[1] / l, p[2] / l]; });
+        var i, j, dmin = 1e9, dist = function (a, b) { return Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2) + Math.pow(a[2] - b[2], 2)); };
+        for (i = 0; i < V.length; i++) for (j = i + 1; j < V.length; j++) dmin = Math.min(dmin, dist(V[i], V[j]));
+        var E = [], adj = V.map(function () { return []; });
+        for (i = 0; i < V.length; i++) for (j = i + 1; j < V.length; j++) if (dist(V[i], V[j]) < dmin * 1.01) { E.push([i, j]); adj[i].push(j); adj[j].push(i); }
+        // distance from the centre to the nearest edge (unit circumradius)
+        var dEdge = 1e9;
+        E.forEach(function (e) {
+          var a = V[e[0]], b = V[e[1]], d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+          var t = clamp(-(a[0] * d[0] + a[1] * d[1] + a[2] * d[2]) / dd, 0, 1);
+          dEdge = Math.min(dEdge, Math.sqrt(Math.pow(a[0] + t * d[0], 2) + Math.pow(a[1] + t * d[1], 2) + Math.pow(a[2] + t * d[2], 2)));
+        });
+        // a face to rest on: a triangle of mutually adjacent corners, or a pentagon for the dodecahedron
+        var face = null, a, b, c;
+        for (a = 0; a < V.length && !face; a++) adj[a].forEach(function (bb) { adj[bb].forEach(function (cc) {
+          if (!face && cc !== a && adj[cc].indexOf(a) >= 0) face = [a, bb, cc]; }); });
+        if (!face) { // pentagon: walk five edges around
+          var start = 0, path = [start];
+          (function walk(cur, depth) {
+            if (face) return;
+            if (depth === 5) { if (adj[cur].indexOf(start) >= 0) face = path.slice(); return; }
+            adj[cur].forEach(function (nx) {
+              if (path.indexOf(nx) < 0 && !face) {
+                // the next corner must keep the path planar enough to be a face: require shared neighbour structure
+                path.push(nx); walk(nx, depth + 1); if (!face) path.pop();
+              }
+            });
+          })(start, 1);
+        }
+        var n = [0, 0, 0];
+        face.forEach(function (k) { n[0] += V[k][0]; n[1] += V[k][1]; n[2] += V[k][2]; });
+        var nl = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+        n = [n[0] / nl, n[1] / nl, n[2] / nl];
+        var rest = n[0] * V[face[0]][0] + n[1] * V[face[0]][1] + n[2] * V[face[0]][2];
+        return (SHAPE_CACHE[idx] = { V: V, E: E, dEdge: dEdge, esc: S.esc, face: S.face, normal: n, rest: rest });
+      }
+
+      function rotateTo(V, n) {
+        // rotation taking unit n onto -Y
+        var ax = n[2], az = -n[0], al = Math.sqrt(ax * ax + az * az), ang = Math.acos(clamp(-n[1], -1, 1));
+        if (al < 1e-9) return V.map(function (p) { return n[1] < 0 ? p.slice() : [p[0], -p[1], p[2]]; });
+        var ux = ax / al, uz = az / al, c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+        return V.map(function (p) {
+          return [(t * ux * ux + c) * p[0] + (-s * uz) * p[1] + (t * ux * uz) * p[2],
+                  (s * uz) * p[0] + c * p[1] + (-s * ux) * p[2],
+                  (t * ux * uz) * p[0] + (s * ux) * p[1] + (t * uz * uz + c) * p[2]];
+        });
+      }
+
+      function buildRattle(p) {
+        var D = shapeData(Math.round(p.shape)), Rc = p.size, rs = p.strut, rj = rs * 1.35, gap = p.gap;
+        var V = rotateTo(D.V, D.normal).map(function (q) { return [q[0] * Rc, q[1] * Rc, q[2] * Rc]; });
+        var cage = [], i;
+        D.E.forEach(function (e, k) {
+          // small per-part twist so the end rings of struts that meet at a corner never share exact points
+          var a = V[e[0]], b = V[e[1]], len = Math.sqrt(Math.pow(b[0] - a[0], 2) + Math.pow(b[1] - a[1], 2) + Math.pow(b[2] - a[2], 2));
+          var cyl = mv(aimY(rotY(cylY(rs, 0, len, 10), 0.31 + 0.17 * k), b[0] - a[0], b[1] - a[1], b[2] - a[2]), a[0], a[1], a[2]);
+          append(cage, cyl);
+        });
+        V.forEach(function (q, k) { append(cage, mv(rotY(sphere(rj, 6, 14), 0.23 + 0.11 * k), q[0], q[1], q[2])); });
+
+        // The ball may be as large as the clearance to the struts and the face planes allow, and must be
+        // larger than the biggest opening of the cage.
+        var lo = D.esc * Rc - rs + 0.4, hi = Math.min(D.dEdge * Rc - rs - gap, D.face * Rc - 0.8);
+        var Rb = lo + (Math.max(hi, lo) - lo) * p.ball;
+        var out = [{ name: 'cage', positions: toF32(cage) }];
+        var rb0 = 1.6, ball, yBallBottom;
+        if (p.round >= 1) { ball = sphere(Rb, 14, 28); yBallBottom = -Rb; }
+        else { var h = Rb - rb0; ball = lathe([[0, -h], [rb0, -h], [Rb, 0], [rb0, h], [0, h]], 28); yBallBottom = -h; }
+        out.push({ name: 'ball', positions: toF32(ball) });
+
+        // Raft under the resting face and a thin pin that holds the ball for printing.
+        var ymin = 1e9;
+        V.forEach(function (q) { ymin = Math.min(ymin, q[1]); });
+        ymin -= rj;
+        var rr = 0;
+        V.forEach(function (q) { if (q[1] - rj < ymin + 1) rr = Math.max(rr, Math.sqrt(q[0] * q[0] + q[2] * q[2])); });
+        if (p.raft >= 1) {
+          out.push({ name: 'raft', positions: toF32(cylY(rr + rj + 2.5, ymin, ymin + 1.0, 48)) });
+          if (p.pin >= 1) out.push({ name: 'pin', positions: toF32(cylY(0.65, ymin + 0.6, yBallBottom + 0.4, 10)) });
+        }
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-048',
+        category: 'DESK // FIDGETS',
+        title: 'Rattle Ball Cage',
+        fileName: 'Rattle_Ball_Cage',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { cage: 'Cage', ball: 'Ball', raft: 'Raft', pin: 'Snap-off pin' },
+        parameters: [
+          { group: 'Cage', key: 'shape', label: 'Cage shape', unit: '', min: 0, max: 3, step: 1, value: 1, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
+          { group: 'Cage', key: 'size', label: 'Cage size', unit: ' mm', min: 16, max: 34, step: 1, value: 24 },
+          { group: 'Cage', key: 'strut', label: 'Bar thickness', unit: ' mm', min: 1, max: 2.4, step: 0.1, value: 1.5 },
+          { group: 'Ball', key: 'ball', label: 'Ball size (small to large)', unit: '%', min: 0, max: 1, step: 0.05, value: 0.6, format: function (v) { return Math.round(v * 100) + '%'; } },
+          { group: 'Ball', key: 'round', label: 'Ball shape', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Diamond', 'Round'] },
+          { group: 'Ball', key: 'gap', label: 'Rattle room around ball', unit: ' mm', min: 0.4, max: 1.2, step: 0.1, value: 0.6 },
+          { group: 'Print', key: 'raft', label: 'Raft under the cage', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+          { group: 'Print', key: 'pin', label: 'Snap-off pin holding ball (round ball needs slicer supports)', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] }
+        ],
+        presets: [
+          { label: 'Default icosahedron', values: { shape: 1, size: 24, strut: 1.5, ball: 0.6, round: 0, gap: 0.6, raft: 1, pin: 1 } },
+          { label: 'Chunky octahedron', values: { shape: 0, size: 26, strut: 2, ball: 0.5, round: 0, gap: 0.7, raft: 1, pin: 1 } },
+          { label: 'Soccer-ball dodecahedron', values: { shape: 2, size: 28, strut: 1.4, ball: 0.7, round: 0, gap: 0.6, raft: 1, pin: 1 } },
+          { label: 'Cuboctahedron', values: { shape: 3, size: 24, strut: 1.6, ball: 0.55, round: 0, gap: 0.6, raft: 1, pin: 1 } }
+        ],
+        build: function (p) { return buildRattle(p); }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
