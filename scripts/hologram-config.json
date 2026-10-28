@@ -5,14 +5,239 @@
   },
   "spider": {
     "dark": true,
-    "hue": 215
+    "hue": 200
   },
   "witch-hat": {
     "dark": true,
-    "hue": 215
+    "hue": 200
   },
   "skull-sculptor": {
     "sat": 0,
     "light": 85
+  },
+  "ghost-builder": {
+    "hue": 165,
+    "sat": 60,
+    "light": 78
+  },
+  "snowman": {
+    "hue": 200,
+    "sat": 80,
+    "light": 82
+  },
+  "snowflake": {
+    "hue": 195,
+    "sat": 85,
+    "light": 80
+  },
+  "holiday-tree": {
+    "hue": 130,
+    "sat": 80,
+    "light": 58
+  },
+  "gift-box": {
+    "hue": 355,
+    "sat": 85,
+    "light": 64
+  },
+  "gift-box-2": {
+    "hue": 45,
+    "sat": 90,
+    "light": 62
+  },
+  "key-clicker": {
+    "hue": 185,
+    "sat": 100,
+    "light": 62
+  },
+  "name-keychain": {
+    "hue": 45,
+    "sat": 95,
+    "light": 62
+  },
+  "image-clicker": {
+    "hue": 280,
+    "sat": 80,
+    "light": 70
+  },
+  "ornament-stacker": {
+    "hue": 350,
+    "sat": 85,
+    "light": 66
+  },
+  "pottery-wheel": {
+    "hue": 24,
+    "sat": 70,
+    "light": 58
+  },
+  "turkey-builder": {
+    "hue": 26,
+    "sat": 80,
+    "light": 58
+  },
+  "cornucopia": {
+    "hue": 38,
+    "sat": 90,
+    "light": 60
+  },
+  "leaf-press": {
+    "hue": 14,
+    "sat": 90,
+    "light": 60
+  },
+  "pumpkin-pie-slice": {
+    "hue": 32,
+    "sat": 85,
+    "light": 62
+  },
+  "acorn-pinecone-set": {
+    "hue": 30,
+    "sat": 65,
+    "light": 55
+  },
+  "scarecrow-stacker": {
+    "hue": 48,
+    "sat": 90,
+    "light": 62
+  },
+  "gratitude-place-cards": {
+    "hue": 40,
+    "sat": 80,
+    "light": 66
+  },
+  "countdown-clock": {
+    "hue": 50,
+    "sat": 95,
+    "light": 62
+  },
+  "confetti-cannon": {
+    "hue": 320,
+    "sat": 90,
+    "light": 68
+  },
+  "party-hat": {
+    "hue": 290,
+    "sat": 85,
+    "light": 68
+  },
+  "party-whistle": {
+    "hue": 55,
+    "sat": 95,
+    "light": 62
+  },
+  "conversation-hearts": {
+    "hue": 335,
+    "sat": 90,
+    "light": 72
+  },
+  "valentines-card": {
+    "hue": 345,
+    "sat": 90,
+    "light": 66
+  },
+  "egg-decorator": {
+    "hue": 300,
+    "sat": 70,
+    "light": 72
+  },
+  "bunny-builder": {
+    "hue": 320,
+    "sat": 70,
+    "light": 80
+  },
+  "chick-hatcher": {
+    "hue": 55,
+    "sat": 95,
+    "light": 64
+  },
+  "flower-pot": {
+    "hue": 110,
+    "sat": 70,
+    "light": 58
+  },
+  "butterfly-wings": {
+    "hue": 268,
+    "sat": 80,
+    "light": 72
+  },
+  "egg-basket": {
+    "hue": 85,
+    "sat": 75,
+    "light": 60
+  },
+  "cake-stacker": {
+    "hue": 330,
+    "sat": 80,
+    "light": 72
+  },
+  "candle-number": {
+    "hue": 40,
+    "sat": 95,
+    "light": 62
+  },
+  "pinata": {
+    "hue": 305,
+    "sat": 90,
+    "light": 68
+  },
+  "balloon-twister": {
+    "hue": 5,
+    "sat": 90,
+    "light": 64
+  },
+  "banner-letters": {
+    "hue": 175,
+    "sat": 80,
+    "light": 62
+  },
+  "party-popper": {
+    "hue": 50,
+    "sat": 95,
+    "light": 64
+  },
+  "cupcake-maker": {
+    "hue": 340,
+    "sat": 80,
+    "light": 74
+  },
+  "birthday-crown": {
+    "hue": 48,
+    "sat": 95,
+    "light": 62
+  },
+  "gear-train": {
+    "hue": 215,
+    "sat": 70,
+    "light": 66
+  },
+  "fidget-slider": {
+    "hue": 160,
+    "sat": 85,
+    "light": 60
+  },
+  "spinner-ring": {
+    "hue": 265,
+    "sat": 80,
+    "light": 70
+  },
+  "spiral-tower": {
+    "hue": 245,
+    "sat": 75,
+    "light": 72
+  },
+  "rattle-ball": {
+    "hue": 14,
+    "sat": 80,
+    "light": 62
+  },
+  "chain": {
+    "hue": 205,
+    "sat": 45,
+    "light": 70
+  },
+  "flipper": {
+    "hue": 170,
+    "sat": 85,
+    "light": 60
   }
 }
