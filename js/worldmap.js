@@ -174,19 +174,26 @@ function hoverDraw(obj) {
   obj.style.filter = `drop-shadow(0 0 ${3 + 9 * Math.min(1, h.p)}px rgba(60, 230, 255, ${0.35 + 0.4 * Math.min(1, h.p)}))`;
 }
 
+// Frames only change on display refreshes. Stepping every 41.7 ms (24 fps) on a 60 Hz screen alternates 2 and 3
+// refreshes per frame, which reads as judder. So measure the refresh interval and step a whole number of refreshes.
 function hoverLoop(obj, now) {
   const h = obj._hover, m = h.m, dt = Math.min(64, now - h.last);
   h.last = now;
+  (h.dts = h.dts || []).push(dt);
+  if (h.dts.length > 12) h.dts.shift();
+  const r = h.dts.length >= 5 ? [...h.dts].sort((a, b) => a - b)[Math.floor(h.dts.length / 2)] : 16.7;
+  const n = Math.max(1, Math.round(1000 / m.fps / r));
   h.p = Math.max(0, Math.min(1, h.p + h.dir * dt / (h.dir > 0 ? 260 : 200)));
   h.acc += dt;
   // After the pointer leaves, shrink back but keep turning (twice as fast) until the loop lands on frame 0, so the
   // tile settles on the rest pose without a snap.
-  const step = 1000 / m.fps / (h.dir < 0 ? 2 : 1);
-  while (h.acc >= step) {
+  const step = r * (h.dir < 0 ? Math.max(1, Math.round(n / 2)) : n);
+  while (h.acc >= step - r * 0.4) {
     h.acc -= step;
     h.frame = (h.frame + 1) % h.lay.seq.length;
     if (h.dir < 0 && h.p <= 0 && h.frame === 0) break;
   }
+  if (h.acc < 0) h.acc = 0;
   if (h.dir < 0 && h.p <= 0 && h.frame === 0) { h.acc = 0; h.raf = 0; hoverDraw(obj); return; }
   hoverDraw(obj);
   h.raf = requestAnimationFrame(t => hoverLoop(obj, t));

@@ -6,7 +6,7 @@
   "frames": 24,
   "cols": 6,
   "rowsPerBlock": 4,
-  "fps": 24,
+  "fps": 20,
   "restScale": 0.41,
   "displayScale": 0.85,
   "sheets": [

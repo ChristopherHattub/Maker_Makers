@@ -17,7 +17,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'assets/thumbnails/sprites'
-CELL, COLS, BLOCK_ROWS, BLOCKS, FRAMES, FPS = 288, 6, 4, 2, 24, 24
+CELL, COLS, BLOCK_ROWS, BLOCKS, FRAMES, FPS = 288, 6, 4, 2, 24, 20
 OBJ = 228            # px the object's largest dimension is normalised to, inside a 288 cell
 BASE = 512           # output size of the base tile
 CYAN, RIM = 185, 24  # source hues (degrees) of the hologram and the base tile rim
@@ -79,16 +79,22 @@ def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAME
         ys, xs = np.nonzero(m)
         boxes.append((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
         cells.append(cell)
-    scale = OBJ / max(max(b[2] - b[0], b[3] - b[1]) for b in boxes)
-    # Keep one fixed centre for the whole block. Gemini already holds the object steady in its cell, while
-    # centring each frame on its own bounding box makes the body jump sideways whenever an arm swings out.
-    cx = cw / 2
-    cy = float(np.median([(b[1] + b[3]) / 2 for b in boxes]))
+    scale = OBJ / max(max(bx[2] - bx[0], bx[3] - bx[1]) for bx in boxes)
+    # Pin every frame by its centre of mass, not its outline. Gemini re-centres each frame's bounding box, so a
+    # swinging arm, a curling stem or a spread of legs shifts the whole body between frames; a real turntable keeps
+    # the body on a fixed axis. The mass centre sits exactly on the cell's centre line, so the mirrored half of the
+    # turn (flipped about that line) lands on the same spot as the original half.
+    cents = []
+    for cell in cells:
+        wgt = np.clip(cell.max(axis=2).astype(float) - 40, 0, None)
+        ys, xs = np.mgrid[0:wgt.shape[0], 0:wgt.shape[1]]
+        cents.append(((wgt * xs).sum() / wgt.sum(), (wgt * ys).sum() / wgt.sum()))
+    off_y = float(np.median([c[1] - (bx[1] + bx[3]) / 2 for c, bx in zip(cents, boxes)]))
+    tx, ty = CELL / 2, CELL / 2 + off_y * scale          # where the mass centre lands in the output cell
     out = []
-    for cell, (l, t, rr, bb) in zip(cells, boxes):
-        win = CELL / scale
+    for cell, (cxf, cyf) in zip(cells, cents):
         im = Image.fromarray(cell, 'RGB').transform(
-            (CELL, CELL), Image.AFFINE, (1 / scale, 0, cx - win / 2, 0, 1 / scale, cy - win / 2), Image.BICUBIC)
+            (CELL, CELL), Image.AFFINE, (1 / scale, 0, cxf - tx / scale, 0, 1 / scale, cyf - ty / scale), Image.BICUBIC)
         rgb = np.asarray(im)
         if hue is not None:
             rgb = shift_hue(np.ascontiguousarray(rgb), CYAN, hue)
