@@ -489,7 +489,7 @@ const BUNDLES = [
     generators: ['SLOT-15'] },
   { id: 'decor', name: 'Home & Decor', accent: '#4aa3ff', at: [4, 5], size: [4, 2], planned: true,
     description: 'Vases, lamps, frames and wall art.' },
-  { id: 'organization', name: 'Organisation', accent: '#38d6c4', at: [8, 5], size: [4, 2], planned: true,
+  { id: 'organization', name: 'Organisation', accent: '#38d6c4', at: [16, 6], size: [4, 2], planned: true,
     description: 'Hooks, trays, holders and storage.' },
   { id: 'toys', name: 'Toys & Games', accent: '#ff5252', at: [12, 5], size: [4, 2], planned: true,
     description: 'Puzzles, spinners and pieces to play with.' },

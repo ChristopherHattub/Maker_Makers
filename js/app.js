@@ -68,6 +68,8 @@ function hideAllScreens() {
   document.getElementById('splash-screen').style.display = 'none';
   document.getElementById('viewer-screen').style.display = 'none';
   document.getElementById('map-screen').style.display = 'none';
+  document.getElementById('workshop-screen').style.display = 'none';
+  document.body.classList.remove('on-workshop');
 }
 
 // Navigation is driven by the URL hash so the browser Back and Forward buttons work:
@@ -85,6 +87,8 @@ function renderRoute() {
   const genMatch = hash.match(/^#\/generator\/(.+)$/);
   if (genMatch && PROGRAMS.some(p => p.id === decodeURIComponent(genMatch[1]))) {
     renderProgram(decodeURIComponent(genMatch[1]));
+  } else if (hash === '#/workshop') {
+    renderWorkshop();
   } else if (hash === '#/map') {
     renderPrinterMap();
   } else {
@@ -113,6 +117,15 @@ function renderSplash() {
   worldMapShown();
   const iframe = document.getElementById('external-program-iframe');
   if (iframe) setFrameUrl(iframe, 'about:blank');
+}
+
+function renderWorkshop() {
+  hideAllScreens();
+  document.getElementById('workshop-screen').style.display = 'block';
+  document.body.classList.add('on-workshop');
+  const iframe = document.getElementById('external-program-iframe');
+  if (iframe) setFrameUrl(iframe, 'about:blank');
+  openWorkshop();
 }
 
 function renderProgram(progId) {

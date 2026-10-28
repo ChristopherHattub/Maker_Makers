@@ -17,6 +17,10 @@ const worldState = {
   drawQueued: false
 };
 
+// The Workshop is a large tile in the middle of the map (not a generator). It occupies WORKSHOP.cols x WORKSHOP.rows cells
+// starting at cell WORKSHOP.at, and opens the free-range 3D editor at #/workshop. See docs/workshop.md.
+const WORKSHOP = { at: [8, 5], cols: 4, rows: 3 };
+
 const wEl = {};
 
 function worldClamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
@@ -276,6 +280,24 @@ function regionHTML(r) {
     </section>`;
 }
 
+function workshopTileHTML() {
+  const C = WORLD.CELL, w = WORKSHOP.cols * C - WORLD.GAP, h = WORKSHOP.rows * C - WORLD.GAP;
+  return `
+    <button class="workshop-tile" type="button" style="left:${WORKSHOP.at[0] * C}px; top:${WORKSHOP.at[1] * C}px; width:${w}px; height:${h}px"
+            aria-label="Workshop: a free-range 3D editor. Import STL files, add shapes, move, scale and rotate.">
+      <span class="ws-grid" aria-hidden="true"></span>
+      <svg class="ws-holo" viewBox="0 0 240 150" aria-hidden="true">
+        <g class="ws-orbit">
+          <path class="ws-f" d="M40 96 L70 80 L100 96 L100 128 L70 144 L40 128Z M40 96 L70 112 L100 96 M70 112 L70 144"/>
+          <circle class="ws-f" cx="170" cy="100" r="26"/><ellipse class="ws-f" cx="170" cy="100" rx="26" ry="8"/>
+          <path class="ws-f" d="M120 40 L150 82 L90 82Z M120 40 L120 82"/>
+          <path class="ws-f" d="M184 30 l12 -8 l12 8 v14 l-12 8 l-12 -8z"/>
+        </g>
+      </svg>
+      <span class="ws-label"><strong>Workshop</strong><em>Import STLs &middot; add shapes &middot; move, scale, rotate</em></span>
+    </button>`;
+}
+
 function initWorldMap() {
   const groups = BUNDLES.filter(b => b.members.length || b.planned);
   worldState.regions = layoutWorld(groups);
@@ -288,7 +310,7 @@ function initWorldMap() {
   wEl.search = document.getElementById('world-search');
   wEl.hint = document.getElementById('world-hint');
 
-  wEl.canvas.innerHTML = worldState.regions.map(regionHTML).join('') + '<div class="cell-cursor" id="cell-cursor" hidden></div>';
+  wEl.canvas.innerHTML = worldState.regions.map(regionHTML).join('') + workshopTileHTML() + '<div class="cell-cursor" id="cell-cursor" hidden></div>';
   wEl.cursor = document.getElementById('cell-cursor');
 
   const filled = groups.reduce((n, g) => n + g.members.length, 0);
@@ -546,6 +568,7 @@ function worldSuggest(group) {
 // ---------- input ----------
 
 function worldTap(e) {
+  if (e.target.closest('.workshop-tile')) { location.hash = '#/workshop'; return; }
   const tile = e.target.closest('.tile');
   if (tile) {
     const prog = PROGRAMS.find(p => p.id === tile.dataset.id);
@@ -754,6 +777,9 @@ function worldDrawMinimap() {
       ctx.fillStyle = r.group.accent || '#00e5ff';
       ctx.fillRect(x, y, w, h);
     });
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillRect(ox + (WORKSHOP.at[0] * WORLD.CELL - b.x) * s, oy + (WORKSHOP.at[1] * WORLD.CELL - b.y) * s, WORKSHOP.cols * WORLD.CELL * s, WORKSHOP.rows * WORLD.CELL * s);
     ctx.globalAlpha = 1;
     const { cam, size } = worldState;
     const vx = ox + (-cam.x / cam.k - b.x) * s, vy = oy + (-cam.y / cam.k - b.y) * s;
