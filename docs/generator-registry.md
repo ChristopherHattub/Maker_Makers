@@ -47,7 +47,7 @@ A generator is a page in `programs/` that loads the shared engine. The page hold
 - It is loaded in an `<iframe>` in the viewer. Its sliders, Color tool and export buttons appear inside that frame.
 - It must work with no server and no build step. It can fetch three.js from its CDN, and nothing else.
 - The viewer's "Download Program (.HTML)" button, and the generator's own "Download standalone .html generator" button, both save one self-contained file. The shared files are inlined into it.
-- The two "Export .STL / .3MF" buttons in the viewer are placeholders. Exporting happens inside the generator.
+- The two "Export .STL / .OBJ" buttons in the viewer are placeholders. Exporting happens inside the generator.
 
 Use relative paths only, such as `programs/ghost-builder.html`, never a path starting with `/`. Relative paths work locally and under a GitHub Pages project URL.
 

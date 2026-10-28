@@ -83,6 +83,6 @@ These are current behaviors to know about. None are blocking for the static, tru
 
 - **Unescaped HTML.** Titles, categories, descriptions, and the printer fields are inserted with `innerHTML` without escaping. Data from `PROGRAMS` and the printer JSON file is trusted, but live OpenStreetMap results are not. Their name, address and equipment text appear in popups and cards, and their `website` tag becomes an `href`. A `javascript:` URL in that tag would run when clicked. Validate or escape these before the scan results are shown.
 - **Saved ideas are unescaped too.** The idea log writes the stored title and description as HTML. Only the submitting browser sees them, but they should still be escaped.
-- **Export buttons are placeholders.** The viewer's "Export .STL" and "Export .3MF" buttons are disabled and not wired.
+- **Export buttons are placeholders.** The viewer's "Export .STL" and "Export .OBJ" buttons are disabled and not wired.
 - **Silent scan failures.** Overpass errors are swallowed, so a failed scan looks like an empty one.
 - **Distance check is in degrees.** Deciding which verified listings to include in a scan uses a degree distance, not kilometers.

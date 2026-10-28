@@ -33,7 +33,8 @@ const MIME = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.stl': 'model/stl',
-  '.3mf': 'model/3mf',
+  '.obj': 'text/plain',
+  '.mtl': 'text/plain',
   '.txt': 'text/plain; charset=utf-8'
 };
 

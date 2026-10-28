@@ -164,7 +164,7 @@ function wsInit(root) {
         <strong style="letter-spacing:3px;color:var(--bp-cyan)">WORKSHOP</strong>
         <button class="ws-btn" data-a="import" title="Open an STL file">📂<small>Open STL</small></button>
         <button class="ws-btn ws-export" data-a="export" title="Save everything as an STL file (no colours)">💾<small>Save STL</small></button>
-        <button class="ws-btn ws-export" data-a="export3mf" title="Save everything as a 3MF with your colours, for Bambu Studio, OrcaSlicer, PrusaSlicer and Cura">🎨<small>Save 3MF</small></button>
+        <button class="ws-btn ws-export" data-a="exportObj" title="Save everything as an OBJ + MTL zip with your colours, for Bambu Studio, OrcaSlicer and PrusaSlicer. No print settings">🎨<small>Save OBJ</small></button>
         <button class="ws-btn" data-a="undo" title="Undo (Ctrl+Z)">↩️<small>Undo</small></button>
         <button class="ws-btn" data-a="redo" title="Redo">↪️<small>Redo</small></button>
         <button class="ws-btn" data-a="clear" title="Remove everything">🧹<small>Clear</small></button>
@@ -628,13 +628,13 @@ function wsBindUI() {
 }
 
 function wsAction(a) {
-  if (WS.mini && /^(clear|undo|redo|del|back|import|bool-.*|dup|drop|center|mirror|resetrot|export|export3mf)$/.test(a)) { wsToast('Press Done first.'); return; }
+  if (WS.mini && /^(clear|undo|redo|del|back|import|bool-.*|dup|drop|center|mirror|resetrot|export|exportObj)$/.test(a)) { wsToast('Press Done first.'); return; }
   if (a.startsWith('step:')) { WS.step = Number(a.slice(5)); wsRenderSide(); return; }
   if (/^(nudge|turn|grow|color):/.test(a)) { wsVisualAction(a); return; }
   if (a === 'edit') { const o = WS.sel[0]; if (o && o.gen) wsOpenMini(o); return; }
   if (a === 'import') document.getElementById('ws-file').click();
   else if (a === 'export') wsExport();
-  else if (a === 'export3mf') wsExport3mf();
+  else if (a === 'exportObj') wsExportObj();
   else if (a === 'undo') wsUndo();
   else if (a === 'redo') wsRedo();
   else if (a === 'clear') { if (!WS.objs.length || confirm('Remove everything from the Workshop?')) { WS.objs.slice().forEach(wsRemove); wsSelect([]); wsCommit(); } }
@@ -745,7 +745,7 @@ function wsRenderSide() {
   }
   side.innerHTML = `<div><h4>Selection</h4>${insp}</div><div><h4>Scene (${WS.objs.length})</h4><ul class="ws-list">${list || '<li class="ws-note">Empty</li>'}</ul>
     <p class="ws-note">Keys: W move · E rotate · R scale · G snap · B drop to bed · H hide · F focus · Ctrl+D duplicate · Ctrl+Z undo · Del delete</p>
-    <div class="ws-btns" style="margin:4px 0"><button data-a="export">💾 Save STL</button><button data-a="export3mf">🎨 Save 3MF (colours)</button></div><p class="ws-note">Private: files never leave your browser.</p></div>`;
+    <div class="ws-btns" style="margin:4px 0"><button data-a="export">💾 Save STL</button><button data-a="exportObj">🎨 Save OBJ (colours)</button></div><p class="ws-note">Private: files never leave your browser.</p></div>`;
   side.onclick = e => {
     const li = e.target.closest('li[data-id]');
     if (!li) return;
@@ -951,46 +951,37 @@ function wsExport() {
   wsToast(`Saved ${vis.length} object${vis.length > 1 ? 's' : ''} (${tris.length} triangles) as workshop.stl`);
 }
 
-// 3MF with colours: one object, a volume per colour (extruder numbers for Prusa / Bambu / Orca) and per-triangle base
-// materials (Cura and generic viewers). Same layout as the generators' .3mf export; only colours, never print settings.
-function wsExport3mf() {
+// OBJ + MTL zip with colours: one usemtl group per colour (Bambu / Orca / Prusa offer to map them to filaments).
+// Only colours, never print settings.
+function wsExportObj() {
   const vis = WS.objs.filter(o => o.mesh.visible);
   if (!vis.length) { wsToast('Nothing to save.'); return; }
-  const hex = c => '#' + c.toString(16).padStart(6, '0').toUpperCase();
-  const colors = [], cidx = {}, verts = [], tris = [], a = new THREE.Vector3();
+  const hex = c => c.toString(16).padStart(6, '0').toUpperCase();
+  const colors = [], faces = {}, verts = [], a = new THREE.Vector3();
+  let off = 0;
   vis.forEach(o => {
     o.mesh.updateMatrixWorld(true);
     const g = o.geo.index ? o.geo.toNonIndexed() : o.geo, p = g.attributes.position, flip = o.mesh.matrixWorld.determinant() < 0, c = hex(o.color), local = {};
-    if (cidx[c] === undefined) { cidx[c] = colors.length; colors.push(c); }
+    if (!faces[c]) { faces[c] = []; colors.push(c); }
+    let n = 0;
     const vid = i => {
       a.fromBufferAttribute(p, i).applyMatrix4(o.mesh.matrixWorld);
       const key = a.x.toFixed(4) + ',' + a.y.toFixed(4) + ',' + a.z.toFixed(4);
-      if (local[key] === undefined) { local[key] = verts.length; verts.push(`<vertex x="${a.x.toFixed(4)}" y="${a.y.toFixed(4)}" z="${a.z.toFixed(4)}"/>`); }
-      return local[key];
+      if (local[key] === undefined) { local[key] = n++; verts.push(`v ${a.x.toFixed(4)} ${a.y.toFixed(4)} ${a.z.toFixed(4)}`); }
+      return local[key] + off + 1;
     };
-    for (let i = 0; i < p.count; i += 3) { const t = [vid(i), vid(i + 1), vid(i + 2)]; if (flip) t.reverse(); tris.push({ c: cidx[c], v: t }); }
+    for (let i = 0; i < p.count; i += 3) { const t = [vid(i), vid(i + 1), vid(i + 2)]; if (flip) t.reverse(); faces[c].push(`f ${t[0]} ${t[1]} ${t[2]}`); }
+    off += n;
   });
-  tris.sort((x, y) => x.c - y.c);
-  const ranges = colors.map(() => null);
-  const triXml = tris.map((t, i) => { if (!ranges[t.c]) ranges[t.c] = { first: i, last: i }; ranges[t.c].last = i; return `<triangle v1="${t.v[0]}" v2="${t.v[1]}" v3="${t.v[2]}" pid="1" p1="${t.c}"/>`; });
-  const model = '<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
-    '<metadata name="Title">Workshop</metadata><metadata name="Designer">Maker Makers</metadata><resources>' +
-    '<basematerials id="1">' + colors.map(c => `<base name="${c}" displaycolor="${c}"/>`).join('') + '</basematerials>' +
-    '<object id="2" name="Workshop" type="model" pid="1" pindex="0"><mesh><vertices>' + verts.join('') + '</vertices><triangles>' + triXml.join('') + '</triangles></mesh></object></resources><build><item objectid="2"/></build></model>';
-  const volumes = colors.map((c, i) => `<volume firstid="${ranges[i].first}" lastid="${ranges[i].last}"><metadata type="volume" key="name" value="Color ${i + 1} ${c}"/><metadata type="volume" key="volume_type" value="ModelPart"/><metadata type="volume" key="extruder" value="${i + 1}"/></volume>`).join('');
-  const cfg = '<?xml version="1.0" encoding="UTF-8"?><config><object id="2" instances_count="1"><metadata type="object" key="name" value="Workshop"/><metadata type="object" key="extruder" value="1"/>' + volumes + '</object></config>';
-  const q = colors.map(c => `"${c}"`).join(';');
+  const lines = ['# Workshop - Maker Makers', 'mtllib workshop.mtl', 'o workshop', ...verts];
+  colors.forEach(c => lines.push(`g color_${c}`, `usemtl color_${c}`, ...faces[c]));
+  const mtl = ['# Maker Makers colors', ...colors.map(c => {
+    const rgb = [0, 2, 4].map(k => (parseInt(c.slice(k, k + 2), 16) / 255).toFixed(4)).join(' ');
+    return `newmtl color_${c}\nKa ${rgb}\nKd ${rgb}\nKs 0 0 0\nd 1\nillum 1\n`;
+  })].join('\n');
   const enc = t => new TextEncoder().encode(t);
-  const files = [
-    { name: '[Content_Types].xml', data: enc('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="config" ContentType="text/plain"/></Types>') },
-    { name: '_rels/.rels', data: enc('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>') },
-    { name: '3D/3dmodel.model', data: enc(model) }
-  ];
-  if (colors.length > 1) { files.push({ name: 'Metadata/Slic3r_PE_model.config', data: enc(cfg) }, { name: 'Metadata/model_settings.config', data: enc(cfg) }); }
-  files.push({ name: 'Metadata/Slic3r_PE.config', data: enc(`; extruder_colour = ${q}\n; filament_colour = ${q}\n`) });
-  files.push({ name: 'Metadata/project_settings.config', data: enc(JSON.stringify({ filament_colour: colors, extruder_colour: colors, filament_type: colors.map(() => 'PLA') }, null, 2)) });
-  wsDownload(wsZip(files), 'workshop.3mf');
-  wsToast(`Saved workshop.3mf with ${colors.length} ${colors.length === 1 ? 'colour' : 'colours'}`);
+  wsDownload(wsZip([{ name: 'workshop.obj', data: enc(lines.join('\n') + '\n') }, { name: 'workshop.mtl', data: enc(mtl) }]), 'workshop-obj.zip');
+  wsToast(`Saved workshop-obj.zip with ${colors.length} ${colors.length === 1 ? 'colour' : 'colours'}`);
 }
 
 function wsDownload(data, name) {
@@ -999,7 +990,7 @@ function wsDownload(data, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Minimal ZIP writer (store, no compression), enough for a .3mf package.
+// Minimal ZIP writer (store, no compression), enough for the .obj + .mtl package.
 function wsZip(files) {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }

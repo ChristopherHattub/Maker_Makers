@@ -29,7 +29,7 @@ The port can also be set with the `PORT` environment variable. The default is 51
 - Requests map directly to files under the repo root. `/` and any folder path serve that folder's `index.html`.
 - Requests that resolve outside the repo root get `403`. Missing files get a plain `404`.
 - Responses set `Cache-Control: no-store`, so refreshes always fetch the latest file.
-- Content types come from a built-in table covering HTML, CSS, JS, JSON, images, fonts, and `.stl` / `.3mf`.
+- Content types come from a built-in table covering HTML, CSS, JS, JSON, images, fonts, and `.stl` / `.obj` / `.mtl` / `.zip`.
 
 **Live reload.**
 - The server watches the repo root recursively and ignores `.git`, `node_modules` and `.DS_Store`.

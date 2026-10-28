@@ -191,7 +191,7 @@
       el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
       el('div', { class: 'mm-export-row' }, [
         el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } }),
-        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF (colors)', title: 'Keeps your Color-tab colors for Bambu Studio, OrcaSlicer, PrusaSlicer and Cura', onclick: function () { confirmDownload('.3MF', export3mf); } })
+        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-obj', text: 'Export .OBJ (colors)', title: 'Zip with .obj + .mtl. Keeps your Color-tab colors for Bambu Studio, OrcaSlicer and PrusaSlicer; no print settings', onclick: function () { confirmDownload('.OBJ', exportObj); } })
       ]),
       el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: function () { confirmDownload('generator', downloadStandalone); } }),
       disclaimerBlock()
@@ -1281,10 +1281,10 @@
     toast('Saved ' + safeFileName($('mm-file-name').value) + '.stl');
   }
 
-  // Colored 3MF: one object, one volume per distinct color (Bambu Studio / OrcaSlicer / PrusaSlicer read these
-  // as parts with an extruder number), plus per-triangle basematerials colors (Cura and generic viewers).
-  // Only the Color-tab colors are written, never slicer print settings.
-  function export3mf() {
+  // Colored OBJ: name.obj + name.mtl in one zip. One named material per distinct color (usemtl groups), which
+  // Bambu Studio / OrcaSlicer / PrusaSlicer offer to map to filaments. Only the Color-tab colors are written,
+  // never slicer print settings.
+  function exportObj() {
     ensureParts();
     // Same Y-up -> Z-up mapping and bed offset as the STL export.
     var minY = Infinity;
@@ -1296,7 +1296,7 @@
 
     var colorIndex = {};
     var colorList = [];
-    var vertexXml = [];
+    var verts = [];
     var tris = [];
     var vertexOffset = 0;
 
@@ -1310,9 +1310,9 @@
         var key = x.toFixed(4) + ',' + y.toFixed(4) + ',' + z.toFixed(4);
         if (localVerts[key] === undefined) {
           localVerts[key] = localIndex++;
-          vertexXml.push('<vertex x="' + x.toFixed(4) + '" y="' + (-z).toFixed(4) + '" z="' + (y - minY).toFixed(4) + '"/>');
+          verts.push('v ' + x.toFixed(4) + ' ' + (-z).toFixed(4) + ' ' + (y - minY).toFixed(4));
         }
-        return localVerts[key] + vertexOffset;
+        return localVerts[key] + vertexOffset + 1;
       }
 
       for (var t = 0; t < triCount; t++) {
@@ -1331,76 +1331,32 @@
       vertexOffset += localIndex;
     });
 
-    // Sort by color so each color is one contiguous triangle range (a volume).
+    // Group faces by color: one usemtl block per color.
     tris.sort(function (a, b) { return a.c - b.c; });
-    var ranges = colorList.map(function () { return null; });
-    var triangleXml = tris.map(function (t, i) {
-      if (!ranges[t.c]) ranges[t.c] = { first: i, last: i };
-      ranges[t.c].last = i;
-      return '<triangle v1="' + t.v[0] + '" v2="' + t.v[1] + '" v3="' + t.v[2] + '" pid="1" p1="' + t.c + '"/>';
+    var name = safeFileName($('mm-file-name').value);
+    var lines = ['# ' + cfg.title + ' - Maker Makers', 'mtllib ' + name + '.mtl', 'o ' + name].concat(verts);
+    var current = -1;
+    tris.forEach(function (t) {
+      if (t.c !== current) {
+        current = t.c;
+        lines.push('g color_' + colorList[t.c].replace('#', ''));
+        lines.push('usemtl color_' + colorList[t.c].replace('#', ''));
+      }
+      lines.push('f ' + t.v[0] + ' ' + t.v[1] + ' ' + t.v[2]);
     });
 
-    var baseXml = colorList.map(function (c) {
-      return '<base name="' + c + '" displaycolor="' + c + '"/>';
-    }).join('');
-    var objName = escapeXml(safeFileName($('mm-file-name').value));
-
-    var modelXml = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
-      '<metadata name="Title">' + escapeXml(cfg.title) + '</metadata>' +
-      '<metadata name="Designer">Maker Makers</metadata>' +
-      '<resources>' +
-      '<basematerials id="1">' + baseXml + '</basematerials>' +
-      '<object id="2" name="' + objName + '" type="model" pid="1" pindex="0">' +
-      '<mesh><vertices>' + vertexXml.join('') + '</vertices><triangles>' + triangleXml.join('') + '</triangles></mesh>' +
-      '</object></resources>' +
-      '<build><item objectid="2"/></build></model>';
-
-    // Volume list with extruder numbers (Prusa and Bambu/Orca use the same layout and key names).
-    var volumes = colorList.map(function (c, i) {
-      return '<volume firstid="' + ranges[i].first + '" lastid="' + ranges[i].last + '">' +
-        '<metadata type="volume" key="name" value="Color ' + (i + 1) + ' ' + c + '"/>' +
-        '<metadata type="volume" key="volume_type" value="ModelPart"/>' +
-        '<metadata type="volume" key="extruder" value="' + (i + 1) + '"/>' +
-        '</volume>';
-    }).join('');
-    var modelConfig = '<?xml version="1.0" encoding="UTF-8"?><config>' +
-      '<object id="2" instances_count="1"><metadata type="object" key="name" value="' + objName + '"/>' +
-      '<metadata type="object" key="extruder" value="1"/>' + volumes + '</object></config>';
-
-    var quoted = colorList.map(function (c) { return '"' + c + '"'; }).join(';');
-    var prusaConfig = '; extruder_colour = ' + quoted + '\n; filament_colour = ' + quoted + '\n';
-    var bambuConfig = {
-      filament_colour: colorList.slice(),
-      extruder_colour: colorList.slice(),
-      filament_type: colorList.map(function () { return printSettings.material; })
-    };
-
-    var contentTypes = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>' +
-      '<Default Extension="config" ContentType="text/plain"/>' +
-      '</Types>';
-    var rels = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>' +
-      '</Relationships>';
+    var mtl = ['# Maker Makers colors'].concat(colorList.map(function (c) {
+      var r = parseInt(c.slice(1, 3), 16) / 255, g = parseInt(c.slice(3, 5), 16) / 255, bl = parseInt(c.slice(5, 7), 16) / 255;
+      var rgb = r.toFixed(4) + ' ' + g.toFixed(4) + ' ' + bl.toFixed(4);
+      return 'newmtl color_' + c.replace('#', '') + '\nKa ' + rgb + '\nKd ' + rgb + '\nKs 0 0 0\nd 1\nillum 1\n';
+    })).join('\n');
 
     var files = [
-      { name: '[Content_Types].xml', data: utf8(contentTypes) },
-      { name: '_rels/.rels', data: utf8(rels) },
-      { name: '3D/3dmodel.model', data: utf8(modelXml) }
+      { name: name + '.obj', data: utf8(lines.join('\n') + '\n') },
+      { name: name + '.mtl', data: utf8(mtl) }
     ];
-    if (colorList.length > 1) {
-      files.push({ name: 'Metadata/Slic3r_PE_model.config', data: utf8(modelConfig) });
-      files.push({ name: 'Metadata/model_settings.config', data: utf8(modelConfig) });
-    }
-    files.push({ name: 'Metadata/Slic3r_PE.config', data: utf8(prusaConfig) });
-    files.push({ name: 'Metadata/project_settings.config', data: utf8(JSON.stringify(bambuConfig, null, 2)) });
-    var name = safeFileName($('mm-file-name').value);
-    saveBlob(new Blob([makeZip(files)], { type: 'application/octet-stream' }), name + '.3mf');
-    toast('Saved ' + name + '.3mf with ' + colorList.length + (colorList.length === 1 ? ' color' : ' colors'));
+    saveBlob(new Blob([makeZip(files)], { type: 'application/zip' }), name + '-obj.zip');
+    toast('Saved ' + name + '-obj.zip with ' + colorList.length + (colorList.length === 1 ? ' color' : ' colors'));
   }
 
   function escapeXml(text) {
@@ -1424,7 +1380,7 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
-  // Minimal ZIP writer (store, no compression), enough for a .3mf package.
+  // Minimal ZIP writer (store, no compression), enough for the .obj + .mtl package.
   function makeZip(files) {
     var crcTable = makeZip.table || (makeZip.table = (function () {
       var table = new Uint32Array(256);

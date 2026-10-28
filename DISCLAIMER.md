@@ -6,7 +6,7 @@ The short version appears in the footer of the homepage and of every generator. 
 
 ## Use at your own risk
 
-Maker Makers and its models, generators, exports (.STL, .3MF), recommended print settings and the printer map are provided **"as is" and "as available", without warranty of any kind**, express or implied, including any implied warranty of merchantability, fitness for a particular purpose, accuracy or non-infringement.
+Maker Makers and its models, generators, exports (.STL, .OBJ), recommended print settings and the printer map are provided **"as is" and "as available", without warranty of any kind**, express or implied, including any implied warranty of merchantability, fitness for a particular purpose, accuracy or non-infringement.
 
 3D printing involves heat, moving parts, fumes and small parts. You print at your own risk. You are responsible for:
 
@@ -17,7 +17,7 @@ Maker Makers and its models, generators, exports (.STL, .3MF), recommended print
 
 Printed parts are not tested or certified for any use. Keep small parts away from young children.
 
-Before any .STL or .3MF download, the generator shows a consent dialog that you must accept (it lives in `generator-core.js`, `confirmDownload`).
+Before any .STL or .OBJ download, the generator shows a consent dialog that you must accept (it lives in `generator-core.js`, `confirmDownload`).
 
 ## Limitation of liability
 

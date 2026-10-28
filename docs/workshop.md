@@ -15,7 +15,7 @@ A large tile in the middle of the homepage map opens `#/workshop`, a 3D editor f
 - **Up / Down** lift a shape off the bed (it floats) and lower it back; it never goes below the bed, and "To bed" drops it.
 - **Arrow keys** nudge the selection (tiny / small / big step chips set the size; Shift = 5x, Alt = 1 mm, PageUp / PageDown = up / down). The Centre button in the left toolbar zooms the view onto the selected shape.
 - **Editing a generator shape:** double-click it for a controls-only mini editor. The shape updates in the main view as you change sliders. It is locked in place (no moving, scaling, adding or deleting) until you press Done. Click the shape in the main view to stamp or place things; the click is converted to the generator's coordinates and sent to its active tool (`mm-pick`). Stamps are kept with the shape (generators with stamps export `embedState`).
-- **Save:** Save STL and Save 3MF (keeps each shape's colour for Bambu, Orca, Prusa and Cura) are in the top bar and the side panel.
+- **Save:** Save STL and Save OBJ (a zip with .obj + .mtl that keeps each shape's colour for Bambu, Orca and Prusa; no print settings) are in the top bar and the side panel.
 - **Keys:** W/E/R move/rotate/scale, G snap, B drop to bed, H hide, F focus, Ctrl+D duplicate, Ctrl+Z / Ctrl+Shift+Z undo / redo, Del delete.
 
 ## Privacy

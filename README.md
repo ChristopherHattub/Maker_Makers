@@ -1,6 +1,6 @@
 # Maker Makers
 
-A static website for hosting parametric STL / 3MF generators and customizers, plus a free, keyless map of public 3D printers and makerspaces.
+A static website for hosting parametric STL / OBJ generators and customizers, plus a free, keyless map of public 3D printers and makerspaces.
 
 No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it runs anywhere a static file host does, including GitHub Pages.
 
