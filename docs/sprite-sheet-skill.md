@@ -1,240 +1,264 @@
-# Tile sprite sheet skill (for Gemini)
+# Tile sprite sheet skill v2 (for Gemini)
 
-Goal: have Gemini produce sprite sheets that hold every generator's tile icon plus a short hover animation, in the style of the current pro tiles (`assets/thumbnails/pro/`). The homepage's experimental view will slice the sheets and play the frames on hover.
+Version 2 replaces the first spec. What changed: every tile now has the **same hover animation** (the hologram grows, pops out past the tile frame and spins clockwise), and the work is split into two kinds of image so the site can recolour the frame and the hologram in code.
 
-This doc has four parts: the **Gem instructions** (paste into a Gemini Gem), the **manifest** (paste or upload into the Gem as knowledge), the **how to run it** workflow, and the **homepage handoff** (what the site needs back). Source of truth for the list is `js/programs.js` on `origin/main`, which currently has **42 generators** (slots 1–43; slot 14 is unused). Re-generate the manifest table when slots are added.
+Source of truth for the list is `js/programs.js` on `origin/main`: **42 generators** (slots 1–43; slot 14 is unused). Re-generate the manifest when slots are added. The v1 sheets (6-frame scan-line style) already on the site keep working until the v2 playback replaces them.
 
-## Decisions baked into the spec
+## The design
 
-| Item | Value | Why |
+| Piece | What Gemini draws | Count |
 |---|---|---|
-| Cell | 256 × 256 px | The experimental view draws tiles at 128 CSS px, so 256 is a crisp 2× for retina. |
-| Tile art inside the cell | 240 × 240 px, centred, 8 px key-colour margin on every side | Margin doubles as a gutter, so slicing errors of a few px never touch artwork. |
-| Frames per generator | 6, laid out left to right in one row | Smooth enough at about 8 fps, small enough for the model to keep consistent. |
-| Rows per sheet | 4 generators per sheet | Gives 1536 × 1024 (3:2), a size Gemini can render. One giant sheet of all 42 will not work. |
-| Sheets | 11 sheets, in slot order | Last sheet is short and is padded with blank key-colour rows. |
-| Key colour | Flat magenta `#FF00FF` | Gemini does not reliably output transparent PNGs. Magenta is removed in post, which also gives the chamfered frame corners real transparency. |
-| Hover loop | f0 is the rest pose and the static icon | Sheet frame 0 is also exported as the still `pro/<id>.png`, so the current fallback keeps working. |
+| **Base tile** | The empty tile: steel frame, rivets, orange rim, HUD background, glow pool. **No object, no text.** | 1 image, made once, shared by all generators |
+| **Object sheets** | Only the cyan wireframe hologram on pure black, rotating 360° in 8 frames, drawn at its large "popped" size | 14 sheets, 3 generators each |
 
-### Frame order (identical for every generator)
+The site then draws the label, slot number, rim colour and hologram colour in code, and does the pop-out itself:
 
-| Frame | Object yaw | Scan line (a thin cyan horizontal sweep over the object) | Glow pool under object |
-|---|---|---|---|
-| f0 | 0° (rest, the static icon) | none | normal |
-| f1 | +10° | 15% down the object | +10% brighter |
-| f2 | +20° | 35% | +20% |
-| f3 | +10° | 55% | +10% |
-| f4 | 0° | 75% | normal |
-| f5 | −10° | 95% | −5% |
+- **Label and slot number are real text** drawn by the site, so spelling is always right and they can be restyled. Gemini never draws text.
+- **Rim colour** is changed in code per section of tiles. The base is built so it can be recoloured cleanly (see "Why these colours").
+- **Pop-out** is a code animation: the object frame scales from its rest size to full size, lifts slightly, and overflows the tile frame, then the 8 rotation frames loop. Because the scale is done in code, every tile pops identically and Gemini never has to keep a rest/pop size consistent.
+- **Hologram colour** is also changed in code (all holograms are drawn in the same cyan; the site shifts the hue per tile, like the orange Pumpkin Plotter).
+- **Black background instead of magenta for objects:** a glowing hologram on black can be turned into transparency exactly (brightness becomes opacity), so no key colour and no coloured fringe.
 
-Playback loops f0 → f5 → f0. Only the **object, the scan line and the glow pool** may change between frames. Everything else (frame, rivets, orange rim, HUD grid and readouts, label, slot number) must be pixel-identical in all six cells of a row.
+### Why these colours
+
+- **Frame:** neutral brushed steel with zero colour cast. Greys do not shift when the site changes hues.
+- **Rim glow:** one pure, saturated orange (about `#FF7A00`), and **no other warm colour anywhere in the tile** (no yellow, red, brown, white-hot centre). Then "everything warm" is the rim, and a hue shift in code recolours exactly the rim and nothing else.
+- **HUD, grid, glow pool:** cool cyan and blue only, so they sit on the opposite side of the colour wheel from the rim.
+- **Objects:** pure cyan wireframe. Tinted in code.
+
+### Geometry summary
+
+| Item | Value |
+|---|---|
+| Base tile image | 1024 × 1024. Tile is 960 × 960 centred, 32 px flat magenta `#FF00FF` margin (also fills the chamfered corner cut-outs). |
+| Object sheet | 1280 × 1920 (2:3). Cells 320 × 320. 4 columns × 6 rows. No gaps, no outer border. |
+| Per generator | A **block** of 4 × 2 cells (frames f0–f7, left to right, top row then bottom row). 3 blocks per sheet, stacked top to bottom. |
+| Object size in cell | Centred at the cell centre. Largest dimension 272–280 px (85–88% of the cell). At least 20 px of pure black on every side. |
+| Frames | 8, one turn in 45° steps, **clockwise viewed from above** (the front of the object travels from the viewer's right to the viewer's left). f0 is the rest view: three-quarter front, slightly from above. |
 
 ---
 
 ## 1. Gem instructions (paste into the Gem)
 
 ````text
-You make sprite sheets of tile icons for a website called MakerMakers (parametric 3D-print model generators). Output is ONE image per request. Follow this spec exactly. Never add text or commentary inside the image beyond the specified label and slot number.
+You make image assets for a website called MakerMakers (parametric 3D-print model generators). Each request is for ONE image: either the BASE TILE, or an OBJECT SHEET. Follow the spec exactly. Never add text, titles, captions, numbers or watermarks inside any image.
 
-STYLE (match the attached reference tiles)
-Each tile is a square brushed-metal frame with chamfered corners, small rivets in the four corners, and a glowing orange rim on the inner edge. Inside is a dark blue-black HUD background with a faint cyan grid, thin circular HUD arcs and tiny unreadable readouts. In the centre is ONE holographic wireframe object in cyan/teal: a dense mesh of fine lines with slightly brighter edges and a soft inner glow, rendered semi-transparent so the grid shows through. Under the object is a glowing elliptical pool of cyan light with a thin ring. A mono-spaced label sits centred in the bottom strip of the tile, light grey with a dark outline, on a dark band. A small slot number sits in the top-left HUD area in the same mono font, cyan. Same lighting, same line weight and same camera for every object: three-quarter front view, slightly from above, object centred and filling about 60-70% of the tile height.
+SHARED STYLE
+Sci-fi holographic UI: brushed-steel frame, dark HUD screen, glowing cyan wireframe hologram. Match the attached reference images for line weight, glow and mood.
 
-SHEET GEOMETRY (strict)
-- Canvas exactly 1536 x 1024 px. If you cannot output that size, output the closest 3:2 image and say so in one line after it.
-- Grid: 6 columns x 4 rows of 256 x 256 px cells. No gaps between cells, no extra border around the canvas.
-- Each row is ONE generator. Each cell in a row is one animation frame, left to right f0..f5.
-- Inside each cell the tile is a 240 x 240 px square centred in the cell, leaving an 8 px margin on every side.
-- Keep all important art (object, label, slot number) inside a 208 x 208 px safe area centred in the tile (16 px in from the tile edge). Nothing glows or bleeds outside the tile.
-- Everything outside the tiles (the 8 px margins and the chamfered corner cut-outs) is flat solid magenta #FF00FF, no gradient, no shadow, no glow, no anti-alias halo. Never use magenta, pink or purple anywhere in the tiles.
-- If a request has fewer than 4 generators, fill the unused rows with flat magenta #FF00FF.
+=== MODE A: "BASE TILE" ===
+Make ONE image, exactly 1024 x 1024 px: an EMPTY tile with no object and no text of any kind.
+- The tile is a 960 x 960 px square centred on the canvas with chamfered (cut) corners and a 32 px margin around it. The margin AND the cut-away corner triangles are flat solid magenta #FF00FF, with no gradient, shadow, glow or halo. Never use magenta, pink or purple inside the tile.
+- Frame: neutral brushed steel, pure grey, NO colour cast (no blue, no brown, no warm tint). Four small rivets, one in each corner.
+- Rim: a thin glowing line running just inside the steel frame, in ONE pure saturated orange (about #FF7A00) with a soft glow falling off in the same orange. Do not blow it out to white or yellow. This is the ONLY warm colour in the whole tile: no yellow, red, brown, gold or orange anywhere else.
+- Screen: dark blue-black background with a faint cyan grid, thin circular HUD arcs, small abstract readout blocks made of bars and dots (absolutely no letters or numbers), all in cool cyan/blue only.
+- Under the centre: a glowing elliptical cyan pool of light with a thin ring, sitting at about 72% of the tile height. Nothing above it: the middle of the screen is empty so a hologram can be placed there later.
+- Bottom strip: a plain dark band with nothing on it (a label is added later). Top-left: a small empty rectangular HUD box (a number is added later).
+- Everything symmetric and tidy. Flat lighting, no strong shadows crossing the frame.
 
-FRAME ORDER (same for every row)
-f0: object at rest, yaw 0 degrees, no scan line, normal glow. This is the static icon.
-f1: yaw +10 degrees, a thin bright cyan horizontal scan line crossing the object 15% from its top, glow pool 10% brighter.
-f2: yaw +20, scan line 35%, glow +20%.
-f3: yaw +10, scan line 55%, glow +10%.
-f4: yaw 0, scan line 75%, glow normal.
-f5: yaw -10, scan line 95%, glow 5% dimmer.
-Only the object's rotation, the scan line and the glow pool change between frames. The frame, rivets, orange rim, background grid, HUD arcs, readouts, label and slot number must be IDENTICAL in all 6 cells of a row. The object must keep the same size, same centre and same design in every frame; only its yaw changes.
-
-LABEL AND SLOT
-Use exactly the label text and slot number given in the manifest for each row, spelled exactly, in the same mono font and size in every cell. Slot number format is two digits, e.g. 07.
+=== MODE B: "SHEET NN" (object sheet) ===
+Make ONE image, exactly 1280 x 1920 px (2:3), pure black #000000 background, containing holographic objects in a strict grid.
+- Grid: 4 columns x 6 rows of 320 x 320 px cells, no gaps, no lines, no border, no labels. Total 24 cells.
+- The sheet holds THREE generators, one "block" each. A block is 4 columns x 2 rows (8 cells), and the three blocks are stacked top to bottom: block 1 = rows 1-2, block 2 = rows 3-4, block 3 = rows 5-6. Look up the subjects for the requested sheet in the manifest.
+- Each block is ONE object shown as 8 animation frames, read left to right, top row then bottom row: f0 f1 f2 f3 / f4 f5 f6 f7.
+- The object is a dense cyan/teal holographic wireframe: fine mesh lines, brighter edges, soft inner glow, semi-transparent, glowing slightly beyond its outline into black. Pure cyan only (about #2FE6FF); no other hues. No background, no grid, no frame, no ground pool, no scan lines, no particles, no text.
+- Camera: three-quarter front view, slightly from above, same lens and same distance for every frame and every object.
+- Size and position: the object is centred at the exact centre of its cell. Its largest dimension (height or width) is 272-280 px, so it fills about 85-88% of the cell. Keep at least 20 px of pure black on every side; glow must fade to pure black before the cell edge. Nothing crosses into a neighbouring cell.
+- Rotation: the object turns on a vertical axis through the cell centre. f0 is the rest view. Each following frame turns the object a further 45 degrees, CLOCKWISE seen from above (the front of the object moves from the viewer's right to the viewer's left): f0 0, f1 45, f2 90, f3 135, f4 180, f5 225, f6 270, f7 315 degrees. The loop returns to f0 after f7. Flat objects (cards, snowflakes, leaves, plaques) turn on the same vertical axis and show their edge or back mid-turn.
+- The object must be the identical design, size, line density, brightness and colour in all 8 frames; only its turn angle changes. Keep every block's brightness and line weight consistent with the other two blocks.
 
 HOW TO RESPOND
-1. When the user gives a sheet number (for example "sheet 03"), look it up in the manifest, and generate that sheet. Draw each row's subject as a holographic wireframe object described in the Subject column. Keep style identical across all rows.
-2. When the user attaches reference tiles, copy their frame, colours, font and HUD style exactly.
-3. When the user says "redo row N of sheet XX", regenerate the whole sheet keeping the other rows unchanged as far as possible and only changing row N.
-4. After the image, add a one-line checklist: size OK/not OK, magenta key clean yes/no, label spelling matches yes/no.
-Never merge generators in one row. Never change the order of rows. Never add a title or caption inside the image.
+1. "BASE TILE": make the base tile. Nothing else.
+2. "SHEET NN": look up sheet NN in the manifest and draw the three subjects in block order.
+3. "redo block N of sheet NN": regenerate the sheet keeping the other two blocks unchanged as far as possible, changing only block N.
+4. After the image add one line: size OK/not OK; background pure black/magenta yes/no; 8 frames per block yes/no; no text in image yes/no.
+Never reorder blocks, never merge generators, never add decoration.
 ````
 
 ## 2. Manifest (paste into the Gem as knowledge, or append to the chat)
 
-Rows are in slot order, 4 generators per sheet. The Label is the exact on-tile text (shortened from the site title to stay under about 18 characters so it fits the mono label at 256 px). `id` is the thumbnail basename from `js/programs.js`; the homepage uses it to find the sheet row.
+3 generators per sheet, in slot order. `id` is the thumbnail basename from `js/programs.js`, which the site uses to find the block. The subject is a drawing hint only; the on-site label comes from the generator title.
 
-Sheets are named `sheet-01` … `sheet-11`.
+Sheets are named `sheet-01` … `sheet-14`.
 
-### Sheet 01 (rows 0–3)
+### Sheet 01
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 01 | Ghost Builder | ghost-builder | a rounded ghost with a wavy hem, two stubby arms and a friendly face |
-| 1 | 02 | Pumpkin Plotter | pumpkin-plotter | a ribbed pumpkin with a curly stem and a carved face |
-| 2 | 03 | Spider | spider | a spider with a round abdomen, eight bent legs and a cluster of eyes |
-| 3 | 04 | Snowman Stacker | snowman | a three-ball snowman with a top hat, scarf and carrot nose |
+| 1 | 1–2 | 01 | ghost-builder | a rounded ghost with a wavy hem, two stubby arms and a friendly face |
+| 2 | 3–4 | 02 | pumpkin-plotter | a ribbed pumpkin with a curly stem and a carved face |
+| 3 | 5–6 | 03 | spider | a spider with a round abdomen, eight bent legs and a cluster of eyes |
 
-### Sheet 02 (rows 0–3)
+### Sheet 02
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 05 | Witch Hat | witch-hat | a tall bent witch hat with a wide curled brim and a hat band |
-| 1 | 06 | Snowflake Studio | snowflake | a six-armed flat snowflake ornament with branches and a hanging loop |
-| 2 | 07 | Skull Sculptor | skull-sculptor | a skull with eye sockets, nose cavity and teeth |
-| 3 | 08 | Holiday Tree | holiday-tree | a tiered Christmas tree with baubles and a star topper |
+| 1 | 1–2 | 04 | snowman | a three-ball snowman with a top hat, scarf and carrot nose |
+| 2 | 3–4 | 05 | witch-hat | a tall bent witch hat with a wide curled brim and a hat band |
+| 3 | 5–6 | 06 | snowflake | a six-armed flat snowflake ornament with branches and a hanging loop |
 
-### Sheet 03 (rows 0–3)
+### Sheet 03
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 09 | Holiday Gift Box | gift-box | a gift box with a lid and a ribbon bow |
-| 1 | 10 | Key Clicker | key-clicker | a row of mechanical keyboard keycaps |
-| 2 | 11 | Name Keychain | name-keychain | a rounded name plate with raised letters and a key ring |
-| 3 | 12 | Image Clicker | image-clicker | a flat print-in-place fidget clicker slab with an embossed picture |
+| 1 | 1–2 | 07 | skull-sculptor | a skull with eye sockets, nose cavity and teeth |
+| 2 | 3–4 | 08 | holiday-tree | a tiered Christmas tree with baubles and a star topper |
+| 3 | 5–6 | 09 | gift-box | a gift box with a lid and a ribbon bow |
 
-### Sheet 04 (rows 0–3)
+### Sheet 04
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 13 | Snowman 2.0 | ornament-stacker | a stacked ornament-style snowman with a hanging loop |
-| 1 | 15 | Pottery Wheel | pottery-wheel | a vase being shaped on a pottery wheel |
-| 2 | 16 | Gift Box 2.0 | gift-box-2 | a gift box with a hinged lid and a bow, a second design from slot 9 |
-| 3 | 17 | Turkey Builder | turkey-builder | a turkey with a fan of tail feathers |
+| 1 | 1–2 | 10 | key-clicker | a row of mechanical keyboard keycaps |
+| 2 | 3–4 | 11 | name-keychain | a rounded name plate with raised letters and a key ring |
+| 3 | 5–6 | 12 | image-clicker | a flat print-in-place fidget clicker slab with an embossed picture |
 
-### Sheet 05 (rows 0–3)
+### Sheet 05
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 18 | Cornucopia | cornucopia | a horn-of-plenty basket spilling fruit and gourds |
-| 1 | 19 | Leaf Press | leaf-press | a flat leaf ornament with raised veins |
-| 2 | 20 | Pumpkin Pie Slice | pumpkin-pie-slice | a slice of pumpkin pie with a crust edge |
-| 3 | 21 | Acorn & Pinecone | acorn-pinecone-set | an acorn and a pinecone side by side |
+| 1 | 1–2 | 13 | ornament-stacker | a stacked ornament-style snowman with a hanging loop |
+| 2 | 3–4 | 15 | pottery-wheel | a vase being shaped on a pottery wheel |
+| 3 | 5–6 | 16 | gift-box-2 | a gift box with a hinged lid and a bow, a second design from slot 9 |
 
-### Sheet 06 (rows 0–3)
+### Sheet 06
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 22 | Scarecrow Stacker | scarecrow-stacker | a stacked scarecrow with a straw hat and patched body |
-| 1 | 23 | Gratitude Cards | gratitude-place-cards | a standing folded place card with a leaf motif |
-| 2 | 24 | Countdown Clock | countdown-clock | a clock face with chunky numerals as a cake topper |
-| 3 | 25 | Confetti Cannon | confetti-cannon | a party-popper cone bursting confetti |
+| 1 | 1–2 | 17 | turkey-builder | a turkey with a fan of tail feathers |
+| 2 | 3–4 | 18 | cornucopia | a horn-of-plenty basket spilling fruit and gourds |
+| 3 | 5–6 | 19 | leaf-press | a flat leaf ornament with raised veins |
 
-### Sheet 07 (rows 0–3)
+### Sheet 07
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 26 | Party Hat Spinner | party-hat | a striped party hat on a spinning base |
-| 1 | 27 | Party Whistle | party-whistle | a curly party blower whistle |
-| 2 | 28 | Conversation Hearts | conversation-hearts | a pile of heart-shaped candies with short embossed words |
-| 3 | 29 | Valentine Card | valentines-card | a folded card with a heart cut-out |
+| 1 | 1–2 | 20 | pumpkin-pie-slice | a slice of pumpkin pie with a crust edge |
+| 2 | 3–4 | 21 | acorn-pinecone-set | an acorn and a pinecone side by side |
+| 3 | 5–6 | 22 | scarecrow-stacker | a stacked scarecrow with a straw hat and patched body |
 
-### Sheet 08 (rows 0–3)
+### Sheet 08
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 30 | Egg Decorator | egg-decorator | a decorated egg on a stand with patterned bands |
-| 1 | 31 | Bunny Builder | bunny-builder | a bunny with long ears and a round tail |
-| 2 | 32 | Chick Hatcher | chick-hatcher | a chick emerging from a cracked egg |
-| 3 | 33 | Flower Pot | flower-pot | a planter pot with a flower growing out |
+| 1 | 1–2 | 23 | gratitude-place-cards | a standing folded place card with a leaf motif |
+| 2 | 3–4 | 24 | countdown-clock | a clock face with chunky numerals as a cake topper |
+| 3 | 5–6 | 25 | confetti-cannon | a party-popper cone bursting confetti |
 
-### Sheet 09 (rows 0–3)
+### Sheet 09
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 34 | Butterfly Wings | butterfly-wings | a butterfly with patterned open wings |
-| 1 | 35 | Egg Hunt Basket | egg-basket | a woven basket with a handle holding eggs |
-| 2 | 36 | Cake Stacker | cake-stacker | a tiered cake with frosting drips and a cherry |
-| 3 | 37 | Candle Number | candle-number | a numeral-shaped candle topper with a flame |
+| 1 | 1–2 | 26 | party-hat | a striped party hat on a spinning base |
+| 2 | 3–4 | 27 | party-whistle | a curly party blower whistle |
+| 3 | 5–6 | 28 | conversation-hearts | a pile of heart-shaped candies with short embossed words |
 
-### Sheet 10 (rows 0–3)
+### Sheet 10
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 38 | Pull-String Pinata | pinata | a donkey-shaped pinata with a pull string |
-| 1 | 39 | Balloon Twister | balloon-twister | a twisted balloon dog |
-| 2 | 40 | Banner Letters | banner-letters | a row of bunting flags with letters |
-| 3 | 41 | Party Popper | party-popper | a party popper spinner fidget |
+| 1 | 1–2 | 29 | valentines-card | a folded card with a heart cut-out |
+| 2 | 3–4 | 30 | egg-decorator | a decorated egg on a stand with patterned bands |
+| 3 | 5–6 | 31 | bunny-builder | a bunny with long ears and a round tail |
 
-### Sheet 11 (rows 0–1)
+### Sheet 11
 
-| Row | Slot | Label (exact text) | id | Subject |
+| Block | Cell rows | Slot | id | Subject |
 |---|---|---|---|---|
-| 0 | 42 | Cupcake Maker | cupcake-maker | a cupcake with swirled frosting and a cherry |
-| 1 | 43 | Birthday Crown | birthday-crown | a spiked birthday crown with gems |
+| 1 | 1–2 | 32 | chick-hatcher | a chick emerging from a cracked egg |
+| 2 | 3–4 | 33 | flower-pot | a planter pot with a flower growing out |
+| 3 | 5–6 | 34 | butterfly-wings | a butterfly with patterned open wings |
+
+### Sheet 12
+
+| Block | Cell rows | Slot | id | Subject |
+|---|---|---|---|---|
+| 1 | 1–2 | 35 | egg-basket | a woven basket with a handle holding eggs |
+| 2 | 3–4 | 36 | cake-stacker | a tiered cake with frosting drips and a cherry |
+| 3 | 5–6 | 37 | candle-number | a numeral-shaped candle topper with a flame |
+
+### Sheet 13
+
+| Block | Cell rows | Slot | id | Subject |
+|---|---|---|---|---|
+| 1 | 1–2 | 38 | pinata | a donkey-shaped pinata with a pull string |
+| 2 | 3–4 | 39 | balloon-twister | a twisted balloon dog |
+| 3 | 5–6 | 40 | banner-letters | a row of bunting flags with letters |
+
+### Sheet 14
+
+| Block | Cell rows | Slot | id | Subject |
+|---|---|---|---|---|
+| 1 | 1–2 | 41 | party-popper | a party popper spinner fidget |
+| 2 | 3–4 | 42 | cupcake-maker | a cupcake with swirled frosting and a cherry |
+| 3 | 5–6 | 43 | birthday-crown | a spiked birthday crown with gems |
 
 
 ## 3. How to run it
 
-1. Create a Gemini Gem. Paste section 1 as the instructions. Add section 2 as knowledge (or paste it into the first chat message).
-2. Attach 1–2 of the existing pro tiles (for example `assets/thumbnails/pro/ghost-builder.png` and `skull-sculptor.png`) to **every** request. They anchor the style.
-3. Ask for one sheet at a time: "Sheet 01". Download the PNG and save it as `sheet-01.png`.
-4. Check the consistency list below. If one row is off, ask "redo row 2 of sheet 01" and attach the previous result. If the grid is off, ask again with "canvas exactly 1536 x 1024, 6 x 4 grid of 256 px cells".
-5. Gemini will not hit exact pixels every time. Before slicing, resize each sheet to exactly 1536 × 1024 (nearest edge is fine; a few px of drift lands inside the 8 px margins). Then key out `#FF00FF` (tolerance about 10%) to transparent and save as PNG or WebP.
-6. Send the finished sheets back; I'll add them under `assets/thumbnails/sprites/` with the manifest JSON in section 4.
+1. Create a Gemini Gem. Paste section 1 as the instructions. Add section 2 as knowledge, or paste it into the first chat message.
+2. **Base tile first.** Attach `assets/thumbnails/pro/ghost-builder.png` as a style reference and send "BASE TILE". Regenerate until the checklist below passes. This one image is used for all 42 tiles, so it is worth a few attempts. Save as `base-tile.png`.
+3. **Object sheets.** Attach 1 or 2 of the v1 hologram sheets as a style reference, and for sheets after the first also attach the first accepted sheet so line weight and brightness stay consistent. Send "SHEET 01", then "SHEET 02", and so on through 14. Save as `sheet-01.png` …
+4. If a block is off, "redo block 2 of sheet 05" and attach the sheet.
+5. Gemini will not hit exact pixels every time. Send me the files; the build script resizes each sheet to exactly 1280 × 1920, converts brightness to transparency and checks each block.
 
-### Consistency checklist (per sheet)
+### Base tile checklist
 
-- [ ] Image is 1536 × 1024 (or 3:2 and resized), 6 × 4 grid, no gaps, no outer border.
-- [ ] Each row is exactly one generator, rows in manifest order, unused rows pure magenta.
-- [ ] Magenta key is flat and clean: nothing magenta/pink in the art, no coloured halo on the chamfered corners, no glow outside the frame.
-- [ ] Tile is centred in its cell with an even 8 px margin; no cell is shifted or scaled relative to its neighbours.
-- [ ] Frame, rivets, orange rim, grid, HUD and readouts are identical across the 6 frames of a row.
-- [ ] Label text and slot number match the manifest exactly (spelling, case, two-digit slot), same font and size in every cell and on every row.
-- [ ] Label and slot number sit inside the safe area and are not covered by the object.
-- [ ] Object has the same size, centre and design in all 6 frames; only yaw, scan line and glow pool change.
-- [ ] f0 has no scan line; f1→f5 scan line moves strictly top to bottom.
-- [ ] Style matches the reference pro tiles (cyan wireframe, orange rim, same line weight) and matches the other rows and sheets.
-- [ ] Looping f0→f5→f0 looks smooth (no jump in size or position).
+- [ ] 1024 × 1024, tile 960 × 960 centred, flat magenta margin and chamfered corners with no halo.
+- [ ] Zero text, letters or numbers anywhere. No object in the middle.
+- [ ] Steel frame is neutral grey with no colour cast.
+- [ ] The rim is one saturated orange and is the only warm colour in the image (check the grid, arcs and pool are all cool).
+- [ ] Glow pool at about 72% of the tile height, middle of the screen clear.
+- [ ] Empty dark label band at the bottom; empty small box at top-left.
+- [ ] Symmetric left and right, rivets evenly placed.
 
-## 4. Homepage handoff (what the experimental view needs)
+### Object sheet checklist (per sheet)
 
-Not built yet. This is the contract so playback is a small change in `js/worldmap.js` (which already loads `assets/thumbnails/pro/<id>.png` with `proThumbUrl`, and falls back to the SVG when missing).
+- [ ] 1280 × 1920 (or 2:3 and resized), 4 × 6 grid, pure black everywhere outside the objects.
+- [ ] Three blocks of 4 × 2 cells, in manifest order, one generator each, no cell showing a different object.
+- [ ] Each object is centred in its cell, largest dimension 272–280 px, 20 px of black all round, glow does not touch the cell edge.
+- [ ] Same size, centre, line density and brightness in all 8 frames of a block.
+- [ ] Frames turn in even 45° steps, clockwise from above; f7 flows back into f0 with no jump.
+- [ ] Pure cyan only; no background, pool, grid, scan line, particles or text.
+- [ ] The look matches the other blocks and sheets.
 
-### Files
+## 4. Homepage handoff (not built yet)
+
+Replaces the v1 format. Files:
 
 ```
-assets/thumbnails/sprites/manifest.json
-assets/thumbnails/sprites/sheet-01.png   (keyed PNG or WebP, 1536 x 1024)
+assets/thumbnails/sprites/base-tile.webp      keyed (magenta removed), 1024x1024, recolourable rim
+assets/thumbnails/sprites/obj-sheet-01.webp   brightness converted to alpha, 1280x1920
 ...
-assets/thumbnails/sprites/sheet-11.png
-assets/thumbnails/pro/<id>.png           (frame 0, 240 x 240, existing still; keep for fallback)
+assets/thumbnails/sprites/obj-sheet-14.webp
+assets/thumbnails/sprites/manifest.json
 ```
-
-### manifest.json
 
 ```json
 {
-  "version": 1,
-  "cell": 256,
-  "inset": 8,
-  "tile": 240,
-  "frames": 6,
-  "fps": 8,
-  "sheets": [
-    { "file": "sheet-01.png", "width": 1536, "height": 1024 }
-  ],
+  "version": 2,
+  "base": "base-tile.webp",
+  "cell": 320,
+  "frames": 8,
+  "cols": 4,
+  "fps": 10,
+  "restScale": 0.56,
+  "sheets": [{ "file": "obj-sheet-01.webp", "width": 1280, "height": 1920 }],
   "tiles": {
-    "ghost-builder": { "slot": 1, "label": "Ghost Builder", "sheet": 0, "row": 0 },
-    "pumpkin-plotter": { "slot": 2, "label": "Pumpkin Plotter", "sheet": 0, "row": 1 }
+    "ghost-builder": { "slot": 1, "sheet": 0, "block": 0 },
+    "pumpkin-plotter": { "slot": 2, "sheet": 0, "block": 1, "hue": 28 }
   }
 }
 ```
 
-`tiles` is keyed by the `id` column above (the thumbnail basename), so it matches `proThumbUrl`. `sheet` is a zero-based index into `sheets`; `row` is the zero-based row in that sheet. Frame `f` of a tile sits at source x = `f * cell + inset`, y = `row * cell + inset`, size `tile × tile`. Optional per-tile overrides (`frames`, `fps`) let one tile deviate. A tile missing from `tiles` just keeps its still.
+`block` is the zero-based block on that sheet. Frame `f` of a block is at x = `(f % 4) × 320`, y = `(block × 2 + floor(f / 4)) × 320`. Optional per-tile `hue` recolours the hologram in the build step, like the current `scripts/sprite-tints.json`.
 
-### Playback requirements
+Playback and drawing rules the site needs:
 
-- On `mouseenter` / `focus` of a tile (experimental view only), load the tile's sheet if not already loaded (lazy, one request per sheet, cached), then step frames at `fps` using CSS `background-position` (or a canvas). On `mouseleave` / `blur`, stop and return to f0. Honour `prefers-reduced-motion` (no playback).
-- Tile CSS size is 128 px and the visible art is 240 source px, so scale = 128 / 240. Set `background-size: (sheetWidth × scale) × (sheetHeight × scale)` and `background-position: -(f × 256 + 8) × scale px, -(row × 256 + 8) × scale px`.
-- Keep the current `.has-pro` flow: show the still first, swap to the sprite on hover. Tiles without a sprite entry behave as today.
-- The label is baked into the artwork, so `.tile.has-pro .tile-label` stays hidden as now.
-- Size budget: 11 sheets at roughly 1–2 MB each; only fetch on first hover. Prefer WebP with alpha if file size matters.
+- Each tile is the base tile (steel frame, rim, HUD, pool), the label and slot number as text, and an object layer drawn **on top and allowed to overflow the tile** (tile card must not clip; hovered tile gets a higher z-index, as now).
+- Rest state: frame f0 scaled by `restScale` (0.56, so the object is about 65% of the tile as before), centred on the tile.
+- Hover or focus: animate the object layer from `restScale` to 1.0 and lift it about 6% of the tile height over about 220 ms with an ease-out (a small overshoot feels like a pop), then loop frames f0 → f7 at `fps`. Add a soft glow that grows with the scale.
+- Hover end: stop the rotation, return to f0 and shrink back to `restScale`.
+- Rim recolour per section: hue-shift only warm pixels of the base tile (orange rim), by section/bundle. Hologram recolour: per-tile `hue`, as now.
+- Honour `prefers-reduced-motion`: no pop, no rotation.
+- Lazy-load a sheet on the first hover of one of its tiles. About 14 sheets at 0.5–1 MB each.
