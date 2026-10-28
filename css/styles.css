@@ -763,8 +763,6 @@ body.on-splash .container {
 
 .world-title h2 { font-size: 1rem; letter-spacing: 3px; text-transform: uppercase; }
 .world-title p { font-size: 0.68rem; color: #8ab4e1; margin: 0.15rem 0 0.55rem; }
-.world-exp-toggle { width: 100%; margin-bottom: 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.72rem; }
-.world-exp-toggle[aria-pressed="true"] { background: var(--bp-cyan); color: #06152d; }
 .world-title .bp-input { width: 100%; min-width: 0; padding: 0.4rem 0.6rem; font-size: 0.78rem; }
 
 .world-controls {

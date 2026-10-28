@@ -231,9 +231,6 @@ function worldSetExperimental(on) {
   });
   if (on) spriteLoad().then(ms => { if (ms && worldState.experimental) spriteApply(ms); });
   else spriteRemove();
-  const btn = document.getElementById('world-exp-toggle');
-  if (btn) btn.setAttribute('aria-pressed', on);
-  try { localStorage.setItem('mm-exp-view', on ? '1' : '0'); } catch (e) {}
   worldSelect(null);
   worldRedraw();
 }
@@ -299,7 +296,6 @@ function initWorldMap() {
   document.getElementById('world-stats').textContent =
     `${filled} generators · ${groups.filter(g => g.members.length).length} groups · ${open} open slots`;
 
-  const expBtn = document.getElementById('world-exp-toggle');
   const spriteTile = e => (worldState.experimental ? e.target.closest?.('.tile.has-sprite, .tile.has-3d') : null);
   const hoverOn = t => (t.classList.contains('has-3d') ? hoverStart(t, true) : spritePlay(t));
   const hoverOff = t => (t.classList.contains('has-3d') ? hoverStart(t, false) : spriteStop(t));
@@ -310,10 +306,7 @@ function initWorldMap() {
   });
   wEl.canvas.addEventListener('focusin', e => { const t = spriteTile(e); if (t) hoverOn(t); });
   wEl.canvas.addEventListener('focusout', e => { const t = spriteTile(e); if (t) hoverOff(t); });
-  if (expBtn) expBtn.addEventListener('click', () => worldSetExperimental(!worldState.experimental));
-  let wasOn = false;
-  try { wasOn = localStorage.getItem('mm-exp-view') === '1'; } catch (e) {}
-  if (wasOn) worldSetExperimental(true);
+  worldSetExperimental(true);   // the edge-to-edge hologram view is the only view
 
   bindWorldInput();
   new ResizeObserver(worldResized).observe(wEl.root);

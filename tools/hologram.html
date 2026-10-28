@@ -107,17 +107,24 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
     geo.computeVertexNormals();
 
     var hue = cfg.hue === undefined ? 185 : cfg.hue;
-    var col = new T.Color(hsl(hue, 100, 62));
-    var body = new T.ShaderMaterial({
+    var dark = cfg.dark === true;   // black model: opaque near-black body with a light rim and edge glow, so it reads on the dark tile
+    var col = new T.Color(dark ? hsl(hue, 45, 80) : hsl(hue, cfg.sat === undefined ? 100 : cfg.sat, cfg.light || 62));
+    var body = dark ? new T.ShaderMaterial({
+      uniforms: { uColor: { value: col } }, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+      vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'uniform vec3 uColor; varying vec3 vN; varying vec3 vV; void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(vec3(0.015, 0.015, 0.022) + uColor * 0.32 * pow(f, 3.0), 1.0); }'
+    }) : new T.ShaderMaterial({
       uniforms: { uColor: { value: col } },
       transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending,
       vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
       fragmentShader: 'const float K_BODY = ' + K_BODY.toFixed(3) + '; uniform vec3 uColor; varying vec3 vN; varying vec3 vV; void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(uColor * (0.03 + K_BODY * pow(f, 2.4)), 1.0); }'
     });
-    var edges = new T.LineSegments(new T.EdgesGeometry(geo, K_ANGLE), new T.LineBasicMaterial({ color: col, transparent: true, opacity: K_EDGE, blending: T.AdditiveBlending, depthWrite: false }));
+    var edges = new T.LineSegments(new T.EdgesGeometry(geo, K_ANGLE), new T.LineBasicMaterial({ color: col, transparent: true, opacity: dark ? 0.9 : K_EDGE, blending: dark ? T.NormalBlending : T.AdditiveBlending, depthWrite: false }));
     var mesh = new T.LineSegments(new T.WireframeGeometry(geo), new T.LineBasicMaterial({ color: col, transparent: true, opacity: K_WIRE, blending: T.AdditiveBlending, depthWrite: false }));
     var root = new T.Group();
-    root.add(new T.Mesh(geo, body), mesh, edges);
+    var bodyMesh = new T.Mesh(geo, body);
+    root.add(bodyMesh, mesh, edges);
+    var maskMat = new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide });
     var scene = new T.Scene();
     scene.add(root);
 
@@ -144,6 +151,14 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
 
     for (var f = 0; f < N; f++) {
       root.rotation.y = -(yaw0 + f * 360 / N) * Math.PI / 180;   // three.js +y is counter-clockwise seen from above
+      var maskD = null;
+      if (dark) {   // coverage pass: the silhouette, so the near-black body can be opaque
+        bodyMesh.material = maskMat; mesh.visible = edges.visible = false;
+        renderer.render(scene, cam);
+        tctx.clearRect(0, 0, CELL, CELL); tctx.drawImage(renderer.domElement, 0, 0, CELL, CELL);
+        maskD = tctx.getImageData(0, 0, CELL, CELL).data;
+        bodyMesh.material = body; mesh.visible = edges.visible = true;
+      }
       renderer.render(scene, cam);
       tctx.clearRect(0, 0, CELL, CELL);
       tctx.imageSmoothingQuality = 'high';
@@ -160,6 +175,7 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
       for (var p = 0; p < d.length; p += 4) {   // brightness becomes alpha: light on transparent
         var m = Math.max(d[p], d[p + 1], d[p + 2]);
         var a = Math.min(255, Math.max(0, (m - 6) * 1.12));
+        if (maskD && maskD[p] > a) { d[p + 3] = maskD[p]; continue; }   // inside the silhouette keep the true (dark) colour
         if (m > 0) { d[p] = d[p] * 255 / m; d[p + 1] = d[p + 1] * 255 / m; d[p + 2] = d[p + 2] * 255 / m; }
         d[p + 3] = a;
       }

@@ -1,4 +1,18 @@
 {
-  "_help": "Per-generator overrides for tools/hologram.html, keyed by thumbnail id. hue: degrees (185 cyan, 28 orange). stand: true/false forces a flat model upright (default: auto). yaw0: start angle. fill: fraction of the cell the model fills (default 0.8). skipRender: true leaves the tile on its current art.",
-  "pumpkin-plotter": { "hue": 28 }
+  "_help": "Per-generator overrides for tools/hologram.html, keyed by thumbnail id. hue: degrees (185 cyan, 28 orange). stand: true/false forces a flat model upright (default: auto). yaw0: start angle. fill: fraction of the cell the model fills (default 0.8). skipRender: true leaves the tile on its current art. dark: true renders a black model (opaque near-black body, light rim and edges). sat/light: colour saturation and lightness (sat 0 = white).",
+  "pumpkin-plotter": {
+    "hue": 28
+  },
+  "spider": {
+    "dark": true,
+    "hue": 215
+  },
+  "witch-hat": {
+    "dark": true,
+    "hue": 215
+  },
+  "skull-sculptor": {
+    "sat": 0,
+    "light": 85
+  }
 }
