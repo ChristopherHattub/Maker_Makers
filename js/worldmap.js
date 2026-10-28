@@ -133,7 +133,7 @@ function spriteApplyV1(tile, m, entry) {
 // The label and slot number are text; the hologram layer may overflow the tile (see .tile-obj in styles.css).
 function hoverApply(tile, m, id) {
   let entry = m.tiles[id];
-  if (entry.holo && /[?&]holo\b/.test(location.search)) entry = { ...entry, ...entry.holo };   // ?holo previews the rendered hologram
+  if (entry.gemini && /[?&]gemini\b/.test(location.search)) entry = { ...entry, ...entry.gemini };   // ?gemini shows the older Gemini-drawn frames
   const section = tile.closest('.region')?.dataset.region;
   const art = tile.querySelector('.tile-art');
   const base = document.createElement('span');

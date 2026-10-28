@@ -8,39 +8,70 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
 </head>
 <body>
 <!--
-  Renders a generator's real 3D model as a cyan hologram turntable and uploads a sprite atlas.
-  Open: tools/hologram.html?gen=ghost-builder&frames=24&hue=185&save=1   (the page loads programs/<gen>.html in a hidden frame)
-  Params: gen, frames (24), cell (288), cols (6), hue (degrees, default 185 cyan), yaw0 (start angle), save=1 (upload to
-  scripts/receive-render.mjs on :5190 as holo-<gen>.png)
+  Renders each generator's real 3D model as a cyan hologram turntable (24 frames, 15 degrees apart, clockwise seen from above)
+  and uploads a 6x4 sprite atlas per generator to scripts/receive-render.mjs (:5190) as holo-<id>.png.
+  Open  tools/hologram.html?gen=all&save=1            every generator in js/programs.js
+        tools/hologram.html?gen=ghost-builder&save=1   one generator (thumbnail id)
+  Params: frames (24), cell (288), cols (6), ss (supersample, 4), wire/edge/body/glow/angle (look).
+  Per-generator overrides live in scripts/hologram-config.json. Then run: python3 scripts/build-holo.py <receiver out dir>
 -->
 <div id="log">loading…</div>
+<pre id="results"></pre>
 <canvas id="atlas"></canvas>
 <iframe id="gen"></iframe>
+<script src="../js/programs.js"></script>
 <script>
 (function () {
   var q = new URLSearchParams(location.search);
-  var GEN = q.get('gen') || 'ghost-builder';
-  var N = +(q.get('frames') || 24), CELL = +(q.get('cell') || 288), COLS = +(q.get('cols') || 6);
-  var HUE = +(q.get('hue') || 185), SS = +(q.get('ss') || 3), YAW0 = +(q.get('yaw0') || 0);
-  var FILL = +(q.get('fill') || 0.78);
-  var K_WIRE = +(q.get('wire') || 0.07), K_EDGE = +(q.get('edge') || 0.9), K_BODY = +(q.get('body') || 0.4), K_GLOW = +(q.get('glow') || 0.55), K_ANGLE = +(q.get('angle') || 28);          // fraction of the cell the model's bounding sphere fills
-  var log = function (t) { document.getElementById('log').textContent = t; };
+  var N = +(q.get('frames') || 24), CELL = +(q.get('cell') || 288), COLS = +(q.get('cols') || 6), SS = +(q.get('ss') || 4);
+  var K_WIRE = +(q.get('wire') || 0.05), K_EDGE = +(q.get('edge') || 0.8), K_BODY = +(q.get('body') || 0.35), K_GLOW = +(q.get('glow') || 0.5), K_ANGLE = +(q.get('angle') || 22);
+  var SAVE = !!q.get('save');
+  var logEl = document.getElementById('log'), resEl = document.getElementById('results');
   var frame = document.getElementById('gen');
-  frame.src = '../programs/' + GEN + '.html';
+  var results = {};
+  window.HOLO_RESULTS = results;
+  var log = function (t) { logEl.textContent = t; };
 
+  function thumbId(g) { return g.thumbnailUrl.split('/').pop().replace(/\.\w+$/, ''); }
   function hsl(h, s, l) { return 'hsl(' + h + ',' + s + '%,' + l + '%)'; }
 
-  function waitForStage(done) {
-    var tries = 0;
-    (function poll() {
-      var w = frame.contentWindow;
-      if (w && w.MM_STAGE && w.MM_STAGE.getModelData && (w.MM_STAGE.getModelData() || []).length) return done(w.MM_STAGE);
-      if (++tries > 200) return log('timed out waiting for the generator');
-      setTimeout(poll, 100);
-    })();
+  function loadGenerator(url) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      function finish(v, err) { if (done) return; done = true; frame.onload = null; err ? reject(err) : resolve(v); }
+      frame.onload = function () {
+        var tries = 0;
+        (function poll() {
+          var w = frame.contentWindow;
+          try {
+            if (w && w.MM_STAGE && w.MM_STAGE.getModelData) {
+              var d = w.MM_STAGE.getModelData() || [];
+              var n = 0; d.forEach(function (e) { n += e.positions.length; });
+              if (n > 0) return finish(w.MM_STAGE);
+            }
+          } catch (e) { return finish(null, e); }
+          if (++tries > 120) return finish(null, new Error('no model after 12s'));
+          setTimeout(poll, 100);
+        })();
+      };
+      frame.src = url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();
+    });
   }
 
-  function build(stage) {
+  // One shared renderer: a new WebGL context per generator would exhaust the browser's context limit.
+  var shared = null;
+  function rendererFor(T) {
+    if (!shared || shared.T !== T) {
+      var size = CELL * SS;
+      var r = new T.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+      r.setSize(size, size, false);
+      r.setClearColor(0x000000, 1);
+      shared = { T: T, renderer: r };
+    }
+    return shared.renderer;
+  }
+
+  function renderModel(stage, cfg, id) {
     var T = stage.THREE;
     var data = stage.getModelData();
     var total = 0;
@@ -48,24 +79,35 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
     var pos = new Float32Array(total), o = 0;
     data.forEach(function (e) { pos.set(e.positions, o); o += e.positions.length; });
 
-    // Fit: pivot on the vertical axis through the bounding-box centre; scale so the bounding sphere is constant.
-    var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9, minZ = 1e9, maxZ = -1e9;
-    for (var i = 0; i < pos.length; i += 3) {
-      minX = Math.min(minX, pos[i]); maxX = Math.max(maxX, pos[i]);
-      minY = Math.min(minY, pos[i + 1]); maxY = Math.max(maxY, pos[i + 1]);
-      minZ = Math.min(minZ, pos[i + 2]); maxZ = Math.max(maxZ, pos[i + 2]);
+    function extents() {
+      var b = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 };
+      for (var i = 0; i < pos.length; i += 3) {
+        b.x0 = Math.min(b.x0, pos[i]); b.x1 = Math.max(b.x1, pos[i]);
+        b.y0 = Math.min(b.y0, pos[i + 1]); b.y1 = Math.max(b.y1, pos[i + 1]);
+        b.z0 = Math.min(b.z0, pos[i + 2]); b.z1 = Math.max(b.z1, pos[i + 2]);
+      }
+      return b;
     }
-    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
-    var R = 0;
+    var b = extents();
+    var flat = (b.y1 - b.y0) < 0.22 * Math.max(b.x1 - b.x0, b.z1 - b.z0);
+    var stand = cfg.stand === undefined ? flat : !!cfg.stand;
+    if (stand) {   // a model that lies flat on the plate: stand it up so its top face looks at the camera
+      for (var i = 0; i < pos.length; i += 3) { var y = pos[i + 1]; pos[i + 1] = -pos[i + 2]; pos[i + 2] = y; }
+      b = extents();
+    }
+    var cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, cz = (b.z0 + b.z1) / 2;
+    var Rxz = 0;
     for (i = 0; i < pos.length; i += 3) {
       pos[i] -= cx; pos[i + 1] -= cy; pos[i + 2] -= cz;
-      R = Math.max(R, Math.hypot(pos[i], pos[i + 1], pos[i + 2]));
+      Rxz = Math.max(Rxz, Math.hypot(pos[i], pos[i + 2]));
     }
+    var H = b.y1 - b.y0;
     var geo = new T.BufferGeometry();
     geo.setAttribute('position', new T.BufferAttribute(pos, 3));
     geo.computeVertexNormals();
 
-    var col = new T.Color(hsl(HUE, 100, 62));
+    var hue = cfg.hue === undefined ? 185 : cfg.hue;
+    var col = new T.Color(hsl(hue, 100, 62));
     var body = new T.ShaderMaterial({
       uniforms: { uColor: { value: col } },
       transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending,
@@ -76,37 +118,36 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
     var mesh = new T.LineSegments(new T.WireframeGeometry(geo), new T.LineBasicMaterial({ color: col, transparent: true, opacity: K_WIRE, blending: T.AdditiveBlending, depthWrite: false }));
     var root = new T.Group();
     root.add(new T.Mesh(geo, body), mesh, edges);
-
     var scene = new T.Scene();
     scene.add(root);
-    var cam = new T.PerspectiveCamera(26, 1, 1, 5000);
-    var dist = R / Math.sin((26 / 2) * Math.PI / 180) / FILL * 0.5 * 2 * 0.5 + R * 0;
-    dist = (R / FILL) / Math.tan((26 / 2) * Math.PI / 180);
+
+    // Constant scale for the whole turn: the widest the model gets sideways, or its height, fills the cell.
+    var FILL = cfg.fill || 0.8;
+    var dim = Math.max(2 * Rxz, H) * 1.06;
+    var fov = 26;
+    var cam = new T.PerspectiveCamera(fov, 1, 1, 8000);
+    var dist = (dim / 2 / FILL) / Math.tan(fov / 2 * Math.PI / 180);
     cam.position.set(0, dist * 0.22, dist);
     cam.lookAt(0, 0, 0);
 
-    var size = CELL * SS;
-    var renderer = new T.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
-    renderer.setSize(size, size, false);
-    renderer.setClearColor(0x000000, 1);
-
+    var renderer = rendererFor(T);
     var rows = Math.ceil(N / COLS);
     var atlas = document.getElementById('atlas');
     atlas.width = CELL * COLS; atlas.height = CELL * rows;
     var actx = atlas.getContext('2d', { willReadFrequently: true });
+    actx.clearRect(0, 0, atlas.width, atlas.height);
     var tmp = document.createElement('canvas'); tmp.width = tmp.height = CELL;
     var tctx = tmp.getContext('2d', { willReadFrequently: true });
     var glow = document.createElement('canvas'); glow.width = glow.height = CELL;
     var gctx = glow.getContext('2d');
+    var yaw0 = cfg.yaw0 || 0;
 
     for (var f = 0; f < N; f++) {
-      // Clockwise seen from above: the front (+z) moves toward the viewer's left (-x).
-      root.rotation.y = -(YAW0 + f * 360 / N) * Math.PI / 180;   // three.js +y is counter-clockwise seen from above
+      root.rotation.y = -(yaw0 + f * 360 / N) * Math.PI / 180;   // three.js +y is counter-clockwise seen from above
       renderer.render(scene, cam);
       tctx.clearRect(0, 0, CELL, CELL);
       tctx.imageSmoothingQuality = 'high';
       tctx.drawImage(renderer.domElement, 0, 0, CELL, CELL);
-      // Glow: add a blurred copy back on top.
       gctx.clearRect(0, 0, CELL, CELL);
       gctx.filter = 'blur(' + (CELL / 70) + 'px)';
       gctx.drawImage(tmp, 0, 0);
@@ -115,9 +156,8 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
       tctx.globalAlpha = K_GLOW;
       tctx.drawImage(glow, 0, 0);
       tctx.globalAlpha = 1; tctx.globalCompositeOperation = 'source-over';
-      // Brightness becomes alpha (hologram light on transparent), as in tools/ for the Gemini sheets.
       var img = tctx.getImageData(0, 0, CELL, CELL), d = img.data;
-      for (var p = 0; p < d.length; p += 4) {
+      for (var p = 0; p < d.length; p += 4) {   // brightness becomes alpha: light on transparent
         var m = Math.max(d[p], d[p + 1], d[p + 2]);
         var a = Math.min(255, Math.max(0, (m - 6) * 1.12));
         if (m > 0) { d[p] = d[p] * 255 / m; d[p + 1] = d[p + 1] * 255 / m; d[p + 2] = d[p + 2] * 255 / m; }
@@ -125,16 +165,44 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
       }
       actx.putImageData(img, (f % COLS) * CELL, Math.floor(f / COLS) * CELL);
     }
-    log(GEN + ': rendered ' + N + ' frames, atlas ' + atlas.width + 'x' + atlas.height + ', R=' + R.toFixed(1));
-    window.HOLO_DONE = true;
-    if (q.get('save')) {
-      atlas.toBlob(function (b) {
-        fetch('http://localhost:5190/save?name=holo-' + GEN + '.png', { method: 'POST', body: b }).then(function () { log(document.getElementById('log').textContent + ' · uploaded'); window.HOLO_SAVED = true; });
-      }, 'image/png');
-    }
+    geo.dispose();
+    return { atlas: atlas, info: { flat: flat, stand: stand, Rxz: +Rxz.toFixed(1), H: +H.toFixed(1) } };
   }
 
-  frame.addEventListener('load', function () { waitForStage(build); });
+  function upload(id, atlas) {
+    return new Promise(function (resolve) {
+      atlas.toBlob(function (blob) {
+        fetch('http://localhost:5190/save?name=holo-' + id + '.png', { method: 'POST', body: blob }).then(function () { resolve(true); }, function () { resolve(false); });
+      }, 'image/png');
+    });
+  }
+
+  async function main() {
+    var config = {};
+    try { config = await (await fetch('../scripts/hologram-config.json')).json(); } catch (e) {}
+    var want = q.get('gen') || 'ghost-builder';
+    var list = GENERATORS.filter(function (g) { return g.programUrl; });
+    if (want !== 'all') list = list.filter(function (g) { return thumbId(g) === want || g.programUrl.indexOf('/' + want + '.html') >= 0; });
+    var k = 0;
+    for (var g of list) {
+      var id = thumbId(g), cfg = config[id] || {};
+      k++;
+      if (cfg.skipRender) { results[id] = 'skipped'; continue; }
+      log('[' + k + '/' + list.length + '] ' + id + ' …');
+      try {
+        var stage = await loadGenerator('../' + g.programUrl);
+        var out = renderModel(stage, cfg, id);
+        var ok = SAVE ? await upload(id, out.atlas) : null;
+        results[id] = { ok: ok, info: out.info };
+      } catch (e) {
+        results[id] = 'ERROR ' + e.message;
+      }
+      resEl.textContent = Object.keys(results).map(function (n) { return n + ': ' + JSON.stringify(results[n]); }).join('\n');
+    }
+    log('done: ' + list.length + ' generators');
+    window.HOLO_DONE = true;
+  }
+  main();
 })();
 </script>
 </body>

@@ -1,0 +1,4 @@
+{
+  "_help": "Per-generator overrides for tools/hologram.html, keyed by thumbnail id. hue: degrees (185 cyan, 28 orange). stand: true/false forces a flat model upright (default: auto). yaw0: start angle. fill: fraction of the cell the model fills (default 0.8). skipRender: true leaves the tile on its current art.",
+  "pumpkin-plotter": { "hue": 28 }
+}
