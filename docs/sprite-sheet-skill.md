@@ -72,7 +72,7 @@ Never merge generators in one row. Never change the order of rows. Never add a t
 
 Rows are in slot order, 4 generators per sheet. The Label is the exact on-tile text (shortened from the site title to stay under about 18 characters so it fits the mono label at 256 px). `id` is the thumbnail basename from `js/programs.js`; the homepage uses it to find the sheet row.
 
-Sheets are named `sheet-01` … `sheet-{{CHUNKS}}`.
+Sheets are named `sheet-01` … `sheet-11`.
 
 ### Sheet 01 (rows 0–3)
 
@@ -205,7 +205,7 @@ Not built yet. This is the contract so playback is a small change in `js/worldma
 assets/thumbnails/sprites/manifest.json
 assets/thumbnails/sprites/sheet-01.png   (keyed PNG or WebP, 1536 x 1024)
 ...
-assets/thumbnails/sprites/sheet-{{CHUNKS}}.png
+assets/thumbnails/sprites/sheet-11.png
 assets/thumbnails/pro/<id>.png           (frame 0, 240 x 240, existing still; keep for fallback)
 ```
 
