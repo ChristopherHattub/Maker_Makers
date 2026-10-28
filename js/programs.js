@@ -501,10 +501,8 @@ const GENERATORS = [
 // (a string, or an array for several groups) or the `generators` list.
 //   id / name / description: region header and search text
 //   accent: CSS hex colour of the region's tint, connectors and hover glow
-//   at: [col, row] of the region's top-left cell on the world grid (one cell = one tile).
-//       The region takes one header row, then `size` tile cells. Leave a spare cell or row so a
-//       region can grow; regions without `at` are auto-placed in a new row below everything else.
-//   size: [cols, rows] of tile cells. Rows grow automatically if there are more generators than cells.
+//   at / size: ignored. The homepage sizes each region to its tiles and packs regions in rings around the Workshop
+//       tile automatically (see docs/homepage.md), so a new group needs no coordinates.
 //   planned: true for a region with no generators yet. It shows as empty slots to be filled later.
 //   generators: optional ordered list of ids ('SLOT-01') to control tile order
 const BUNDLES = [

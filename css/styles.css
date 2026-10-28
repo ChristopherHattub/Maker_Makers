@@ -806,21 +806,33 @@ body.on-splash .container {
 /* Regions: the tinted "heat" of each group */
 .region {
   position: absolute;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 7%, rgba(6, 21, 45, 0.55));
-  border-radius: 18px;
-  transition: border-color 0.3s, background 0.3s;
 }
 
-.region.planned {
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
-  background: color-mix(in srgb, var(--accent) 3%, rgba(6, 21, 45, 0.4));
+/* The outline hugs the tiles (a part-filled last row is cut away), so it is drawn as a path, not a CSS border */
+.region-shape {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
 }
 
-.region.selected {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, rgba(6, 21, 45, 0.6));
+.region-shape path {
+  stroke-width: 1.5;
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+  fill: color-mix(in srgb, var(--accent) 7%, rgba(6, 21, 45, 0.55));
+  transition: stroke 0.3s, fill 0.3s;
+}
+
+.region.planned .region-shape path {
+  stroke-dasharray: 6 5;
+  stroke: color-mix(in srgb, var(--accent) 28%, transparent);
+  fill: color-mix(in srgb, var(--accent) 3%, rgba(6, 21, 45, 0.4));
+}
+
+.region.selected .region-shape path {
+  stroke: var(--accent);
+  fill: color-mix(in srgb, var(--accent) 12%, rgba(6, 21, 45, 0.6));
 }
 
 /* Colour that bleeds past the border so neighbouring groups blend into one heatmap */
@@ -1145,3 +1157,14 @@ body.on-splash .container {
   font: 600 9px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: #cfd8e3; text-shadow: 0 1px 2px #000;
 }
 .world.exp .tile.has-3d:hover .tile-label, .world.exp .tile.has-3d:focus-visible .tile-label { color: #fff; }
+
+/* Sort and rearrange */
+.world-sort { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+.world-sort select { flex: 1; min-width: 0; padding: 0.35rem 0.4rem; font-size: 0.72rem; }
+.world-sort .btn { padding: 0.3rem 0.6rem; font-size: 0.72rem; white-space: nowrap; }
+.world-sort .btn[aria-pressed="true"] { background: var(--bp-cyan); color: #04101f; }
+.world-sort .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.world.arranging .tile { cursor: grab; }
+.world.arranging .tile.dragging { cursor: grabbing; z-index: 40; opacity: 0.92; pointer-events: none; will-change: transform; }
+.world.exp .cell-cursor { width: 128px; height: 128px; }
+.world-sort [hidden] { display: none; }

@@ -1,9 +1,18 @@
 // Homepage world map: every group in BUNDLES is a region on one big 2D grid, with generators as tiles
 // inside it. The camera pans (drag, wheel, arrow keys) and zooms (pinch, Ctrl+wheel, +/-). Selecting a
 // tile snaps the camera to it and opens a details panel; selecting it again opens the generator.
-// Layout comes from `at` and `size` on each group in js/programs.js. See docs/homepage.md.
+// Layout is automatic: each group is sized to its tiles and packed in rings around the Workshop tile (the `at` and
+// `size` fields in js/programs.js are ignored). See docs/homepage.md.
 
-const WORLD = { CELL: 128, TILE: 112, GAP: 16, PAD: 8, MIN_K: 0.18, MAX_K: 2.4, AUTO_COLS: 16 };
+const WORLD = { CELL: 128, TILE: 128, PAD: 8, REGION_GAP: 16, MIN_K: 0.18, MAX_K: 2.4 };
+const SORT_MODES = {
+  default: 'Groups, biggest in the middle',
+  name: 'Groups, A to Z',
+  newest: 'Groups, newest first',
+  'flat-name': 'No groups, A to Z',
+  'flat-newest': 'No groups, newest first'
+};
+const LAYOUT_KEY = 'mm-home-layout';   // the visitor's own sort and tile order, kept in this browser only
 const EMPTY_CELL_SVG = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect x='1.5' y='1.5' width='109' height='109' rx='14' fill='%23ffffff' fill-opacity='0.025' stroke='%23ffffff' stroke-opacity='0.16' stroke-width='1.5' stroke-dasharray='5 6'/%3E%3C/svg%3E\")";
 
 const worldState = {
@@ -14,12 +23,16 @@ const worldState = {
   anim: null,
   size: { w: 1, h: 1 },
   ready: false,
-  drawQueued: false
+  drawQueued: false,
+  mode: 'default',
+  groupOrder: [],   // group ids in the order they were packed when the visitor started rearranging
+  order: {},        // custom tile order per group id, from drag and drop (see worldMoveTile)
+  arranging: false
 };
 
 // The Workshop is a large tile in the middle of the map (not a generator). It occupies WORKSHOP.cols x WORKSHOP.rows cells
 // starting at cell WORKSHOP.at, and opens the free-range 3D editor at #/workshop. See docs/workshop.md.
-const WORKSHOP = { at: [8, 5], cols: 4, rows: 4 };
+const WORKSHOP = { at: [0, 0], cols: 4, rows: 4 };
 
 const wEl = {};
 
@@ -28,32 +41,47 @@ function worldReducedMotion() { return window.matchMedia('(prefers-reduced-motio
 
 // ---------- layout ----------
 
+// Columns and rows for a group of n tiles: close to square (counting the header row), with few unused cells.
+function regionShape(n) {
+  if (!n) return { w: 2, h: 1 };
+  let best = null;
+  for (let w = 2; w <= 9; w++) {
+    const h = Math.ceil(n / w);
+    const score = (w * h - n) * 1.2 + Math.abs(Math.log(w / (h + 1))) * 4 + (w > n ? 3 : 0);
+    if (!best || score < best.score) best = { w, h, score };
+  }
+  return best;
+}
+
+// Packs the regions (already in priority order) around the Workshop: each goes to the free spot that touches
+// something already placed and sits closest to the Workshop's centre, so the map grows outward in rings.
 function layoutWorld(groups) {
+  const C = WORLD.CELL, P = WORLD.PAD, G = WORLD.REGION_GAP;
   const regions = groups.map(g => {
-    const [w, rows] = g.size || [4, 1];
-    return { group: g, w, h: Math.max(rows, Math.ceil(g.members.length / w)), x: null, y: null };
+    const { w, h } = regionShape(g.members.length);
+    return { group: g, w, h, pw: w * C + P * 2, ph: (h + 1) * C + P * 2 };
   });
-  regions.forEach(r => { if (r.group.at) [r.x, r.y] = r.group.at; });
-
-  // Groups with no `at` are packed into rows below everything that has a position.
-  let cy = regions.reduce((m, r) => (r.x === null ? m : Math.max(m, r.y + r.h + 1)), 0);
-  let cx = 0, rowH = 0;
-  regions.filter(r => r.x === null).forEach(r => {
-    if (cx + r.w > WORLD.AUTO_COLS) { cx = 0; cy += rowH; rowH = 0; }
-    r.x = cx; r.y = cy; cx += r.w; rowH = Math.max(rowH, r.h + 1);
-  });
-
-  const C = WORLD.CELL;
+  const ws = { x: WORKSHOP.at[0] * C, y: WORKSHOP.at[1] * C, w: WORKSHOP.cols * C, h: WORKSHOP.rows * C };
+  const placed = [ws];
+  const wcx = ws.x + ws.w / 2, wcy = ws.y + ws.h / 2;
+  const clash = (x, y, w, h) => placed.some(p => x < p.x + p.w + G && p.x < x + w + G && y < p.y + p.h + G && p.y < y + h + G);
   regions.forEach(r => {
-    r.px = r.x * C - WORLD.PAD;
-    r.py = r.y * C - WORLD.PAD;
-    r.pw = r.w * C - WORLD.GAP + WORLD.PAD * 2;
-    r.ph = (r.h + 1) * C - WORLD.GAP + WORLD.PAD * 2;
+    const xs = [], ys = [];
+    placed.forEach(p => {
+      xs.push(p.x + p.w + G, p.x - r.pw - G, p.x, p.x + p.w - r.pw);
+      ys.push(p.y + p.h + G, p.y - r.ph - G, p.y, p.y + p.h - r.ph);
+    });
+    let best = null;
+    for (const x of xs) for (const y of ys) {
+      if (clash(x, y, r.pw, r.ph)) continue;
+      const d = Math.hypot(x + r.pw / 2 - wcx, y + r.ph / 2 - wcy);
+      if (!best || d < best.d - 0.5) best = { x, y, d };
+    }
+    r.px = best.x; r.py = best.y;
+    placed.push({ x: r.px, y: r.py, w: r.pw, h: r.ph });
   });
-  const maxX = Math.max(...regions.map(r => r.px + r.pw));
-  const maxY = Math.max(...regions.map(r => r.py + r.ph));
-  const minX = Math.min(...regions.map(r => r.px));
-  const minY = Math.min(...regions.map(r => r.py));
+  const minX = Math.min(...placed.map(p => p.x)), minY = Math.min(...placed.map(p => p.y));
+  const maxX = Math.max(...placed.map(p => p.x + p.w)), maxY = Math.max(...placed.map(p => p.y + p.h));
   worldState.bounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   return regions;
 }
@@ -61,7 +89,81 @@ function layoutWorld(groups) {
 // Pixel position of a tile cell in world space.
 function cellRect(region, col, row) {
   const C = WORLD.CELL;
-  return { x: region.x * C + col * C, y: region.y * C + (row + 1) * C, w: WORLD.TILE, h: WORLD.TILE };
+  return { x: region.px + WORLD.PAD + col * C, y: region.py + WORLD.PAD + (row + 1) * C, w: WORLD.TILE, h: WORLD.TILE };
+}
+
+// Outline of a region as a rounded path: a rectangle, with the empty end of a part-filled last row cut away.
+function regionPath(r) {
+  const C = WORLD.CELL, P = WORLD.PAD, n = r.group.members.length;
+  const last = n ? n - r.w * (r.h - 1) : r.w;
+  const pts = last === r.w
+    ? [[0, 0], [r.pw, 0], [r.pw, r.ph], [0, r.ph]]
+    : [[0, 0], [r.pw, 0], [r.pw, r.ph - C], [last * C + P * 2, r.ph - C], [last * C + P * 2, r.ph], [0, r.ph]];
+  const rad = 18;
+  let d = '';
+  pts.forEach((pt, i) => {
+    const prev = pts[(i + pts.length - 1) % pts.length], next = pts[(i + 1) % pts.length];
+    const toward = (a, b) => {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]), t = Math.min(rad, len / 2) / len;
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    };
+    const p1 = toward(pt, prev), p2 = toward(pt, next);
+    d += `${i ? 'L' : 'M'}${p1[0]} ${p1[1]}Q${pt[0]} ${pt[1]} ${p2[0]} ${p2[1]}`;
+  });
+  return d + 'Z';
+}
+
+// ---------- groups, sorting and the visitor's own arrangement ----------
+
+function worldLoadSaved() {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}');
+    if (v.mode in SORT_MODES) worldState.mode = v.mode;
+    if (v.order && typeof v.order === 'object') worldState.order = v.order;
+    if (Array.isArray(v.groupOrder)) worldState.groupOrder = v.groupOrder;
+  } catch (e) { /* storage blocked or corrupt: use the defaults */ }
+}
+
+function worldSave() {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ mode: worldState.mode, order: worldState.order, groupOrder: worldState.groupOrder })); } catch (e) { /* ignore */ }
+}
+
+// The groups to show right now, as copies of BUNDLES entries with their own member lists.
+function worldViewGroups() {
+  const mode = worldState.mode;
+  const byTitle = (a, b) => a.title.localeCompare(b.title);
+  const byNew = (a, b) => b.slot - a.slot;
+
+  if (mode.startsWith('flat')) {
+    const all = [...new Set(BUNDLES.flatMap(b => b.members))].sort(mode === 'flat-name' ? byTitle : byNew);
+    return [{ id: 'all', name: 'All generators', accent: '#00e5ff', description: 'Every generator in one block.', members: all }];
+  }
+
+  const saved = worldState.order, placed = {};
+  if (mode === 'default') {
+    Object.keys(saved).forEach(gid => (saved[gid] || []).forEach(id => { if (!placed[id]) placed[id] = gid; }));
+  }
+  const groups = BUNDLES.filter(b => b.members.length || b.planned).map((b, i) => {
+    let members = b.members.filter(p => !placed[p.id] || placed[p.id] === b.id);
+    if (mode === 'default' && saved[b.id]) {
+      const ordered = saved[b.id].map(id => PROGRAMS.find(p => p.id === id)).filter(p => p && p.programUrl && placed[p.id] === b.id);
+      members = ordered.concat(members.filter(p => !ordered.includes(p)));
+    } else if (mode === 'name') members = members.slice().sort(byTitle);
+    else if (mode === 'newest') members = members.slice().sort(byNew);
+    return { ...b, members, _i: i };
+  });
+  const newest = g => g.members.reduce((m, p) => Math.max(m, p.slot), -1);
+  groups.sort((a, b) => {
+    if (!a.members.length !== !b.members.length) return a.members.length ? -1 : 1;   // empty groups last
+    if (mode === 'name') return a.name.localeCompare(b.name);
+    if (mode === 'newest') return newest(b) - newest(a);
+    if (mode === 'default' && worldState.groupOrder.length) {   // keep the map steady once the visitor has arranged it
+      const at = g => { const i = worldState.groupOrder.indexOf(g.id); return i < 0 ? 1e9 : i; };
+      if (at(a) !== at(b)) return at(a) - at(b);
+    }
+    return b.members.length - a.members.length || a._i - b._i;
+  });
+  return groups;
 }
 
 // ---------- experimental view ----------
@@ -244,7 +346,6 @@ function worldSetExperimental(on) {
 function regionHTML(r) {
   const g = r.group;
   const filled = g.members.length;
-  const total = r.w * r.h;
   const C = WORLD.CELL;
   const tiles = g.members.map((p, i) => {
     const col = i % r.w, row = Math.floor(i / r.w);
@@ -267,13 +368,14 @@ function regionHTML(r) {
     <section class="region${g.planned ? ' planned' : ''}${filled ? '' : ' no-tiles'}" data-region="${g.id}"
              style="left:${r.px}px; top:${r.py}px; width:${r.pw}px; height:${r.ph}px; --accent:${g.accent || '#00e5ff'}">
       <div class="region-heat" aria-hidden="true"></div>
-      <div class="region-inner" style="left:${WORLD.PAD}px; top:${WORLD.PAD}px; width:${r.w * C - WORLD.GAP}px; height:${(r.h + 1) * C - WORLD.GAP}px">
+      <svg class="region-shape" width="${r.pw}" height="${r.ph}" aria-hidden="true"><path d="${regionPath(r)}"/></svg>
+      <div class="region-inner" style="left:${WORLD.PAD}px; top:${WORLD.PAD}px; width:${r.w * C}px; height:${(r.h + 1) * C}px">
         <div class="region-head" data-act="group">
           <h3>${escapeHTML(g.name)}</h3>
-          <span class="region-meta">${filled ? `${filled} / ${total}` : 'COMING SOON'}</span>
+          <span class="region-meta">${filled ? `${filled}` : 'COMING SOON'}</span>
           <p>${escapeHTML(g.description || '')}</p>
         </div>
-        <div class="region-slots" style="top:${C}px; width:${r.w * C - WORLD.GAP}px; height:${r.h * C - WORLD.GAP}px; background-image:${EMPTY_CELL_SVG}; background-size:${C}px ${C}px">
+        <div class="region-slots" style="top:${C}px; width:${r.w * C}px; height:${r.h * C}px${filled ? '' : `; background-image:${EMPTY_CELL_SVG}; background-size:${C}px ${C}px`}">
           ${tiles}
         </div>
       </div>
@@ -281,7 +383,7 @@ function regionHTML(r) {
 }
 
 function workshopTileHTML() {
-  const C = WORLD.CELL, w = WORKSHOP.cols * C - WORLD.GAP, h = WORKSHOP.rows * C - WORLD.GAP;
+  const C = WORLD.CELL, w = WORKSHOP.cols * C, h = WORKSHOP.rows * C;
   return `
     <button class="workshop-tile" type="button" style="left:${WORKSHOP.at[0] * C}px; top:${WORKSHOP.at[1] * C}px; width:${w}px; height:${h}px"
             aria-label="Workshop: a free-range 3D editor. Import STL files, add shapes, move, scale and rotate.">
@@ -299,9 +401,7 @@ function workshopTileHTML() {
 }
 
 function initWorldMap() {
-  const groups = BUNDLES.filter(b => b.members.length || b.planned);
-  worldState.regions = layoutWorld(groups);
-
+  worldLoadSaved();
   wEl.root = document.getElementById('world');
   wEl.vp = document.getElementById('world-viewport');
   wEl.canvas = document.getElementById('world-canvas');
@@ -309,16 +409,11 @@ function initWorldMap() {
   wEl.mini = document.getElementById('world-minimap');
   wEl.search = document.getElementById('world-search');
   wEl.hint = document.getElementById('world-hint');
+  wEl.sort = document.getElementById('world-sort');
+  wEl.arrange = document.getElementById('world-arrange');
+  wEl.reset = document.getElementById('world-reset');
 
-  wEl.canvas.innerHTML = worldState.regions.map(regionHTML).join('') + workshopTileHTML() + '<div class="cell-cursor" id="cell-cursor" hidden></div>';
-  wEl.cursor = document.getElementById('cell-cursor');
-
-  const filled = groups.reduce((n, g) => n + g.members.length, 0);
-  const open = worldState.regions.reduce((n, r) => n + r.w * r.h - r.group.members.length, 0);
-  document.getElementById('world-stats').textContent =
-    `${filled} generators · ${groups.filter(g => g.members.length).length} groups · ${open} open slots`;
-
-  const spriteTile = e => (worldState.experimental ? e.target.closest?.('.tile.has-sprite, .tile.has-3d') : null);
+  const spriteTile = e => (worldState.experimental && !worldState.arranging ? e.target.closest?.('.tile.has-sprite, .tile.has-3d') : null);
   const hoverOn = t => (t.classList.contains('has-3d') ? hoverStart(t, true) : spritePlay(t));
   const hoverOff = t => (t.classList.contains('has-3d') ? hoverStart(t, false) : spriteStop(t));
   wEl.canvas.addEventListener('mouseover', e => { const t = spriteTile(e); if (t) hoverOn(t); });
@@ -328,13 +423,31 @@ function initWorldMap() {
   });
   wEl.canvas.addEventListener('focusin', e => { const t = spriteTile(e); if (t) hoverOn(t); });
   wEl.canvas.addEventListener('focusout', e => { const t = spriteTile(e); if (t) hoverOff(t); });
-  worldSetExperimental(true);   // the edge-to-edge hologram view is the only view
-
+  worldBuild();                 // the edge-to-edge hologram view is the only view
   bindWorldInput();
+  bindWorldArrange();
   new ResizeObserver(worldResized).observe(wEl.root);
   worldState.ready = true;
   worldState.needsHome = true;
   worldMapShown();
+}
+
+// (Re)creates every region and tile from the current sort and arrangement. Tiles are plain DOM, so this is cheap
+// enough to run after each drop; the camera is left where it is.
+function worldBuild() {
+  worldSelect(null);
+  const groups = worldViewGroups();
+  worldState.regions = layoutWorld(groups);
+  wEl.canvas.innerHTML = worldState.regions.map(regionHTML).join('') + workshopTileHTML() + '<div class="cell-cursor" id="cell-cursor" hidden></div>';
+  wEl.cursor = document.getElementById('cell-cursor');
+
+  const filled = groups.reduce((n, g) => n + g.members.length, 0);
+  document.getElementById('world-stats').textContent =
+    `${filled} generators${worldState.mode.startsWith('flat') ? '' : ` · ${groups.filter(g => g.members.length).length} groups`}`;
+  wEl.sort.value = worldState.mode;
+  wEl.reset.hidden = !Object.keys(worldState.order).length;
+  worldSetExperimental(true);
+  if (wEl.search.value) worldSearch(wEl.search.value, false);
 }
 
 // The map fills the window between the header and the footer, so the disclaimer stays visible.
@@ -430,12 +543,11 @@ function worldFitRect(rect, minK, maxK, animate) {
   worldFocusRect(rect, k, animate);
 }
 
+// The home view: centred on the Workshop tile, close enough to read the first ring of groups around it.
 function worldHome(instant) {
-  const used = worldState.regions.filter(r => r.group.members.length);
-  const list = used.length ? used : worldState.regions;
-  const x0 = Math.min(...list.map(r => r.px)), y0 = Math.min(...list.map(r => r.py));
-  const x1 = Math.max(...list.map(r => r.px + r.pw)), y1 = Math.max(...list.map(r => r.py + r.ph));
-  worldFitRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, 0.35, 1, !instant);
+  const C = WORLD.CELL, { w, h } = worldState.size;
+  const k = worldClamp(Math.min(w / (9.5 * C), h / (7 * C)), 0.3, 1);
+  worldFocusRect({ x: WORKSHOP.at[0] * C, y: WORKSHOP.at[1] * C, w: WORKSHOP.cols * C, h: WORKSHOP.rows * C }, k, !instant);
 }
 
 function worldFitAll() {
@@ -458,7 +570,7 @@ function worldSelect(sel) {
   worldState.sel = sel;
   document.querySelectorAll('.tile.selected').forEach(t => t.classList.remove('selected'));
   document.querySelectorAll('.region.selected').forEach(t => t.classList.remove('selected'));
-  wEl.cursor.hidden = true;
+  if (wEl.cursor) wEl.cursor.hidden = true;
   if (!sel) { wEl.panel.hidden = true; wEl.root.classList.remove('has-selection'); return; }
 
   wEl.root.classList.add('has-selection');
@@ -504,8 +616,7 @@ function worldTileTap(prog, region) {
 function worldRenderPanel() {
   const s = worldState.sel;
   const g = s.region.group;
-  const total = s.region.w * s.region.h;
-  const open = total - g.members.length;
+  const open = g.members.length ? 0 : s.region.w * s.region.h;
   const members = g.members.map(p => `
     <button type="button" class="panel-member${s.prog === p ? ' on' : ''}" data-act="pick" data-id="${p.id}" title="${escapeHTML(p.title)}">
       ${p.thumbnailUrl ? `<img src="${p.thumbnailUrl}" alt="">` : ''}
@@ -541,7 +652,7 @@ function worldRenderPanel() {
       <span class="panel-kicker">GROUP</span>
       <h3>${escapeHTML(g.name)}</h3>
       <p>${escapeHTML(g.description || '')}</p>
-      <div class="panel-stats"><strong>${g.members.length}</strong> generator${g.members.length === 1 ? '' : 's'} &middot; <strong>${open}</strong> open slot${open === 1 ? '' : 's'}</div>
+      <div class="panel-stats"><strong>${g.members.length}</strong> generator${g.members.length === 1 ? '' : 's'} ${open ? ` &middot; <strong>${open}</strong> open slot${open === 1 ? '' : 's'}` : ''}</div>
       ${members ? `<div class="panel-members">${members}</div>` : '<div class="panel-soon">No generators in this group yet.</div>'}
     </div>
     ${detail}`;
@@ -568,6 +679,7 @@ function worldSuggest(group) {
 // ---------- input ----------
 
 function worldTap(e) {
+  if (worldState.arranging) return;   // taps do nothing while rearranging
   if (e.target.closest('.workshop-tile')) { location.hash = '#/workshop'; return; }
   const tile = e.target.closest('.tile');
   if (tile) {
@@ -584,7 +696,7 @@ function worldTap(e) {
     const col = Math.floor((e.clientX - rect.left) / (WORLD.CELL * k));
     const row = Math.floor((e.clientY - rect.top) / (WORLD.CELL * k));
     const inCell = ((e.clientX - rect.left) / k) % WORLD.CELL <= WORLD.TILE && ((e.clientY - rect.top) / k) % WORLD.CELL <= WORLD.TILE;
-    if (inCell && col >= 0 && col < region.w && row >= 0 && row < region.h && col + row * region.w >= region.group.members.length) {
+    if (inCell && !region.group.members.length && col >= 0 && col < region.w && row >= 0 && row < region.h) {
       const s = worldState.sel;
       if (s && s.type === 'empty' && s.region === region && s.col === col && s.row === row) { worldSuggest(region.group); return; }
       worldSelect({ type: 'empty', region, col, row });
@@ -599,13 +711,17 @@ function worldTap(e) {
 function bindWorldInput() {
   const vp = wEl.vp;
   const pointers = new Map();
-  let drag = null, lastPinch = null;
+  let drag = null, lastPinch = null, tileDrag = null;
 
   const rel = e => { const r = vp.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   vp.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     worldStopAnim();
+    if (worldState.arranging && !pointers.size) {
+      const tile = e.target.closest('.tile');
+      if (tile) { tileDrag = { id: e.pointerId, tile, sx: e.clientX, sy: e.clientY, moved: false, raf: 0 }; return; }
+    }
     pointers.set(e.pointerId, rel(e));
     if (pointers.size === 1) {
       drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, cx: worldState.cam.x, cy: worldState.cam.y, moved: false };
@@ -618,6 +734,7 @@ function bindWorldInput() {
   });
 
   vp.addEventListener('pointermove', e => {
+    if (tileDrag && tileDrag.id === e.pointerId) { worldDragMove(tileDrag, e); return; }
     if (!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, rel(e));
     if (pointers.size >= 2 && lastPinch) {
@@ -642,6 +759,12 @@ function bindWorldInput() {
   });
 
   const end = e => {
+    if (tileDrag && tileDrag.id === e.pointerId) {
+      const t = tileDrag;
+      tileDrag = null;
+      worldDragEnd(t, e.type === 'pointerup');
+      return;
+    }
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
     if (drag && drag.id === e.pointerId) {
@@ -656,7 +779,7 @@ function bindWorldInput() {
   vp.addEventListener('pointercancel', end);
 
   // Keyboard activation of a focused tile (mouse and touch go through the pointer path above).
-  vp.addEventListener('click', e => { if (e.detail === 0) worldTap(e); });
+  vp.addEventListener('click', e => { if (e.detail === 0 && !worldState.arranging) worldTap(e); });
 
   vp.addEventListener('wheel', e => {
     e.preventDefault();
@@ -736,7 +859,7 @@ function bindWorldInput() {
   wEl.mini.addEventListener('pointerup', () => { miniDown = false; });
 }
 
-function worldSearch(query) {
+function worldSearch(query, pan = true) {
   const q = query.trim().toLowerCase();
   wEl.root.classList.toggle('searching', Boolean(q));
   let first = null;
@@ -745,7 +868,7 @@ function worldSearch(query) {
     t.classList.toggle('match', hit);
     if (hit && !first) first = t;
   });
-  if (first) {
+  if (first && pan) {
     // Pan to the first match without opening details.
     const prog = PROGRAMS.find(p => p.id === first.dataset.id);
     const region = worldRegion(first.closest('.region').dataset.region);
@@ -787,4 +910,125 @@ function worldDrawMinimap() {
     ctx.strokeStyle = '#ffffff';
     ctx.strokeRect(vx, vy, size.w / cam.k * s, size.h / cam.k * s);
   });
+}
+
+// ---------- sorting and rearranging ----------
+
+function bindWorldArrange() {
+  wEl.sort.innerHTML = Object.entries(SORT_MODES).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  wEl.sort.value = worldState.mode;
+  wEl.sort.addEventListener('change', () => {
+    worldState.mode = wEl.sort.value;
+    worldSave();
+    worldArrangeUI();
+    worldBuild();
+    worldHome(false);
+  });
+  wEl.arrange.addEventListener('click', () => {
+    worldState.arranging = !worldState.arranging;
+    worldArrangeUI();
+    worldSelect(null);
+  });
+  wEl.reset.addEventListener('click', () => {
+    worldState.order = {};
+    worldState.groupOrder = [];
+    worldSave();
+    worldBuild();
+  });
+  worldArrangeUI();
+}
+
+function worldArrangeUI() {
+  const flat = worldState.mode.startsWith('flat');
+  if (flat) worldState.arranging = false;
+  wEl.arrange.disabled = flat;
+  wEl.arrange.title = flat ? 'Switch to a grouped sort to rearrange tiles' : 'Drag tiles to reorder them, or into another group';
+  wEl.arrange.setAttribute('aria-pressed', String(worldState.arranging));
+  wEl.arrange.textContent = worldState.arranging ? 'Done' : 'Rearrange';
+  wEl.root.classList.toggle('arranging', worldState.arranging);
+  wEl.hint.textContent = worldState.arranging
+    ? 'Drag a tile to a new spot or into another group, then press Done'
+    : 'Drag to pan · pinch or Ctrl+scroll to zoom · select a tile, then select it again to open it';
+  wEl.hint.classList.toggle('gone', !worldState.arranging);
+}
+
+// Where a screen point would drop a tile: the region under it and the cell index in that region.
+function worldDropAt(clientX, clientY) {
+  const r = wEl.vp.getBoundingClientRect(), { x, y, k } = worldState.cam;
+  const wx = (clientX - r.left - x) / k, wy = (clientY - r.top - y) / k;
+  const C = WORLD.CELL, P = WORLD.PAD;
+  const region = worldState.regions.find(g => wx >= g.px && wx <= g.px + g.pw && wy >= g.py && wy <= g.py + g.ph);
+  if (!region) return null;
+  const col = worldClamp(Math.floor((wx - region.px - P) / C), 0, region.w - 1);
+  const row = worldClamp(Math.floor((wy - region.py - P) / C) - 1, 0, region.h - 1);
+  return { region, idx: row * region.w + col };
+}
+
+// Moving only writes a transform on the dragged tile and (once per frame) positions one marker, so it stays smooth.
+function worldDragMove(t, e) {
+  const dx = e.clientX - t.sx, dy = e.clientY - t.sy;
+  if (!t.moved) {
+    if (Math.hypot(dx, dy) < 6) return;
+    t.moved = true;
+    try { wEl.vp.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    t.tile.classList.add('dragging');
+    wEl.vp.classList.add('panning');
+  }
+  t.x = e.clientX; t.y = e.clientY;
+  if (t.raf) return;
+  t.raf = requestAnimationFrame(() => {
+    t.raf = 0;
+    const k = worldState.cam.k;
+    t.tile.style.transform = `translate(${(t.x - t.sx) / k}px, ${(t.y - t.sy) / k}px) scale(1.08)`;
+    t.drop = worldDropAt(t.x, t.y);
+    const c = wEl.cursor;
+    if (!t.drop) { c.hidden = true; return; }
+    const n = t.drop.region.group.members.length;
+    const idx = Math.min(t.drop.idx, Math.max(0, n - (t.drop.region.group.members.includes(PROGRAMS.find(p => p.id === t.tile.dataset.id)) ? 1 : 0)));
+    const rect = cellRect(t.drop.region, idx % t.drop.region.w, Math.floor(idx / t.drop.region.w));
+    c.style.left = `${rect.x}px`; c.style.top = `${rect.y}px`;
+    c.style.setProperty('--accent', t.drop.region.group.accent);
+    c.hidden = false;
+  });
+}
+
+function worldDragEnd(t, committed) {
+  cancelAnimationFrame(t.raf);
+  wEl.vp.classList.remove('panning');
+  t.tile.classList.remove('dragging');
+  t.tile.style.transform = '';
+  wEl.cursor.hidden = true;
+  if (!t.moved || !committed) return;
+  const drop = worldDropAt(t.x, t.y);
+  if (!drop) return;
+  const prog = PROGRAMS.find(p => p.id === t.tile.dataset.id);
+  const from = worldRegion(t.tile.closest('.region').dataset.region);
+  worldMoveTile(prog, from, drop.region, drop.idx);
+}
+
+// Moves a tile to a cell (same group or another), remembers the whole arrangement in this browser, and redraws.
+function worldMoveTile(prog, from, to, idx) {
+  const wasDefault = worldState.mode === 'default';
+  const lists = {};
+  worldState.regions.forEach(r => { lists[r.group.id] = r.group.members.map(p => p.id); });
+  lists[from.group.id] = lists[from.group.id].filter(id => id !== prog.id);
+  lists[to.group.id].splice(Math.min(idx, lists[to.group.id].length), 0, prog.id);
+  if (!worldState.groupOrder.length || !wasDefault) worldState.groupOrder = worldState.regions.map(r => r.group.id);
+  worldState.order = lists;
+  worldState.mode = 'default';
+  worldSave();
+
+  if (wasDefault && from === to) {
+    // Same group: nothing changes size, so just slide the tiles to their new cells.
+    const C = WORLD.CELL;
+    from.group.members = lists[from.group.id].map(id => PROGRAMS.find(p => p.id === id));
+    from.group.members.forEach((p, i) => {
+      const el = wEl.canvas.querySelector(`.region[data-region="${from.group.id}"] .tile[data-id="${p.id}"]`);
+      el.style.left = `${(i % from.w) * C}px`; el.style.top = `${Math.floor(i / from.w) * C}px`;
+      el.classList.toggle('has-left', i % from.w > 0); el.classList.toggle('has-up', i >= from.w);
+    });
+    wEl.reset.hidden = false;
+    return;
+  }
+  worldBuild();
 }
