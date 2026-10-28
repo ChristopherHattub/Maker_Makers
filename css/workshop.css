@@ -102,5 +102,5 @@ body.on-workshop .container { max-width: none; padding: 0; }
 .ws-holo { display: block; margin: 0 auto .2rem; background-repeat: no-repeat; filter: drop-shadow(0 0 6px rgba(60,230,255,.5)); }
 .ws-card img.ws-ic, .ws-card .ws-holo { margin-left: auto; margin-right: auto; }
 .ws-top-row button.ws-export { border-color: var(--bp-green); }
-.ws-mini { width: min(820px, 70%); left: auto; }
+.ws-mini { width: min(360px, 60%); }
 @media (max-width: 760px) { .ws-mini { width: auto; } }

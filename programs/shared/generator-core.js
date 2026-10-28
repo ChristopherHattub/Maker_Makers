@@ -708,7 +708,7 @@
     postEmbedModel();
   }
 
-  // Workshop embed (?embed=workshop): the page shows the controls and 3D view but no header or Color / Print tabs and sends the built model to the parent
+  // Workshop embed (?embed=workshop): the page shows only the controls (no header, 3D view or Color / Print tabs) and sends the built model to the parent
   // after every rebuild, so the Workshop can place and edit it. The parent can send { type: 'mm-set-params', params, state }.
   // A generator with state outside its parameters (stamps) can add cfg.embedState = { get(), set(v) } so that state round-trips.
   var EMBED = /[?&]embed=workshop\b/.test(location.search);
@@ -720,7 +720,15 @@
       parts: modelData.map(function (e) { return { name: e.name || 'body', positions: e.positions.slice() }; }) }, '*');
   }
   if (EMBED) window.addEventListener('message', function (e) {
-    if (e.source !== window.parent || !e.data || e.data.type !== 'mm-set-params') return;
+    if (e.source !== window.parent || !e.data) return;
+    if (e.data.type === 'mm-pick') {   // a click on the model in the Workshop's own view, in this page's coordinates
+      var handler = tabHandlers(), d = e.data;
+      if (handler && typeof handler.onPick === 'function') {
+        handler.onPick({ point: new T.Vector3(d.point[0], d.point[1], d.point[2]), normal: new T.Vector3(d.normal[0], d.normal[1], d.normal[2]), meshName: d.meshName, part: null }, api);
+      }
+      return;
+    }
+    if (e.data.type !== 'mm-set-params') return;
     if (cfg.embedState && e.data.state) cfg.embedState.set(e.data.state);   // generator-specific extras such as placed stamps
     setParams(e.data.params || {});
   });

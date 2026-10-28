@@ -279,7 +279,7 @@ function wsResize() {
 
 // While the mini editor covers the right of the view, slide the picture left so the shape stays in the clear part.
 function wsViewShift() {
-  const w = wsEl.stage.clientWidth, h = wsEl.stage.clientHeight, sh = WS.mini && w > 760 ? Math.min(820, w * 0.7) / 2 : 0;
+  const w = wsEl.stage.clientWidth, h = wsEl.stage.clientHeight, sh = WS.mini && w > 760 ? Math.min(360, w * 0.6) / 2 : 0;
   if (sh) WS.cam.setViewOffset(w, h, sh, 0, w, h); else WS.cam.clearViewOffset();
   WS.cam.updateProjectionMatrix();
 }
@@ -343,6 +343,9 @@ function wsGenGeometry(parts) {
   let k = 0;
   parts.forEach(p => { for (let i = 0; i < p.positions.length; i += 3) { pos[k++] = p.positions[i]; pos[k++] = -p.positions[i + 2]; pos[k++] = p.positions[i + 1]; } });   // Y-up -> Z-up
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.computeBoundingBox();
+  g.userData.genOff = g.boundingBox.getCenter(new THREE.Vector3());          // where the generator's own origin sits before centring
+  g.userData.genParts = parts.map(p => ({ name: p.name, tris: p.positions.length / 9 }));
   return wsCentre(g);
 }
 
@@ -374,7 +377,7 @@ function wsAddGenerator(item) {
 function wsOpenMini(o) {
   wsCloseMini();
   const item = { name: o.name, gen: o.gen };
-  wsSelect([o]); wsZoomTo(o);
+  wsSelect([o]); wsZoomTo(o); wsAttachGizmo();
   const f = wsGenFrame(item, true);
   f.className = 'ws-mini-frame';
   WS.mini = { o, f, first: true, t: 0 };
@@ -387,7 +390,7 @@ function wsOpenMini(o) {
 
 function wsCloseMini() {
   if (!WS.mini) return;
-  WS.mini.f.remove(); WS.mini = null;
+  WS.mini.f.remove(); WS.mini = null; wsAttachGizmo(); wsRenderSide();
   document.getElementById('ws-mini').hidden = true;
   wsViewShift();
 }
@@ -406,6 +409,17 @@ function wsMiniMessage(e) {
   clearTimeout(m.t); m.t = setTimeout(() => { wsCommit(); }, 600);
 }
 
+// A click on the shape while its editor is open goes to the generator as a pick (stamps and similar tools), converted from
+// the Workshop's coordinates back to the generator's own (Y-up, uncentred) ones.
+function wsMiniPick(hit) {
+  const m = WS.mini, o = m.o, off = o.geo.userData.genOff;
+  if (!off || !o.geo.userData.genParts) return;
+  const local = o.mesh.worldToLocal(hit.point.clone()).add(off), n = hit.face.normal;
+  let tri = hit.faceIndex, name = 'body';
+  for (const p of o.geo.userData.genParts) { if (tri < p.tris) { name = p.name; break; } tri -= p.tris; }
+  m.f.contentWindow.postMessage({ type: 'mm-pick', point: [local.x, local.z, -local.y], normal: [n.x, n.z, -n.y], meshName: name }, '*');
+}
+
 // Smoothly centre the camera on a shape.
 function wsZoomTo(o) {
   const b = wsBox(o), c = b.getCenter(new THREE.Vector3()), d = Math.max(b.getSize(new THREE.Vector3()).length() * 2.2, 70);
@@ -420,6 +434,7 @@ function wsZoomTo(o) {
 }
 
 function wsAddFromCatalog(id) {
+  if (WS.mini) { wsToast('Press Done first.'); return; }
   const item = WS.cat[id];
   if (item.gen) { wsAddGenerator(item); return; }
   const o = wsAddObject({ name: item.name, cat: id, params: item.params ? { ...item.params } : null, gen: item.gen, color: item.gen ? 0x4aa3ff : 0x7ab3ff });
@@ -488,6 +503,7 @@ function wsSelect(list) {
 function wsAttachGizmo() {
   const tc = WS.tc;
   tc.detach();
+  if (WS.mini) return;                                  // the shape is locked in place while its generator editor is open
   const editable = WS.sel.filter(o => !o.locked && o.mesh.visible);
   if (!editable.length) return;
   if (editable.length === 1) { tc.attach(editable[0].mesh); }
@@ -514,7 +530,7 @@ function wsPick(e) {
   const v = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
   const ray = new THREE.Raycaster(); ray.setFromCamera(v, WS.cam);
   const hit = ray.intersectObjects(WS.objs.filter(o => o.mesh.visible && !o.locked).map(o => o.mesh), false)[0];
-  return { ray, o: hit ? hit.object.userData.o : null, point: hit && hit.point };
+  return { ray, o: hit ? hit.object.userData.o : null, point: hit && hit.point, hit };
 }
 
 function wsBindUI() {
@@ -524,8 +540,8 @@ function wsBindUI() {
     if (e.button !== 0 || WS.tc.axis) return;
     const p = wsPick(e);
     if (WS.mini && p.o !== WS.mini.o) p.o = null;
-    down = { x: e.clientX, y: e.clientY, o: p.o, moved: false, shift: e.shiftKey };
-    if (p.o) {
+    down = { x: e.clientX, y: e.clientY, o: p.o, hit: p.hit, moved: false, shift: e.shiftKey };
+    if (p.o && !WS.mini) {
       if (!WS.sel.includes(p.o)) wsSelect(e.shiftKey ? WS.sel.concat(p.o) : [p.o]);
       // Grab and drag: slide the selection across the horizontal plane through the grabbed point.
       drag = { plane: new THREE.Plane(new THREE.Vector3(0, 0, 1), -p.point.z), start: p.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -p.point.z), new THREE.Vector3()),
@@ -548,6 +564,7 @@ function wsBindUI() {
   window.addEventListener('pointerup', e => {
     if (!down) return;
     if (drag) { WS.orbit.enabled = true; if (drag.did) wsCommit(); }
+    if (WS.mini && down.o === WS.mini.o && !down.moved && down.hit) wsMiniPick(down.hit);
     if (!down.moved && !down.o && !down.shift && e.target === el) wsSelect([]);
     else if (!down.moved && down.o && down.shift) wsSelect(WS.sel.includes(down.o) ? WS.sel.filter(x => x !== down.o) : WS.sel.concat(down.o));
     else if (!down.moved && down.o) wsSelect([down.o]);
@@ -604,7 +621,7 @@ function wsBindUI() {
 }
 
 function wsAction(a) {
-  if (WS.mini && /^(clear|undo|redo|del|back|import|bool-.*|dup)$/.test(a)) { wsToast('Press Done first.'); return; }
+  if (WS.mini && /^(clear|undo|redo|del|back|import|bool-.*|dup|drop|center|mirror|resetrot|export|export3mf)$/.test(a)) { wsToast('Press Done first.'); return; }
   if (a.startsWith('step:')) { WS.step = Number(a.slice(5)); wsRenderSide(); return; }
   if (/^(nudge|turn|grow|color):/.test(a)) { wsVisualAction(a); return; }
   if (a === 'edit') { const o = WS.sel[0]; if (o && o.gen) wsOpenMini(o); return; }
@@ -685,7 +702,9 @@ function wsRenderSide() {
   const list = WS.objs.slice().reverse().map(o => `<li data-id="${o.id}" class="${sel.includes(o) ? 'sel' : ''}"><span class="n">${escapeHTML(o.name)}${o.gen ? ' ⚙' : ''}</span>
       <button data-t="hidden" title="Hide / show (H)">${o.hidden ? '◌' : '◉'}</button><button data-t="locked" title="Lock">${o.locked ? '🔒' : '🔓'}</button></li>`).join('');
   let insp = '<p class="ws-note">👆 Tap a shape to pick it. Drag it to move it. Drag empty space to look around. Hold Shift and tap to pick more than one. Double-click a ⚙ shape to edit it.</p>';
-  if (sel.length) {
+  if (WS.mini) {
+    insp = `<h4>✏️ Editing ${escapeHTML(WS.mini.o.name)}</h4><p class="ws-note">The shape is locked in place. Use the editor beside it and watch it change here. Click the shape to stamp or place things where the generator allows. Press <b>✅ Done</b> to unlock it.</p>`;
+  } else if (sel.length) {
     const o = sel[0], one = sel.length === 1;
     const B = (a, ic, label, tip) => `<button class="ws-big" data-a="${a}" title="${tip || label}"><span>${ic}</span><small>${label}</small></button>`;
     const colors = ['#ff5252', '#ff9f1c', '#ffd400', '#7bd34a', '#00c2a8', '#4aa3ff', '#7a5cff', '#ff6ec7', '#ffffff', '#9aa5b1', '#6b4a2f', '#222222'];
@@ -762,6 +781,7 @@ function wsSideInput(e) {
 
 // Big visual buttons: "nudge:x,y,z", "turn:axis,degrees", "grow:sx,sy,sz", "color:#hex".
 function wsVisualAction(a) {
+  if (WS.mini) { wsToast('Press Done to unlock the shape first.'); return; }
   const [kind, arg] = a.split(':'), v = arg.split(',');
   const list = WS.sel.filter(o => !o.locked);
   if (!list.length) return;
