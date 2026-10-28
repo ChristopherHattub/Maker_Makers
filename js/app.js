@@ -119,6 +119,30 @@ function renderSplash() {
   if (iframe) setFrameUrl(iframe, 'about:blank');
 }
 
+// The generator runs in an iframe on the same origin; its engine exposes window.MM_STAGE (see generator-core.js).
+function generatorStage() {
+  const frame = document.getElementById('external-program-iframe');
+  try { return frame.contentWindow.MM_STAGE || null; } catch (e) { return null; }
+}
+
+// Same as the generator's own "Export .STL" button, including its consent prompt.
+function saveGeneratorStl() {
+  try {
+    const btn = document.getElementById('external-program-iframe').contentDocument.getElementById('mm-export-stl');
+    if (btn) { btn.click(); return; }
+  } catch (e) { /* fall through */ }
+  alert('The generator is still loading. Try again in a moment.');
+}
+
+// Hands the built model (plus its settings and extras such as stamps) to the Workshop and opens it.
+function sendToWorkshop() {
+  const stage = generatorStage();
+  if (!stage || !stage.getEmbed) { alert('The generator is still loading. Try again in a moment.'); return; }
+  const m = stage.getEmbed();
+  window.MM_WORKSHOP_INBOX = { gen: activeProgram.id, name: activeProgram.title, params: m.params, state: m.state, parts: m.parts };
+  goTo('#/workshop');
+}
+
 function renderWorkshop() {
   hideAllScreens();
   document.getElementById('workshop-screen').style.display = 'block';
@@ -141,18 +165,18 @@ function renderProgram(progId) {
 
   const iframe = document.getElementById('external-program-iframe');
   const emptyMsg = document.getElementById('empty-stage-message');
-  const dlBtn = document.getElementById('btn-dl-html');
+  const saveBtns = ['btn-save-stl', 'btn-to-workshop'].map(id => document.getElementById(id));
 
   if (activeProgram.programUrl) {
     emptyMsg.style.display = 'none';
     iframe.style.display = 'block';
     setFrameUrl(iframe, activeProgram.programUrl);
-    dlBtn.disabled = false;
+    saveBtns.forEach(b => { b.disabled = false; });
   } else {
     iframe.style.display = 'none';
     setFrameUrl(iframe, 'about:blank');
     emptyMsg.style.display = 'block';
-    dlBtn.disabled = true;
+    saveBtns.forEach(b => { b.disabled = true; });
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

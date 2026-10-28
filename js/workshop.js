@@ -140,7 +140,7 @@ function wsLoadLibs() {
 
 function openWorkshop() {
   const root = document.getElementById('workshop-screen');
-  if (WS.ready) { wsResize(); return; }
+  if (WS.ready) { wsResize(); wsTakeInbox(); return; }
   if (!root.dataset.built) {
     root.dataset.built = '1';
     root.innerHTML = '<div class="ws-app"><div style="padding:2rem">Loading the Workshop&hellip;</div></div>';
@@ -232,6 +232,17 @@ function wsInit(root) {
   const loop = () => { requestAnimationFrame(loop); if (document.body.classList.contains('on-workshop')) { orbit.update(); r.render(scene, cam); } };
   loop();
   wsToast('Pick a shape from the tab above, or drop an STL file here.');
+  wsTakeInbox();
+}
+
+// A model sent from a generator page ("Send to Workshop"): add it as an editable generator shape and zoom to it.
+function wsTakeInbox() {
+  const m = window.MM_WORKSHOP_INBOX;
+  if (!m) return;
+  window.MM_WORKSHOP_INBOX = null;
+  const o = wsAddObject({ name: m.name, gen: m.gen, genParams: m.params, genState: m.state, geo: wsGenGeometry(m.parts), color: 0x7ab3ff });
+  wsToBed(o); wsPlaceFree(o); wsSelect([o]); wsCommit(); wsFocus();
+  wsToast(m.name + ' is in the Workshop. Double-click it to edit it.');
 }
 
 // Catalog pictures are small renders of the real 3D shapes, made once with a throwaway renderer.
@@ -362,7 +373,7 @@ function wsAddGenerator(item) {
 // Mini editor: zoom in on the shape and show the generator's own controls beside it. Changes rebuild the shape in place.
 function wsOpenMini(o) {
   wsCloseMini();
-  const item = WS.cat['gen:' + o.gen];
+  const item = { name: o.name, gen: o.gen };
   wsSelect([o]); wsZoomTo(o);
   const f = wsGenFrame(item, true);
   f.className = 'ws-mini-frame';

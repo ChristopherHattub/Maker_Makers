@@ -1551,7 +1551,11 @@
     rebuild();
     centerCamera('front');
     if (cfg.hideModelTab || cfg.tabsFirst) setTab(activeTab);
-    window.MM_STAGE = { THREE: T, modelGroup: modelGroup, getModelData: function () { return modelData; } };   // read by tools/hologram.html
+    window.MM_STAGE = { THREE: T, modelGroup: modelGroup, getModelData: function () { return modelData; },
+      getEmbed: function () {   // read by the site's "Send to Workshop" button
+        return { params: JSON.parse(JSON.stringify(params)), state: cfg.embedState ? JSON.parse(JSON.stringify(cfg.embedState.get())) : null,
+          parts: modelData.map(function (e) { return { name: e.name || 'body', positions: e.positions.slice() }; }) };
+      } };   // read by tools/hologram.html
     if (typeof cfg.onStage === 'function') cfg.onStage({ THREE: T, scene: scene, camera: camera, renderer: renderer, controls: controls, hemi: hemi, key: key, rim: rim, plateMesh: plateMesh, grid: grid, container: container, modelGroup: modelGroup });
     animate();
   }

@@ -69,11 +69,11 @@
           <h2 id="viewer-title" style="letter-spacing: 1.5px; text-transform: uppercase;">UNASSIGNED MODULE</h2>
         </div>
         <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
-          <button class="btn btn-green" onclick="showPrinterMapScreen()">
-            &#8982; Local 3D Printers Map
+          <button class="btn btn-green" id="btn-save-stl" onclick="saveGeneratorStl()" disabled>
+            &#128190; Save STL
           </button>
-          <button class="btn btn-amber" id="btn-dl-html" onclick="confirmSiteDownload(downloadStandaloneHTML)" disabled>
-            &#11015; Download Program (.HTML)
+          <button class="btn btn-amber" id="btn-to-workshop" onclick="sendToWorkshop()" disabled>
+            &#128295; Send to Workshop
           </button>
           <button class="btn" onclick="showSplashScreen()">
             &#10006; Back to Generators
