@@ -80,9 +80,12 @@ def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAME
         boxes.append((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
         cells.append(cell)
     scale = OBJ / max(max(b[2] - b[0], b[3] - b[1]) for b in boxes)
+    # Keep one fixed centre for the whole block. Gemini already holds the object steady in its cell, while
+    # centring each frame on its own bounding box makes the body jump sideways whenever an arm swings out.
+    cx = cw / 2
+    cy = float(np.median([(b[1] + b[3]) / 2 for b in boxes]))
     out = []
     for cell, (l, t, rr, bb) in zip(cells, boxes):
-        cx, cy = (l + rr) / 2, (t + bb) / 2
         win = CELL / scale
         im = Image.fromarray(cell, 'RGB').transform(
             (CELL, CELL), Image.AFFINE, (1 / scale, 0, cx - win / 2, 0, 1 / scale, cy - win / 2), Image.BICUBIC)
@@ -126,6 +129,7 @@ def main():
             continue
         a = np.asarray(Image.open(f).convert('RGB'))
         H, W = a.shape[:2]
+        used = TINTS.get(ident, {}).get('frames', 16)   # set "frames": 15 to drop a bad last frame
         frames = build_block(a, 0, 0, W, H, TINTS.get(ident, {}).get('hue'), 4, 4, 16)
         img = Image.new('RGBA', (CELL * 4, CELL * 4), (0, 0, 0, 0))
         for i, fr in enumerate(frames):
@@ -133,7 +137,7 @@ def main():
         name = f'obj-{ident}.webp'
         img.save(OUT / name, 'WEBP', quality=82, alpha_quality=80, method=6)
         tiles[ident] = {'slot': slot, 'file': name, 'width': img.width, 'height': img.height,
-                        'cols': 4, 'frames': 16, 'rowsPerBlock': 4, 'block': 0, 'mirror': True}
+                        'cols': 4, 'frames': used, 'rowsPerBlock': 4, 'block': 0, 'mirror': True}
         print(name)
     manifest = {'version': 2, 'base': 'base-tile.webp', 'rims': rims, 'cell': CELL, 'frames': FRAMES, 'cols': COLS,
                 'rowsPerBlock': BLOCK_ROWS, 'fps': FPS, 'restScale': 0.41, 'displayScale': 0.85, 'sheets': sheets, 'tiles': tiles}

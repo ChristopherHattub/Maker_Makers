@@ -1,3 +1,8 @@
 {
-  "pumpkin-plotter": { "hue": 28 }
+  "pumpkin-plotter": {
+    "hue": 28
+  },
+  "ghost-builder": {
+    "frames": 15
+  }
 }
