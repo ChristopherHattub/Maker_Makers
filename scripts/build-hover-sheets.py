@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build the v2 hover assets (shared base tile + 24-frame rotating hologram sheets).
+"""Build the v2/v3 hover assets (shared base tile + 24-frame rotating hologram sheets).
 
-Usage: python3 scripts/build-hover-sheets.py <base_tile image> <dir with sheet-01-3d.jpg ...>
+Usage: python3 scripts/build-hover-sheets.py <base_tile image> <dir with sheet-01-3d.jpg ... and/or <id>-3d.jpg ...>
 See docs/sprite-sheet-skill.md. Raw object sheets are 6 columns x 8 rows (two 6x4 blocks, one per
 generator) of glowing cyan wireframes on black. Each frame is re-centred and scaled per block (so the
 object does not jump or breathe), brightness becomes alpha (no key colour needed), and an optional
@@ -67,12 +67,12 @@ def build_base(path):
         rims[section] = f'base-tile-{section}.webp'
     return rims
 
-def build_block(a, bx, by, bw, bh, hue):
-    """a: source array, block origin (bx,by), size (bw,bh) in source px. Returns 24 RGBA cells (288x288)."""
-    cw, ch = bw / COLS, bh / BLOCK_ROWS
+def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAMES):
+    """a: source array, block origin (bx,by), size (bw,bh) in source px. Returns `frames` RGBA cells (288x288)."""
+    cw, ch = bw / cols, bh / rows
     cells, boxes = [], []
-    for f in range(FRAMES):
-        c, r = f % COLS, f // COLS
+    for f in range(frames):
+        c, r = f % cols, f // cols
         x0, y0 = int(round(bx + c * cw)), int(round(by + r * ch))
         cell = a[y0:y0 + int(round(ch)), x0:x0 + int(round(cw))]
         m = cell.max(axis=2) > 55
@@ -102,7 +102,7 @@ def main():
     rims = build_base(base_path)
     sheets, tiles = [], {}
     n = 1
-    while any((src / f'sheet-{n:02d}-3d.{e}').exists() for e in ('jpg', 'png')):
+    while any((src / f'sheet-{n:02d}-3d.{e}').exists() for e in ('jpg', 'png')):  # v2: two generators per sheet
         f = next(p for p in (src / f'sheet-{n:02d}-3d.jpg', src / f'sheet-{n:02d}-3d.png') if p.exists())
         a = np.asarray(Image.open(f).convert('RGB'))
         H, W = a.shape[:2]
@@ -119,6 +119,22 @@ def main():
         sheets.append({'file': name, 'width': sheet.width, 'height': sheet.height})
         print(name, [g[2] for g in group])
         n += 1
+    # One generator per image (v3): a 4x4 grid holding a 0-180 degree half turn, mirrored by the site.
+    for slot, title, ident in gens:
+        f = next((p for p in (src / f'{ident}-3d.jpg', src / f'{ident}-3d.png') if p.exists()), None)
+        if not f:
+            continue
+        a = np.asarray(Image.open(f).convert('RGB'))
+        H, W = a.shape[:2]
+        frames = build_block(a, 0, 0, W, H, TINTS.get(ident, {}).get('hue'), 4, 4, 16)
+        img = Image.new('RGBA', (CELL * 4, CELL * 4), (0, 0, 0, 0))
+        for i, fr in enumerate(frames):
+            img.paste(fr, ((i % 4) * CELL, (i // 4) * CELL))
+        name = f'obj-{ident}.webp'
+        img.save(OUT / name, 'WEBP', quality=82, alpha_quality=80, method=6)
+        tiles[ident] = {'slot': slot, 'file': name, 'width': img.width, 'height': img.height,
+                        'cols': 4, 'frames': 16, 'rowsPerBlock': 4, 'block': 0, 'mirror': True}
+        print(name)
     manifest = {'version': 2, 'base': 'base-tile.webp', 'rims': rims, 'cell': CELL, 'frames': FRAMES, 'cols': COLS,
                 'rowsPerBlock': BLOCK_ROWS, 'fps': FPS, 'restScale': 0.41, 'displayScale': 0.85, 'sheets': sheets, 'tiles': tiles}
     (OUT / 'manifest-v2.json').write_text(json.dumps(manifest, indent=2) + '\n')

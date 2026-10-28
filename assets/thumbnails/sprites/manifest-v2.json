@@ -19,8 +19,14 @@
   "tiles": {
     "ghost-builder": {
       "slot": 1,
-      "sheet": 0,
-      "block": 0
+      "file": "obj-ghost-builder.webp",
+      "width": 1152,
+      "height": 1152,
+      "cols": 4,
+      "frames": 16,
+      "rowsPerBlock": 4,
+      "block": 0,
+      "mirror": true
     },
     "pumpkin-plotter": {
       "slot": 2,

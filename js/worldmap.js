@@ -146,11 +146,15 @@ function hoverApply(tile, m, id) {
   const obj = document.createElement('span');
   obj.className = 'tile-obj';
   obj.setAttribute('aria-hidden', 'true');
-  const size = m.cell * m.displayScale, sheet = m.sheets[entry.sheet];
+  const lay = { cols: entry.cols || m.cols, frames: entry.frames || m.frames, rows: entry.rowsPerBlock || m.rowsPerBlock,
+                block: entry.block || 0, mirror: Boolean(entry.mirror) };
+  lay.seq = [...Array(lay.frames).keys()];
+  if (lay.mirror) for (let i = lay.frames - 2; i > 0; i--) lay.seq.push(-i);      // negative = mirrored frame
+  const size = m.cell * m.displayScale, sheet = entry.file ? entry : m.sheets[entry.sheet];
   obj.style.width = obj.style.height = `${size}px`;
   obj.style.backgroundImage = `url(${SPRITE_DIR}${sheet.file})`;
   obj.style.backgroundSize = `${sheet.width * m.displayScale}px ${sheet.height * m.displayScale}px`;
-  obj._hover = { m, entry, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0 };
+  obj._hover = { m, entry, lay, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0 };
   art.append(base, slot, obj);
   tile.classList.add('has-3d', 'has-pro');
   hoverDraw(obj);
@@ -162,9 +166,10 @@ function hoverDraw(obj) {
   const h = obj._hover, m = h.m;
   const e = easeOutBack(Math.min(1, h.p));
   const scale = m.restScale + (1 - m.restScale) * e;
-  const col = h.frame % m.cols, row = m.rowsPerBlock * h.entry.block + Math.floor(h.frame / m.cols);
+  const lay = h.lay, step = lay.seq[h.frame], f = Math.abs(step);
+  const col = f % lay.cols, row = lay.rows * lay.block + Math.floor(f / lay.cols);
   obj.style.backgroundPosition = `${-col * m.cell * m.displayScale}px ${-row * m.cell * m.displayScale}px`;
-  obj.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  obj.style.transform = `translate(-50%, -50%) scale(${(Object.is(step, -0) || step < 0 ? -1 : 1) * scale}, ${scale})`;
   obj.style.filter = `drop-shadow(0 0 ${3 + 9 * Math.min(1, h.p)}px rgba(60, 230, 255, ${0.35 + 0.4 * Math.min(1, h.p)}))`;
 }
 
@@ -174,7 +179,7 @@ function hoverLoop(obj, now) {
   h.p = Math.max(0, Math.min(1, h.p + h.dir * dt / (h.dir > 0 ? 260 : 200)));
   h.acc += dt;
   const step = 1000 / m.fps;
-  while (h.acc >= step) { h.acc -= step; h.frame = (h.frame + 1) % m.frames; }
+  while (h.acc >= step) { h.acc -= step; h.frame = (h.frame + 1) % h.lay.seq.length; }
   if (h.dir < 0 && h.p <= 0) { h.frame = 0; h.acc = 0; h.raf = 0; hoverDraw(obj); return; }
   hoverDraw(obj);
   h.raf = requestAnimationFrame(t => hoverLoop(obj, t));
