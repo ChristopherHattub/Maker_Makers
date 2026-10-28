@@ -95,3 +95,12 @@ body.on-workshop .container { max-width: none; padding: 0; }
 .ws-mini-frame { width: 100%; height: 100%; border: 0; background: var(--bp-bg-deep); }
 @media (max-width: 760px) { .ws-mini { left: 10px; right: 10px; top: auto; height: 55%; width: auto; } }
 .ws-top-row button[data-a="tabtoggle"] { flex-direction: row; font-size: 0.85rem; min-height: 40px; }
+.ws-col { display: flex; flex-direction: column; gap: 6px; }
+.ws-steps { float: right; }
+.ws-step { background: transparent !important; border: 1px solid var(--machinery-border) !important; border-radius: 999px !important; padding: 0 8px !important; font-size: .7rem; margin-left: 3px; }
+.ws-step.on { background: var(--bp-cyan) !important; color: #04202c !important; }
+.ws-holo { display: block; margin: 0 auto .2rem; background-repeat: no-repeat; filter: drop-shadow(0 0 6px rgba(60,230,255,.5)); }
+.ws-card img.ws-ic, .ws-card .ws-holo { margin-left: auto; margin-right: auto; }
+.ws-top-row button.ws-export { border-color: var(--bp-green); }
+.ws-mini { width: min(820px, 70%); left: auto; }
+@media (max-width: 760px) { .ws-mini { width: auto; } }

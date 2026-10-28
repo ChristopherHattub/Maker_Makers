@@ -12,7 +12,7 @@ const WS_LIBS = [
 ];
 const WS_SAVE_KEY = 'mm-workshop-v1';
 
-const WS = { ready: false, loading: null, objs: [], sel: [], hist: [], hi: -1, mode: 'translate', snap: true, bed: 256, nextId: 1, set: 'basic', open: 'strip', q: '' };
+const WS = { step: 5, ready: false, loading: null, objs: [], sel: [], hist: [], hi: -1, mode: 'translate', snap: true, bed: 256, nextId: 1, set: 'basic', open: 'strip', q: '' };
 const wsEl = {};
 
 // ---------------------------------------------------------------- catalog
@@ -163,7 +163,8 @@ function wsInit(root) {
       <div class="ws-top-row">
         <strong style="letter-spacing:3px;color:var(--bp-cyan)">WORKSHOP</strong>
         <button class="ws-btn" data-a="import" title="Open an STL file">📂<small>Open STL</small></button>
-        <button class="ws-btn" data-a="export" title="Save everything as an STL file">💾<small>Save STL</small></button>
+        <button class="ws-btn ws-export" data-a="export" title="Export everything as an STL file (no colours)">⬇️<small>Export STL</small></button>
+        <button class="ws-btn ws-export" data-a="export3mf" title="Export everything as a 3MF with your colours, for Bambu Studio, OrcaSlicer, PrusaSlicer and Cura">🎨<small>Export 3MF</small></button>
         <button class="ws-btn" data-a="undo" title="Undo (Ctrl+Z)">↩️<small>Undo</small></button>
         <button class="ws-btn" data-a="redo" title="Redo">↪️<small>Redo</small></button>
         <button class="ws-btn" data-a="clear" title="Remove everything">🧹<small>Clear</small></button>
@@ -184,6 +185,7 @@ function wsInit(root) {
           <button data-m="rotate" title="Turn it round (E)">🔄<small>Turn</small></button>
           <button data-m="scale" title="Make it bigger or smaller (R)">⤢<small>Size</small></button>
           <button data-a="snap" class="on" title="Snap to the grid (G)">🧲<small>Snap</small></button>
+          <button data-a="focus" title="Centre the view on the selected shape (F)">🎯<small>Centre</small></button>
           <button data-v="top" title="Look from above">⬆️<small>Top</small></button>
           <button data-v="front" title="Look from the front">👀<small>Front</small></button>
           <button data-v="iso" title="3D view">🧊<small>3D</small></button>
@@ -220,6 +222,7 @@ function wsInit(root) {
   wsView('iso');
   wsBindUI();
   wsMakeThumbs();
+  fetch('assets/thumbnails/sprites/manifest-v2.json').then(r => (r.ok ? r.json() : null)).then(m => { if (m) { WS.holo = m; wsRenderCatalog(); } }).catch(() => {});
   wsRenderCatalog();
   if (!wsLoad()) { /* empty scene */ }
   wsCommit(true);
@@ -265,7 +268,7 @@ function wsResize() {
 
 // While the mini editor covers the right of the view, slide the picture left so the shape stays in the clear part.
 function wsViewShift() {
-  const w = wsEl.stage.clientWidth, h = wsEl.stage.clientHeight, sh = WS.mini && w > 760 ? Math.min(360, w * 0.6) / 2 : 0;
+  const w = wsEl.stage.clientWidth, h = wsEl.stage.clientHeight, sh = WS.mini && w > 760 ? Math.min(820, w * 0.7) / 2 : 0;
   if (sh) WS.cam.setViewOffset(w, h, sh, 0, w, h); else WS.cam.clearViewOffset();
   WS.cam.updateProjectionMatrix();
 }
@@ -310,7 +313,7 @@ function wsCentre(geo) {
 }
 
 function wsAddObject(spec) {
-  const o = { id: spec.id || WS.nextId++, name: spec.name, cat: spec.cat || null, params: spec.params || null, gen: spec.gen || null, genParams: spec.genParams || null,
+  const o = { id: spec.id || WS.nextId++, name: spec.name, cat: spec.cat || null, params: spec.params || null, gen: spec.gen || null, genParams: spec.genParams || null, genState: spec.genState || null,
               geo: spec.geo || null, color: spec.color || 0x7ab3ff, locked: !!spec.locked, hidden: !!spec.hidden };
   WS.nextId = Math.max(WS.nextId, o.id + 1);
   if (o.cat && !o.geo) o.geo = wsCentre(WS.cat[o.cat].build(o.params));
@@ -346,7 +349,7 @@ function wsAddGenerator(item) {
   const done = (ok, msg) => { window.removeEventListener('message', onMsg); clearTimeout(timer); f.remove(); if (!ok) wsToast('Could not load ' + item.name + '.'); };
   const onMsg = e => {
     if (e.source !== f.contentWindow || !e.data || e.data.type !== 'mm-model') return;
-    const o = wsAddObject({ name: item.name, gen: item.gen, genParams: e.data.params, geo: wsGenGeometry(e.data.parts), color: 0x7ab3ff });
+    const o = wsAddObject({ name: item.name, gen: item.gen, genParams: e.data.params, genState: e.data.state, geo: wsGenGeometry(e.data.parts), color: 0x7ab3ff });
     wsToBed(o); wsPlaceFree(o); wsSelect([o]); wsCommit(); wsFocus();
     wsToast(item.name + ' added. Double-click it to edit it.');
     done(true);
@@ -382,11 +385,11 @@ function wsMiniMessage(e) {
   const m = WS.mini;
   if (!m || e.source !== m.f.contentWindow || !e.data || e.data.type !== 'mm-model') return;
   const o = m.o;
-  if (m.first) { m.first = false; if (o.genParams) { m.f.contentWindow.postMessage({ type: 'mm-set-params', params: o.genParams }, '*'); return; } }
+  if (m.first) { m.first = false; if (o.genParams) { m.f.contentWindow.postMessage({ type: 'mm-set-params', params: o.genParams, state: o.genState }, '*'); return; } }
   const old = wsBox(o), c = old.getCenter(new THREE.Vector3());
   const g = wsGenGeometry(e.data.parts);
   o.mesh.geometry.dispose(); o.geo = o.mesh.geometry = g;
-  o.genParams = e.data.params;
+  o.genParams = e.data.params; o.genState = e.data.state;
   o.mesh.position.x += c.x - wsBox(o).getCenter(new THREE.Vector3()).x; o.mesh.position.y += c.y - wsBox(o).getCenter(new THREE.Vector3()).y;
   wsToBed(o); wsAttachGizmo(); wsOutOfBed();
   clearTimeout(m.t); m.t = setTimeout(() => { wsCommit(); }, 600);
@@ -446,7 +449,7 @@ function wsRemove(o) {
 
 function wsDuplicate() {
   const copies = WS.sel.map(o => {
-    const c = wsAddObject({ name: o.name + ' copy', cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams && JSON.parse(JSON.stringify(o.genParams)), geo: o.cat ? null : o.geo, color: o.color,
+    const c = wsAddObject({ name: o.name + ' copy', cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams && JSON.parse(JSON.stringify(o.genParams)), genState: o.genState && JSON.parse(JSON.stringify(o.genState)), geo: o.cat ? null : o.geo, color: o.color,
       pos: o.mesh.position.toArray(), quat: o.mesh.quaternion.toArray(), scale: o.mesh.scale.toArray() });
     c.mesh.position.x += 12; c.mesh.position.y -= 12;
     return c;
@@ -455,6 +458,7 @@ function wsDuplicate() {
 }
 
 function wsDelete() {
+  if (WS.mini) { wsToast('Press Done first.'); return; }
   if (!WS.sel.length) return;
   WS.sel.slice().forEach(o => !o.locked && wsRemove(o));
   wsSelect([]); wsCommit();
@@ -463,8 +467,8 @@ function wsDelete() {
 // ---------------------------------------------------------------- selection and gizmo
 
 function wsSelect(list) {
+  if (WS.mini && !(list.length === 1 && list[0] === WS.mini.o)) return;   // locked to the shape being edited until Done
   WS.sel = list;
-  if (WS.mini && !list.includes(WS.mini.o)) wsCloseMini();
   WS.objs.forEach(o => o.mesh.material.emissive.setHex(WS.sel.includes(o) ? 0x0b6a80 : 0x000000));
   wsAttachGizmo();
   wsRenderSide();
@@ -508,6 +512,7 @@ function wsBindUI() {
   el.addEventListener('pointerdown', e => {
     if (e.button !== 0 || WS.tc.axis) return;
     const p = wsPick(e);
+    if (WS.mini && p.o !== WS.mini.o) p.o = null;
     down = { x: e.clientX, y: e.clientY, o: p.o, moved: false, shift: e.shiftKey };
     if (p.o) {
       if (!WS.sel.includes(p.o)) wsSelect(e.shiftKey ? WS.sel.concat(p.o) : [p.o]);
@@ -566,6 +571,7 @@ function wsBindUI() {
   window.addEventListener('keydown', e => {
     if (!document.body.classList.contains('on-workshop') || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+    if (WS.mini && (mod || k === 'delete' || k === 'backspace')) return;
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? wsRedo() : wsUndo(); }
     else if (mod && k === 'y') { e.preventDefault(); wsRedo(); }
     else if (mod && k === 'd') { e.preventDefault(); wsDuplicate(); }
@@ -577,14 +583,23 @@ function wsBindUI() {
     else if (k === 'h') wsToggle('hidden');
     else if (k === 'f') wsFocus();
     else if (k === 'escape') wsSelect([]);
+    else if (/^arrow(left|right|up|down)$|^page(up|down)$/.test(k) && WS.sel.length) {
+      e.preventDefault();
+      const d = { arrowleft: '-1,0,0', arrowright: '1,0,0', arrowup: '0,1,0', arrowdown: '0,-1,0', pageup: '0,0,1', pagedown: '0,0,-1' }[k];
+      const keep = WS.step; WS.step = e.shiftKey ? WS.step * 5 : e.altKey ? 1 : WS.step;
+      wsVisualAction('nudge:' + d); WS.step = keep;
+    }
   });
 }
 
 function wsAction(a) {
+  if (WS.mini && /^(clear|undo|redo|del|back|import|bool-.*|dup)$/.test(a)) { wsToast('Press Done first.'); return; }
+  if (a.startsWith('step:')) { WS.step = Number(a.slice(5)); wsRenderSide(); return; }
   if (/^(nudge|turn|grow|color):/.test(a)) { wsVisualAction(a); return; }
   if (a === 'edit') { const o = WS.sel[0]; if (o && o.gen) wsOpenMini(o); return; }
   if (a === 'import') document.getElementById('ws-file').click();
   else if (a === 'export') wsExport();
+  else if (a === 'export3mf') wsExport3mf();
   else if (a === 'undo') wsUndo();
   else if (a === 'redo') wsRedo();
   else if (a === 'clear') { if (!WS.objs.length || confirm('Remove everything from the Workshop?')) { WS.objs.slice().forEach(wsRemove); wsSelect([]); wsCommit(); } }
@@ -607,6 +622,7 @@ function wsDropSelected() { WS.sel.forEach(wsToBed); wsAttachGizmo(); wsCommit()
 function wsFocus() {
   const list = WS.sel.length ? WS.sel : WS.objs;
   if (!list.length) return;
+  if (list.length === 1) { wsZoomTo(list[0]); return; }
   const b = new THREE.Box3(); list.forEach(o => b.union(wsBox(o)));
   const c = b.getCenter(new THREE.Vector3()), d = Math.max(b.getSize(new THREE.Vector3()).length() * 1.8, 60);
   WS.orbit.target.copy(c);
@@ -620,8 +636,18 @@ function wsToggle(key) {
 
 // ---------------------------------------------------------------- catalog UI
 
+// Generator cards use the homepage hologram art, still (first frame, no hover motion). Falls back to the thumbnail.
+function wsHoloIcon(i) {
+  const m = WS.holo, id = i.img && i.img.replace(/^.*\/([^/]+)\.\w+$/, '$1'), e = m && id && m.tiles[id];
+  if (!e) return '';
+  const sheet = e.file ? e : m.sheets[e.sheet], cols = e.cols || m.cols, rows = e.rowsPerBlock || m.rowsPerBlock, f = (e.order || [0])[0] || 0;
+  const S = 84, k = S / m.cell, col = f % cols, row = rows * (e.block || 0) + Math.floor(f / cols);
+  return `<span class="ws-ic ws-holo" style="width:${S}px;height:${S}px;background-image:url(assets/thumbnails/sprites/${sheet.file});background-size:${sheet.width * k}px ${sheet.height * k}px;background-position:${-col * S}px ${-row * S}px"></span>`;
+}
+
 function wsCard(i) {
-  const ic = (i.img || i.thumb) ? `<img class="ws-ic" src="${i.img || i.thumb}" alt="" draggable="false">` : `<span class="ws-ic">${i.icon}</span>`;
+  const holo = i.gen ? wsHoloIcon(i) : '';
+  const ic = holo || ((i.img || i.thumb) ? `<img class="ws-ic" src="${i.img || i.thumb}" alt="" draggable="false">` : `<span class="ws-ic">${i.icon}</span>`);
   return `<button class="ws-card" data-add="${escapeHTML(i.id)}" title="${escapeHTML(i.name)}${i.gen ? ' (has a generator)' : ''}">${ic}<span class="ws-nm">${escapeHTML(i.name)}</span></button>`;
 }
 
@@ -657,28 +683,32 @@ function wsRenderSide() {
       <div class="ws-note" id="ws-dims"></div>
       ${one && o.params ? wsParamHTML(o) : ''}
       ${one && o.gen ? `<button class="ws-big ws-wide" data-a="edit" title="Edit this shape (or double-click it)"><span>✏️</span><small>Edit this shape</small></button>` : ''}
-      <div class="ws-note">Move it</div>
+      <div class="ws-note">Move it <span class="ws-steps">${[1, 5, 10].map(n => `<button class="ws-step${WS.step === n ? ' on' : ''}" data-a="step:${n}">${n === 1 ? 'tiny' : n === 5 ? 'small' : 'big'}</button>`).join('')}</span></div>
       <div class="ws-pad">
-        ${B('nudge:0,5,0', '⬆️', 'Back')}${B('nudge:0,0,5', '🛗', 'Up')}<span></span>
-        ${B('nudge:-5,0,0', '⬅️', 'Left')}${B('nudge:0,-5,0', '⬇️', 'Front')}${B('nudge:5,0,0', '➡️', 'Right')}
+        ${B('nudge:0,1,0', '⬆️', 'Back')}${B('nudge:0,0,1', '🛗', 'Up')}${B('nudge:0,0,-1', '⬇️', 'Down')}
+        ${B('nudge:-1,0,0', '⬅️', 'Left')}${B('nudge:0,-1,0', '🔽', 'Front')}${B('nudge:1,0,0', '➡️', 'Right')}
       </div>
+      <div class="ws-note">Arrow keys nudge it too (Shift = bigger steps, PageUp/PageDown = up/down)</div>
       <div class="ws-note">Turn it</div>
       <div class="ws-btns3">${B('turn:z,15', '↺', 'Spin left')}${B('turn:z,-15', '↻', 'Spin right')}${B('turn:z,90', '⟲', 'Quarter')}
         ${B('turn:x,90', '🤸', 'Tip over')}${B('turn:y,90', '🎡', 'Roll')}${B('turn:x,180', '🙃', 'Flip')}</div>
-      <div class="ws-note">Make it …</div>
-      <div class="ws-btns3">${B('grow:1.25,1.25,1.25', '🐘', 'Bigger')}${B('grow:0.8,0.8,0.8', '🐜', 'Smaller')}${B('grow:1,1,1.25', '🦒', 'Taller')}
-        ${B('grow:1,1,0.8', '🥞', 'Flatter')}${B('grow:1.25,1,1', '↔️', 'Wider')}${B('grow:0.8,1,1', '🤏', 'Thinner')}</div>
+      <div class="ws-note">Scale</div>
+      <div class="ws-btns3">
+        <div class="ws-col">${B('grow:1.25,1.25,1.25', '🐘', 'Bigger')}${B('grow:0.8,0.8,0.8', '🐜', 'Smaller')}</div>
+        <div class="ws-col">${B('grow:1,1,1.25', '🦒', 'Taller')}${B('grow:1,1,0.8', '🥞', 'Flatter')}</div>
+        <div class="ws-col">${B('grow:1.25,1,1', '↔️', 'Wider')}${B('grow:0.8,1,1', '🤏', 'Thinner')}</div>
+      </div>
       <div class="ws-note">Colour</div>
       <div class="ws-colors">${colors.map(c => `<button class="ws-sw" data-a="color:${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}</div>
       <div class="ws-note">Do more</div>
       <div class="ws-btns3">${B('dup', '👯', 'Copy', 'Duplicate (Ctrl+D)')}${B('del', '🗑️', 'Delete', 'Delete')}${B('drop', '⏬', 'To bed', 'Put it on the bed (B)')}
-        ${B('center', '🎯', 'Centre')}${B('mirror', '🪞', 'Mirror')}${B('focus', '🔍', 'Zoom', 'Zoom to it (F)')}</div>
+        ${B('center', '⏺️', 'To middle', 'Move it to the middle of the bed')}${B('mirror', '🪞', 'Mirror')}</div>
       <div class="ws-note">Join shapes ${sel.length > 1 ? '(the first one you picked is the base)' : '(pick 2 or more)'}</div>
       <div class="ws-btns3">${B('bool-union', '🧩', 'Merge')}${B('bool-subtract', '✂️', 'Cut')}${B('bool-intersect', '🔗', 'Overlap')}</div>`;
   }
   side.innerHTML = `<div><h4>Selection</h4>${insp}</div><div><h4>Scene (${WS.objs.length})</h4><ul class="ws-list">${list || '<li class="ws-note">Empty</li>'}</ul>
     <p class="ws-note">Keys: W move · E rotate · R scale · G snap · B drop to bed · H hide · F focus · Ctrl+D duplicate · Ctrl+Z undo · Del delete</p>
-    <p class="ws-note">Private: files never leave your browser.</p></div>`;
+    <div class="ws-btns" style="margin:4px 0"><button data-a="export">⬇️ Export STL</button><button data-a="export3mf">🎨 Export 3MF (colours)</button></div><p class="ws-note">Private: files never leave your browser.</p></div>`;
   side.onclick = e => {
     const li = e.target.closest('li[data-id]');
     if (!li) return;
@@ -724,7 +754,7 @@ function wsVisualAction(a) {
   const [kind, arg] = a.split(':'), v = arg.split(',');
   const list = WS.sel.filter(o => !o.locked);
   if (!list.length) return;
-  if (kind === 'nudge') list.forEach(o => { const n = v.map(Number); o.mesh.position.add(new THREE.Vector3(...n)); });
+  if (kind === 'nudge') list.forEach(o => { const n = v.map(Number); o.mesh.position.add(new THREE.Vector3(...n).multiplyScalar(WS.step)); });
   else if (kind === 'turn') list.forEach(o => o.mesh.rotateOnWorldAxis(new THREE.Vector3(v[0] === 'x' ? 1 : 0, v[0] === 'y' ? 1 : 0, v[0] === 'z' ? 1 : 0), Number(v[1]) * Math.PI / 180));
   else if (kind === 'grow') list.forEach(o => o.mesh.scale.multiply(new THREE.Vector3(...v.map(Number))));
   else if (kind === 'color') list.forEach(o => { o.color = parseInt(v[0].slice(1), 16); o.mesh.material.color.setHex(o.color); });
@@ -788,7 +818,7 @@ async function wsBoolean(op) {
 // ---------------------------------------------------------------- history and autosave
 
 function wsSnapshot() {
-  return WS.objs.map(o => ({ id: o.id, name: o.name, cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams, geo: o.geo, color: o.color, locked: o.locked, hidden: o.hidden,
+  return WS.objs.map(o => ({ id: o.id, name: o.name, cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams, genState: o.genState, geo: o.geo, color: o.color, locked: o.locked, hidden: o.hidden,
     pos: o.mesh.position.toArray(), quat: o.mesh.quaternion.toArray(), scale: o.mesh.scale.toArray() }));
 }
 
@@ -806,8 +836,8 @@ function wsCommit(first) {
   WS.hi = WS.hist.length - 1;
   wsRenderSide(); wsOutOfBed(); wsSave();
 }
-function wsUndo() { if (WS.hi > 0) { WS.hi--; wsRestore(WS.hist[WS.hi]); wsSave(); } }
-function wsRedo() { if (WS.hi < WS.hist.length - 1) { WS.hi++; wsRestore(WS.hist[WS.hi]); wsSave(); } }
+function wsUndo() { if (!WS.mini && WS.hi > 0) { WS.hi--; wsRestore(WS.hist[WS.hi]); wsSave(); } }
+function wsRedo() { if (!WS.mini && WS.hi < WS.hist.length - 1) { WS.hi++; wsRestore(WS.hist[WS.hi]); wsSave(); } }
 
 // Autosave keeps the catalog shapes only (imported STLs can be large; they are not stored). Local to this browser.
 function wsSave() {
@@ -879,8 +909,76 @@ function wsExport() {
     const f = [n.x, n.y, n.z, p.x, p.y, p.z, q.x, q.y, q.z, r.x, r.y, r.z];
     f.forEach((v, j) => dv.setFloat32(84 + i * 50 + j * 4, isFinite(v) ? v : 0, true));
   });
-  const url = URL.createObjectURL(new Blob([buf], { type: 'model/stl' }));
-  const link = document.createElement('a'); link.href = url; link.download = 'workshop.stl'; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  wsDownload(buf, 'workshop.stl');
   wsToast(`Exported ${vis.length} object${vis.length > 1 ? 's' : ''} (${tris.length} triangles) as workshop.stl`);
+}
+
+// 3MF with colours: one object, a volume per colour (extruder numbers for Prusa / Bambu / Orca) and per-triangle base
+// materials (Cura and generic viewers). Same layout as the generators' .3mf export; only colours, never print settings.
+function wsExport3mf() {
+  const vis = WS.objs.filter(o => o.mesh.visible);
+  if (!vis.length) { wsToast('Nothing to export.'); return; }
+  const hex = c => '#' + c.toString(16).padStart(6, '0').toUpperCase();
+  const colors = [], cidx = {}, verts = [], tris = [], a = new THREE.Vector3();
+  vis.forEach(o => {
+    o.mesh.updateMatrixWorld(true);
+    const g = o.geo.index ? o.geo.toNonIndexed() : o.geo, p = g.attributes.position, flip = o.mesh.matrixWorld.determinant() < 0, c = hex(o.color), local = {};
+    if (cidx[c] === undefined) { cidx[c] = colors.length; colors.push(c); }
+    const vid = i => {
+      a.fromBufferAttribute(p, i).applyMatrix4(o.mesh.matrixWorld);
+      const key = a.x.toFixed(4) + ',' + a.y.toFixed(4) + ',' + a.z.toFixed(4);
+      if (local[key] === undefined) { local[key] = verts.length; verts.push(`<vertex x="${a.x.toFixed(4)}" y="${a.y.toFixed(4)}" z="${a.z.toFixed(4)}"/>`); }
+      return local[key];
+    };
+    for (let i = 0; i < p.count; i += 3) { const t = [vid(i), vid(i + 1), vid(i + 2)]; if (flip) t.reverse(); tris.push({ c: cidx[c], v: t }); }
+  });
+  tris.sort((x, y) => x.c - y.c);
+  const ranges = colors.map(() => null);
+  const triXml = tris.map((t, i) => { if (!ranges[t.c]) ranges[t.c] = { first: i, last: i }; ranges[t.c].last = i; return `<triangle v1="${t.v[0]}" v2="${t.v[1]}" v3="${t.v[2]}" pid="1" p1="${t.c}"/>`; });
+  const model = '<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
+    '<metadata name="Title">Workshop</metadata><metadata name="Designer">Maker Makers</metadata><resources>' +
+    '<basematerials id="1">' + colors.map(c => `<base name="${c}" displaycolor="${c}"/>`).join('') + '</basematerials>' +
+    '<object id="2" name="Workshop" type="model" pid="1" pindex="0"><mesh><vertices>' + verts.join('') + '</vertices><triangles>' + triXml.join('') + '</triangles></mesh></object></resources><build><item objectid="2"/></build></model>';
+  const volumes = colors.map((c, i) => `<volume firstid="${ranges[i].first}" lastid="${ranges[i].last}"><metadata type="volume" key="name" value="Color ${i + 1} ${c}"/><metadata type="volume" key="volume_type" value="ModelPart"/><metadata type="volume" key="extruder" value="${i + 1}"/></volume>`).join('');
+  const cfg = '<?xml version="1.0" encoding="UTF-8"?><config><object id="2" instances_count="1"><metadata type="object" key="name" value="Workshop"/><metadata type="object" key="extruder" value="1"/>' + volumes + '</object></config>';
+  const q = colors.map(c => `"${c}"`).join(';');
+  const enc = t => new TextEncoder().encode(t);
+  const files = [
+    { name: '[Content_Types].xml', data: enc('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="config" ContentType="text/plain"/></Types>') },
+    { name: '_rels/.rels', data: enc('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>') },
+    { name: '3D/3dmodel.model', data: enc(model) }
+  ];
+  if (colors.length > 1) { files.push({ name: 'Metadata/Slic3r_PE_model.config', data: enc(cfg) }, { name: 'Metadata/model_settings.config', data: enc(cfg) }); }
+  files.push({ name: 'Metadata/Slic3r_PE.config', data: enc(`; extruder_colour = ${q}\n; filament_colour = ${q}\n`) });
+  files.push({ name: 'Metadata/project_settings.config', data: enc(JSON.stringify({ filament_colour: colors, extruder_colour: colors, filament_type: colors.map(() => 'PLA') }, null, 2)) });
+  wsDownload(wsZip(files), 'workshop.3mf');
+  wsToast(`Exported workshop.3mf with ${colors.length} ${colors.length === 1 ? 'colour' : 'colours'}`);
+}
+
+function wsDownload(data, name) {
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
+  const link = document.createElement('a'); link.href = url; link.download = name; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Minimal ZIP writer (store, no compression), enough for a .3mf package.
+function wsZip(files) {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+  const crc32 = d => { let c = 0xffffffff; for (let i = 0; i < d.length; i++) c = table[(c ^ d[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const enc = new TextEncoder(), locals = [], centrals = [];
+  let offset = 0;
+  files.forEach(f => {
+    const nb = enc.encode(f.name), crc = crc32(f.data), l = new DataView(new ArrayBuffer(30)), c = new DataView(new ArrayBuffer(46));
+    l.setUint32(0, 0x04034b50, true); l.setUint16(4, 20, true); l.setUint16(6, 0x0800, true); l.setUint32(14, crc, true); l.setUint32(18, f.data.length, true); l.setUint32(22, f.data.length, true); l.setUint16(26, nb.length, true);
+    locals.push(new Uint8Array(l.buffer), nb, f.data);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint32(16, crc, true); c.setUint32(20, f.data.length, true); c.setUint32(24, f.data.length, true); c.setUint16(28, nb.length, true); c.setUint32(42, offset, true);
+    centrals.push(new Uint8Array(c.buffer), nb);
+    offset += 30 + nb.length + f.data.length;
+  });
+  const cs = centrals.reduce((n, x) => n + x.length, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cs, true); end.setUint32(16, offset, true);
+  const all = locals.concat(centrals, [new Uint8Array(end.buffer)]), out = new Uint8Array(all.reduce((n, x) => n + x.length, 0));
+  let pos = 0; all.forEach(x => { out.set(x, pos); pos += x.length; });
+  return out;
 }

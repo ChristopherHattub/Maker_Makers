@@ -504,6 +504,7 @@
           }
         }],
 
+        embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
         build: function (p) {
           var body = setupBody(p);
           var meshes = [

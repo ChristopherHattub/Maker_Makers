@@ -455,6 +455,7 @@
           }
         }],
 
+        embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
         build: function (p, api) {
           var meshes = buildBody(p);
           stamps.forEach(function (stamp) {

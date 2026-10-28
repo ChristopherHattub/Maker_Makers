@@ -11,6 +11,9 @@ A large tile in the middle of the homepage map opens `#/workshop`, a 3D editor f
 - **Text:** the Text shape accepts any keyboard character; edit text, height and thickness in the inspector.
 - **Quality of life:** undo/redo, duplicate, delete, multi-select (shift-click), drop to bed, centre, mirror, hide, lock, colour, snap, top/front/iso views, a build-plate size with out-of-bounds warning, autosave.
 - **Merge / Cut / Intersect:** select two or more shapes (the first selected is the base) and use the Combine buttons in the inspector. The result is one new shape; Ctrl+Z restores the originals. It uses three-bvh-csg, loaded from esm.sh on first use, and works best on closed shapes.
+- **Arrow keys** nudge the selection (tiny / small / big step chips set the size; Shift = 5x, Alt = 1 mm, PageUp / PageDown = up / down). The Centre button in the left toolbar zooms the view onto the selected shape.
+- **Editing a generator shape:** the selection is locked to that shape until you press Done, and the mini editor includes the generator's 3D view, so stamps and other click-on-the-model tools work. Stamps are kept with the shape (generators with stamps export `embedState` for this).
+- **Export:** Export STL and Export 3MF (keeps each shape's colour for Bambu, Orca, Prusa and Cura) are in the top bar and the side panel.
 - **Keys:** W/E/R move/rotate/scale, G snap, B drop to bed, H hide, F focus, Ctrl+D duplicate, Ctrl+Z / Ctrl+Shift+Z undo / redo, Del delete.
 
 ## Privacy
@@ -29,4 +32,4 @@ Add an entry to a set in `wsCatalog()`: `{ id, name, icon, build(params) }`, whe
 
 ## Not done yet
 
-Generator shapes are single-colour in the Workshop (Color-tool paint is not carried over), and they are not kept by autosave. The mini editor shows the generator's Parametric tab only. Per-part colour in the export are also not done.
+Generator shapes are single-colour in the Workshop (Color-tool paint is not carried over), and they are not kept by autosave. The mini editor has no Color or Print tab. Other state outside a generator's sliders is only kept if the generator defines `embedState`. Per-part colour inside one shape is also not done.

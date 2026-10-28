@@ -578,6 +578,7 @@
           }
         }],
 
+        embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
         build: build
       };
     })();
