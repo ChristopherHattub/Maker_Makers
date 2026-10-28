@@ -303,6 +303,78 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/egg-basket.svg',
     programUrl: 'programs/egg-basket.html',
     description: 'A woven Easter basket with an arched handle and striped mini eggs. Drag eggs around the top-down plan, add or remove them, and set the weave, rim and egg size. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 36,
+    title: 'Cake Stacker',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // CAKES',
+    thumbnailUrl: 'assets/thumbnails/cake-stacker.svg',
+    programUrl: 'programs/cake-stacker.html',
+    description: 'Tiered birthday cake: drag each tier wider or taller in the Tiers tab, then add fluted sides, frosting drips, sprinkles, candle rings and a plate. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 37,
+    title: 'Candle Number Topper',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // CANDLES',
+    thumbnailUrl: 'assets/thumbnails/candle-number.svg',
+    programUrl: 'programs/candle-number.html',
+    description: 'Chunky age numbers on a cake spike: set the number, size and stroke width, add a coloured border, beads, an inlay line and a flame. Prints flat. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 38,
+    title: 'Pull-String Pinata',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // PINATAS',
+    thumbnailUrl: 'assets/thumbnails/pinata.svg',
+    programUrl: 'programs/pinata.html',
+    description: 'A hollow party pinata in two halves: choose a round, star or flower shape, add rows of tissue fringe, a hang loop and a pull tab, and pull the string to place the lid. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 39,
+    title: 'Balloon Twister',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // BALLOONS',
+    thumbnailUrl: 'assets/thumbnails/balloon-twister.svg',
+    programUrl: 'programs/balloon-twister.html',
+    description: 'A flat-lying balloon animal made of fat lobes pinched at twist knots: a dog, sword, flower, heart, snake or a curly chain. Set lobe length, puffiness and twists. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 40,
+    title: 'Banner Letters',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // BANNERS',
+    thumbnailUrl: 'assets/thumbnails/banner-letters.svg',
+    programUrl: 'programs/banner-letters.html',
+    description: 'Type a message and get a string of letter pennants on a ribbon: triangle, swallowtail, round or block flags with raised letters, edge trim and hang loops. Each word is its own banner. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 41,
+    title: 'Party Popper Spinner',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // FIDGETS',
+    thumbnailUrl: 'assets/thumbnails/party-popper.svg',
+    programUrl: 'programs/party-popper.html',
+    description: 'A print-in-place fidget: a confetti-finned ring spins on a cone and clicks over matching teeth as it turns. Set clicks per turn, click strength, fit gap and fins. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 42,
+    title: 'Cupcake Maker',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // CUPCAKES',
+    thumbnailUrl: 'assets/thumbnails/cupcake-maker.svg',
+    programUrl: 'programs/cupcake-maker.html',
+    description: 'A fluted cupcake liner with a muffin top and a piped frosting swirl: set the turns, height and star nozzle, then add a cherry, candle, flag or sprinkles. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 43,
+    title: 'Birthday Crown',
+    bundle: 'birthday',
+    category: 'BIRTHDAY // HATS',
+    thumbnailUrl: 'assets/thumbnails/birthday-crown.svg',
+    programUrl: 'programs/birthday-crown.html',
+    description: 'A wearable birthday crown sized by head circumference: choose points, arches, castle or wave peaks, add jewels, band dots and a front plaque with the age. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -338,8 +410,9 @@ const BUNDLES = [
   { id: 'newyear', name: 'New Year & Party', accent: '#ffd400', at: [9, 3], size: [4, 1],
     description: 'A countdown clock, confetti cannon, party hats and a whistle to blow.',
     generators: ['SLOT-24', 'SLOT-25', 'SLOT-26', 'SLOT-27'] },
-  { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [16, 3], size: [3, 1], planned: true,
-    description: 'Cake toppers and party favours.' },
+  { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [16, 3], size: [4, 2],
+    description: 'Cakes, cupcakes, candles, pinatas, balloons, banners, a popper spinner and a crown.',
+    generators: ['SLOT-36', 'SLOT-37', 'SLOT-42', 'SLOT-38', 'SLOT-39', 'SLOT-40', 'SLOT-41', 'SLOT-43'] },
   // Fidgets & personal
   { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [4, 2],
     description: 'Print-in-place clickers and keycap pads.',
