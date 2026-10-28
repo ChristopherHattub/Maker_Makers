@@ -1,6 +1,10 @@
 {
   "pumpkin-plotter": {
-    "hue": 28
+    "hue": 28,
+    "skip": [
+      1,
+      2
+    ]
   },
   "ghost-builder": {
     "skip": [
