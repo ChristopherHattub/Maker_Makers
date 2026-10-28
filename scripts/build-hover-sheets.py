@@ -129,7 +129,8 @@ def main():
             continue
         a = np.asarray(Image.open(f).convert('RGB'))
         H, W = a.shape[:2]
-        used = TINTS.get(ident, {}).get('frames', 16)   # set "frames": 15 to drop a bad last frame
+        skip = TINTS.get(ident, {}).get('skip', [])     # frame numbers to leave out of playback (bad frames)
+        order = [i for i in range(16) if i not in skip]
         frames = build_block(a, 0, 0, W, H, TINTS.get(ident, {}).get('hue'), 4, 4, 16)
         img = Image.new('RGBA', (CELL * 4, CELL * 4), (0, 0, 0, 0))
         for i, fr in enumerate(frames):
@@ -137,7 +138,7 @@ def main():
         name = f'obj-{ident}.webp'
         img.save(OUT / name, 'WEBP', quality=82, alpha_quality=80, method=6)
         tiles[ident] = {'slot': slot, 'file': name, 'width': img.width, 'height': img.height,
-                        'cols': 4, 'frames': used, 'rowsPerBlock': 4, 'block': 0, 'mirror': True}
+                        'cols': 4, 'frames': 16, 'order': order, 'rowsPerBlock': 4, 'block': 0, 'mirror': True}
         print(name)
     manifest = {'version': 2, 'base': 'base-tile.webp', 'rims': rims, 'cell': CELL, 'frames': FRAMES, 'cols': COLS,
                 'rowsPerBlock': BLOCK_ROWS, 'fps': FPS, 'restScale': 0.41, 'displayScale': 0.85, 'sheets': sheets, 'tiles': tiles}

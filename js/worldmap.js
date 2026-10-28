@@ -148,8 +148,9 @@ function hoverApply(tile, m, id) {
   obj.setAttribute('aria-hidden', 'true');
   const lay = { cols: entry.cols || m.cols, frames: entry.frames || m.frames, rows: entry.rowsPerBlock || m.rowsPerBlock,
                 block: entry.block || 0, mirror: Boolean(entry.mirror) };
-  lay.seq = [...Array(lay.frames).keys()];
-  if (lay.mirror) for (let i = lay.frames - 2; i > 0; i--) lay.seq.push(-i);      // negative = mirrored frame
+  const order = entry.order || [...Array(lay.frames).keys()];                  // frames to play, in turn order
+  lay.seq = order.slice();
+  if (lay.mirror) for (let i = order.length - 2; i > 0; i--) lay.seq.push(-order[i]);   // negative = mirrored frame
   const size = m.cell * m.displayScale, sheet = entry.file ? entry : m.sheets[entry.sheet];
   obj.style.width = obj.style.height = `${size}px`;
   obj.style.backgroundImage = `url(${SPRITE_DIR}${sheet.file})`;

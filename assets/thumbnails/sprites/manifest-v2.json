@@ -23,7 +23,22 @@
       "width": 1152,
       "height": 1152,
       "cols": 4,
-      "frames": 15,
+      "frames": 16,
+      "order": [
+        0,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
       "rowsPerBlock": 4,
       "block": 0,
       "mirror": true

@@ -3,6 +3,10 @@
     "hue": 28
   },
   "ghost-builder": {
-    "frames": 15
+    "skip": [
+      1,
+      2,
+      15
+    ]
   }
 }
