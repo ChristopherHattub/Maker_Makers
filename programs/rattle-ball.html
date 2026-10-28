@@ -251,6 +251,11 @@
       ];
       var SHAPE_CACHE = {};
 
+      function sub3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function add3(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function mul3(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function len3(a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); }
+
       function shapeData(idx) {
         if (SHAPE_CACHE[idx]) return SHAPE_CACHE[idx];
         var S = SHAPES[idx], V = S.v.map(function (p) { var l = Math.sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]); return [p[0] / l, p[1] / l, p[2] / l]; });
@@ -290,6 +295,27 @@
         return (SHAPE_CACHE[idx] = { V: V, E: E, dEdge: dEdge, esc: S.esc, face: S.face, normal: n, rest: rest });
       }
 
+      // Square bar turned to stand on a corner, so its underside is two 45 degree faces instead of a round belly.
+      function diamondBar(a, b, r) {
+        var d = sub3(b, a), L = len3(d), u = mul3(d, 1 / L);
+        var down = [0, -1, 0], dp = u[0] * down[0] + u[1] * down[1] + u[2] * down[2];
+        var e1 = sub3(down, mul3(u, dp)), l1 = len3(e1);
+        if (l1 < 1e-6) e1 = [1, 0, 0]; else e1 = mul3(e1, 1 / l1);
+        var e2 = [u[1] * e1[2] - u[2] * e1[1], u[2] * e1[0] - u[0] * e1[2], u[0] * e1[1] - u[1] * e1[0]];
+        var c = [mul3(e1, r), mul3(e2, r), mul3(e1, -r), mul3(e2, -r)], A = c.map(function (q) { return add3(a, q); }), B = c.map(function (q) { return add3(b, q); });
+        var m = [], i;
+        for (i = 0; i < 4; i++) { var n = (i + 1) % 4; quad(m, A[i], A[n], B[n], B[i]); }
+        quad(m, A[3], A[2], A[1], A[0]);
+        quad(m, B[0], B[1], B[2], B[3]);
+        // flip everything if the frame came out left handed
+        var t = [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]], x = sub3([t[3], t[4], t[5]], [t[0], t[1], t[2]]), y = sub3([t[6], t[7], t[8]], [t[0], t[1], t[2]]);
+        var nrm = [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+        var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], fc = [(A[0][0] + A[1][0] + B[1][0]) / 3, (A[0][1] + A[1][1] + B[1][1]) / 3, (A[0][2] + A[1][2] + B[1][2]) / 3];
+        var out = sub3(fc, mid);
+        if (nrm[0] * out[0] + nrm[1] * out[1] + nrm[2] * out[2] < 0) return xf(m, function (px, py, pz) { return [px, py, pz]; }, true);
+        return m;
+      }
+
       function rotateTo(V, n) {
         // rotation taking unit n onto -Y
         var ax = n[2], az = -n[0], al = Math.sqrt(ax * ax + az * az), ang = Math.acos(clamp(-n[1], -1, 1));
@@ -307,10 +333,9 @@
         var V = rotateTo(D.V, D.normal).map(function (q) { return [q[0] * Rc, q[1] * Rc, q[2] * Rc]; });
         var cage = [], i;
         D.E.forEach(function (e, k) {
-          // small per-part twist so the end rings of struts that meet at a corner never share exact points
-          var a = V[e[0]], b = V[e[1]], len = Math.sqrt(Math.pow(b[0] - a[0], 2) + Math.pow(b[1] - a[1], 2) + Math.pow(b[2] - a[2], 2));
-          var cyl = mv(aimY(rotY(cylY(rs, 0, len, 10), 0.31 + 0.17 * k), b[0] - a[0], b[1] - a[1], b[2] - a[2]), a[0], a[1], a[2]);
-          append(cage, cyl);
+          // ends reach a little way into the corner balls, by a different amount per bar so no two end rings coincide
+          var a = V[e[0]], b = V[e[1]], u = mul3(sub3(b, a), 1 / len3(sub3(b, a)));
+          append(cage, diamondBar(sub3(a, mul3(u, 0.15 + 0.011 * k)), add3(b, mul3(u, 0.25 + 0.017 * k)), rs * 1.25));
         });
         V.forEach(function (q, k) { append(cage, mv(rotY(sphere(rj, 6, 14), 0.23 + 0.11 * k), q[0], q[1], q[2])); });
 

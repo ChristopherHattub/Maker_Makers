@@ -297,16 +297,16 @@
         parameters: [
           { group: 'Chain', key: 'links', label: 'Links', unit: '', min: 3, max: MAX_LINKS, step: 1, value: 6 },
           { group: 'Chain', key: 'ring', label: 'Key ring on first link', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
-          { group: 'Link', key: 'width', label: 'Link width', unit: ' mm', min: 14, max: 26, step: 1, value: 18 },
+          { group: 'Link', key: 'width', label: 'Link width', unit: ' mm', min: 16, max: 26, step: 1, value: 18 },
           { group: 'Link', key: 'thick', label: 'Link thickness', unit: ' mm', min: 2.5, max: 5, step: 0.25, value: 3.25 },
-          { group: 'Link', key: 'bar', label: 'Bar width', unit: ' mm', min: 3, max: 5, step: 0.25, value: 3.5 },
+          { group: 'Link', key: 'bar', label: 'Bar width', unit: ' mm', min: 3, max: 4.5, step: 0.25, value: 3.5 },
           { group: 'Fit', key: 'slack', label: 'Looseness (how far links slide)', unit: ' mm', min: 1.5, max: 6, step: 0.5, value: 3 },
           { group: 'Fit', key: 'gap', label: 'Gap around bars', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: 0.4 }
         ],
         presets: [
           { label: 'Default chain', values: { links: 6, ring: 1, width: 18, thick: 3.25, bar: 3.5, slack: 3, gap: 0.4 } },
           { label: 'Long and loose', values: { links: 8, ring: 1, width: 20, thick: 3, bar: 3.5, slack: 5, gap: 0.45 } },
-          { label: 'Slim keychain', values: { links: 4, ring: 1, width: 15, thick: 3, bar: 3, slack: 2, gap: 0.4 } },
+          { label: 'Slim keychain', values: { links: 4, ring: 1, width: 16, thick: 3, bar: 3, slack: 2, gap: 0.4 } },
           { label: 'Plain strand', values: { links: 5, ring: 0, width: 16, thick: 3, bar: 3.25, slack: 3, gap: 0.4 } }
         ],
         build: function (p) { return buildChain(p); }

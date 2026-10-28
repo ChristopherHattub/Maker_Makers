@@ -10,9 +10,9 @@
 </head>
 <body class="mm-gen">
   <script>
-    // Fidget Slider: a knob that slides along a dovetail track and clicks over bumps in the floor.
+    // Fidget Slider: a knob that slides along a dovetail track and clicks over ridges on the track walls.
     // The slider is printed already captured in the track (45 degree dovetail, no supports). A thin leaf on
-    // the slider carries a little wedge that rides over the floor bumps, which is where the click comes from.
+    // the slider carries two thin spring blades whose wedges ride over ridges on the track walls, which is where the click comes from.
     // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
     (function () {
       'use strict';
@@ -238,35 +238,44 @@
 
       function buildSlider(p) {
         var travel = p.travel, sp = p.spacing, hn = p.width / 2, c = p.gap, bh = p.click;
-        var dov = 3, hc = hn + dov, fl = 2, hv = 2.5, tl = 2.2;
+        var dov = 3, hc = hn + dov, fl = 2, hv = 4.6, tl = 2.2;
         var yv = fl + hv, yn = yv + dov, H = yn + tl, Wo = hc + 3;
-        var Ls = p.length, Ll = 10, e = 3.5, tf = 1.0;
+        var Ls = p.length, Ll = 10, e = 3.5, tb = 1.0;
         var Lc = 2 * e + travel + Ls + Ll + 2 * c + 1;
 
-        // Track: dovetail channel as one extruded outline along X, plus closed end walls and floor bumps.
+        // Track: dovetail channel as one extruded outline along X, plus closed end walls.
         var prof = [[-Wo, 0], [Wo, 0], [Wo, H], [hn, H], [hn, yn], [hc, yv], [hc, fl],
                     [-hc, fl], [-hc, yv], [-hn, yn], [-hn, H], [-Wo, H]];
         var base = extrudeAxis(prof, 'x', 0, Lc);
         append(base, box(0, fl - 1, -hc - 1, e, H, hc + 1));
         append(base, box(Lc - e, fl - 1, -hc - 1, Lc, H, hc + 1));
 
-        // Slider outline (dovetail, neck through the slot, flared knob), then the spring leaf and wedge.
-        var yb = fl + bh + c, k = 0.414 * c, ycap = H + 0.5, capo = 2.6, ytop = ycap + p.knob;
+        // Slider outline (dovetail, neck through the slot, flared knob). It sits `c` above the floor.
+        var yb = fl + c, k = 0.414 * c, ycap = H + 0.5, capo = 2.6, ytop = ycap + p.knob;
         var half = [[hc - c, yb], [hc - c, yv - k], [hn - c, yn - k], [hn - c, ycap], [hn + capo, ycap + capo + c], [hn + capo, ytop - 0.9], [hn + capo - 0.9, ytop]];
         // bottom-right, up the right side, across the top, then the mirrored left side back down
         var outline = half.concat(half.slice().reverse().map(function (q) { return [-q[0], q[1]]; }));
-        var xs = e + c + sp * 0.5; // rest position: wedge sits in a valley between two bumps
+        var xs = e + c + sp * 0.5; // rest position: the wedges sit in a valley between two ridges
         var slider = extrudeAxis(outline, 'x', xs, xs + Ls);
-        var Wl = 2 * (hc - c - 1.2);
-        append(slider, box(xs + Ls - 1.3, yb, -Wl / 2, xs + Ls + Ll, yb + tf, Wl / 2));
-        var nd = bh + c - 0.25, nw = nd * 2.1, xn = xs + Ls + Ll - 2.2;
-        append(slider, extrudeAxis([[xn - nw / 2, yb + 0.5], [xn + nw / 2, yb + 0.5], [xn, yb - nd]], 'z', -Wl / 2 + 0.3, Wl / 2 - 0.3));
 
-        // Floor bumps across the lane the wedge rides in, one every `spacing` mm along the travel.
-        var x0 = e + c + Ls + Ll - 2.2, nBump = Math.floor(travel / sp) + 1, bw = bh * 2 + 0.8, bi;
-        for (bi = 0; bi < nBump; bi++) {
+        // Two standing spring blades (they flex sideways, so they print as plain vertical walls). Each carries a
+        // small wedge that rides over ridges on the vertical wall of the track.
+        var yb0 = yb, yb1 = fl + hv - 0.3, zOut = hc - bh - c, xn = xs + Ls + Ll - 2.2, nw = 1.8;
+        var sgn;
+        for (sgn = -1; sgn <= 1; sgn += 2) {
+          var z0 = Math.min(sgn * zOut, sgn * (zOut - tb)), z1 = Math.max(sgn * zOut, sgn * (zOut - tb));
+          append(slider, box(xs + Ls - 1.3, yb0, z0, xs + Ls + Ll, yb1, z1));
+          var zb = sgn * (zOut - 0.3), zt = sgn * (hc - 0.25);
+          append(slider, extrude([[xn - nw / 2, zb], [xn + nw / 2, zb], [xn, zt]], yb0 + 0.3, yb1 - 0.3));
+        }
+
+        // Ridges on both vertical walls of the track, one every `spacing` mm along the travel.
+        var x0 = e + c + Ls + Ll - 2.2, nRidge = Math.floor(travel / sp) + 1, bw = bh * 2 + 0.8, bi;
+        for (bi = 0; bi < nRidge; bi++) {
           var xb = x0 + bi * sp;
-          append(base, extrudeAxis([[xb - bw / 2, fl - 0.4], [xb + bw / 2, fl - 0.4], [xb + 0.3, fl + bh], [xb - 0.3, fl + bh]], 'z', -Wl / 2 + 0.6, Wl / 2 - 0.6));
+          for (sgn = -1; sgn <= 1; sgn += 2) {
+            append(base, extrude([[xb - bw / 2, sgn * (hc + 0.4)], [xb + bw / 2, sgn * (hc + 0.4)], [xb + 0.3, sgn * (hc - bh)], [xb - 0.3, sgn * (hc - bh)]], fl + 0.5, fl + hv - 0.2));
+          }
         }
         var cx = Lc / 2;
         return [{ name: 'track', positions: toF32(mv(base, -cx, 0, 0)) },
@@ -291,13 +300,13 @@
           { group: 'Track', key: 'width', label: 'Slot width', unit: ' mm', min: 8, max: 16, step: 1, value: 10 },
           { group: 'Slider', key: 'length', label: 'Slider length', unit: ' mm', min: 12, max: 32, step: 1, value: 18 },
           { group: 'Slider', key: 'knob', label: 'Knob height', unit: ' mm', min: 4, max: 9, step: 0.5, value: 5.5 },
-          { group: 'Slider', key: 'click', label: 'Click strength (bump height)', unit: ' mm', min: 0.5, max: 1.2, step: 0.05, value: 0.85 },
+          { group: 'Slider', key: 'click', label: 'Click strength (ridge height)', unit: ' mm', min: 0.6, max: 1.2, step: 0.05, value: 0.9 },
           { group: 'Fit', key: 'gap', label: 'Gap around slider', unit: ' mm', min: 0.3, max: 0.6, step: 0.05, value: 0.4 }
         ],
         presets: [
-          { label: 'Default slider', values: { travel: 44, spacing: 5.5, width: 10, length: 18, knob: 5.5, click: 0.85, gap: 0.4 } },
+          { label: 'Default slider', values: { travel: 44, spacing: 5.5, width: 10, length: 18, knob: 5.5, click: 0.9, gap: 0.4 } },
           { label: 'Long and slow', values: { travel: 80, spacing: 8, width: 12, length: 24, knob: 6.5, click: 1, gap: 0.4 } },
-          { label: 'Tiny and tight', values: { travel: 24, spacing: 4, width: 8, length: 13, knob: 4.5, click: 0.65, gap: 0.35 } }
+          { label: 'Tiny and tight', values: { travel: 24, spacing: 4, width: 8, length: 13, knob: 4.5, click: 0.7, gap: 0.35 } }
         ],
         build: function (p) { return buildSlider(p); }
       };

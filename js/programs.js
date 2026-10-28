@@ -392,7 +392,7 @@ const GENERATORS = [
     category: 'DESK // FIDGETS',
     thumbnailUrl: 'assets/thumbnails/fidget-slider.svg',
     programUrl: 'programs/fidget-slider.html',
-    description: 'A flared knob that slides along a dovetail track and clicks over bumps in the floor. Set travel, click spacing, click strength, slot width and knob height. The slider prints already captured in its track on 45 degree flanks, no supports. Paint parts in the Color tool and export .STL.'
+    description: 'A flared knob that slides along a dovetail track and clicks over ridges on the track walls. Set travel, click spacing, click strength, slot width and knob height. The slider prints already captured in its track on 45 degree flanks, no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 46,
@@ -437,7 +437,7 @@ const GENERATORS = [
     category: 'DESK // FIDGETS',
     thumbnailUrl: 'assets/thumbnails/flipper.svg',
     programUrl: 'programs/flipper.html',
-    description: 'A kaleidocycle: a ring of six hinged tetrahedra with print-in-place pin hinges that turns itself inside out when you push it. Set piece length, slimness, hinge size, pin gap and the pose it prints in. Hinge barrels may want small supports. Paint parts in the Color tool and export .STL.'
+    description: 'A kaleidocycle: a ring of six hinged tetrahedra with print-in-place pin hinges that turns itself inside out when you push it. Set piece length, slimness, hinge size, pin gap and the pose it prints in. Print it with supports under the three raised pieces and around the hinges. Paint parts in the Color tool and export .STL.'
   }
 ];
 
