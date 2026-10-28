@@ -67,8 +67,8 @@ def build_base(path):
         rims[section] = f'base-tile-{section}.webp'
     return rims
 
-def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAMES):
-    """a: source array, block origin (bx,by), size (bw,bh) in source px. Returns `frames` RGBA cells (288x288)."""
+def grab_cells(a, bx, by, bw, bh, cols=COLS, rows=BLOCK_ROWS, frames=FRAMES):
+    """Cut one block (origin bx,by, size bw,bh in source px) into `frames` cells with their bright bounding boxes."""
     cw, ch = bw / cols, bh / rows
     cells, boxes = [], []
     for f in range(frames):
@@ -79,6 +79,10 @@ def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAME
         ys, xs = np.nonzero(m)
         boxes.append((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
         cells.append(cell)
+    return cells, boxes
+
+def render_cells(cells, boxes, hue):
+    """Normalise a list of cells to 288x288 RGBA with one shared scale and mass-centre pin."""
     scale = OBJ / max(max(bx[2] - bx[0], bx[3] - bx[1]) for bx in boxes)
     # Pin every frame by its centre of mass, not its outline. Gemini re-centres each frame's bounding box, so a
     # swinging arm, a curling stem or a spread of legs shifts the whole body between frames; a real turntable keeps
@@ -103,6 +107,9 @@ def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAME
         col = np.clip(rgb / np.maximum(mx, 1)[..., None] * 255, 0, 255)
         out.append(Image.fromarray(np.dstack([col, alpha * 255]).astype(np.uint8), 'RGBA'))
     return out
+
+def build_block(a, bx, by, bw, bh, hue, cols=COLS, rows=BLOCK_ROWS, frames=FRAMES):
+    return render_cells(*grab_cells(a, bx, by, bw, bh, cols, rows, frames), hue)
 
 def main():
     base_path, src = Path(sys.argv[1]), Path(sys.argv[2])
@@ -129,23 +136,36 @@ def main():
         print(name, [g[2] for g in group])
         n += 1
     # One generator per image (v3): a 4x4 grid holding a 0-180 degree half turn, mirrored by the site.
+    # If <id>-3d-b.jpg exists it holds the 180-360 degree half, so the whole turn is played as drawn (no mirroring).
     for slot, title, ident in gens:
         f = next((p for p in (src / f'{ident}-3d.jpg', src / f'{ident}-3d.png') if p.exists()), None)
         if not f:
             continue
+        fb = next((p for p in (src / f'{ident}-3d-b.jpg', src / f'{ident}-3d-b.png') if p.exists()), None)
+        cfg = TINTS.get(ident, {})
+        skip = cfg.get('skip', [])                       # frame numbers to leave out of playback (bad frames)
         a = np.asarray(Image.open(f).convert('RGB'))
         H, W = a.shape[:2]
-        skip = TINTS.get(ident, {}).get('skip', [])     # frame numbers to leave out of playback (bad frames)
-        order = [i for i in range(16) if i not in skip]
-        frames = build_block(a, 0, 0, W, H, TINTS.get(ident, {}).get('hue'), 4, 4, 16)
-        img = Image.new('RGBA', (CELL * 4, CELL * 4), (0, 0, 0, 0))
+        cells, boxes = grab_cells(a, 0, 0, W, H, 4, 4, 16)
+        if fb:
+            b_ = np.asarray(Image.open(fb).convert('RGB'))
+            cb, bb = grab_cells(b_, 0, 0, b_.shape[1], b_.shape[0], 4, 4, 16)
+            cells, boxes = cells + cb, boxes + bb
+        frames = render_cells(cells, boxes, cfg.get('hue'))
+        n = len(frames)
+        img = Image.new('RGBA', (CELL * 4, CELL * 4 * (n // 16)), (0, 0, 0, 0))
         for i, fr in enumerate(frames):
             img.paste(fr, ((i % 4) * CELL, (i // 4) * CELL))
         name = f'obj-{ident}.webp'
         img.save(OUT / name, 'WEBP', quality=82, alpha_quality=80, method=6)
+        if fb:   # frames 0..15 from part A, 16..31 from part B; B's first frame repeats A's last and B's last repeats A's first
+            order = [i for i in range(16) if i not in skip] + [i for i in range(17, 31) if i not in skip]
+        else:
+            order = [i for i in range(16) if i not in skip]
         tiles[ident] = {'slot': slot, 'file': name, 'width': img.width, 'height': img.height,
-                        'cols': 4, 'frames': 16, 'order': order, 'rowsPerBlock': 4, 'block': 0, 'mirror': True}
-        print(name)
+                        'cols': 4, 'frames': 16 * (n // 16), 'order': order, 'rowsPerBlock': 4 * (n // 16), 'block': 0,
+                        'mirror': not fb}
+        print(name, 'full turn' if fb else 'half turn, mirrored')
     manifest = {'version': 2, 'base': 'base-tile.webp', 'rims': rims, 'cell': CELL, 'frames': FRAMES, 'cols': COLS,
                 'rowsPerBlock': BLOCK_ROWS, 'fps': FPS, 'restScale': 0.41, 'displayScale': 0.85, 'sheets': sheets, 'tiles': tiles}
     (OUT / 'manifest-v2.json').write_text(json.dumps(manifest, indent=2) + '\n')

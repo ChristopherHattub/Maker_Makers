@@ -133,3 +133,24 @@ Slot 43 | birthday-crown | a spiked birthday crown with gems | front f0: a large
 ## 4. Homepage handoff
 
 Playback is built for v2 (24-frame sheets of two generators). For v3 the build script and `manifest-v2.json` change to one file per generator: `assets/thumbnails/sprites/obj-<id>.webp` (1152 × 1152, brightness to alpha, per-block normalising, optional hue), with each tile entry `{ "slot": 1, "file": "obj-ghost-builder.webp" }`, `cols` 4, `frames` 16, `rowsPerBlock` 4, `fps` 24, `mirror: true` (play f0..f15 then f14..f1 with `transform: scaleX(-1)`). Loading one small file per tile on first hover is lighter than the shared sheets. Everything else (base tile, rim hues, pop-out, label and slot text, reduced motion) stays as in v2.
+
+## 5. Optional: second half of the turn (PART B) for asymmetric objects
+
+Mirroring the 0–180° half only works when the object looks the same flipped left to right. Objects with a feature on one side (a hat tip that curls one way, a scarf tail, a stem curl) show that feature jumping to the other side at the 180° turnaround. For those, generate the second half too and the site plays the whole turn as drawn, with no mirroring.
+
+Add to the Gem instructions:
+
+```
+=== MODE C: "TILE <id> PART B" (second half of the turn) ===
+Same image format as TILE <id> (1152 x 1152, 4 x 4 grid of 288 px cells, pure black, same look, same size, same camera), but showing the SECOND half of the rotation, 180 to 360 degrees. I attach the accepted PART A of the same object: it is the same 3D model, so every detail (colours aside) must match it. Frame n shows the model rotated 180 + n x 12 degrees clockwise seen from above:
+  f0 180 | f1 192 | f2 204 | f3 216
+  f4 228 | f5 240 | f6 252 | f7 264
+  f8 276 | f9 288 | f10 300 | f11 312
+  f12 324 | f13 336 | f14 348 | f15 360
+- f0 must look exactly like PART A's f15 (the back view). f15 must look exactly like PART A's f0 (the front view).
+- Around f7-f8 (about 270 degrees) the object is in side profile with its FRONT pointing to the viewer's RIGHT; the front features then come back into view from the right side.
+- Asymmetric features (a curled tip, a scarf tail, a stem) stay attached to the same side of the object as in PART A: they turn with the object, they never swap sides.
+- Same rules as before: every frame different from its neighbours, steady turn in one direction, nothing held, same size and centre.
+```
+
+Save the result as `<id>-3d-b.jpg` next to `<id>-3d.jpg`. The build script then makes a 32-frame full turn (`mirror: false`) for that tile.
