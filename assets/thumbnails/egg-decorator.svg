@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#14407f"/><stop offset="0.6" stop-color="#0d2b59"/><stop offset="1" stop-color="#06152d"/></radialGradient>
+    <radialGradient id="plate" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#1b4c92"/><stop offset="1" stop-color="#081c3b"/></radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="mat" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffffff"/><stop offset="0.3" stop-color="#e3ecf9"/><stop offset="0.7" stop-color="#a9bcdc"/><stop offset="1" stop-color="#667fa8"/></radialGradient>
+    <radialGradient id="warm" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffe9cc"/><stop offset="0.3" stop-color="#fdba74"/><stop offset="0.7" stop-color="#e08a33"/><stop offset="1" stop-color="#9c5412"/></radialGradient>
+    <radialGradient id="green" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#e6ffef"/><stop offset="0.3" stop-color="#bbf7d0"/><stop offset="0.7" stop-color="#6fd39a"/><stop offset="1" stop-color="#2f8a5c"/></radialGradient>
+    <pattern id="gridMinor" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#00e5ff" stroke-opacity="0.05"/></pattern>
+    <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#00e5ff" stroke-opacity="0.12"/></pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect width="400" height="300" fill="url(#gridMinor)"/>
+  <rect width="400" height="300" fill="url(#gridMajor)"/>
+  <ellipse cx="200" cy="248" rx="128" ry="19" fill="url(#plate)" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <ellipse cx="200" cy="248" rx="104" ry="14" fill="none" stroke="#00e5ff" stroke-opacity="0.18"/>
+  <ellipse cx="200" cy="249" rx="82" ry="11" fill="url(#shadow)"/>
+  <path d="M200 44 C268 44 306 138 296 198 C290 238 252 250 200 250 C148 250 110 238 104 198 C94 138 132 44 200 44 Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M110 120 Q125 110 140 120 T170 120 T200 120 T230 120 T260 120 T290 120" fill="none" stroke="#c084fc" stroke-width="7" stroke-linecap="round"/>
+  <path d="M106 176 L124 160 L142 176 L160 160 L178 176 L196 160 L214 176 L232 160 L250 176 L268 160 L286 176" fill="none" stroke="#ff6ec7" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="150" cy="212" r="7" fill="#fde047" stroke="#fff" stroke-width="1"/><circle cx="200" cy="218" r="7" fill="#fde047" stroke="#fff" stroke-width="1"/><circle cx="250" cy="212" r="7" fill="#fde047" stroke="#fff" stroke-width="1"/>
+  <polygon points="200.0,66.0 202.9,74.0 211.4,74.3 204.8,79.5 207.1,87.7 200.0,83.0 192.9,87.7 195.2,79.5 188.6,74.3 197.1,74.0" fill="#fff" opacity="0.9"/>
+  <path d="M138 90 Q150 64 176 56" stroke="url(#gloss)" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
+    <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
+  </g>
+  <rect x="30" y="26" width="52" height="16" rx="3" fill="#06152d" fill-opacity="0.7" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <text x="56" y="38" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#00e5ff" letter-spacing="1.5">MM-030</text>
+  <text x="200" y="285" text-anchor="middle" font-family="Courier New, monospace" font-size="12" fill="#eef7ff" fill-opacity="0.9" letter-spacing="3">EGG DECORATOR</text>
+</svg>

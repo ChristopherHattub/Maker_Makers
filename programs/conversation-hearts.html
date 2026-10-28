@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-028 Conversation Hearts // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Conversation Hearts: stackable candy-style hearts, squares and rounds with embossed love notes you type or pick.
+      // -----------------------------------------------------------------------
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      // -----------------------------------------------------------------------
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = prof[i][0] < 1e-6, d1 = prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+      function mesh(name, list, group) {
+        return list.length ? { name: name, positions: concat(list), smoothGroup: group || name } : null;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a 0..1 switch and a named-option picker, both stored as plain numbers.
+      function toggle(group, key, label, off, on, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: 1, step: 1, value: value,
+          format: function (v) { return v >= 1 ? on : off; } };
+      }
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+
+      // x-height 4, descender -2. Strokes are thickened into capsules at build time.
+      // -----------------------------------------------------------------------
+      function arc(cx, cy, rx, ry, a0, a1) {
+        var n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 24));
+        var pts = [];
+        for (var i = 0; i <= n; i++) {
+          var a = (a0 + (a1 - a0) * i / n) * DEG;
+          pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+        }
+        return pts;
+      }
+      function join() { return Array.prototype.concat.apply([], arguments); }
+      function glyph(w) { return { w: w, s: Array.prototype.slice.call(arguments, 1) }; }
+      var DOT = function (x, y) { return [[x, y], [x, y + 0.01]]; };
+
+      var heartPts = [];
+      for (var hi = 360; hi >= 0; hi -= 15) {
+        var ht = hi * DEG;
+        var hx = 16 * Math.pow(Math.sin(ht), 3);
+        var hy = 13 * Math.cos(ht) - 5 * Math.cos(2 * ht) - 2 * Math.cos(3 * ht) - Math.cos(4 * ht);
+        heartPts.push([(hx + 16) / 32 * 5.2, (hy + 17) / 29 * 5.4 + 0.3]);
+      }
+
+      var GLYPHS = {
+        ' ': glyph(2.5),
+        'A': glyph(4, [[0, 0], [2, 6], [4, 0]], [[0.9, 2.2], [3.1, 2.2]]),
+        'B': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.4, 1.5, 90, -90)), join([[0, 3], [2.6, 3]], arc(2.6, 1.5, 1.5, 1.5, 90, -90), [[0, 0]])),
+        'C': glyph(4.4, arc(2.2, 3, 2.2, 3, 45, 315)),
+        'D': glyph(4.4, [[0, 0], [0, 6]], join([[0, 6], [1.8, 6]], arc(1.8, 3, 2.6, 3, 90, -90), [[0, 0]])),
+        'E': glyph(4, [[4, 6], [0, 6], [0, 0], [4, 0]], [[0, 3], [3, 3]]),
+        'F': glyph(4, [[4, 6], [0, 6], [0, 0]], [[0, 3], [3, 3]]),
+        'G': glyph(4.4, join(arc(2.2, 3, 2.2, 3, 45, 360), [[2.4, 3]])),
+        'H': glyph(4, [[0, 0], [0, 6]], [[4, 0], [4, 6]], [[0, 3], [4, 3]]),
+        'I': glyph(0, [[0, 0], [0, 6]]),
+        'J': glyph(3, join([[3, 6]], arc(1.5, 1.5, 1.5, 1.5, 0, -180))),
+        'K': glyph(4, [[0, 0], [0, 6]], [[4, 6], [0, 2.5]], [[1.2, 3.5], [4, 0]]),
+        'L': glyph(3.6, [[0, 6], [0, 0], [3.6, 0]]),
+        'M': glyph(4.4, [[0, 0], [0, 6], [2.2, 2.2], [4.4, 6], [4.4, 0]]),
+        'N': glyph(4, [[0, 0], [0, 6], [4, 0], [4, 6]]),
+        'O': glyph(4.4, arc(2.2, 3, 2.2, 3, 0, 360)),
+        'P': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.6, 1.5, 90, -90), [[0, 3]])),
+        'Q': glyph(4.4, arc(2.2, 3, 2.2, 3, 0, 360), [[2.6, 1.6], [4.4, -0.6]]),
+        'R': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.6, 1.5, 90, -90), [[0, 3]]), [[1.6, 3], [4, 0]]),
+        'S': glyph(4, join(arc(2, 4.5, 1.9, 1.5, 20, 270), arc(2, 1.5, 2, 1.5, 90, -160))),
+        'T': glyph(4, [[0, 6], [4, 6]], [[2, 6], [2, 0]]),
+        'U': glyph(4, join([[0, 6]], arc(2, 2.2, 2, 2.2, 180, 360), [[4, 6]])),
+        'V': glyph(4, [[0, 6], [2, 0], [4, 6]]),
+        'W': glyph(5, [[0, 6], [1.1, 0], [2.5, 4], [3.9, 0], [5, 6]]),
+        'X': glyph(4, [[0, 6], [4, 0]], [[4, 6], [0, 0]]),
+        'Y': glyph(4, [[0, 6], [2, 3], [4, 6]], [[2, 3], [2, 0]]),
+        'Z': glyph(4, [[0, 6], [4, 6], [0, 0], [4, 0]]),
+        '0': glyph(3.8, arc(1.9, 3, 1.9, 3, 0, 360)),
+        '1': glyph(2, [[0.2, 4.8], [2, 6], [2, 0]]),
+        '2': glyph(4, join(arc(2, 4.3, 1.9, 1.7, 160, -20), [[0, 0], [4, 0]])),
+        '3': glyph(4, join(arc(2, 4.5, 1.8, 1.5, 150, -90), arc(2, 1.6, 2, 1.6, 90, -150))),
+        '4': glyph(4, [[3, 0], [3, 6], [0, 2], [4, 2]]),
+        '5': glyph(4, join([[3.6, 6], [0.4, 6], [0.7, 3.2]], arc(2, 1.8, 2, 1.8, 130, -150))),
+        '6': glyph(4, [[3.2, 6], [0.1, 2.2]], arc(2, 1.9, 1.9, 1.9, 0, 360)),
+        '7': glyph(4, [[0, 6], [4, 6], [1.4, 0]]),
+        '8': glyph(4, arc(2, 4.6, 1.6, 1.4, 0, 360), arc(2, 1.6, 1.9, 1.6, 0, 360)),
+        '9': glyph(4, arc(2, 4.1, 1.9, 1.9, 0, 360), [[0.8, 0], [3.9, 3.8]]),
+        '-': glyph(2.8, [[0.2, 3], [2.6, 3]]),
+        '+': glyph(3, [[0, 3], [3, 3]], [[1.5, 1.5], [1.5, 4.5]]),
+        '.': glyph(0, DOT(0, 0)),
+        '!': glyph(0, [[0, 6], [0, 1.8]], DOT(0, 0)),
+        '\'': glyph(0, [[0, 6], [0, 4.5]]),
+        '♥': glyph(5.2, heartPts),
+        'a': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360), [[3.8, 4], [3.8, 0]]),
+        'b': glyph(3.8, [[0, 6], [0, 0]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'c': glyph(3.8, arc(1.9, 2, 1.9, 2, 40, 320)),
+        'd': glyph(3.8, [[3.8, 6], [3.8, 0]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'e': glyph(3.8, join([[0, 2], [3.8, 2]], arc(1.9, 2, 1.9, 2, 0, 320))),
+        'f': glyph(2.8, join([[1.2, 0], [1.2, 5]], arc(2.4, 5, 1.2, 1, 180, 60)), [[0, 3.8], [2.6, 3.8]]),
+        'g': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360), join([[3.8, 4], [3.8, -0.5]], arc(1.9, -0.5, 1.9, 1.4, 0, -150))),
+        'h': glyph(3.6, [[0, 6], [0, 0]], join(arc(1.8, 2.2, 1.8, 1.8, 180, 0), [[3.6, 0]])),
+        'i': glyph(0, [[0, 0], [0, 4]], DOT(0, 5.6)),
+        'j': glyph(1.3, join([[1.3, 4], [1.3, -0.6]], arc(0.1, -0.6, 1.2, 1.2, 0, -100)), DOT(1.3, 5.6)),
+        'k': glyph(3.4, [[0, 6], [0, 0]], [[3.2, 4], [0, 1.6]], [[1, 2.4], [3.4, 0]]),
+        'l': glyph(0, [[0, 6], [0, 0]]),
+        'm': glyph(6, [[0, 4], [0, 0]], join(arc(1.5, 2.2, 1.5, 1.8, 180, 0), arc(4.5, 2.2, 1.5, 1.8, 180, 0), [[6, 0]]), [[3, 2.2], [3, 0]]),
+        'n': glyph(3.6, [[0, 4], [0, 0]], join(arc(1.8, 2.2, 1.8, 1.8, 180, 0), [[3.6, 0]])),
+        'o': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360)),
+        'p': glyph(3.8, [[0, 4], [0, -2]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'q': glyph(3.8, [[3.8, 4], [3.8, -2]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'r': glyph(2.8, [[0, 4], [0, 0]], arc(1.6, 2.2, 1.6, 1.8, 180, 50)),
+        's': glyph(3.4, join(arc(1.7, 3.1, 1.5, 0.9, 20, 270), arc(1.7, 1.1, 1.7, 1.1, 90, -160))),
+        't': glyph(2.8, join([[1.2, 5.6], [1.2, 0.8]], arc(2.4, 0.8, 1.2, 0.8, 180, 270)), [[0, 4], [2.8, 4]]),
+        'u': glyph(3.6, join([[0, 4], [0, 1.8]], arc(1.8, 1.8, 1.8, 1.8, 180, 360)), [[3.6, 4], [3.6, 0]]),
+        'v': glyph(3.6, [[0, 4], [1.8, 0], [3.6, 4]]),
+        'w': glyph(4.8, [[0, 4], [1, 0], [2.4, 3], [3.8, 0], [4.8, 4]]),
+        'x': glyph(3.4, [[0, 4], [3.4, 0]], [[3.4, 4], [0, 0]]),
+        'y': glyph(3.6, [[0, 4], [1.8, 0.4]], [[3.6, 4], [1, -2]]),
+        'z': glyph(3.4, [[0, 4], [3.4, 4], [0, 0], [3.4, 0]])
+      };
+
+
+      // Seeded random numbers, so scatter patterns stay put while a slider moves.
+      function rng(seed) {
+        var a = (seed | 0) + 0x6D2B79F5;
+        return function () {
+          a = (a + 0x6D2B79F5) | 0;
+          var t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function cent(pts) {
+        var x = 0, z = 0, i;
+        for (i = 0; i < pts.length; i++) { x += pts[i][0]; z += pts[i][1]; }
+        return [x / pts.length, z / pts.length];
+      }
+      // Closed prism from a polygon in the XZ plane (x, z), star-shaped about its centre.
+      function slab(pts, y0, y1) { return fanPrism(pts, y0, y1, cent(pts)); }
+      // Round-ended stroke from (x0,z0) to (x1,z1).
+      function capsule(x0, z0, x1, z1, w, y0, y1) {
+        var h = w / 2 * (1 + 0.012 * Math.abs(Math.sin(x0 * 12.9898 + z0 * 78.233 + x1 * 37.719 + z1 * 4.581))), dx = x1 - x0, dz = z1 - z0, l0 = Math.sqrt(dx * dx + dz * dz), l = l0 || 1, i, a, pts = [];
+        if (l0 < 0.05) return slab(circlePts(x0, z0, h, 18), y0, y1);
+        dx /= l; dz /= l;
+        var nx = -dz, nz = dx, n = 6, jit = 6 * Math.sin(x0 * 31.7 + z0 * 17.3 + x1 * 5.9 + z1 * 11.1);
+        for (i = 0; i <= n; i++) { a = (-90 + jit + 180 * i / n) * DEG; pts.push([x1 + h * (dx * Math.cos(a) + nx * Math.sin(a)), z1 + h * (dz * Math.cos(a) + nz * Math.sin(a))]); }
+        for (i = 0; i <= n; i++) { a = (90 + jit + 180 * i / n) * DEG; pts.push([x0 + h * (dx * Math.cos(a) + nx * Math.sin(a)), z0 + h * (dz * Math.cos(a) + nz * Math.sin(a))]); }
+        return slab(pts, y0, y1);
+      }
+      function heartPoly(r, n) {
+        var pts = [], i, t;
+        for (i = 0; i < n; i++) {
+          t = (i / n) * TAU;
+          pts.push([r * 16 * Math.pow(Math.sin(t), 3) / 17, -r * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t) - 2) / 17]);
+        }
+        return pts; // point down on screen when seen from above (z grows downward); slab() fixes the winding
+      }
+      function starPoly(ro, ri, k, rot, n) {
+        var pts = [], i, m = k * 2;
+        for (i = 0; i < m; i++) { var a = rot + (i / m) * TAU, r = i % 2 ? ri : ro; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+      function movePts(pts, dx, dz, ang, sc) {
+        var c = Math.cos(ang || 0), s = Math.sin(ang || 0), k = sc == null ? 1 : sc;
+        return pts.map(function (p) { return [dx + k * (p[0] * c - p[1] * s), dz + k * (p[0] * s + p[1] * c)]; });
+      }
+      // Smooth tube along a path of [x,y,z] points. rad(t) is the radius at t in 0..1 (0 at an end = a rounded pole).
+      function tube(path, rad, seg, flat) {
+        var n = path.length, prof = [], i, fr = [], T0, N0, B0, tg, nx, ny, nz, bx, by, bz, l;
+        function norm(v) { var m = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1; return [v[0] / m, v[1] / m, v[2] / m]; }
+        function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+        for (i = 0; i < n; i++) {
+          var a = path[Math.max(0, i - 1)], b = path[Math.min(n - 1, i + 1)];
+          tg = norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+          if (i === 0) { var up = Math.abs(tg[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]; N0 = norm(cross(tg, up)); }
+          else { N0 = norm(cross(cross(tg, fr[i - 1].N), tg)); if (N0[0] !== N0[0]) N0 = fr[i - 1].N; }
+          B0 = cross(tg, N0);
+          fr.push({ N: N0, B: B0, r: rad(i / (n - 1)) });
+          prof.push([fr[i].r, 0]);
+        }
+        var f = flat == null ? 1 : flat;
+        return surface(prof, seg, function (i, j, th) {
+          var c = path[i], F = fr[i], ca = Math.cos(th) * F.r, sa = Math.sin(th) * F.r * f;
+          return [c[0] + F.N[0] * ca + F.B[0] * sa, c[1] + F.N[1] * ca + F.B[1] * sa, c[2] + F.N[2] * ca + F.B[2] * sa];
+        });
+      }
+      // Smooth Catmull-Rom curve through [x,y,z] points, sampled k times per span.
+      function curve(pts, k) {
+        var out = [], i, j, n = pts.length;
+        for (i = 0; i < n - 1; i++) {
+          var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n - 1, i + 2)];
+          for (j = 0; j < k; j++) {
+            var t = j / k, t2 = t * t, t3 = t2 * t, q = [];
+            for (var c = 0; c < p1.length; c++) q.push(0.5 * ((2 * p1[c]) + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3));
+            out.push(q);
+          }
+        }
+        out.push(pts[n - 1].slice());
+        return out;
+      }
+      // Axis-aligned box from min / max corners.
+      function box(x0, y0, z0, x1, y1, z1) {
+        return slab([[x0, z0], [x1, z0], [x1, z1], [x0, z1]], y0, y1);
+      }
+      // Text as stroke segments [x0,u0,x1,u1] (u is up on the page, cap height = 6 * unit), centred on x = 0, baseline u = 0.
+      function textSegs(str, unit, spacing) {
+        var x = 0, segs = [], minX = Infinity, maxX = -Infinity, i;
+        for (i = 0; i < str.length; i++) {
+          var g = GLYPHS[str.charAt(i)] || GLYPHS[' '];
+          g.s.forEach(function (poly) {
+            for (var k = 0; k < poly.length - 1; k++) {
+              var a = poly[k], b = poly[k + 1];
+              if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 1e-4) continue;
+              var ax = x + a[0] * unit, bx = x + b[0] * unit;
+              segs.push([ax, a[1] * unit, bx, b[1] * unit]);
+              minX = Math.min(minX, ax, bx); maxX = Math.max(maxX, ax, bx);
+            }
+          });
+          x += g.w * unit + spacing;
+        }
+        if (!isFinite(minX)) return { segs: [], w: 0 };
+        var cx = (minX + maxX) / 2;
+        return { segs: segs.map(function (s) { return [s[0] - cx, s[1], s[2] - cx, s[3]]; }), w: maxX - minX };
+      }
+      // Lay text on a flat plane: segments become capsules at (cx, cz) turned by rot, between heights y0 and y1.
+      function textSolids(str, unit, thick, y0, y1, cx, cz, rot, spacing) {
+        var t = textSegs(str, unit, spacing == null ? thick * 0.6 : spacing), out = [], c = Math.cos(rot || 0), s = Math.sin(rot || 0);
+        t.segs.forEach(function (g) {
+          var ax = g[0], az = -(g[1] - unit * 3), bx = g[2], bz = -(g[3] - unit * 3);
+          out.push(capsule(cx + ax * c - az * s, cz + ax * s + az * c, cx + bx * c - bz * s, cz + bx * s + bz * c, thick, y0, y1));
+        });
+        return out;
+      }
+      // Drag helper for a 2D canvas: calls fn(x, y, phase) with 0..1 coordinates (phase: 'down', 'move', 'up').
+      function dragCanvas(cv, fn) {
+        var down = false;
+        function pos(e) { var r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+        cv.style.touchAction = 'none';
+        cv.addEventListener('pointerdown', function (e) { down = true; try { cv.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } var q = pos(e); fn(q[0], q[1], 'down', e); e.preventDefault(); });
+        cv.addEventListener('pointermove', function (e) { if (!down) return; var q = pos(e); fn(q[0], q[1], 'move', e); });
+        function up(e) { if (!down) return; down = false; var q = pos(e); fn(q[0], q[1], 'up', e); }
+        cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+      }
+      function mkEl(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]); else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      function mkBtn(label, fn, cls) { return mkEl('button', { class: 'mm-btn' + (cls ? ' ' + cls : ''), type: 'button', onclick: fn }, label); }
+      function mkCanvas(container, w, h) {
+        var cv = mkEl('canvas', { width: String(w), height: String(h), style: 'width:100%;max-width:' + w + 'px;aspect-ratio:' + w + '/' + h + ';background:#0a2246;border:1px solid #00e5ff55;border-radius:6px;display:block;margin:8px 0;cursor:crosshair' });
+        container.appendChild(cv);
+        return cv;
+      }
+      // Rounded rectangle outline in the XZ plane (half sizes a, b; corner radius r).
+      function rrect(a, b, r, steps) {
+        var pts = [], cs = [[a - r, b - r, 0], [-(a - r), b - r, 90], [-(a - r), -(b - r), 180], [a - r, -(b - r), 270]], i, k, st = steps || 8;
+        r = Math.min(r, a, b);
+        for (k = 0; k < 4; k++) for (i = 0; i <= st; i++) { var an = (cs[k][2] + 90 * i / st) * DEG; pts.push([cs[k][0] + r * Math.cos(an), cs[k][1] + r * Math.sin(an)]); }
+        return pts;
+      }
+      function superEllipse(a, b, n, N) {
+        var pts = [], i, t, c, s;
+        for (i = 0; i < N; i++) { t = (i / N) * TAU; c = Math.cos(t); s = Math.sin(t); pts.push([a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]); }
+        return pts;
+      }
+      // Word-wrap text to a width in mm at glyph unit u (cap height = 6u).
+      function wrapText(str, u, maxW) {
+        var words = String(str).split(/\s+/).filter(Boolean), lines = [], cur = '';
+        words.forEach(function (w) {
+          var tryS = cur ? cur + ' ' + w : w;
+          if (cur && textSegs(tryS, u, u * 0.3).w > maxW) { lines.push(cur); cur = w; } else cur = tryS;
+        });
+        if (cur) lines.push(cur);
+        return lines;
+      }
+
+
+      /*FONT*/
+      var DEFAULTS = {
+        shape: 0, size: 46, thick: 6, candies: 2, twist: 24, shift: 15, textRaise: 0.9, textFit: 100, loop: 0, bevel: 1
+      };
+      var SHAPE_NAMES = ['Heart', 'Square', 'Round', 'Oval', 'Star'];
+      var PHRASES = ['BE MINE', 'XOXO', 'LOVE U', 'HUG ME', 'CUTIE', 'KISS ME', 'MY LOVE', 'TRUE LOVE', 'UR SWEET', 'BE MY BAE', 'YES!', '<3'];
+      var msgs = ['BE MINE', 'XOXO', 'LOVE U'], selected = 0, inputs = [];
+
+      function outline(shape, r) {
+        if (shape === 0) return heartPoly(r * 1.02, 120);
+        if (shape === 1) return superEllipse(r * 0.9, r * 0.9, 5, 120);
+        if (shape === 2) return circlePts(0, 0, r * 0.95, 96);
+        if (shape === 3) return superEllipse(r * 1.12, r * 0.78, 2, 96);
+        return starPoly(r * 1.08, r * 0.62, 5, -Math.PI / 2, 5).length ? densifyStar(r) : [];
+      }
+      function densifyStar(r) {
+        var base = starPoly(r * 1.08, r * 0.6, 5, -Math.PI / 2, 5), out = [], i, k;
+        for (i = 0; i < base.length; i++) { var a = base[i], b = base[(i + 1) % base.length]; for (k = 0; k < 4; k++) out.push([lerp(a[0], b[0], k / 4), lerp(a[1], b[1], k / 4)]); }
+        return out;
+      }
+      function layoutLines(text, availW, maxU) {
+        var t = String(text || '').toUpperCase().replace(/<3/g, '♥').trim();
+        if (!t) t = '♥';
+        var words = t.split(/\s+/), lines = words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [t];
+        if (lines.length === 2 && textSegs(t, 1, 0.3).w <= availW / maxU * 0.55) lines = [t];
+        var w = 0.01; lines.forEach(function (l) { w = Math.max(w, textSegs(l, 1, 0.3).w); });
+        return { lines: lines, u: Math.min(maxU, availW / w) };
+      }
+
+      function build(p) {
+        var out = [], parts = { candy: [], text: [], loop: [] }, n = Math.round(p.candies), k, r = p.size / 2, T = p.thick;
+        var ol = outline(Math.round(p.shape), r), ctr = cent(ol), maxU = p.size * 0.075 * (p.textFit / 100);
+        for (k = 0; k < n; k++) {
+          var yb = k * (T + p.textRaise + 0.1), ang = k % 2 ? p.twist * DEG : -p.twist * 0.6 * DEG, dx = (k % 2 ? 1 : -1) * p.shift * (k ? 1 : 0), dz = (k % 2 ? -1 : 1) * p.shift * 0.5 * (k ? 1 : 0);
+          var P = function (sc) { return movePts(ol.map(function (q) { return [(q[0] - ctr[0]) * sc, (q[1] - ctr[1]) * sc]; }), dx, dz, ang, 1); };
+          if (p.bevel >= 1) {
+            parts.candy.push(slab(P(1), yb, yb + T * 0.42)); parts.candy.push(slab(P(0.965), yb + T * 0.4, yb + T * 0.76)); parts.candy.push(slab(P(0.915), yb + T * 0.74, yb + T));
+          } else parts.candy.push(slab(P(1), yb, yb + T));
+          var lay = layoutLines(msgs[k % msgs.length], p.size * (Math.round(p.shape) === 0 ? 0.56 : 0.66), maxU), u = lay.u, thick = Math.max(1.2, u * 0.42), pitch = u * 8;
+          lay.lines.forEach(function (ln, li) {
+            var off = (li - (lay.lines.length - 1) / 2) * pitch + (Math.round(p.shape) === 0 ? -r * 0.06 : 0);
+            textSolids(ln, u, thick, yb + T * 0.74, yb + T + p.textRaise, 0, off, 0, u * 0.35).forEach(function (m) {
+              parts.text.push(xform(m, { ry: -ang, t: [dx, 0, dz] }));
+            });
+          });
+          if (p.loop >= 1 && k === n - 1) {
+            var ex = -ol.reduce(function (m, q) { return Math.min(m, q[1] - ctr[1]); }, 0);
+            var top = ol.reduce(function (m, q) { return Math.min(m, q[1] - ctr[1]); }, 99);
+            parts.loop.push(ringPrism(circlePts(dx, dz + top - 3.5, 6, 36), circlePts(dx, dz + top - 3.5, 2.8, 36), yb, yb + T * 0.72));
+          }
+        }
+        pushMesh(out, mesh('candy', parts.candy)); pushMesh(out, mesh('text', parts.text)); pushMesh(out, mesh('loop', parts.loop));
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-028',
+        category: "VALENTINE'S // CANDY",
+        title: 'Conversation Hearts',
+        fileName: 'Conversation_Hearts',
+        palette: [
+          { name: 'Candy Pink', color: '#fda4c0' },
+          { name: 'Mint Candy', color: '#a7f3d0' },
+          { name: 'Lemon Drop', color: '#fde68a' },
+          { name: 'Lilac Candy', color: '#d8b4fe' },
+          { name: 'Peach Candy', color: '#fdba94' },
+          { name: 'Sky Candy', color: '#a5d8ff' },
+          { name: 'Berry Red', color: '#e11d48' },
+          { name: 'Bone White', color: '#f1f5f9' }
+        ],
+        defaultColor: '#fda4c0',
+        partNames: { candy: 'Candy', text: 'Love note', loop: 'Key ring loop' },
+        openGroups: ['Candy'],
+        parameters: [
+          choice('Candy', 'shape', 'Candy shape', SHAPE_NAMES, DEFAULTS.shape),
+          { group: 'Candy', key: 'size', label: 'Size', unit: ' mm', min: 28, max: 80, step: 1, value: DEFAULTS.size },
+          { group: 'Candy', key: 'thick', label: 'Thickness', unit: ' mm', min: 3, max: 12, step: 0.5, value: DEFAULTS.thick },
+          toggle('Candy', 'bevel', 'Edges', 'Straight', 'Soft stepped edges', DEFAULTS.bevel),
+          { group: 'Candy', key: 'candies', label: 'Candies in the pile', unit: '', min: 1, max: 3, step: 1, value: DEFAULTS.candies },
+          { group: 'Candy', key: 'twist', label: 'Pile twist', unit: '°', min: 0, max: 45, step: 1, value: DEFAULTS.twist },
+          { group: 'Candy', key: 'shift', label: 'Pile spread', unit: ' mm', min: 2, max: 26, step: 0.5, value: DEFAULTS.shift },
+          { group: 'Lettering', key: 'textRaise', label: 'Letters stand up', unit: ' mm', min: 0.6, max: 2, step: 0.1, value: DEFAULTS.textRaise },
+          { group: 'Lettering', key: 'textFit', label: 'Letter size', unit: '%', min: 60, max: 130, step: 5, value: DEFAULTS.textFit },
+          toggle('Extras', 'loop', 'Key ring loop', 'None', 'Loop on the top candy', DEFAULTS.loop)
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Candy pair', {}),
+          presetOf(DEFAULTS, 'Single heart', { candies: 1, size: 54 }),
+          presetOf(DEFAULTS, 'Big stack of three', { candies: 3, size: 44, twist: 30, thick: 5 }),
+          presetOf(DEFAULTS, 'Key ring heart', { candies: 1, loop: 1, size: 44 }),
+          presetOf(DEFAULTS, 'Square candies', { shape: 1, candies: 2 }),
+          presetOf(DEFAULTS, 'Round candies', { shape: 2, candies: 2 })
+        ],
+        tabs: [{
+          id: 'note',
+          label: 'Love notes',
+          hint: 'Type a message for each candy, or tap a phrase',
+          mount: function (container, api) {
+            container.appendChild(mkEl('h3', { class: 'mm-group-title' }, 'Message on each candy'));
+            inputs = [];
+            [0, 1, 2].forEach(function (i) {
+              var input = mkEl('input', { type: 'text', maxlength: '18', autocomplete: 'off', spellcheck: 'false', placeholder: 'Candy ' + (i + 1) });
+              input.value = msgs[i];
+              input.addEventListener('input', function () { msgs[i] = input.value; api.rebuild(); });
+              input.addEventListener('focus', function () { selected = i; });
+              var wrap = mkEl('div', { class: 'mm-slider' }), head = mkEl('div', { class: 'mm-slider-head' });
+              head.appendChild(mkEl('label', {}, 'Candy ' + (i + 1) + (i === 0 ? ' (bottom)' : ''))); wrap.appendChild(head); wrap.appendChild(input);
+              container.appendChild(wrap); inputs.push(input);
+            });
+            container.appendChild(mkEl('p', { class: 'mm-note' }, 'Letters, numbers, ! and <3 for a heart. Tap a box, then a phrase.'));
+            container.appendChild(mkEl('h3', { class: 'mm-group-title' }, 'Popular phrases'));
+            var chips = mkEl('div', { class: 'mm-chips' });
+            PHRASES.forEach(function (ph) {
+              chips.appendChild(mkEl('button', { class: 'mm-chip', type: 'button', onclick: function () { msgs[selected] = ph; inputs[selected].value = ph; api.rebuild(); } }, ph));
+            });
+            container.appendChild(chips);
+            setTimeout(function () { api.centerCamera('iso'); }, 60);
+          }
+        }],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

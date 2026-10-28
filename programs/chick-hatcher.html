@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-032 Chick Hatcher // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Chick Hatcher: a cracked Easter egg with a chick inside; draw the crack line, then tilt the cap open with the Hatch slider.
+      // -----------------------------------------------------------------------
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      // -----------------------------------------------------------------------
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = prof[i][0] < 1e-6, d1 = prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+      function mesh(name, list, group) {
+        return list.length ? { name: name, positions: concat(list), smoothGroup: group || name } : null;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a 0..1 switch and a named-option picker, both stored as plain numbers.
+      function toggle(group, key, label, off, on, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: 1, step: 1, value: value,
+          format: function (v) { return v >= 1 ? on : off; } };
+      }
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+
+
+
+      // Seeded random numbers, so scatter patterns stay put while a slider moves.
+      function rng(seed) {
+        var a = (seed | 0) + 0x6D2B79F5;
+        return function () {
+          a = (a + 0x6D2B79F5) | 0;
+          var t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function cent(pts) {
+        var x = 0, z = 0, i;
+        for (i = 0; i < pts.length; i++) { x += pts[i][0]; z += pts[i][1]; }
+        return [x / pts.length, z / pts.length];
+      }
+      // Closed prism from a polygon in the XZ plane (x, z), star-shaped about its centre.
+      function slab(pts, y0, y1) { return fanPrism(pts, y0, y1, cent(pts)); }
+      // Round-ended stroke from (x0,z0) to (x1,z1).
+      function capsule(x0, z0, x1, z1, w, y0, y1) {
+        var h = w / 2 * (1 + 0.012 * Math.abs(Math.sin(x0 * 12.9898 + z0 * 78.233 + x1 * 37.719 + z1 * 4.581))), dx = x1 - x0, dz = z1 - z0, l0 = Math.sqrt(dx * dx + dz * dz), l = l0 || 1, i, a, pts = [];
+        if (l0 < 0.05) return slab(circlePts(x0, z0, h, 18), y0, y1);
+        dx /= l; dz /= l;
+        var nx = -dz, nz = dx, n = 6, jit = 6 * Math.sin(x0 * 31.7 + z0 * 17.3 + x1 * 5.9 + z1 * 11.1);
+        for (i = 0; i <= n; i++) { a = (-90 + jit + 180 * i / n) * DEG; pts.push([x1 + h * (dx * Math.cos(a) + nx * Math.sin(a)), z1 + h * (dz * Math.cos(a) + nz * Math.sin(a))]); }
+        for (i = 0; i <= n; i++) { a = (90 + jit + 180 * i / n) * DEG; pts.push([x0 + h * (dx * Math.cos(a) + nx * Math.sin(a)), z0 + h * (dz * Math.cos(a) + nz * Math.sin(a))]); }
+        return slab(pts, y0, y1);
+      }
+      function heartPoly(r, n) {
+        var pts = [], i, t;
+        for (i = 0; i < n; i++) {
+          t = (i / n) * TAU;
+          pts.push([r * 16 * Math.pow(Math.sin(t), 3) / 17, -r * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t) - 2) / 17]);
+        }
+        return pts; // point down on screen when seen from above (z grows downward); slab() fixes the winding
+      }
+      function starPoly(ro, ri, k, rot, n) {
+        var pts = [], i, m = k * 2;
+        for (i = 0; i < m; i++) { var a = rot + (i / m) * TAU, r = i % 2 ? ri : ro; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+      function movePts(pts, dx, dz, ang, sc) {
+        var c = Math.cos(ang || 0), s = Math.sin(ang || 0), k = sc == null ? 1 : sc;
+        return pts.map(function (p) { return [dx + k * (p[0] * c - p[1] * s), dz + k * (p[0] * s + p[1] * c)]; });
+      }
+      // Smooth tube along a path of [x,y,z] points. rad(t) is the radius at t in 0..1 (0 at an end = a rounded pole).
+      function tube(path, rad, seg, flat) {
+        var n = path.length, prof = [], i, fr = [], T0, N0, B0, tg, nx, ny, nz, bx, by, bz, l;
+        function norm(v) { var m = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1; return [v[0] / m, v[1] / m, v[2] / m]; }
+        function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+        for (i = 0; i < n; i++) {
+          var a = path[Math.max(0, i - 1)], b = path[Math.min(n - 1, i + 1)];
+          tg = norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+          if (i === 0) { var up = Math.abs(tg[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]; N0 = norm(cross(tg, up)); }
+          else { N0 = norm(cross(cross(tg, fr[i - 1].N), tg)); if (N0[0] !== N0[0]) N0 = fr[i - 1].N; }
+          B0 = cross(tg, N0);
+          fr.push({ N: N0, B: B0, r: rad(i / (n - 1)) });
+          prof.push([fr[i].r, 0]);
+        }
+        var f = flat == null ? 1 : flat;
+        return surface(prof, seg, function (i, j, th) {
+          var c = path[i], F = fr[i], ca = Math.cos(th) * F.r, sa = Math.sin(th) * F.r * f;
+          return [c[0] + F.N[0] * ca + F.B[0] * sa, c[1] + F.N[1] * ca + F.B[1] * sa, c[2] + F.N[2] * ca + F.B[2] * sa];
+        });
+      }
+      // Smooth Catmull-Rom curve through [x,y,z] points, sampled k times per span.
+      function curve(pts, k) {
+        var out = [], i, j, n = pts.length;
+        for (i = 0; i < n - 1; i++) {
+          var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n - 1, i + 2)];
+          for (j = 0; j < k; j++) {
+            var t = j / k, t2 = t * t, t3 = t2 * t, q = [];
+            for (var c = 0; c < p1.length; c++) q.push(0.5 * ((2 * p1[c]) + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3));
+            out.push(q);
+          }
+        }
+        out.push(pts[n - 1].slice());
+        return out;
+      }
+      // Axis-aligned box from min / max corners.
+      function box(x0, y0, z0, x1, y1, z1) {
+        return slab([[x0, z0], [x1, z0], [x1, z1], [x0, z1]], y0, y1);
+      }
+      // Text as stroke segments [x0,u0,x1,u1] (u is up on the page, cap height = 6 * unit), centred on x = 0, baseline u = 0.
+      function textSegs(str, unit, spacing) {
+        var x = 0, segs = [], minX = Infinity, maxX = -Infinity, i;
+        for (i = 0; i < str.length; i++) {
+          var g = GLYPHS[str.charAt(i)] || GLYPHS[' '];
+          g.s.forEach(function (poly) {
+            for (var k = 0; k < poly.length - 1; k++) {
+              var a = poly[k], b = poly[k + 1];
+              if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 1e-4) continue;
+              var ax = x + a[0] * unit, bx = x + b[0] * unit;
+              segs.push([ax, a[1] * unit, bx, b[1] * unit]);
+              minX = Math.min(minX, ax, bx); maxX = Math.max(maxX, ax, bx);
+            }
+          });
+          x += g.w * unit + spacing;
+        }
+        if (!isFinite(minX)) return { segs: [], w: 0 };
+        var cx = (minX + maxX) / 2;
+        return { segs: segs.map(function (s) { return [s[0] - cx, s[1], s[2] - cx, s[3]]; }), w: maxX - minX };
+      }
+      // Lay text on a flat plane: segments become capsules at (cx, cz) turned by rot, between heights y0 and y1.
+      function textSolids(str, unit, thick, y0, y1, cx, cz, rot, spacing) {
+        var t = textSegs(str, unit, spacing == null ? thick * 0.6 : spacing), out = [], c = Math.cos(rot || 0), s = Math.sin(rot || 0);
+        t.segs.forEach(function (g) {
+          var ax = g[0], az = -(g[1] - unit * 3), bx = g[2], bz = -(g[3] - unit * 3);
+          out.push(capsule(cx + ax * c - az * s, cz + ax * s + az * c, cx + bx * c - bz * s, cz + bx * s + bz * c, thick, y0, y1));
+        });
+        return out;
+      }
+      // Drag helper for a 2D canvas: calls fn(x, y, phase) with 0..1 coordinates (phase: 'down', 'move', 'up').
+      function dragCanvas(cv, fn) {
+        var down = false;
+        function pos(e) { var r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+        cv.style.touchAction = 'none';
+        cv.addEventListener('pointerdown', function (e) { down = true; try { cv.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } var q = pos(e); fn(q[0], q[1], 'down', e); e.preventDefault(); });
+        cv.addEventListener('pointermove', function (e) { if (!down) return; var q = pos(e); fn(q[0], q[1], 'move', e); });
+        function up(e) { if (!down) return; down = false; var q = pos(e); fn(q[0], q[1], 'up', e); }
+        cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+      }
+      function mkEl(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]); else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      function mkBtn(label, fn, cls) { return mkEl('button', { class: 'mm-btn' + (cls ? ' ' + cls : ''), type: 'button', onclick: fn }, label); }
+      function mkCanvas(container, w, h) {
+        var cv = mkEl('canvas', { width: String(w), height: String(h), style: 'width:100%;max-width:' + w + 'px;aspect-ratio:' + w + '/' + h + ';background:#0a2246;border:1px solid #00e5ff55;border-radius:6px;display:block;margin:8px 0;cursor:crosshair' });
+        container.appendChild(cv);
+        return cv;
+      }
+      // Rounded rectangle outline in the XZ plane (half sizes a, b; corner radius r).
+      function rrect(a, b, r, steps) {
+        var pts = [], cs = [[a - r, b - r, 0], [-(a - r), b - r, 90], [-(a - r), -(b - r), 180], [a - r, -(b - r), 270]], i, k, st = steps || 8;
+        r = Math.min(r, a, b);
+        for (k = 0; k < 4; k++) for (i = 0; i <= st; i++) { var an = (cs[k][2] + 90 * i / st) * DEG; pts.push([cs[k][0] + r * Math.cos(an), cs[k][1] + r * Math.sin(an)]); }
+        return pts;
+      }
+      function superEllipse(a, b, n, N) {
+        var pts = [], i, t, c, s;
+        for (i = 0; i < N; i++) { t = (i / N) * TAU; c = Math.cos(t); s = Math.sin(t); pts.push([a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]); }
+        return pts;
+      }
+      // Word-wrap text to a width in mm at glyph unit u (cap height = 6u).
+      function wrapText(str, u, maxW) {
+        var words = String(str).split(/\s+/).filter(Boolean), lines = [], cur = '';
+        words.forEach(function (w) {
+          var tryS = cur ? cur + ' ' + w : w;
+          if (cur && textSegs(tryS, u, u * 0.3).w > maxW) { lines.push(cur); cur = w; } else cur = tryS;
+        });
+        if (cur) lines.push(cur);
+        return lines;
+      }
+
+
+      var DEFAULTS = {
+        height: 70, width: 25, shape: 0.6, flat: 9, wall: 2.2, crackY: 52, amp: 5, hatch: 0, chick: 106, beak: 100, eye: 2.0
+      };
+      var NS = 48, crack = new Float32Array(NS), redrawCrack = null;
+      function crackFill(fn) { for (var i = 0; i < NS; i++) crack[i] = fn(i / NS * TAU, i); }
+      var CRACKS = {
+        'Zigzag': function (a) { return (2 / Math.PI) * Math.asin(Math.sin(7 * a)); },
+        'Fine zigzag': function (a) { return (2 / Math.PI) * Math.asin(Math.sin(11 * a)); },
+        'Wavy': function (a) { return Math.sin(3 * a); },
+        'Scallops': function (a) { return Math.abs(Math.sin(4.5 * a)) * 2 - 1; },
+        'Tilted straight': function (a) { return Math.cos(a - Math.PI / 4) * 0.8; },
+        'Straight': function () { return 0; }
+      };
+      crackFill(CRACKS.Zigzag);
+      function crackAt(th, amp) {
+        var u = (((th / TAU) % 1) + 1) % 1 * NS, i = Math.floor(u), f = u - i;
+        return amp * lerp(crack[i % NS], crack[(i + 1) % NS], f);
+      }
+      function eggR(t, W, shape) {
+        var e = 1 - 0.28 * shape, u = Math.pow(Math.max(0, Math.min(1, t)), e);
+        return W * Math.pow(Math.max(0, Math.sin(Math.PI * u)), 0.6);
+      }
+      function build(p) {
+        var H = p.height, W = p.width, e = p.shape, wall = p.wall, SEGN = 96, n = 26;
+        var tcut = 0.02; while (tcut < 0.3 && eggR(tcut, W, e) < Math.min(p.flat, W * 0.9)) tcut += 0.004;
+        var Rf = function (y) { return eggR(tcut + (1 - tcut) * (Math.max(0, y) / H), W, e); };
+        var hy = H * p.crackY / 100, i;
+        var hOf = function (th) { return Math.max(wall + 6, Math.min(H - wall - 6, hy + crackAt(th, p.amp))); };
+
+        // lower shell: flat floor, walls up to the crack line
+        var D = [{ k: 'pole', y: 0 }], P = [[0, 0]];
+        for (i = 0; i <= n; i++) { D.push({ k: 'o', t: i / n }); P.push([1, 0]); }
+        for (i = n; i >= 0; i--) { D.push({ k: 'i', t: i / n }); P.push([1, 0]); }
+        D.push({ k: 'pole', y: wall }); P.push([0, 0]);
+        var lower = surface(P, SEGN, function (idx, j, th) {
+          var d = D[idx], h = hOf(th), y, r;
+          if (d.k === 'pole') return [0, d.y, 0];
+          if (d.k === 'o') { y = h * d.t; r = Rf(y); } else { y = wall + (h - wall) * d.t; r = Math.max(0.3, Rf(y) - wall); }
+          return [r * Math.cos(th), y, r * Math.sin(th)];
+        });
+        // cap: dome from the crack line to the tip
+        var C = [], PC = [], m = 30;
+        for (i = 0; i <= m; i++) { C.push({ k: 'o', t: i / m }); PC.push([i === m ? 0 : 1, 0]); }
+        for (i = m; i >= 0; i--) { C.push({ k: 'i', t: i / m }); PC.push([1, 0]); }
+        var cap = surface(PC, SEGN, function (idx, j, th) {
+          var d = C[idx], h = hOf(th), y, r;
+          if (d.k === 'o') { y = h + (H - h) * d.t; r = d.t >= 1 ? 0 : Rf(y); }
+          else { y = h + (H - wall * 1.2 - h) * d.t; r = Math.max(0, Rf(y) - wall); }
+          return [r * Math.cos(th), y, r * Math.sin(th)];
+        }, true);
+        var hb = hOf(-Math.PI / 2), pivot = [0, hb - 0.3, -Rf(hb)];
+        var a = p.hatch * DEG;
+        cap = xform(cap, { t: [0, -0.35, 0] });
+        if (a > 0.001) cap = xform(xform(xform(cap, { t: [-pivot[0], -pivot[1], -pivot[2]] }), { rx: -a }), { t: pivot });
+        // the chick
+        var inner = W - wall, rb = inner * 0.62 * p.chick / 100, rh = rb * 0.64, by = wall + rb * 1.02, headY = by + rb * 0.8 + rh * 0.6;
+        var body = [xform(ball(rb, rb * 0.95, rb * 0.92, 48), { t: [0, by, 0] })];
+        var head = [xform(ball(rh, rh * 0.95, rh, 40), { t: [0, headY, rb * 0.08] })];
+        var wings = [-1, 1].map(function (s) { return xform(ball(rb * 0.22, rb * 0.5, rb * 0.42, 24), { rz: s * 0.35, t: [s * rb * 0.92, by + rb * 0.05, -rb * 0.05] }); });
+        var bk = p.beak / 100;
+        var beak = [xform(cone(rh * 0.3 * bk, 0, 0, rh * 0.62 * bk, 18), { rx: Math.PI / 2, t: [0, headY - rh * 0.1, rb * 0.08 + rh * 0.88] }),
+                    xform(cone(rh * 0.24 * bk, 0, 0, rh * 0.5 * bk, 18), { rx: Math.PI / 2 + 0.28, t: [0, headY - rh * 0.34, rb * 0.08 + rh * 0.8] })];
+        var eyes = [-1, 1].map(function (s) { return xform(ball(p.eye, p.eye * 1.1, p.eye * 0.7, 20), { t: [s * rh * 0.44, headY + rh * 0.2, rb * 0.08 + rh * 0.9] }); });
+        var tuft = [-1, 0, 1].map(function (s) { return xform(cone(rh * 0.1, 0, 0, rh * 0.45, 10), { rz: -s * 0.5, t: [s * rh * 0.12, headY + rh * 0.92, rb * 0.08] }); });
+        var out = [{ name: 'shell', positions: lower, smoothGroup: 'shell' }, { name: 'cap', positions: cap, smoothGroup: 'cap' }];
+        pushMesh(out, mesh('chick', body.concat(head, wings))); pushMesh(out, mesh('beak', beak)); pushMesh(out, mesh('eyes', eyes)); pushMesh(out, mesh('tuft', tuft));
+        return out;
+      }
+
+      function drawCrack(cv, amp) {
+        var g = cv.getContext('2d'), w = cv.width, h = cv.height, i;
+        g.fillStyle = '#0a2246'; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#14407f'; g.fillRect(0, 0, w, h * 0.5 - 8); g.fillStyle = '#0e2e5c'; g.fillRect(0, h * 0.5 + 8, w, h * 0.5);
+        g.strokeStyle = '#00e5ff44'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke(); g.setLineDash([]);
+        g.strokeStyle = '#ffd400'; g.lineWidth = 3; g.beginPath();
+        for (i = 0; i <= NS; i++) { var X = i / NS * w, Y = h / 2 - crack[i % NS] * (h / 2 - 12); if (i) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+        g.fillStyle = '#9fc4ff'; g.font = '11px Courier New'; g.fillText('front', 6, h - 6); g.fillText('back', w * 0.75 - 12, h - 6);
+      }
+      function mountCrack(container, api) {
+        container.appendChild(mkEl('p', { class: 'mm-note' }, 'Draw the crack: this strip is the egg unrolled, left to right is once around. Drag to draw; the gold line becomes the break. Then raise Hatch in the Egg section to tip the cap open.'));
+        var cv = mkCanvas(container, 336, 110), last = null;
+        redrawCrack = function () { drawCrack(cv, 1); };
+        dragCanvas(cv, function (x, y, phase) {
+          if (phase === 'up') { last = null; return; }
+          var c = Math.max(0, Math.min(NS - 1, Math.round(x * NS))), v = Math.max(-1, Math.min(1, (0.5 - y) * 2 * (cv.height / (cv.height - 24))));
+          if (last) { var n = Math.max(1, Math.abs(c - last[0])), k; for (k = 0; k <= n; k++) crack[Math.round(lerp(last[0], c, k / n)) % NS] = lerp(last[1], v, k / n); } else crack[c] = v;
+          last = [c, v]; redrawCrack(); api.rebuild();
+        });
+        var row = mkEl('div', { class: 'mm-export-row' });
+        Object.keys(CRACKS).forEach(function (nm) { row.appendChild(mkBtn(nm, function () { crackFill(CRACKS[nm]); redrawCrack(); api.rebuild(); })); });
+        row.appendChild(mkBtn('Random jag', function () { var r = rng(Date.now() & 0xffff), v = 0; crackFill(function () { v = Math.max(-1, Math.min(1, v + (r() - 0.5) * 1.6)); return v; }); redrawCrack(); api.rebuild(); }));
+        container.appendChild(row);
+        redrawCrack();
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-032',
+        category: 'EASTER // HATCHING',
+        title: 'Chick Hatcher',
+        fileName: 'Chick_Hatcher',
+        palette: [
+          { name: 'Egg Cream', color: '#fff4dc' },
+          { name: 'Chick Yellow', color: '#fde047' },
+          { name: 'Beak Orange', color: '#fb923c' },
+          { name: 'Spring Pink', color: '#fbb6ce' },
+          { name: 'Mint Green', color: '#a7f3d0' },
+          { name: 'Sky Blue', color: '#a5d8ff' },
+          { name: 'Lavender', color: '#d8b4fe' },
+          { name: 'Shadow Black', color: '#334155' }
+        ],
+        defaultColor: '#fff4dc',
+        partNames: { shell: 'Lower shell', cap: 'Egg cap', chick: 'Chick', beak: 'Beak', eyes: 'Eyes', tuft: 'Head tuft' },
+        openGroups: ['Egg'],
+        extrasTitle: 'Draw the crack',
+        parameters: [
+          { group: 'Egg', key: 'hatch', label: 'Hatch (cap tilt; over 20° needs supports)', unit: '°', min: 0, max: 45, step: 1, value: DEFAULTS.hatch },
+          { group: 'Egg', key: 'height', label: 'Egg height', unit: ' mm', min: 54, max: 100, step: 1, value: DEFAULTS.height },
+          { group: 'Egg', key: 'width', label: 'Egg width', unit: ' mm', min: 20, max: 36, step: 0.5, value: DEFAULTS.width },
+          { group: 'Egg', key: 'shape', label: 'Shape (round ↔ egg)', unit: '', min: 0, max: 1, step: 0.05, value: DEFAULTS.shape },
+          { group: 'Egg', key: 'flat', label: 'Flat bottom width', unit: ' mm', min: 6, max: 20, step: 0.5, value: DEFAULTS.flat },
+          { group: 'Egg', key: 'wall', label: 'Shell thickness', unit: ' mm', min: 1.6, max: 3.5, step: 0.2, value: DEFAULTS.wall },
+          { group: 'Crack', key: 'crackY', label: 'Crack height', unit: '%', min: 35, max: 70, step: 1, value: DEFAULTS.crackY },
+          { group: 'Crack', key: 'amp', label: 'Crack zig-zag size', unit: ' mm', min: 0, max: 12, step: 0.5, value: DEFAULTS.amp },
+          { group: 'Chick', key: 'chick', label: 'Chick size', unit: '%', min: 60, max: 115, step: 1, value: DEFAULTS.chick },
+          { group: 'Chick', key: 'beak', label: 'Beak size', unit: '%', min: 50, max: 160, step: 5, value: DEFAULTS.beak },
+          { group: 'Chick', key: 'eye', label: 'Eye size', unit: ' mm', min: 1.2, max: 3.5, step: 0.1, value: DEFAULTS.eye }
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Closed egg', {}),
+          presetOf(DEFAULTS, 'Peeking out', { hatch: 18, amp: 6 }),
+          presetOf(DEFAULTS, 'Wide open', { hatch: 40, crackY: 48 }),
+          presetOf(DEFAULTS, 'Tiny egg', { height: 58, width: 21, chick: 95 }),
+          presetOf(DEFAULTS, 'Big beak chick', { beak: 150, eye: 2.6, hatch: 22 })
+        ],
+        mount: mountCrack,
+        build: function (p) { return build(p); }
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

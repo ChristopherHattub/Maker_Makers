@@ -195,6 +195,114 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/gratitude-place-cards.svg',
     programUrl: 'programs/gratitude-place-cards.html',
     description: 'A standing name card for the Thanksgiving table: type a name and optional second line, pick a lettering style, card shape and a leaf, acorn, pumpkin or turkey motif. The easel foot is built in. Paint card, lettering and motif in the Color tool and export .STL.'
+  },
+  {
+    slot: 24,
+    title: 'Countdown Clock Topper',
+    bundle: 'newyear',
+    category: 'NEW YEAR // COUNTDOWN',
+    thumbnailUrl: 'assets/thumbnails/countdown-clock.svg',
+    programUrl: 'programs/countdown-clock.html',
+    description: 'A flat New Year clock face: drag the hands on a live clock to set the time, pick the year, then add ticks, numbers, a starburst and an optional cake stick or hang loop. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 25,
+    title: 'Confetti Cannon',
+    bundle: 'newyear',
+    category: 'NEW YEAR // PARTY POPPER',
+    thumbnailUrl: 'assets/thumbnails/confetti-cannon.svg',
+    programUrl: 'programs/confetti-cannon.html',
+    description: 'A party popper firing a spray of confetti. Drag on the aiming box to set the angle and how far it flies, then choose how many dots, stars and streamers. Everything prints flat on one plate. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 26,
+    title: 'Party Hat Spinner',
+    bundle: 'newyear',
+    category: 'NEW YEAR // PARTY HATS',
+    thumbnailUrl: 'assets/thumbnails/party-hat.svg',
+    programUrl: 'programs/party-hat.html',
+    description: 'A hollow cone party hat you decorate: paint raised and carved patterns on a wrap-around grid, mirror them around the hat, or click shapes straight onto it. Add a brim band and a pom-pom, point or flat top. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 27,
+    title: 'Party Whistle',
+    bundle: 'newyear',
+    category: 'NEW YEAR // NOISE MAKERS',
+    thumbnailUrl: 'assets/thumbnails/party-whistle.svg',
+    programUrl: 'programs/party-whistle.html',
+    description: 'A noise maker you blow into: a duct whistle with a tunable chamber length, air slot and window, plus party bands and a lanyard loop. Prints flat. Tune the sound with the sliders (the pitch depends on your printer, so test a few). Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 28,
+    title: 'Conversation Hearts',
+    bundle: 'valentines',
+    category: "VALENTINE'S // CANDY",
+    thumbnailUrl: 'assets/thumbnails/conversation-hearts.svg',
+    programUrl: 'programs/conversation-hearts.html',
+    description: 'Stackable candy hearts, squares, rounds, ovals and stars with embossed love notes you type or pick from popular phrases. Pile up to three, twist them, and add a key ring loop. Paint candy and letters in the Color tool and export .STL.'
+  },
+  {
+    slot: 29,
+    title: 'Valentine Card',
+    bundle: 'valentines',
+    category: "VALENTINE'S // CARDS",
+    thumbnailUrl: 'assets/thumbnails/valentines-card.svg',
+    programUrl: 'programs/valentines-card.html',
+    description: 'A flat greeting card with a thin hinge so the leg folds back into an easel stand. Type your message and names, pick a heart picture and border, and click the card to stick on hearts, stars and rings. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 30,
+    title: 'Egg Decorator',
+    bundle: 'easter',
+    category: 'EASTER // EGGS',
+    thumbnailUrl: 'assets/thumbnails/egg-decorator.svg',
+    programUrl: 'programs/egg-decorator.html',
+    description: 'An Easter egg you decorate: paint raised and carved patterns on the unrolled egg, mirror them around it, or click shapes straight onto the egg. Choose a solid or hollow egg with a flat bottom and optional hang loop. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 31,
+    title: 'Bunny Builder',
+    bundle: 'easter',
+    category: 'EASTER // BUNNIES',
+    thumbnailUrl: 'assets/thumbnails/bunny-builder.svg',
+    programUrl: 'programs/bunny-builder.html',
+    description: 'A sitting Easter bunny: size the body and head, then pose the ears (length, spread, lean and droop), turn the head, and set the eyes, cheeks, nose, tail and feet. Add a bow tie or a carrot. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 32,
+    title: 'Chick Hatcher',
+    bundle: 'easter',
+    category: 'EASTER // HATCHING',
+    thumbnailUrl: 'assets/thumbnails/chick-hatcher.svg',
+    programUrl: 'programs/chick-hatcher.html',
+    description: 'A cracked egg with a chick inside. Draw the crack line on the unrolled egg, then raise Hatch to tip the cap open (over 20 degrees needs supports). Resize the chick and beak. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 33,
+    title: 'Flower Pot Planter',
+    bundle: 'easter',
+    category: 'SPRING // GARDEN',
+    thumbnailUrl: 'assets/thumbnails/flower-pot.svg',
+    programUrl: 'programs/flower-pot.html',
+    description: 'A pot with a planting bed: shape the pot, then plant tulips, daisies, daffodils and crocuses by clicking the soil in 3D or on the plan view. Hollow underneath to save plastic. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 34,
+    title: 'Butterfly Wings',
+    bundle: 'easter',
+    category: 'SPRING // BUTTERFLIES',
+    thumbnailUrl: 'assets/thumbnails/butterfly-wings.svg',
+    programUrl: 'programs/butterfly-wings.html',
+    description: 'A flat butterfly: drag the wing handles on a live canvas while the other wing mirrors, then add veins, a raised edge and spots by clicking the wings. Prints flat. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 35,
+    title: 'Egg Hunt Basket',
+    bundle: 'easter',
+    category: 'EASTER // BASKETS',
+    thumbnailUrl: 'assets/thumbnails/egg-basket.svg',
+    programUrl: 'programs/egg-basket.html',
+    description: 'A woven Easter basket with an arched handle and striped mini eggs. Drag eggs around the top-down plan, add or remove them, and set the weave, rim and egg size. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -218,22 +326,25 @@ const BUNDLES = [
   { id: 'christmas', name: 'Christmas', accent: '#ff4d6d', at: [4, 0], size: [4, 2],
     description: 'Snowmen, snowflakes, a tiered tree and gift boxes.',
     generators: ['SLOT-04', 'SLOT-13', 'SLOT-08', 'SLOT-09', 'SLOT-06'] },
-  { id: 'easter', name: 'Easter & Spring', accent: '#c4f04a', at: [8, 0], size: [3, 2], planned: true,
-    description: 'Eggs, bunnies and spring flowers.' },
-  { id: 'valentines', name: "Valentine's", accent: '#ff6ec7', at: [0, 3], size: [3, 1], planned: true,
-    description: 'Hearts, gifts and love notes.' },
-  { id: 'thanksgiving', name: 'Thanksgiving & Fall', accent: '#d9822b', at: [3, 3], size: [7, 1],
+  { id: 'easter', name: 'Easter & Spring', accent: '#c4f04a', at: [8, 0], size: [3, 2],
+    description: 'Decorate eggs, hatch a chick, build a bunny and plant flowers.',
+    generators: ['SLOT-30', 'SLOT-31', 'SLOT-32', 'SLOT-33', 'SLOT-34', 'SLOT-35'] },
+  { id: 'valentines', name: "Valentine's", accent: '#ff6ec7', at: [0, 3], size: [2, 1],
+    description: 'Candy hearts with love notes and a fold-up card.',
+    generators: ['SLOT-28', 'SLOT-29'] },
+  { id: 'thanksgiving', name: 'Thanksgiving & Fall', accent: '#d9822b', at: [2, 3], size: [7, 1],
     description: 'Turkeys, harvest decor, fall leaves and place cards.',
     generators: ['SLOT-17', 'SLOT-22', 'SLOT-18', 'SLOT-20', 'SLOT-19', 'SLOT-21', 'SLOT-23'] },
-  { id: 'newyear', name: 'New Year & Party', accent: '#ffd400', at: [10, 3], size: [2, 1], planned: true,
-    description: 'Parties, toasts and countdowns.' },
+  { id: 'newyear', name: 'New Year & Party', accent: '#ffd400', at: [9, 3], size: [4, 1],
+    description: 'A countdown clock, confetti cannon, party hats and a whistle to blow.',
+    generators: ['SLOT-24', 'SLOT-25', 'SLOT-26', 'SLOT-27'] },
   { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [16, 3], size: [3, 1], planned: true,
     description: 'Cake toppers and party favours.' },
   // Fidgets & personal
   { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [4, 2],
     description: 'Print-in-place clickers and keycap pads.',
     generators: ['SLOT-10', 'SLOT-12'] },
-  { id: 'personal', name: 'Personalised', accent: '#ffae00', at: [12, 3], size: [4, 1],
+  { id: 'personal', name: 'Personalised', accent: '#ffae00', at: [13, 3], size: [3, 1],
     description: 'Name plates and keychains.',
     generators: ['SLOT-11'] },
   // Home, craft & play
