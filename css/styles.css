@@ -218,22 +218,25 @@ header {
 }
 
 .site-disclaimer {
-  max-width: 760px;
-  margin: 0.9rem auto 0;
-  font-size: 0.68rem;
-  line-height: 1.45;
+  display: inline;
+  font-size: 0.64rem;
+  line-height: 1.25;
   color: var(--bp-muted);
   text-align: left;
 }
 
 .site-disclaimer-lead {
-  margin: 0 0 0.4rem;
-  text-align: center;
+  display: inline;
+  margin: 0;
+}
+
+.site-disclaimer details {
+  display: inline;
 }
 
 .site-disclaimer summary {
+  display: inline;
   cursor: pointer;
-  text-align: center;
   color: var(--bp-cyan);
 }
 
@@ -602,8 +605,9 @@ header {
 footer {
   border-top: 1px solid var(--bp-cyan-dim);
   text-align: center;
-  padding: 1.75rem 1rem;
-  font-size: 0.75rem;
+  padding: 0.25rem 1rem;
+  font-size: 0.64rem;
+  line-height: 1.25;
   color: var(--bp-cyan);
   background: rgba(6, 21, 45, 0.92);
 }
