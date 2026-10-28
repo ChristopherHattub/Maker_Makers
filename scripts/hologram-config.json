@@ -239,5 +239,35 @@
     "hue": 170,
     "sat": 85,
     "light": 60
+  },
+  "pot-of-gold": {
+    "hue": 45,
+    "sat": 90,
+    "light": 60
+  },
+  "leprechaun-hat": {
+    "hue": 135,
+    "sat": 80,
+    "light": 55
+  },
+  "lucky-horseshoe": {
+    "hue": 50,
+    "sat": 85,
+    "light": 72
+  },
+  "clover-chain": {
+    "hue": 128,
+    "sat": 85,
+    "light": 58
+  },
+  "firework-burst": {
+    "hue": 352,
+    "sat": 90,
+    "light": 66
+  },
+  "star-spangled-star": {
+    "hue": 218,
+    "sat": 85,
+    "light": 68
   }
 }

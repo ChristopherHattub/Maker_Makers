@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-052 Leprechaun Hat // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+
+      function mesh(name, list, group, single) {
+        if (!list.length) return null;
+        var m = { name: name, positions: concat(list), smoothGroup: group || name };
+        if (single) m.singlePart = true;
+        return m;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a named-option picker stored as a plain number (2 names = buttons, 3+ = dropdown).
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+
+      // --- Clover outline ---
+      // A heart-shaped leaf with its tip at the origin and its lobes along +z (about 27 long at k = 1).
+      var HEART_N = 72;
+      function heartPts(k) {
+        var pts = [], i, t;
+        for (i = 0; i < HEART_N; i++) {
+          t = (i / HEART_N) * TAU;
+          pts.push([k * 16 * Math.pow(Math.sin(t), 3),
+            k * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t) + 17)]);
+        }
+        return pts;
+      }
+      // One closed outline of a 3 or 4 leaf clover about (0, 0), as a star-shaped polygon (ray from the centre
+      // to the outermost leaf edge), so overlapping leaves become a single smooth shell. L = leaf length.
+      function cloverPoly(L, leaves, rotDeg, n) {
+        var k = L / 27, base = heartPts(k), angs = leaves === 4 ? [45, 135, 225, 315] : [90, 210, 330];
+        var polys = [], i, j, e, th, dx, dz, best, t, u, c, s, phi, P, Q, ex, ez, den, out = [];
+        for (i = 0; i < angs.length; i++) {
+          phi = (angs[i] + rotDeg) * DEG - Math.PI / 2; c = Math.cos(phi); s = Math.sin(phi);
+          polys.push(base.map(function (p) { var qx = p[0], qz = p[1] - 8 * k; return [qx * c - qz * s, qx * s + qz * c]; }));
+        }
+        for (j = 0; j < n; j++) {
+          th = (j / n) * TAU; dx = Math.cos(th); dz = Math.sin(th); best = 0;
+          for (i = 0; i < polys.length; i++) {
+            for (e = 0; e < HEART_N; e++) {
+              P = polys[i][e]; Q = polys[i][(e + 1) % HEART_N]; ex = Q[0] - P[0]; ez = Q[1] - P[1];
+              den = dx * ez - dz * ex;
+              if (Math.abs(den) < 1e-12) continue;
+              t = (P[0] * ez - P[1] * ex) / den; u = (P[0] * dz - P[1] * dx) / den;
+              if (t > best && u >= 0 && u <= 1) best = t;
+            }
+          }
+          out.push([best * dx, best * dz]);
+        }
+        return out;
+      }
+      function polyReach(pts) {
+        var r = 0;
+        pts.forEach(function (p) { r = Math.max(r, Math.sqrt(p[0] * p[0] + p[1] * p[1])); });
+        return r;
+      }
+      // Raised vein lines along each leaf axis of a clover centred at (cx, cz).
+      function cloverVeins(L, leaves, rotDeg, cx, cz, w, y0, y1) {
+        var angs = leaves === 4 ? [45, 135, 225, 315] : [90, 210, 330], list = [];
+        angs.forEach(function (a) {
+          var r = (a + rotDeg) * DEG, len = L * 0.52, from = L * 0.12;
+          list.push(stroke(cx + from * Math.cos(r), cz + from * Math.sin(r), cx + len * Math.cos(r), cz + len * Math.sin(r), w, y0, y1));
+        });
+        return list;
+      }
+      function shift(pts, cx, cz) { return pts.map(function (p) { return [p[0] + cx, p[1] + cz]; }); }
+      // Stand a plan-view (x, z) shape upright on the front (+z) face: plan z becomes -y, extrusion y becomes z.
+      function upright(pos, cy) { return xform(pos, { rx: Math.PI / 2, t: [0, cy, 0] }); }
+
+      // Leprechaun Hat: a tall top hat with a rolled brim, a band, and a buckle or clover on the front.
+      var DEFAULTS = { width: 46, height: 44, top: 108, brimW: 12, brimT: 3, curl: 2, bandH: 9, emblem: 1, shape: 0, size: 17, leaves: 0 };
+
+      function build(p) {
+        var out = [], rb = p.width / 2, rt = rb * p.top / 100, H = p.height, bt = p.brimT, Rb = rb + p.brimW;
+        var crownTop = H - 1.6;
+        function rAt(y) { return rb + (rt - rb) * clamp((y - bt) / (crownTop - bt), 0, 1); }
+
+        var hat = lathe([[0, H], [rt - 1.6, H], [rt, crownTop], [rb, bt], [Rb - 3, bt], [Rb, bt + p.curl], [Rb, 0], [0, 0]], 120);
+
+        var by0 = bt + 3, by1 = by0 + p.bandH;
+        var band = lathe([[rAt(by0) - 1.5, by0], [rAt(by0) + 1.3, by0], [rAt(by1) + 1.3, by1], [rAt(by1) - 1.5, by1]], 120, null, true);
+
+        var emblem = [], yc = (by0 + by1) / 2, rf = rAt(yc), S = p.size, e = Math.round(p.emblem);
+        if (e === 1) { // buckle: a square or round frame with a pin
+          var fa = rf - 1.8, fb = rf + 1.8;
+          if (p.shape >= 1) {
+            emblem.push(upright(ringPrism(circlePts(0, 0, S / 2, 56), circlePts(0, 0, S / 2 - 2.4, 56), fa, fb), yc));
+          } else {
+            var h2 = S / 2, i2 = h2 - 2.4;
+            emblem.push(upright(ringPrism([[-h2, -h2], [h2, -h2], [h2, h2], [-h2, h2]], [[-i2, -i2], [i2, -i2], [i2, i2], [-i2, i2]], fa, fb), yc));
+          }
+          emblem.push(upright(stroke(-S * 0.3, 0, S * 0.3, 0, 2.2, fa, fb), yc));
+        } else if (e === 2) { // clover
+          emblem.push(upright(fanPrism(cloverPoly(S, p.leaves >= 1 ? 4 : 3, 180, 180), rf - 2, rf + 1.4), yc));
+        }
+
+        pushMesh(out, mesh('hat', [hat]));
+        pushMesh(out, mesh('band', [band]));
+        pushMesh(out, mesh('emblem', emblem, 'emblem', true));
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-052',
+        category: "ST PATRICK'S // HATS",
+        title: 'Leprechaun Hat',
+        fileName: 'Leprechaun_Hat',
+        palette: [
+          { name: 'Shamrock Green', color: '#4ade80' },
+          { name: 'Emerald Deep', color: '#15803d' },
+          { name: 'Gold Buckle', color: '#fcd34d' },
+          { name: 'Shadow Black', color: '#3b3f4a' },
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Phantom Ice', color: '#93c5fd' },
+          { name: 'Lavender Mist', color: '#d8b4fe' }
+        ],
+        defaultColor: '#15803d',
+        partNames: { hat: 'Hat', band: 'Hat band', emblem: 'Buckle or clover' },
+        parameters: [
+          slider('Hat', 'width', 'Crown width', ' mm', 34, 64, 1, DEFAULTS.width),
+          slider('Hat', 'height', 'Hat height', ' mm', 28, 72, 1, DEFAULTS.height),
+          slider('Hat', 'top', 'Top width (narrow ↔ wide)', '%', 85, 125, 1, DEFAULTS.top),
+          slider('Brim', 'brimW', 'Brim width', ' mm', 5, 22, 1, DEFAULTS.brimW),
+          slider('Brim', 'brimT', 'Brim thickness', ' mm', 2.4, 5, 0.2, DEFAULTS.brimT),
+          slider('Brim', 'curl', 'Brim roll-up', ' mm', 0, 6, 0.5, DEFAULTS.curl),
+          slider('Band & front', 'bandH', 'Band height', ' mm', 5, 14, 1, DEFAULTS.bandH),
+          choice('Band & front', 'emblem', 'Front piece', ['None', 'Buckle', 'Clover'], DEFAULTS.emblem),
+          choice('Band & front', 'shape', 'Buckle shape', ['Square', 'Round'], DEFAULTS.shape),
+          choice('Band & front', 'leaves', 'Clover leaves', ['Three-leaf', 'Four-leaf'], DEFAULTS.leaves),
+          slider('Band & front', 'size', 'Front piece size', ' mm', 10, 26, 1, DEFAULTS.size)
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Default hat', {}),
+          presetOf(DEFAULTS, 'Tall and wide', { height: 60, top: 118, width: 50, brimW: 16 }),
+          presetOf(DEFAULTS, 'Round buckle', { shape: 1, size: 18 }),
+          presetOf(DEFAULTS, 'Clover hat', { emblem: 2, size: 18, bandH: 8 }),
+          presetOf(DEFAULTS, 'Mini hat', { width: 36, height: 30, brimW: 7, size: 12, bandH: 6 })
+        ],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

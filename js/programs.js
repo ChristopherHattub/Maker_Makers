@@ -438,6 +438,60 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/flipper.svg',
     programUrl: 'programs/flipper.html',
     description: 'A kaleidocycle: a ring of six hinged tetrahedra with print-in-place pin hinges that turns itself inside out when you push it. Set piece length, slimness, hinge size, pin gap and the pose it prints in. Print it with supports under the three raised pieces and around the hinges. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 51,
+    title: 'Pot of Gold',
+    bundle: 'stpatricks',
+    category: "ST PATRICK'S // GOLD",
+    thumbnailUrl: 'assets/thumbnails/pot-of-gold.svg',
+    programUrl: 'programs/pot-of-gold.html',
+    description: 'A black cauldron brimming with a mound of gold coins, with an optional belt and clover badge and a few coins spilled beside it. Set pot width and height, rim, pile height, coin count and size. Rests on a flat base with gentle slopes, so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 52,
+    title: 'Leprechaun Hat',
+    bundle: 'stpatricks',
+    category: "ST PATRICK'S // HATS",
+    thumbnailUrl: 'assets/thumbnails/leprechaun-hat.svg',
+    programUrl: 'programs/leprechaun-hat.html',
+    description: 'A tall top hat with a rolled brim, a band, and a buckle or clover on the front. Set crown width and height, how wide the top is, the brim width, thickness and roll-up, and the band. Prints brim down with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 53,
+    title: 'Lucky Horseshoe',
+    bundle: 'stpatricks',
+    category: "ST PATRICK'S // LUCKY CHARMS",
+    thumbnailUrl: 'assets/thumbnails/lucky-horseshoe.svg',
+    programUrl: 'programs/lucky-horseshoe.html',
+    description: 'A flat horseshoe with real square nail holes, an optional clover on top and an optional hang loop. Set width, band width, thickness, how open it is, and the number and size of the holes. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 54,
+    title: 'Clover Chain',
+    bundle: 'stpatricks',
+    category: "ST PATRICK'S // LUCKY CHARMS",
+    thumbnailUrl: 'assets/thumbnails/clover-chain.svg',
+    programUrl: 'programs/clover-chain.html',
+    description: 'One clover or a whole row of them joined by bridges, with three or four leaves, leaf veins and hang rings at one or both ends. Set 1 to 8 clovers, leaf size, bridge length and thickness (thin bridges bend) and a twist for each link. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 55,
+    title: 'Firework Burst',
+    bundle: 'july4',
+    category: "FOURTH OF JULY // FIREWORKS",
+    thumbnailUrl: 'assets/thumbnails/firework-burst.svg',
+    programUrl: 'programs/firework-burst.html',
+    description: 'A flat radial burst of tapered spokes with ball, star or diamond tips, a centre hub, an optional inner ring and an optional hang loop. Set the number, length and width of the spokes, long and short lengths, tip style and thickness. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 56,
+    title: 'Star-Spangled Star',
+    bundle: 'july4',
+    category: "FOURTH OF JULY // STARS",
+    thumbnailUrl: 'assets/thumbnails/star-spangled-star.svg',
+    programUrl: 'programs/star-spangled-star.html',
+    description: 'A chunky star plaque with a raised rim, a centre star and small spangle stars on each point. Use it as a coaster, ornament or wall star. Set the number of points, size, how spiky it is, thickness, rim width and the decoration. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -476,6 +530,12 @@ const BUNDLES = [
   { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [16, 3], size: [4, 2],
     description: 'Cakes, cupcakes, candles, pinatas, balloons, banners, a popper spinner and a crown.',
     generators: ['SLOT-36', 'SLOT-37', 'SLOT-42', 'SLOT-38', 'SLOT-39', 'SLOT-40', 'SLOT-41', 'SLOT-43'] },
+  { id: 'stpatricks', name: "St. Patrick's Day", accent: '#3ddc84', at: [20, 3], size: [4, 1],
+    description: 'A pot of gold, a leprechaun hat, a lucky horseshoe and a clover chain.',
+    generators: ['SLOT-51', 'SLOT-52', 'SLOT-53', 'SLOT-54'] },
+  { id: 'july4', name: 'Fourth of July', accent: '#5b8cff', at: [20, 5], size: [3, 1],
+    description: 'A firework burst and a star-spangled star.',
+    generators: ['SLOT-55', 'SLOT-56'] },
   // Fidgets & personal
   { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [6, 2],
     description: 'Print-in-place clickers, keycap pads, gears, sliders, spinners and rattles.',
