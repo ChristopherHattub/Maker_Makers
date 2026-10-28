@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "cell": 256,
+  "inset": 8,
+  "tile": 240,
+  "frames": 6,
+  "fps": 8,
+  "sheets": [
+    {
+      "file": "sheet-01.webp",
+      "width": 1536,
+      "height": 1024
+    },
+    {
+      "file": "sheet-02.webp",
+      "width": 1536,
+      "height": 1024
+    },
+    {
+      "file": "sheet-03.webp",
+      "width": 1536,
+      "height": 1024
+    }
+  ],
+  "tiles": {
+    "ghost-builder": {
+      "slot": 1,
+      "label": "Ghost Builder",
+      "sheet": 0,
+      "row": 0
+    },
+    "pumpkin-plotter": {
+      "slot": 2,
+      "label": "Pumpkin Plotter",
+      "sheet": 0,
+      "row": 1
+    },
+    "spider": {
+      "slot": 3,
+      "label": "Spider",
+      "sheet": 0,
+      "row": 2
+    },
+    "snowman": {
+      "slot": 4,
+      "label": "Snowman Stacker",
+      "sheet": 0,
+      "row": 3
+    },
+    "witch-hat": {
+      "slot": 5,
+      "label": "Witch Hat",
+      "sheet": 1,
+      "row": 0
+    },
+    "snowflake": {
+      "slot": 6,
+      "label": "Snowflake Studio",
+      "sheet": 1,
+      "row": 1
+    },
+    "skull-sculptor": {
+      "slot": 7,
+      "label": "Skull Sculptor",
+      "sheet": 1,
+      "row": 2
+    },
+    "holiday-tree": {
+      "slot": 8,
+      "label": "Holiday Tree",
+      "sheet": 1,
+      "row": 3
+    },
+    "gift-box": {
+      "slot": 9,
+      "label": "Holiday Gift Box",
+      "sheet": 2,
+      "row": 0
+    },
+    "key-clicker": {
+      "slot": 10,
+      "label": "Key Clicker",
+      "sheet": 2,
+      "row": 1
+    },
+    "name-keychain": {
+      "slot": 11,
+      "label": "Name Keychain",
+      "sheet": 2,
+      "row": 2
+    },
+    "image-clicker": {
+      "slot": 12,
+      "label": "Image Clicker",
+      "sheet": 2,
+      "row": 3
+    }
+  }
+}

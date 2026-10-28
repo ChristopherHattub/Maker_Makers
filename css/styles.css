@@ -1119,6 +1119,9 @@ body.on-splash .container {
 .world.exp .tile { width: 128px; height: 128px; }
 .world.exp .tile-card { border: 0; border-radius: 0; box-shadow: none; background: #000; }
 .world.exp .tile.has-pro .tile-label { display: none; }
+.tile-sprite { position: absolute; inset: 0; background-repeat: no-repeat; pointer-events: none; display: none; }
+.world.exp .tile.has-sprite .tile-sprite { display: block; }
+.world.exp .tile.has-sprite .tile-art img { visibility: hidden; }
 .world.exp .tile-glow { display: none; }
 .world.exp .tile:hover, .world.exp .tile:focus-visible, .world.exp .tile.selected { z-index: 2; }
 .world.exp .tile:hover .tile-card, .world.exp .tile:focus-visible .tile-card, .world.exp .tile.selected .tile-card {

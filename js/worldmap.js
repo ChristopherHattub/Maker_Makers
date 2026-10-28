@@ -69,6 +69,68 @@ function proThumbUrl(url) {
   return url.replace(/^(.*\/)?([^/]+)\.\w+$/, 'assets/thumbnails/pro/$2.png');
 }
 
+// Hover animation: assets/thumbnails/sprites/manifest.json maps a thumbnail's basename to a row of frames in a
+// sprite sheet (see docs/sprite-sheet-skill.md). In the experimental view those tiles show frame 0 and play the
+// frames while hovered or focused. Tiles missing from the manifest keep their still.
+let spriteManifest = null;
+const SPRITE_DIR = 'assets/thumbnails/sprites/';
+
+function spriteLoad() {
+  if (!spriteManifest) {
+    spriteManifest = fetch(SPRITE_DIR + 'manifest.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
+  }
+  return spriteManifest;
+}
+
+function spriteShow(span, frame) {
+  const d = span._sprite, scale = span.clientWidth / d.m.tile;
+  const sheet = d.m.sheets[d.entry.sheet];
+  span.style.backgroundSize = `${sheet.width * scale}px ${sheet.height * scale}px`;
+  span.style.backgroundPosition = `${-(frame * d.m.cell + d.m.inset) * scale}px ${-(d.entry.row * d.m.cell + d.m.inset) * scale}px`;
+}
+
+function spriteStop(tile) {
+  const span = tile.querySelector('.tile-sprite');
+  if (!span || !span._sprite) return;
+  clearInterval(span._sprite.timer);
+  span._sprite.timer = null;
+  spriteShow(span, 0);
+}
+
+function spritePlay(tile) {
+  const span = tile.querySelector('.tile-sprite');
+  if (!span || !span._sprite || span._sprite.timer || worldReducedMotion()) return;
+  const d = span._sprite;
+  let frame = 0;
+  const tick = () => { frame = (frame + 1) % d.m.frames; spriteShow(span, frame); };
+  tick();
+  d.timer = setInterval(tick, 1000 / d.m.fps);
+}
+
+function spriteApply(m) {
+  wEl.canvas.querySelectorAll('.tile').forEach(tile => {
+    const img = tile.querySelector('.tile-art img[data-std]');
+    const entry = img && m.tiles[img.dataset.std.replace(/^.*\/([^/]+)\.\w+$/, '$1')];
+    if (!entry || tile.querySelector('.tile-sprite')) return;
+    const span = document.createElement('span');
+    span.className = 'tile-sprite';
+    span.setAttribute('aria-hidden', 'true');
+    span.style.backgroundImage = `url(${SPRITE_DIR}${m.sheets[entry.sheet].file})`;
+    span._sprite = { m, entry, timer: null };
+    tile.querySelector('.tile-art').appendChild(span);
+    tile.classList.add('has-sprite', 'has-pro');
+    spriteShow(span, 0);
+  });
+}
+
+function spriteRemove() {
+  wEl.canvas.querySelectorAll('.tile.has-sprite').forEach(tile => {
+    spriteStop(tile);
+    tile.querySelector('.tile-sprite')?.remove();
+    tile.classList.remove('has-sprite');
+  });
+}
+
 function worldSetExperimental(on) {
   worldState.experimental = on;
   WORLD.TILE = on ? WORLD.CELL : 112;
@@ -80,6 +142,8 @@ function worldSetExperimental(on) {
     img.onerror = () => { img.onerror = null; tile.classList.remove('has-pro'); img.src = img.dataset.std; };
     img.src = img.dataset.pro;
   });
+  if (on) spriteLoad().then(m => { if (m && worldState.experimental) spriteApply(m); });
+  else spriteRemove();
   const btn = document.getElementById('world-exp-toggle');
   if (btn) btn.setAttribute('aria-pressed', on);
   try { localStorage.setItem('mm-exp-view', on ? '1' : '0'); } catch (e) {}
@@ -149,6 +213,14 @@ function initWorldMap() {
     `${filled} generators · ${groups.filter(g => g.members.length).length} groups · ${open} open slots`;
 
   const expBtn = document.getElementById('world-exp-toggle');
+  const spriteTile = e => (worldState.experimental ? e.target.closest?.('.tile.has-sprite') : null);
+  wEl.canvas.addEventListener('mouseover', e => { const t = spriteTile(e); if (t) spritePlay(t); });
+  wEl.canvas.addEventListener('mouseout', e => {
+    const t = spriteTile(e);
+    if (t && !t.contains(e.relatedTarget)) spriteStop(t);
+  });
+  wEl.canvas.addEventListener('focusin', e => { const t = spriteTile(e); if (t) spritePlay(t); });
+  wEl.canvas.addEventListener('focusout', e => { const t = spriteTile(e); if (t) spriteStop(t); });
   if (expBtn) expBtn.addEventListener('click', () => worldSetExperimental(!worldState.experimental));
   let wasOn = false;
   try { wasOn = localStorage.getItem('mm-exp-view') === '1'; } catch (e) {}
