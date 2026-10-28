@@ -19,7 +19,7 @@ const worldState = {
 
 // The Workshop is a large tile in the middle of the map (not a generator). It occupies WORKSHOP.cols x WORKSHOP.rows cells
 // starting at cell WORKSHOP.at, and opens the free-range 3D editor at #/workshop. See docs/workshop.md.
-const WORKSHOP = { at: [8, 5], cols: 4, rows: 3 };
+const WORKSHOP = { at: [8, 5], cols: 4, rows: 4 };
 
 const wEl = {};
 
