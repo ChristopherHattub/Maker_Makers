@@ -178,9 +178,15 @@ function hoverLoop(obj, now) {
   h.last = now;
   h.p = Math.max(0, Math.min(1, h.p + h.dir * dt / (h.dir > 0 ? 260 : 200)));
   h.acc += dt;
-  const step = 1000 / m.fps;
-  while (h.acc >= step) { h.acc -= step; h.frame = (h.frame + 1) % h.lay.seq.length; }
-  if (h.dir < 0 && h.p <= 0) { h.frame = 0; h.acc = 0; h.raf = 0; hoverDraw(obj); return; }
+  // After the pointer leaves, shrink back but keep turning (twice as fast) until the loop lands on frame 0, so the
+  // tile settles on the rest pose without a snap.
+  const step = 1000 / m.fps / (h.dir < 0 ? 2 : 1);
+  while (h.acc >= step) {
+    h.acc -= step;
+    h.frame = (h.frame + 1) % h.lay.seq.length;
+    if (h.dir < 0 && h.p <= 0 && h.frame === 0) break;
+  }
+  if (h.dir < 0 && h.p <= 0 && h.frame === 0) { h.acc = 0; h.raf = 0; hoverDraw(obj); return; }
   hoverDraw(obj);
   h.raf = requestAnimationFrame(t => hoverLoop(obj, t));
 }
