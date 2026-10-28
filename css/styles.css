@@ -763,6 +763,8 @@ body.on-splash .container {
 
 .world-title h2 { font-size: 1rem; letter-spacing: 3px; text-transform: uppercase; }
 .world-title p { font-size: 0.68rem; color: #8ab4e1; margin: 0.15rem 0 0.55rem; }
+.world-exp-toggle { width: 100%; margin-bottom: 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.72rem; }
+.world-exp-toggle[aria-pressed="true"] { background: var(--bp-cyan); color: #06152d; }
 .world-title .bp-input { width: 100%; min-width: 0; padding: 0.4rem 0.6rem; font-size: 0.78rem; }
 
 .world-controls {
@@ -1112,3 +1114,15 @@ body.on-splash .container {
   .tile:hover .tile-glow::after, .tile:focus-visible .tile-glow::after, .tile.selected .tile-glow::after, .cell-cursor { animation: none; }
   .world-panel { animation: none; }
 }
+
+/* Experimental view: tiles touch, pro artwork fills the whole cell */
+.world.exp .tile { width: 128px; height: 128px; }
+.world.exp .tile-card { border: 0; border-radius: 0; box-shadow: none; background: #000; }
+.world.exp .tile.has-pro .tile-label { display: none; }
+.world.exp .tile-glow { display: none; }
+.world.exp .tile:hover, .world.exp .tile:focus-visible, .world.exp .tile.selected { z-index: 2; }
+.world.exp .tile:hover .tile-card, .world.exp .tile:focus-visible .tile-card, .world.exp .tile.selected .tile-card {
+  transform: scale(1.06);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.world.exp .tile:active .tile-card { transform: scale(1.02); }

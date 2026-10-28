@@ -60,6 +60,33 @@ function cellRect(region, col, row) {
   return { x: region.x * C + col * C, y: region.y * C + (row + 1) * C, w: WORLD.TILE, h: WORLD.TILE };
 }
 
+// ---------- experimental view ----------
+
+// Experimental view: tiles touch edge to edge and use artwork from assets/thumbnails/pro/. To add art for a
+// generator, drop a PNG there named like its normal thumbnail (assets/thumbnails/ghost-builder.svg ->
+// assets/thumbnails/pro/ghost-builder.png). Tiles without one keep their normal thumbnail.
+function proThumbUrl(url) {
+  return url.replace(/^(.*\/)?([^/]+)\.\w+$/, 'assets/thumbnails/pro/$2.png');
+}
+
+function worldSetExperimental(on) {
+  worldState.experimental = on;
+  WORLD.TILE = on ? WORLD.CELL : 112;
+  wEl.root.classList.toggle('exp', on);
+  wEl.canvas.querySelectorAll('.tile-art img[data-std]').forEach(img => {
+    const tile = img.closest('.tile');
+    if (!on) { tile.classList.remove('has-pro'); img.src = img.dataset.std; return; }
+    img.onload = () => { if (img.src.includes('/pro/')) tile.classList.add('has-pro'); };
+    img.onerror = () => { img.onerror = null; tile.classList.remove('has-pro'); img.src = img.dataset.std; };
+    img.src = img.dataset.pro;
+  });
+  const btn = document.getElementById('world-exp-toggle');
+  if (btn) btn.setAttribute('aria-pressed', on);
+  try { localStorage.setItem('mm-exp-view', on ? '1' : '0'); } catch (e) {}
+  worldSelect(null);
+  worldRedraw();
+}
+
 // ---------- render ----------
 
 function regionHTML(r) {
@@ -70,7 +97,7 @@ function regionHTML(r) {
   const tiles = g.members.map((p, i) => {
     const col = i % r.w, row = Math.floor(i / r.w);
     const thumb = p.thumbnailUrl
-      ? `<img src="${p.thumbnailUrl}" alt="" loading="lazy" draggable="false">`
+      ? `<img src="${p.thumbnailUrl}" data-std="${p.thumbnailUrl}" data-pro="${proThumbUrl(p.thumbnailUrl)}" alt="" loading="lazy" draggable="false">`
       : '<span class="tile-empty">+</span>';
     const search = escapeHTML(`${p.title} ${p.category} ${p.description} ${g.name}`.toLowerCase());
     return `
@@ -120,6 +147,12 @@ function initWorldMap() {
   const open = worldState.regions.reduce((n, r) => n + r.w * r.h - r.group.members.length, 0);
   document.getElementById('world-stats').textContent =
     `${filled} generators · ${groups.filter(g => g.members.length).length} groups · ${open} open slots`;
+
+  const expBtn = document.getElementById('world-exp-toggle');
+  if (expBtn) expBtn.addEventListener('click', () => worldSetExperimental(!worldState.experimental));
+  let wasOn = false;
+  try { wasOn = localStorage.getItem('mm-exp-view') === '1'; } catch (e) {}
+  if (wasOn) worldSetExperimental(true);
 
   bindWorldInput();
   new ResizeObserver(worldResized).observe(wEl.root);
