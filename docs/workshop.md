@@ -6,14 +6,14 @@ A large tile in the middle of the homepage map opens `#/workshop`, a 3D editor f
 
 - **Add:** pick a shape in the tab at the top. Collapsed, it shows the current set as a horizontal strip; "All sets" pulls down every set, and the search box filters across all sets.
 - **Move:** drag a shape across the bed. **Turn / Size:** the gizmo buttons (keys E, R). The side panel has big picture buttons instead of number boxes: a move pad, spin / tip / flip, bigger / smaller / taller / flatter / wider / thinner, and colour dots. Shape pictures in the tab are renders of the real 3D shapes.
-- **Import / export:** Import STL (or drop files on the viewport); Export STL writes the whole visible scene as one file.
+- **Import / export:** Open STL (or drop files on the viewport); Save STL writes the whole visible scene as one file.
 - **Generators:** the Generators set lists the finished generators (fidgets, clickers and other functional models are left out for now). Adding one places that generator's real default model. Double-click it to zoom in and open a mini editor (the generator's own Parametric controls) beside it; the shape rebuilds as you change sliders.
 - **Text:** the Text shape accepts any keyboard character; edit text, height and thickness in the inspector.
 - **Quality of life:** undo/redo, duplicate, delete, multi-select (shift-click), drop to bed, centre, mirror, hide, lock, colour, snap, top/front/iso views, a build-plate size with out-of-bounds warning, autosave.
 - **Merge / Cut / Intersect:** select two or more shapes (the first selected is the base) and use the Combine buttons in the inspector. The result is one new shape; Ctrl+Z restores the originals. It uses three-bvh-csg, loaded from esm.sh on first use, and works best on closed shapes.
 - **Arrow keys** nudge the selection (tiny / small / big step chips set the size; Shift = 5x, Alt = 1 mm, PageUp / PageDown = up / down). The Centre button in the left toolbar zooms the view onto the selected shape.
 - **Editing a generator shape:** the selection is locked to that shape until you press Done, and the mini editor includes the generator's 3D view, so stamps and other click-on-the-model tools work. Stamps are kept with the shape (generators with stamps export `embedState` for this).
-- **Export:** Export STL and Export 3MF (keeps each shape's colour for Bambu, Orca, Prusa and Cura) are in the top bar and the side panel.
+- **Save:** Save STL and Save 3MF (keeps each shape's colour for Bambu, Orca, Prusa and Cura) are in the top bar and the side panel.
 - **Keys:** W/E/R move/rotate/scale, G snap, B drop to bed, H hide, F focus, Ctrl+D duplicate, Ctrl+Z / Ctrl+Shift+Z undo / redo, Del delete.
 
 ## Privacy

@@ -163,8 +163,8 @@ function wsInit(root) {
       <div class="ws-top-row">
         <strong style="letter-spacing:3px;color:var(--bp-cyan)">WORKSHOP</strong>
         <button class="ws-btn" data-a="import" title="Open an STL file">📂<small>Open STL</small></button>
-        <button class="ws-btn ws-export" data-a="export" title="Export everything as an STL file (no colours)">⬇️<small>Export STL</small></button>
-        <button class="ws-btn ws-export" data-a="export3mf" title="Export everything as a 3MF with your colours, for Bambu Studio, OrcaSlicer, PrusaSlicer and Cura">🎨<small>Export 3MF</small></button>
+        <button class="ws-btn ws-export" data-a="export" title="Save everything as an STL file (no colours)">💾<small>Save STL</small></button>
+        <button class="ws-btn ws-export" data-a="export3mf" title="Save everything as a 3MF with your colours, for Bambu Studio, OrcaSlicer, PrusaSlicer and Cura">🎨<small>Save 3MF</small></button>
         <button class="ws-btn" data-a="undo" title="Undo (Ctrl+Z)">↩️<small>Undo</small></button>
         <button class="ws-btn" data-a="redo" title="Redo">↪️<small>Redo</small></button>
         <button class="ws-btn" data-a="clear" title="Remove everything">🧹<small>Clear</small></button>
@@ -708,7 +708,7 @@ function wsRenderSide() {
   }
   side.innerHTML = `<div><h4>Selection</h4>${insp}</div><div><h4>Scene (${WS.objs.length})</h4><ul class="ws-list">${list || '<li class="ws-note">Empty</li>'}</ul>
     <p class="ws-note">Keys: W move · E rotate · R scale · G snap · B drop to bed · H hide · F focus · Ctrl+D duplicate · Ctrl+Z undo · Del delete</p>
-    <div class="ws-btns" style="margin:4px 0"><button data-a="export">⬇️ Export STL</button><button data-a="export3mf">🎨 Export 3MF (colours)</button></div><p class="ws-note">Private: files never leave your browser.</p></div>`;
+    <div class="ws-btns" style="margin:4px 0"><button data-a="export">💾 Save STL</button><button data-a="export3mf">🎨 Save 3MF (colours)</button></div><p class="ws-note">Private: files never leave your browser.</p></div>`;
   side.onclick = e => {
     const li = e.target.closest('li[data-id]');
     if (!li) return;
@@ -887,7 +887,7 @@ function wsImportFile(file) {
 
 function wsExport() {
   const vis = WS.objs.filter(o => o.mesh.visible);
-  if (!vis.length) { wsToast('Nothing to export.'); return; }
+  if (!vis.length) { wsToast('Nothing to save.'); return; }
   const tris = [];
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   vis.forEach(o => {
@@ -910,14 +910,14 @@ function wsExport() {
     f.forEach((v, j) => dv.setFloat32(84 + i * 50 + j * 4, isFinite(v) ? v : 0, true));
   });
   wsDownload(buf, 'workshop.stl');
-  wsToast(`Exported ${vis.length} object${vis.length > 1 ? 's' : ''} (${tris.length} triangles) as workshop.stl`);
+  wsToast(`Saved ${vis.length} object${vis.length > 1 ? 's' : ''} (${tris.length} triangles) as workshop.stl`);
 }
 
 // 3MF with colours: one object, a volume per colour (extruder numbers for Prusa / Bambu / Orca) and per-triangle base
 // materials (Cura and generic viewers). Same layout as the generators' .3mf export; only colours, never print settings.
 function wsExport3mf() {
   const vis = WS.objs.filter(o => o.mesh.visible);
-  if (!vis.length) { wsToast('Nothing to export.'); return; }
+  if (!vis.length) { wsToast('Nothing to save.'); return; }
   const hex = c => '#' + c.toString(16).padStart(6, '0').toUpperCase();
   const colors = [], cidx = {}, verts = [], tris = [], a = new THREE.Vector3();
   vis.forEach(o => {
@@ -952,7 +952,7 @@ function wsExport3mf() {
   files.push({ name: 'Metadata/Slic3r_PE.config', data: enc(`; extruder_colour = ${q}\n; filament_colour = ${q}\n`) });
   files.push({ name: 'Metadata/project_settings.config', data: enc(JSON.stringify({ filament_colour: colors, extruder_colour: colors, filament_type: colors.map(() => 'PLA') }, null, 2)) });
   wsDownload(wsZip(files), 'workshop.3mf');
-  wsToast(`Exported workshop.3mf with ${colors.length} ${colors.length === 1 ? 'colour' : 'colours'}`);
+  wsToast(`Saved workshop.3mf with ${colors.length} ${colors.length === 1 ? 'colour' : 'colours'}`);
 }
 
 function wsDownload(data, name) {
