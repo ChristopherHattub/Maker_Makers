@@ -168,7 +168,7 @@ The STL export applies this transform: Y-up becomes Z-up (`x, y, z` becomes `x, 
 
 ### Print tab
 
-The **Print** tab (engine-owned) has a single option, **Material** (PLA, PETG, ABS, ASA, TPU), which changes the finish of the realistic preview. There are no slicer settings and no .3MF export: the only export is .STL. A generator may set `printSettings: { material: 'TPU' }` to change the starting material; nothing else is read.
+The **Print** tab (engine-owned) has a single option, **Material** (PLA, PETG, ABS, ASA, TPU), which changes the finish of the realistic preview. There are no slicer settings. Exports are .STL (no color) and **.3MF (colors)**: the 3MF carries the Color-tab colors, one object with a volume per distinct color (extruder 1..N, read by Bambu Studio, OrcaSlicer and PrusaSlicer) plus per-triangle basematerials colors (Cura and generic viewers), and `filament_colour` lists for the slicer's filament slots. It writes no print settings. Every generator gets it from the engine. A generator may set `printSettings: { material: 'TPU' }` to change the starting material; nothing else is read.
 
 ## Standalone download
 

@@ -26,7 +26,7 @@ Every generator, new or existing, **must** use the shared phone layout from `gen
 
 ## Print tab realistic render is engine-owned
 
-Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**, plus the **Export block** (triangle count, file name, Export .STL, standalone .html download, disclaimer); there are no slicer settings and no .3MF export. Never put export, file name or download controls in another tab. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
+Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**, plus the **Export block** (triangle count, file name, Export .STL, standalone .html download, disclaimer); there are no slicer settings. The Export block has **Export .STL** and **Export .3MF (colors)**; the 3MF carries the Color-tab colors for any slicer (engine-owned, nothing to add per generator). Never put export, file name or download controls in another tab. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
 
 ## Page rules (the standalone bundler depends on these)
 
@@ -172,7 +172,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
 - [ ] Print tab shows the realistic render (colors kept, changing Material updates it live) and has no other options.
-- [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed). There is no .3MF export.
+- [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed). - [ ] Export .3MF (colors) after painting two parts: unzip it; `3D/3dmodel.model` has one `basematerials` entry per used color and `Metadata/model_settings.config` one `<volume>` per color covering all triangles. A new download type must go through `confirmDownload`.
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] Clicking Export .STL opens the consent modal; the download button stays disabled until the box is ticked; Cancel/Esc/backdrop close it without downloading.
 - [ ] The Disclaimer block shows at the bottom of the Print tab under the Export block (engine-provided; never remove or override it in a generator page) and expands to readable text.

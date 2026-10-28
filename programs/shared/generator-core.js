@@ -190,7 +190,8 @@
       el('div', { class: 'mm-stats', id: 'mm-stats', text: 'Geometry ready' }),
       el('label', { class: 'mm-file-field' }, [document.createTextNode('File name'), fileInput]),
       el('div', { class: 'mm-export-row' }, [
-        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } })
+        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-stl', text: 'Export .STL', onclick: function () { confirmDownload('.STL', exportStl); } }),
+        el('button', { class: 'mm-btn mm-btn--solid', type: 'button', id: 'mm-export-3mf', text: 'Export .3MF (colors)', title: 'Keeps your Color-tab colors for Bambu Studio, OrcaSlicer, PrusaSlicer and Cura', onclick: function () { confirmDownload('.3MF', export3mf); } })
       ]),
       el('button', { class: 'mm-btn mm-btn--amber mm-btn--block', type: 'button', text: 'Download standalone .html generator', onclick: function () { confirmDownload('generator', downloadStandalone); } }),
       disclaimerBlock()
@@ -1254,6 +1255,138 @@
     toast('Saved ' + safeFileName($('mm-file-name').value) + '.stl');
   }
 
+  // Colored 3MF: one object, one volume per distinct color (Bambu Studio / OrcaSlicer / PrusaSlicer read these
+  // as parts with an extruder number), plus per-triangle basematerials colors (Cura and generic viewers).
+  // Only the Color-tab colors are written, never slicer print settings.
+  function export3mf() {
+    ensureParts();
+    // Same Y-up -> Z-up mapping and bed offset as the STL export.
+    var minY = Infinity;
+    modelData.forEach(function (entry) {
+      var p = entry.positions;
+      for (var i = 1; i < p.length; i += 3) if (p[i] < minY) minY = p[i];
+    });
+    if (!isFinite(minY)) minY = 0;
+
+    var colorIndex = {};
+    var colorList = [];
+    var vertexXml = [];
+    var tris = [];
+    var vertexOffset = 0;
+
+    modelData.forEach(function (entry, meshIndex) {
+      var p = entry.positions;
+      var triCount = p.length / 9;
+      var localVerts = {};
+      var localIndex = 0;
+
+      function vertexId(x, y, z) {
+        var key = x.toFixed(4) + ',' + y.toFixed(4) + ',' + z.toFixed(4);
+        if (localVerts[key] === undefined) {
+          localVerts[key] = localIndex++;
+          vertexXml.push('<vertex x="' + x.toFixed(4) + '" y="' + (-z).toFixed(4) + '" z="' + (y - minY).toFixed(4) + '"/>');
+        }
+        return localVerts[key] + vertexOffset;
+      }
+
+      for (var t = 0; t < triCount; t++) {
+        var b = t * 9;
+        var part = parts[globalPartIndex(meshIndex, t)];
+        var color = (part.color || part.def || DEFAULT_COLOR).toUpperCase();
+        if (colorIndex[color] === undefined) {
+          colorIndex[color] = colorList.length;
+          colorList.push(color);
+        }
+        tris.push({
+          c: colorIndex[color],
+          v: [vertexId(p[b], p[b + 1], p[b + 2]), vertexId(p[b + 3], p[b + 4], p[b + 5]), vertexId(p[b + 6], p[b + 7], p[b + 8])]
+        });
+      }
+      vertexOffset += localIndex;
+    });
+
+    // Sort by color so each color is one contiguous triangle range (a volume).
+    tris.sort(function (a, b) { return a.c - b.c; });
+    var ranges = colorList.map(function () { return null; });
+    var triangleXml = tris.map(function (t, i) {
+      if (!ranges[t.c]) ranges[t.c] = { first: i, last: i };
+      ranges[t.c].last = i;
+      return '<triangle v1="' + t.v[0] + '" v2="' + t.v[1] + '" v3="' + t.v[2] + '" pid="1" p1="' + t.c + '"/>';
+    });
+
+    var baseXml = colorList.map(function (c) {
+      return '<base name="' + c + '" displaycolor="' + c + '"/>';
+    }).join('');
+    var objName = escapeXml(safeFileName($('mm-file-name').value));
+
+    var modelXml = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">' +
+      '<metadata name="Title">' + escapeXml(cfg.title) + '</metadata>' +
+      '<metadata name="Designer">Maker Makers</metadata>' +
+      '<resources>' +
+      '<basematerials id="1">' + baseXml + '</basematerials>' +
+      '<object id="2" name="' + objName + '" type="model" pid="1" pindex="0">' +
+      '<mesh><vertices>' + vertexXml.join('') + '</vertices><triangles>' + triangleXml.join('') + '</triangles></mesh>' +
+      '</object></resources>' +
+      '<build><item objectid="2"/></build></model>';
+
+    // Volume list with extruder numbers (Prusa and Bambu/Orca use the same layout and key names).
+    var volumes = colorList.map(function (c, i) {
+      return '<volume firstid="' + ranges[i].first + '" lastid="' + ranges[i].last + '">' +
+        '<metadata type="volume" key="name" value="Color ' + (i + 1) + ' ' + c + '"/>' +
+        '<metadata type="volume" key="volume_type" value="ModelPart"/>' +
+        '<metadata type="volume" key="extruder" value="' + (i + 1) + '"/>' +
+        '</volume>';
+    }).join('');
+    var modelConfig = '<?xml version="1.0" encoding="UTF-8"?><config>' +
+      '<object id="2" instances_count="1"><metadata type="object" key="name" value="' + objName + '"/>' +
+      '<metadata type="object" key="extruder" value="1"/>' + volumes + '</object></config>';
+
+    var quoted = colorList.map(function (c) { return '"' + c + '"'; }).join(';');
+    var prusaConfig = '; extruder_colour = ' + quoted + '\n; filament_colour = ' + quoted + '\n';
+    var bambuConfig = {
+      filament_colour: colorList.slice(),
+      extruder_colour: colorList.slice(),
+      filament_type: colorList.map(function () { return printSettings.material; })
+    };
+
+    var contentTypes = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>' +
+      '<Default Extension="config" ContentType="text/plain"/>' +
+      '</Types>';
+    var rels = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>' +
+      '</Relationships>';
+
+    var files = [
+      { name: '[Content_Types].xml', data: utf8(contentTypes) },
+      { name: '_rels/.rels', data: utf8(rels) },
+      { name: '3D/3dmodel.model', data: utf8(modelXml) }
+    ];
+    if (colorList.length > 1) {
+      files.push({ name: 'Metadata/Slic3r_PE_model.config', data: utf8(modelConfig) });
+      files.push({ name: 'Metadata/model_settings.config', data: utf8(modelConfig) });
+    }
+    files.push({ name: 'Metadata/Slic3r_PE.config', data: utf8(prusaConfig) });
+    files.push({ name: 'Metadata/project_settings.config', data: utf8(JSON.stringify(bambuConfig, null, 2)) });
+    var name = safeFileName($('mm-file-name').value);
+    saveBlob(new Blob([makeZip(files)], { type: 'application/octet-stream' }), name + '.3mf');
+    toast('Saved ' + name + '.3mf with ' + colorList.length + (colorList.length === 1 ? ' color' : ' colors'));
+  }
+
+  function escapeXml(text) {
+    return String(text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c];
+    });
+  }
+
+  function utf8(text) {
+    return new TextEncoder().encode(text);
+  }
+
   function saveBlob(blob, fileName) {
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
@@ -1263,6 +1396,71 @@
     link.click();
     document.body.removeChild(link);
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  // Minimal ZIP writer (store, no compression), enough for a .3mf package.
+  function makeZip(files) {
+    var crcTable = makeZip.table || (makeZip.table = (function () {
+      var table = new Uint32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        table[n] = c >>> 0;
+      }
+      return table;
+    })());
+    function crc32(data) {
+      var crc = 0xffffffff;
+      for (var i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    var locals = [];
+    var centrals = [];
+    var offset = 0;
+    files.forEach(function (file) {
+      var nameBytes = utf8(file.name);
+      var crc = crc32(file.data);
+      var local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true);
+      local.setUint16(4, 20, true);
+      local.setUint16(6, 0x0800, true);
+      local.setUint16(8, 0, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, file.data.length, true);
+      local.setUint32(22, file.data.length, true);
+      local.setUint16(26, nameBytes.length, true);
+      locals.push(new Uint8Array(local.buffer), nameBytes, file.data);
+
+      var central = new DataView(new ArrayBuffer(46));
+      central.setUint32(0, 0x02014b50, true);
+      central.setUint16(4, 20, true);
+      central.setUint16(6, 20, true);
+      central.setUint16(8, 0x0800, true);
+      central.setUint32(16, crc, true);
+      central.setUint32(20, file.data.length, true);
+      central.setUint32(24, file.data.length, true);
+      central.setUint16(28, nameBytes.length, true);
+      central.setUint32(42, offset, true);
+      centrals.push(new Uint8Array(central.buffer), nameBytes);
+
+      offset += 30 + nameBytes.length + file.data.length;
+    });
+
+    var centralSize = centrals.reduce(function (s, a) { return s + a.length; }, 0);
+    var end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);
+    end.setUint16(8, files.length, true);
+    end.setUint16(10, files.length, true);
+    end.setUint32(12, centralSize, true);
+    end.setUint32(16, offset, true);
+
+    var parts = locals.concat(centrals, [new Uint8Array(end.buffer)]);
+    var total = parts.reduce(function (s, a) { return s + a.length; }, 0);
+    var out = new Uint8Array(total);
+    var pos = 0;
+    parts.forEach(function (a) { out.set(a, pos); pos += a.length; });
+    return out;
   }
 
   // Standalone file: fetch this page, then inline the shared CSS and engine.
