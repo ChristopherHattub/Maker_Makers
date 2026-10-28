@@ -325,7 +325,7 @@ function wsCentre(geo) {
 
 function wsAddObject(spec) {
   const o = { id: spec.id || WS.nextId++, name: spec.name, cat: spec.cat || null, params: spec.params || null, gen: spec.gen || null, genParams: spec.genParams || null, genState: spec.genState || null,
-              geo: spec.geo || null, color: spec.color || 0x7ab3ff, locked: !!spec.locked, hidden: !!spec.hidden };
+              geo: spec.geo || null, color: spec.color || 0x7ab3ff, free: !!spec.free, locked: !!spec.locked, hidden: !!spec.hidden };
   WS.nextId = Math.max(WS.nextId, o.id + 1);
   if (o.cat && !o.geo) o.geo = wsCentre(WS.cat[o.cat].build(o.params));
   if (!o.geo) return null;
@@ -459,7 +459,14 @@ function wsPlaceFree(o) {
 
 function wsBox(o) { o.mesh.updateMatrixWorld(true); return new THREE.Box3().setFromObject(o.mesh); }
 function wsToBed(o) { const b = wsBox(o); o.mesh.position.z -= b.min.z; }
-function wsKeepOnBed() { WS.sel.forEach(o => { if (!o.free) wsToBed(o); }); wsOutOfBed(); }
+// Shapes sit on the bed unless they were lifted with Up (then they float, never below the bed).
+function wsKeepOnBed() {
+  WS.sel.forEach(o => {
+    if (o.free && wsBox(o).min.z > 0.01) return;
+    o.free = false; wsToBed(o);
+  });
+  wsOutOfBed();
+}
 
 function wsOutOfBed() {
   const h = WS.bed / 2;
@@ -540,7 +547,7 @@ function wsBindUI() {
     if (e.button !== 0 || WS.tc.axis) return;
     const p = wsPick(e);
     if (WS.mini && p.o !== WS.mini.o) p.o = null;
-    down = { x: e.clientX, y: e.clientY, o: p.o, hit: p.hit, moved: false, shift: e.shiftKey };
+    down = { x: e.clientX, y: e.clientY, o: p.o, hit: p.hit, moved: false, shift: e.shiftKey, was: !!p.o && WS.sel.includes(p.o) };
     if (p.o && !WS.mini) {
       if (!WS.sel.includes(p.o)) wsSelect(e.shiftKey ? WS.sel.concat(p.o) : [p.o]);
       // Grab and drag: slide the selection across the horizontal plane through the grabbed point.
@@ -566,7 +573,7 @@ function wsBindUI() {
     if (drag) { WS.orbit.enabled = true; if (drag.did) wsCommit(); }
     if (WS.mini && down.o === WS.mini.o && !down.moved && down.hit) wsMiniPick(down.hit);
     if (!down.moved && !down.o && !down.shift && e.target === el) wsSelect([]);
-    else if (!down.moved && down.o && down.shift) wsSelect(WS.sel.includes(down.o) ? WS.sel.filter(x => x !== down.o) : WS.sel.concat(down.o));
+    else if (!down.moved && down.o && down.shift) { if (down.was) wsSelect(WS.sel.filter(x => x !== down.o)); }   // shift-click on an unselected shape was already added on press
     else if (!down.moved && down.o) wsSelect([down.o]);
     down = null; drag = null;
   });
@@ -645,7 +652,7 @@ function wsAction(a) {
   else if (a === 'resetrot') { WS.sel.forEach(o => { o.mesh.rotation.set(0, 0, 0); wsToBed(o); }); wsCommit(); wsInspectorValues(); }
 }
 
-function wsDropSelected() { WS.sel.forEach(wsToBed); wsAttachGizmo(); wsCommit(); wsInspectorValues(); }
+function wsDropSelected() { WS.sel.forEach(o => { o.free = false; wsToBed(o); }); wsAttachGizmo(); wsCommit(); wsInspectorValues(); }
 
 function wsFocus() {
   const list = WS.sel.length ? WS.sel : WS.objs;
@@ -785,7 +792,7 @@ function wsVisualAction(a) {
   const [kind, arg] = a.split(':'), v = arg.split(',');
   const list = WS.sel.filter(o => !o.locked);
   if (!list.length) return;
-  if (kind === 'nudge') list.forEach(o => { const n = v.map(Number); o.mesh.position.add(new THREE.Vector3(...n).multiplyScalar(WS.step)); });
+  if (kind === 'nudge') list.forEach(o => { const n = v.map(Number); if (n[2] > 0) o.free = true; o.mesh.position.add(new THREE.Vector3(...n).multiplyScalar(WS.step)); });
   else if (kind === 'turn') list.forEach(o => o.mesh.rotateOnWorldAxis(new THREE.Vector3(v[0] === 'x' ? 1 : 0, v[0] === 'y' ? 1 : 0, v[0] === 'z' ? 1 : 0), Number(v[1]) * Math.PI / 180));
   else if (kind === 'grow') list.forEach(o => o.mesh.scale.multiply(new THREE.Vector3(...v.map(Number))));
   else if (kind === 'color') list.forEach(o => { o.color = parseInt(v[0].slice(1), 16); o.mesh.material.color.setHex(o.color); });
@@ -849,7 +856,7 @@ async function wsBoolean(op) {
 // ---------------------------------------------------------------- history and autosave
 
 function wsSnapshot() {
-  return WS.objs.map(o => ({ id: o.id, name: o.name, cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams, genState: o.genState, geo: o.geo, color: o.color, locked: o.locked, hidden: o.hidden,
+  return WS.objs.map(o => ({ id: o.id, name: o.name, cat: o.cat, params: o.params && { ...o.params }, gen: o.gen, genParams: o.genParams, genState: o.genState, geo: o.geo, color: o.color, free: o.free, locked: o.locked, hidden: o.hidden,
     pos: o.mesh.position.toArray(), quat: o.mesh.quaternion.toArray(), scale: o.mesh.scale.toArray() }));
 }
 
