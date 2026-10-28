@@ -1119,6 +1119,7 @@ body.on-splash .container {
 .world.exp .tile { width: 128px; height: 128px; }
 .world.exp .tile-card { border: 0; border-radius: 0; box-shadow: none; background: #000; }
 .world.exp .tile.has-pro .tile-label { display: none; }
+.world.exp .tile.has-pro .tile-card { background: transparent; }   /* pro art has chamfered, transparent corners: no black box behind it */
 .tile-sprite { position: absolute; inset: 0; background-repeat: no-repeat; pointer-events: none; display: none; }
 .world.exp .tile.has-sprite .tile-sprite { display: block; }
 .world.exp .tile.has-sprite .tile-art img { visibility: hidden; }
