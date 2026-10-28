@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-023 Gratitude Place Cards // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Gratitude Place Cards: a name card for the Thanksgiving table with a fall motif, raised stroke-font
+      // lettering and a built-in easel foot. The page layout, viewport, Color tool and exports come from shared/generator-core.js.
+
+      var DEG = Math.PI / 180;
+      var CAP_STEPS = 5;     // Segments per round stroke end
+      var EMBED = 0.4;       // mm that raised parts sink into the plate so slicers union them
+      // -----------------------------------------------------------------------
+      // Stroke font. Each glyph is a width plus polylines on a grid: cap height 6,
+      // x-height 4, descender -2. Strokes are thickened into capsules at build time.
+      // -----------------------------------------------------------------------
+      function arc(cx, cy, rx, ry, a0, a1) {
+        var n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 24));
+        var pts = [];
+        for (var i = 0; i <= n; i++) {
+          var a = (a0 + (a1 - a0) * i / n) * DEG;
+          pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+        }
+        return pts;
+      }
+      function join() { return Array.prototype.concat.apply([], arguments); }
+      function glyph(w) { return { w: w, s: Array.prototype.slice.call(arguments, 1) }; }
+      var DOT = function (x, y) { return [[x, y], [x, y + 0.01]]; };
+
+      var heartPts = [];
+      for (var hi = 360; hi >= 0; hi -= 15) {
+        var ht = hi * DEG;
+        var hx = 16 * Math.pow(Math.sin(ht), 3);
+        var hy = 13 * Math.cos(ht) - 5 * Math.cos(2 * ht) - 2 * Math.cos(3 * ht) - Math.cos(4 * ht);
+        heartPts.push([(hx + 16) / 32 * 5.2, (hy + 17) / 29 * 5.4 + 0.3]);
+      }
+
+      var GLYPHS = {
+        ' ': glyph(2.5),
+        'A': glyph(4, [[0, 0], [2, 6], [4, 0]], [[0.9, 2.2], [3.1, 2.2]]),
+        'B': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.4, 1.5, 90, -90), [[0, 3]]), join([[0, 3], [2.6, 3]], arc(2.6, 1.5, 1.5, 1.5, 90, -90), [[0, 0]])),
+        'C': glyph(4.4, arc(2.2, 3, 2.2, 3, 45, 315)),
+        'D': glyph(4.4, [[0, 0], [0, 6]], join([[0, 6], [1.8, 6]], arc(1.8, 3, 2.6, 3, 90, -90), [[0, 0]])),
+        'E': glyph(4, [[4, 6], [0, 6], [0, 0], [4, 0]], [[0, 3], [3, 3]]),
+        'F': glyph(4, [[4, 6], [0, 6], [0, 0]], [[0, 3], [3, 3]]),
+        'G': glyph(4.4, join(arc(2.2, 3, 2.2, 3, 45, 360), [[2.4, 3]])),
+        'H': glyph(4, [[0, 0], [0, 6]], [[4, 0], [4, 6]], [[0, 3], [4, 3]]),
+        'I': glyph(0, [[0, 0], [0, 6]]),
+        'J': glyph(3, join([[3, 6]], arc(1.5, 1.5, 1.5, 1.5, 0, -180))),
+        'K': glyph(4, [[0, 0], [0, 6]], [[4, 6], [0, 2.5]], [[1.2, 3.5], [4, 0]]),
+        'L': glyph(3.6, [[0, 6], [0, 0], [3.6, 0]]),
+        'M': glyph(4.4, [[0, 0], [0, 6], [2.2, 2.2], [4.4, 6], [4.4, 0]]),
+        'N': glyph(4, [[0, 0], [0, 6], [4, 0], [4, 6]]),
+        'O': glyph(4.4, arc(2.2, 3, 2.2, 3, 0, 360)),
+        'P': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.6, 1.5, 90, -90), [[0, 3]])),
+        'Q': glyph(4.4, arc(2.2, 3, 2.2, 3, 0, 360), [[2.6, 1.6], [4.4, -0.6]]),
+        'R': glyph(4, [[0, 0], [0, 6]], join([[0, 6], [2.4, 6]], arc(2.4, 4.5, 1.6, 1.5, 90, -90), [[0, 3]]), [[1.6, 3], [4, 0]]),
+        'S': glyph(4, join(arc(2, 4.5, 1.9, 1.5, 20, 270), arc(2, 1.5, 2, 1.5, 90, -160))),
+        'T': glyph(4, [[0, 6], [4, 6]], [[2, 6], [2, 0]]),
+        'U': glyph(4, join([[0, 6]], arc(2, 2.2, 2, 2.2, 180, 360), [[4, 6]])),
+        'V': glyph(4, [[0, 6], [2, 0], [4, 6]]),
+        'W': glyph(5, [[0, 6], [1.1, 0], [2.5, 4], [3.9, 0], [5, 6]]),
+        'X': glyph(4, [[0, 6], [4, 0]], [[4, 6], [0, 0]]),
+        'Y': glyph(4, [[0, 6], [2, 3], [4, 6]], [[2, 3], [2, 0]]),
+        'Z': glyph(4, [[0, 6], [4, 6], [0, 0], [4, 0]]),
+        '0': glyph(3.8, arc(1.9, 3, 1.9, 3, 0, 360)),
+        '1': glyph(2, [[0.2, 4.8], [2, 6], [2, 0]]),
+        '2': glyph(4, join(arc(2, 4.3, 1.9, 1.7, 160, -20), [[0, 0], [4, 0]])),
+        '3': glyph(4, join(arc(2, 4.5, 1.8, 1.5, 150, -90), arc(2, 1.6, 2, 1.6, 90, -150))),
+        '4': glyph(4, [[3, 0], [3, 6], [0, 2], [4, 2]]),
+        '5': glyph(4, join([[3.6, 6], [0.4, 6], [0.7, 3.2]], arc(2, 1.8, 2, 1.8, 130, -150))),
+        '6': glyph(4, [[3.2, 6], [0.1, 2.2]], arc(2, 1.9, 1.9, 1.9, 0, 360)),
+        '7': glyph(4, [[0, 6], [4, 6], [1.4, 0]]),
+        '8': glyph(4, arc(2, 4.6, 1.6, 1.4, 0, 360), arc(2, 1.6, 1.9, 1.6, 0, 360)),
+        '9': glyph(4, arc(2, 4.1, 1.9, 1.9, 0, 360), [[0.8, 0], [3.9, 3.8]]),
+        '-': glyph(2.8, [[0.2, 3], [2.6, 3]]),
+        '+': glyph(3, [[0, 3], [3, 3]], [[1.5, 1.5], [1.5, 4.5]]),
+        '.': glyph(0, DOT(0, 0)),
+        '!': glyph(0, [[0, 6], [0, 1.8]], DOT(0, 0)),
+        '\'': glyph(0, [[0, 6], [0, 4.5]]),
+        '♥': glyph(5.2, heartPts),
+        'a': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360), [[3.8, 4], [3.8, 0]]),
+        'b': glyph(3.8, [[0, 6], [0, 0]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'c': glyph(3.8, arc(1.9, 2, 1.9, 2, 40, 320)),
+        'd': glyph(3.8, [[3.8, 6], [3.8, 0]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'e': glyph(3.8, join([[0, 2], [3.8, 2]], arc(1.9, 2, 1.9, 2, 0, 320))),
+        'f': glyph(2.8, join([[1.2, 0], [1.2, 5]], arc(2.4, 5, 1.2, 1, 180, 60)), [[0, 3.8], [2.6, 3.8]]),
+        'g': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360), join([[3.8, 4], [3.8, -0.5]], arc(1.9, -0.5, 1.9, 1.4, 0, -150))),
+        'h': glyph(3.6, [[0, 6], [0, 0]], join(arc(1.8, 2.2, 1.8, 1.8, 180, 0), [[3.6, 0]])),
+        'i': glyph(0, [[0, 0], [0, 4]], DOT(0, 5.6)),
+        'j': glyph(1.3, join([[1.3, 4], [1.3, -0.6]], arc(0.1, -0.6, 1.2, 1.2, 0, -100)), DOT(1.3, 5.6)),
+        'k': glyph(3.4, [[0, 6], [0, 0]], [[3.2, 4], [0, 1.6]], [[1, 2.4], [3.4, 0]]),
+        'l': glyph(0, [[0, 6], [0, 0]]),
+        'm': glyph(6, [[0, 4], [0, 0]], join(arc(1.5, 2.2, 1.5, 1.8, 180, 0), arc(4.5, 2.2, 1.5, 1.8, 180, 0), [[6, 0]]), [[3, 2.2], [3, 0]]),
+        'n': glyph(3.6, [[0, 4], [0, 0]], join(arc(1.8, 2.2, 1.8, 1.8, 180, 0), [[3.6, 0]])),
+        'o': glyph(3.8, arc(1.9, 2, 1.9, 2, 0, 360)),
+        'p': glyph(3.8, [[0, 4], [0, -2]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'q': glyph(3.8, [[3.8, 4], [3.8, -2]], arc(1.9, 2, 1.9, 2, 0, 360)),
+        'r': glyph(2.8, [[0, 4], [0, 0]], arc(1.6, 2.2, 1.6, 1.8, 180, 50)),
+        's': glyph(3.4, join(arc(1.7, 3.1, 1.5, 0.9, 20, 270), arc(1.7, 1.1, 1.7, 1.1, 90, -160))),
+        't': glyph(2.8, join([[1.2, 5.6], [1.2, 0.8]], arc(2.4, 0.8, 1.2, 0.8, 180, 270)), [[0, 4], [2.8, 4]]),
+        'u': glyph(3.6, join([[0, 4], [0, 1.8]], arc(1.8, 1.8, 1.8, 1.8, 180, 360)), [[3.6, 4], [3.6, 0]]),
+        'v': glyph(3.6, [[0, 4], [1.8, 0], [3.6, 4]]),
+        'w': glyph(4.8, [[0, 4], [1, 0], [2.4, 3], [3.8, 0], [4.8, 4]]),
+        'x': glyph(3.4, [[0, 4], [3.4, 0]], [[3.4, 4], [0, 0]]),
+        'y': glyph(3.6, [[0, 4], [1.8, 0.4]], [[3.6, 4], [1, -2]]),
+        'z': glyph(3.4, [[0, 4], [3.4, 4], [0, 0], [3.4, 0]])
+      };
+
+      // Lettering styles (a select in the Name tab): stroke caps, slant, width and weight.
+      var FONTS = {
+        rounded: { label: 'Rounded', cap: 'round', shear: 0, xs: 1, tmul: 1 },
+        block: { label: 'Block', cap: 'square', shear: 0, xs: 1, tmul: 1 },
+        slanted: { label: 'Slanted', cap: 'round', shear: 0.26, xs: 1, tmul: 1 },
+        wide: { label: 'Wide', cap: 'round', shear: 0, xs: 1.3, tmul: 1 },
+        narrow: { label: 'Narrow', cap: 'square', shear: 0, xs: 0.75, tmul: 1 },
+        bubble: { label: 'Bubble', cap: 'round', shear: 0, xs: 1.15, tmul: 1.6 }
+      };
+      // -----------------------------------------------------------------------
+      // Geometry helpers (2D x / gy -> 3D x / y / -z, Y up)
+      // -----------------------------------------------------------------------
+      function v3(p, y) { return [p[0], y, -p[1]]; }
+      function tri(out, a, b, c) {
+        out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(out, a0, b0, b1, a1) { tri(out, a0, b0, b1); tri(out, a0, b1, a1); }
+
+      // Closed prism from a CCW polygon. center = fan point for star-shaped outlines (default: vertex 0, convex only).
+      function prism(out, poly, y0, y1, center) {
+        var n = poly.length, i, a, b;
+        for (i = 0; i < n; i++) {
+          a = poly[i]; b = poly[(i + 1) % n];
+          quad(out, v3(a, y0), v3(b, y0), v3(b, y1), v3(a, y1));
+          if (center) {
+            tri(out, v3(center, y1), v3(a, y1), v3(b, y1));
+            tri(out, v3(center, y0), v3(b, y0), v3(a, y0));
+          } else if (i > 0 && i < n - 1) {
+            tri(out, v3(poly[0], y1), v3(a, y1), v3(b, y1));
+            tri(out, v3(poly[0], y0), v3(b, y0), v3(a, y0));
+          }
+        }
+      }
+
+      // Closed ring prism between two CCW loops with the same vertex count.
+      function ringPrism(out, outer, inner, y0, y1) {
+        var n = outer.length, i, a, b, c, d;
+        for (i = 0; i < n; i++) {
+          a = outer[i]; b = outer[(i + 1) % n]; c = inner[(i + 1) % n]; d = inner[i];
+          quad(out, v3(a, y0), v3(b, y0), v3(b, y1), v3(a, y1));
+          quad(out, v3(d, y0), v3(d, y1), v3(c, y1), v3(c, y0));
+          tri(out, v3(a, y1), v3(b, y1), v3(c, y1));
+          tri(out, v3(a, y1), v3(c, y1), v3(d, y1));
+          tri(out, v3(a, y0), v3(c, y0), v3(b, y0));
+          tri(out, v3(a, y0), v3(d, y0), v3(c, y0));
+        }
+      }
+
+      // Convex capsule (round) or box (square) polygon around a segment.
+      function strokePoly(x0, y0, x1, y1, t, cap) {
+        var h = t / 2, dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) { dx = 1; dy = 0; len = 1; }
+        dx /= len; dy /= len;
+        var nx = -dy, ny = dx, pts = [], i, ang, c, s;
+        if (cap === 'square') {
+          var ax = x0 - dx * h * 0.97, ay = y0 - dy * h * 0.97, bx = x1 + dx * h * 1.03, by = y1 + dy * h * 1.03; // uneven so overlapping boxes never share an exact edge
+          return [[ax - nx * h, ay - ny * h], [bx - nx * h, by - ny * h], [bx + nx * h, by + ny * h], [ax + nx * h, ay + ny * h]];
+        }
+        for (i = 0; i <= CAP_STEPS; i++) {
+          ang = (-90 + 180 * i / CAP_STEPS) * DEG; c = Math.cos(ang); s = Math.sin(ang);
+          pts.push([x1 + h * (dx * c + nx * s), y1 + h * (dy * c + ny * s)]);
+        }
+        for (i = 0; i <= CAP_STEPS; i++) {
+          ang = (90 + 180 * i / CAP_STEPS) * DEG; c = Math.cos(ang); s = Math.sin(ang);
+          pts.push([x0 + h * (dx * c + nx * s), y0 + h * (dy * c + ny * s)]);
+        }
+        return pts;
+      }
+
+      // Drop repeated points and split long edges so rim offsets stay even.
+      function densify(pts, maxLen) {
+        var clean = [], i, a, b, d, k, steps, out = [];
+        for (i = 0; i < pts.length; i++) {
+          a = pts[i]; b = clean[clean.length - 1];
+          if (!b || Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) > 1e-4) clean.push(a);
+        }
+        var f = clean[0], l = clean[clean.length - 1];
+        if (clean.length > 1 && Math.abs(f[0] - l[0]) + Math.abs(f[1] - l[1]) <= 1e-4) clean.pop();
+        for (i = 0; i < clean.length; i++) {
+          a = clean[i]; b = clean[(i + 1) % clean.length];
+          d = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1]));
+          steps = Math.max(1, Math.ceil(d / maxLen));
+          for (k = 0; k < steps; k++) out.push([a[0] + (b[0] - a[0]) * k / steps, a[1] + (b[1] - a[1]) * k / steps]);
+        }
+        return out;
+      }
+
+      function offsetInward(pts, w) {
+        var n = pts.length, out = [], i, p, a, b, e1x, e1y, e2x, e2y, l1, l2, n1x, n1y, n2x, n2y, mx, my, ml, dot;
+        for (i = 0; i < n; i++) {
+          p = pts[i]; a = pts[(i + n - 1) % n]; b = pts[(i + 1) % n];
+          e1x = p[0] - a[0]; e1y = p[1] - a[1]; l1 = Math.sqrt(e1x * e1x + e1y * e1y) || 1;
+          e2x = b[0] - p[0]; e2y = b[1] - p[1]; l2 = Math.sqrt(e2x * e2x + e2y * e2y) || 1;
+          n1x = e1y / l1; n1y = -e1x / l1; n2x = e2y / l2; n2y = -e2x / l2; // outward for CCW
+          mx = n1x + n2x; my = n1y + n2y; ml = Math.sqrt(mx * mx + my * my) || 1;
+          mx /= ml; my /= ml;
+          dot = Math.max(0.35, mx * n1x + my * n1y);
+          out.push([p[0] - mx * w / dot, p[1] - my * w / dot]);
+        }
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // Lettering layout: returns stroke segments centred on the origin plus the ink box.
+      // -----------------------------------------------------------------------
+      function prepText() {
+        var l1 = state.line1, l2 = state.line2;
+        if (state.caps === 'upper') { l1 = l1.toUpperCase(); l2 = l2.toUpperCase(); }
+        if (state.caps === 'lower') { l1 = l1.toLowerCase(); l2 = l2.toLowerCase(); }
+        l1 = l1.replace(/<3/g, '♥'); l2 = l2.replace(/<3/g, '♥');
+        var lines = [];
+        if (l1.trim()) lines.push(l1);
+        if (l2.trim()) lines.push(l2);
+        if (!lines.length) lines.push('Name');
+        return lines;
+      }
+
+      function layout(p) {
+        var sty = FONTS[state.font] || FONTS.rounded;
+        var t = p.stroke * sty.tmul;
+        var lines = prepText(), segs = [], infos = [], baseline = 0, prevCap = 0, prevDesc = false;
+        lines.forEach(function (text, li) {
+          var u = p.textHeight * (li === 0 ? 1 : p.line2Size / 100) / 6;
+          if (li > 0) baseline -= prevCap + (prevDesc ? 2 * prevCap / 6 : 0) + t + p.lineGap;
+          var x = 0, mine = [], desc = false, minX = Infinity, maxX = -Infinity;
+          for (var ci = 0; ci < text.length; ci++) {
+            var ch = text.charAt(ci), g = GLYPHS[ch] || GLYPHS[' '];
+            if (/[gjpqy]/.test(ch)) desc = true;
+            g.s.forEach(function (poly) {
+              for (var k = 0; k < poly.length - 1; k++) {
+                var a = poly[k], b = poly[k + 1];
+                var ay = a[1] * u, by = b[1] * u;
+                var ax = x + a[0] * u * sty.xs + ay * sty.shear, bx = x + b[0] * u * sty.xs + by * sty.shear;
+                mine.push([ax, ay + baseline, bx, by + baseline]);
+                minX = Math.min(minX, ax, bx); maxX = Math.max(maxX, ax, bx);
+              }
+            });
+            x += g.w * u * sty.xs + (state.shape === 'none' ? t * (1 - p.join / 100) : t + p.spacing);
+          }
+          if (!isFinite(minX)) { minX = 0; maxX = 0; }
+          var cx = (minX + maxX) / 2;
+          mine.forEach(function (s) { segs.push([s[0] - cx, s[1], s[2] - cx, s[3]]); });
+          infos.push({ x0: minX - cx - t / 2, x1: maxX - cx + t / 2, base: baseline });
+          prevCap = 6 * u; prevDesc = desc;
+        });
+        var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+        segs.forEach(function (s) {
+          bx0 = Math.min(bx0, s[0], s[2]); bx1 = Math.max(bx1, s[0], s[2]);
+          by0 = Math.min(by0, s[1], s[3]); by1 = Math.max(by1, s[1], s[3]);
+        });
+        if (!isFinite(bx0)) { bx0 = -5; bx1 = 5; by0 = 0; by1 = 6; }
+        bx0 -= t / 2; bx1 += t / 2; by0 -= t / 2; by1 += t / 2;
+        var cxm = (bx0 + bx1) / 2, cym = (by0 + by1) / 2;
+        segs = segs.map(function (s) { return [s[0] - cxm, s[1] - cym, s[2] - cxm, s[3] - cym]; });
+        infos.forEach(function (li) { li.x0 -= cxm; li.x1 -= cxm; li.base -= cym; });
+        return { segs: segs, lines: infos, t: t, cap: sty.cap, W: bx1 - bx0, H: by1 - by0 };
+      }
+
+      function roundedRect(a, b, r) {
+        var pts = [], corners = [[a - r, -(b - r), -90], [a - r, b - r, 0], [-(a - r), b - r, 90], [-(a - r), -(b - r), 180]];
+        var steps = r > 0.01 ? 12 : 1;
+        corners.forEach(function (c) {
+          for (var i = 0; i <= steps; i++) {
+            var ang = (c[2] + 90 * i / steps) * DEG;
+            pts.push([c[0] + r * Math.cos(ang), c[1] + r * Math.sin(ang)]);
+          }
+        });
+        return pts;
+      }
+
+      function ellipsePts(A, B, n, wobble, lobes) {
+        var pts = [];
+        for (var i = 0; i < n; i++) {
+          var a = i / n * Math.PI * 2, k = 1 + (wobble ? wobble * Math.cos(lobes * a) : 0);
+          pts.push([A * k * Math.cos(a), B * k * Math.sin(a)]);
+        }
+        return pts;
+      }
+
+      function plateOutline(shape, W, H, p) {
+        var pad = p.pad + p.rimWidth, a = W / 2 + pad, b = H / 2 + pad, pts, i;
+        if (shape === 'rounded') pts = roundedRect(a, b, Math.min(p.corner, a, b));
+        else if (shape === 'pill') pts = roundedRect(a + b * 0.45, b, b);
+        else if (shape === 'oval' || shape === 'scallop') {
+          var k = 1.22, A = k * W / 2 + pad, B = (H / 2) / Math.sqrt(1 - 1 / (k * k)) + pad;
+          pts = shape === 'oval' ? ellipsePts(A, B, 96, 0, 0) : ellipsePts(A * 1.04, B * 1.04, 192, 0.04, 14);
+        } else if (shape === 'hex') {
+          var c = b * 0.58, ax = W / 2 + pad + c;
+          pts = [[ax, 0], [ax - c, b], [-(ax - c), b], [-ax, 0], [-(ax - c), -b], [ax - c, -b]];
+        } else { // heart
+          var s = Math.max((W / 2 + pad) / 10, (H / 2 + pad) / 5, 0.9);
+          pts = [];
+          for (i = 0; i < 360; i += 3) {
+            var th = i * DEG;
+            var hx = 16 * Math.pow(Math.sin(th), 3);
+            var hy = 13 * Math.cos(th) - 5 * Math.cos(2 * th) - 2 * Math.cos(3 * th) - Math.cos(4 * th);
+            pts.push([hx * s, (hy - 3) * s]);
+          }
+          pts.reverse(); // the curve runs clockwise
+        }
+        return densify(pts, 3);
+      }
+
+      // -----------------------------------------------------------------------
+      // Card-specific parts
+      // -----------------------------------------------------------------------
+      var FONT_KEYS = Object.keys(FONTS);
+      var FONT_NAMES = FONT_KEYS.map(function (k) { return FONTS[k].label; });
+      var SHAPE_KEYS = ['rounded', 'pill', 'oval', 'hex', 'scallop'];
+      var SHAPE_NAMES = ['Rounded rectangle', 'Pill', 'Oval', 'Hexagon', 'Scalloped badge'];
+      var MOTIF_KEYS = ['leaf', 'acorn', 'pumpkin', 'turkey', 'none'];
+      var MOTIF_NAMES = ['Maple leaf', 'Acorn', 'Pumpkin', 'Turkey fan', 'No motif'];
+      var CASE_KEYS = ['typed', 'upper', 'lower'];
+      var CASE_NAMES = ['As typed', 'Uppercase', 'Lowercase'];
+      // Only the typed text lives outside the parameters; font, case, shape and motif are choice parameters.
+      var state = { line1: 'Chris', line2: '', font: 'rounded', shape: 'rounded', motif: 'leaf', caps: 'typed' };
+      function choice(group, tab, key, label, names, value) {
+        return { group: group, tab: tab, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function syncState(p) {
+        state.font = FONT_KEYS[Math.round(p.font)]; state.shape = SHAPE_KEYS[Math.round(p.shape)];
+        state.motif = MOTIF_KEYS[Math.round(p.motif)]; state.caps = CASE_KEYS[Math.round(p.caps)];
+      }
+
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Rotate about X, then move (the card stands up and leans back).
+      function lean(arr, rx, t) {
+        var pos = new Float32Array(arr), c = Math.cos(rx), s = Math.sin(rx), i, y, z;
+        for (i = 0; i < pos.length; i += 3) {
+          y = pos[i + 1]; z = pos[i + 2];
+          pos[i + 1] = y * c - z * s + t[1]; pos[i + 2] = y * s + z * c + t[2];
+        }
+        return pos;
+      }
+
+      // Triangular prism along X: tri = three [z, y] points.
+      function wedgeSolid(x0, x1, t) {
+        var o = [], a0 = [x0, t[0][1], t[0][0]], b0 = [x0, t[1][1], t[1][0]], c0 = [x0, t[2][1], t[2][0]];
+        var a1 = [x1, t[0][1], t[0][0]], b1 = [x1, t[1][1], t[1][0]], c1 = [x1, t[2][1], t[2][0]];
+        tri(o, a0, b0, c0); tri(o, a1, c1, b1);
+        quad(o, a0, a1, b1, b0); quad(o, b0, b1, c1, c0); quad(o, c0, c1, a1, a0);
+        return orient(new Float32Array(o));
+      }
+
+      // Motif outlines: arrays of { poly, center, layer } in card coordinates, scaled to size m around (cx, cy).
+      function maple(phi) {
+        var a = Math.abs(Math.atan2(Math.sin(phi), Math.cos(phi))), r = 0.4;
+        [[0, 1.0, 34], [55, 0.92, 33], [112, 0.6, 32], [160, 0.34, 30]].forEach(function (l) {
+          r = Math.max(r, l[1] * Math.max(0, 1 - Math.pow(Math.abs(a / DEG - l[0]) / l[2], 1.5)));
+        });
+        return r;
+      }
+      function polar(n, f, m, cx, cy) {
+        var pts = [], i, a, r;
+        for (i = 0; i < n; i++) { a = (i / n) * Math.PI * 2; r = f(a) * m; pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); }
+        return pts;
+      }
+      function motifShapes(kind, m, cx, cy) {
+        var out = [], r = m / 2;
+        if (kind === 'leaf') {
+          // phi from +y, so convert the polar angle
+          out.push({ poly: polar(180, function (a) { return maple(Math.PI / 2 - a) * 0.5; }, m, cx, cy - m * 0.04), center: [cx, cy - m * 0.04], layer: 0 });
+          out.push({ strokes: [[cx, cy - m * 0.4, cx, cy + m * 0.42], [cx, cy, cx + m * 0.28, cy + m * 0.16], [cx, cy, cx - m * 0.28, cy + m * 0.16]], layer: 1 });
+        } else if (kind === 'acorn') {
+          out.push({ poly: polar(96, function (a) { return 0.33 * (1 + 0.08 * Math.sin(a)) * (Math.sin(a) < 0 ? 1.05 : 0.85); }, m, cx, cy - m * 0.12), center: [cx, cy - m * 0.12], layer: 0 });
+          out.push({ poly: polar(96, function (a) { return 0.28 + 0.13 * Math.abs(Math.cos(a)); }, m, cx, cy + m * 0.16).map(function (q) { return [q[0], Math.max(q[1], cy + m * 0.1)]; }), center: [cx, cy + m * 0.2], layer: 1 });
+          out.push({ strokes: [[cx, cy + m * 0.3, cx, cy + m * 0.46]], layer: 1 });
+        } else if (kind === 'pumpkin') {
+          out.push({ poly: polar(140, function (a) { return 0.5 * (1 + 0.05 * Math.cos(7 * a)) * 1; }, m, cx, cy).map(function (q) { return [cx + (q[0] - cx), cy + (q[1] - cy) * 0.82]; }), center: [cx, cy], layer: 0 });
+          out.push({ strokes: [[cx, cy + m * 0.32, cx, cy + m * 0.48]], layer: 1 });
+        } else if (kind === 'turkey') {
+          out.push({ poly: polar(160, function (a) {
+            var d = Math.abs(a - Math.PI / 2);
+            return a > 0 && a < Math.PI ? 0.3 + 0.2 * Math.pow(Math.max(0, Math.cos(d * 5)), 0.6) * (d < 1.6 ? 1 : 0) + 0.0 : 0.3;
+          }, m, cx, cy - m * 0.1), center: [cx, cy - m * 0.1], layer: 0 });
+          out.push({ poly: polar(40, function () { return 0.2; }, m, cx, cy - m * 0.18), center: [cx, cy - m * 0.18], layer: 1 });
+        }
+        return out;
+      }
+
+      function buildCard(p) {
+        syncState(p);
+        var lay = layout(p), t = lay.t, mSize = state.motif === 'none' ? 0 : p.motifSize, gap = mSize ? p.motifGap : 0;
+        var W = Math.max(lay.W, mSize * 1.2), H = lay.H + mSize + gap;
+        var outline = plateOutline(state.shape, W, H, p);
+        var base = [], rim = [], text = [], mot1 = [], mot2 = [], plinth = [];
+        var plateT = p.plateThick, tY0 = plateT - EMBED, tY1 = plateT + p.raise, mY1 = plateT + p.motifRaise;
+        prism(base, outline, 0, plateT, [0, 0]);
+        if (p.rimWidth >= 0.2) ringPrism(rim, outline, offsetInward(outline, p.rimWidth), plateT - EMBED, plateT + p.rimHeight);
+        var dy = -(mSize + gap) / 2;
+        lay.segs.forEach(function (s) { prism(text, strokePoly(s[0], s[1] + dy, s[2], s[3] + dy, t, lay.cap), tY0, tY1); });
+        if (mSize) {
+          motifShapes(state.motif, mSize, 0, H / 2 - mSize / 2).forEach(function (sh) {
+            var dst = sh.layer ? mot2 : mot1;
+            if (sh.poly) prism(dst, sh.poly, tY0, mY1, sh.center);
+            else sh.strokes.forEach(function (s) { prism(dst, strokePoly(s[0], s[1], s[2], s[3], Math.max(1.2, mSize * 0.07), 'square'), tY0, mY1 + 0.0); });
+          });
+        }
+
+        // Stand the card up, lean it back and give it a plinth and a back leg.
+        var ymin = Infinity, ymax = -Infinity, xmax = 0;
+        outline.forEach(function (q) { ymin = Math.min(ymin, q[1]); ymax = Math.max(ymax, q[1]); xmax = Math.max(xmax, Math.abs(q[0])); });
+        var rx = Math.PI / 2 - p.lean * DEG, pt = p.plinthT, shiftY = pt * 0.6 - ymin * Math.sin(rx);
+        var T = [0, shiftY, 0];
+        function backZ(gy) { return -gy * Math.cos(rx); }
+        function backY(gy) { return gy * Math.sin(rx) + shiftY; }
+        var zFront = -ymin * Math.cos(rx) + 5;
+        var legH = (ymax - ymin) * Math.sin(rx) * 0.6;
+        var gyTop = ymin + legH / Math.sin(rx), gyLow = ymin + (pt * 0.4) / Math.sin(rx);
+        var embed = 1.4, zBack = backZ(gyLow) - legH;
+        var halfW = xmax * 0.92;
+        prism(plinth, [[-halfW, -zFront], [halfW, -zFront], [halfW, -zBack + 2], [-halfW, -zBack + 2]], 0, pt, [0, (-zFront - zBack + 2) / 2]);
+        var leg = wedgeSolid(-xmax * 0.4, xmax * 0.4, [[backZ(gyTop) + embed, backY(gyTop)], [backZ(gyLow) + embed, backY(gyLow)], [zBack, backY(gyLow)]]);
+
+        var out = [];
+        function add(name, arr) { if (arr.length) out.push({ name: name, positions: lean(arr, rx, T) }); }
+        add('card', base); add('border', rim); add('lettering', text); add('motif', mot1); add('motifTrim', mot2);
+        out.push({ name: 'stand', positions: concat2(new Float32Array(plinth), leg) });
+        return out;
+      }
+      function concat2(a, b) { var o = new Float32Array(a.length + b.length); o.set(a, 0); o.set(b, a.length); return o; }
+
+      var refreshUI = null;
+      var DEFAULTS = {
+        font: 0, caps: 0, shape: 0, motif: 0,
+        textHeight: 12, stroke: 2.2, spacing: 1, join: 12, lineGap: 2, line2Size: 60,
+        plateThick: 3, pad: 6, corner: 6, rimWidth: 1.4, rimHeight: 1, raise: 1.4,
+        motifSize: 18, motifGap: 3, motifRaise: 1.4, lean: 18, plinthT: 3
+      };
+
+      window.MM_GENERATOR = {
+        code: 'MM-023',
+        category: 'FALL // TABLE',
+        title: 'Gratitude Place Cards',
+        fileName: 'Place_Card',
+        palette: [
+          { name: 'Cream', color: '#fff4dc' },
+          { name: 'Maple Red', color: '#e5503a' },
+          { name: 'Harvest Orange', color: '#fdba74' },
+          { name: 'Corn Gold', color: '#fde047' },
+          { name: 'Acorn Brown', color: '#b4783c' },
+          { name: 'Moss Green', color: '#86efac' },
+          { name: 'Cocoa', color: '#5b3a24' },
+          { name: 'Plum', color: '#9d6bd6' }
+        ],
+        defaultColor: '#fff4dc',
+        partNames: { card: 'Card', border: 'Border', lettering: 'Name', motif: 'Motif', motifTrim: 'Motif trim', stand: 'Stand' },
+        openGroups: ['Style'],
+        parameters: [
+          choice('Style', 'name', 'font', 'Lettering style', FONT_NAMES, DEFAULTS.font),
+          choice('Style', 'name', 'caps', 'Capitals', CASE_NAMES, DEFAULTS.caps),
+          choice('Style', 'name', 'shape', 'Card shape', SHAPE_NAMES, DEFAULTS.shape),
+          choice('Style', 'name', 'motif', 'Fall motif', MOTIF_NAMES, DEFAULTS.motif),
+          { group: 'Lettering', tab: 'name', key: 'textHeight', label: 'Letter height', unit: ' mm', min: 7, max: 26, step: 0.5, value: DEFAULTS.textHeight },
+          { group: 'Lettering', tab: 'name', key: 'stroke', label: 'Stroke thickness', unit: ' mm', min: 1.2, max: 5, step: 0.1, value: DEFAULTS.stroke },
+          { group: 'Lettering', tab: 'name', key: 'spacing', label: 'Letter spacing', unit: ' mm', min: 0, max: 6, step: 0.1, value: DEFAULTS.spacing },
+          { group: 'Lettering', tab: 'name', key: 'lineGap', label: 'Line gap (2 lines)', unit: ' mm', min: 0, max: 10, step: 0.5, value: DEFAULTS.lineGap },
+          { group: 'Lettering', tab: 'name', key: 'line2Size', label: 'Line 2 size', unit: '%', min: 40, max: 100, step: 5, value: DEFAULTS.line2Size },
+          { group: 'Card', key: 'plateThick', label: 'Card thickness', unit: ' mm', min: 2, max: 6, step: 0.2, value: DEFAULTS.plateThick },
+          { group: 'Card', key: 'pad', label: 'Space around the name', unit: ' mm', min: 3, max: 16, step: 0.5, value: DEFAULTS.pad },
+          { group: 'Card', key: 'corner', label: 'Corner rounding (rectangle)', unit: ' mm', min: 0, max: 20, step: 0.5, value: DEFAULTS.corner },
+          { group: 'Card', key: 'raise', label: 'Letters stand up', unit: ' mm', min: 0.8, max: 3.5, step: 0.2, value: DEFAULTS.raise },
+          { group: 'Card', key: 'rimWidth', label: 'Border width (0 = none)', unit: ' mm', min: 0, max: 4, step: 0.2, value: DEFAULTS.rimWidth },
+          { group: 'Card', key: 'rimHeight', label: 'Border height', unit: ' mm', min: 0.4, max: 3, step: 0.2, value: DEFAULTS.rimHeight },
+          { group: 'Motif', key: 'motifSize', label: 'Motif size', unit: ' mm', min: 8, max: 30, step: 0.5, value: DEFAULTS.motifSize },
+          { group: 'Motif', key: 'motifGap', label: 'Gap above the name', unit: ' mm', min: 1, max: 10, step: 0.5, value: DEFAULTS.motifGap },
+          { group: 'Motif', key: 'motifRaise', label: 'Motif height', unit: ' mm', min: 0.8, max: 2.5, step: 0.1, value: DEFAULTS.motifRaise },
+          { group: 'Stand', key: 'lean', label: 'Lean back (more = easier print)', unit: '°', min: 8, max: 30, step: 1, value: DEFAULTS.lean },
+          { group: 'Stand', key: 'plinthT', label: 'Plinth thickness', unit: ' mm', min: 2, max: 6, step: 0.5, value: DEFAULTS.plinthT }
+        ],
+        presets: [
+          { label: 'Turkey day', values: DEFAULTS },
+          { label: 'Pumpkin patch', values: { font: 5, shape: 4, motif: 2, textHeight: 11, motifSize: 15, pad: 4 } },
+          { label: 'Acorn tag', values: { font: 5, shape: 1, motif: 1, textHeight: 11, pad: 5 } },
+          { label: 'Gobble gobble', values: { font: 3, shape: 3, motif: 3, textHeight: 10, stroke: 2.4, motifSize: 18, pad: 5 } },
+          { label: 'Simple name', values: { font: 2, shape: 2, motif: 4, textHeight: 14, stroke: 2.4, pad: 5 } },
+          { label: 'Chunky letters', values: { textHeight: 15, stroke: 3.4, raise: 2, plateThick: 3.6 } }
+        ],
+        tabs: [{
+          id: 'name',
+          label: 'Name',
+          hint: 'Type a name, then pick the style and fall motif below',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]); else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            var field = function (label, control) {
+              var wrap = h('div', { class: 'mm-slider' }), head = h('div', { class: 'mm-slider-head' });
+              head.appendChild(h('label', {}, label)); wrap.appendChild(head); wrap.appendChild(control);
+              return wrap;
+            };
+            var textInput = function (key, ph) {
+              var input = h('input', { type: 'text', maxlength: '20', placeholder: ph, autocomplete: 'off', spellcheck: 'false' });
+              input.value = state[key];
+              input.addEventListener('input', function () { state[key] = input.value; api.rebuild(); });
+              return input;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Guest name'));
+            var in1 = textInput('line1', 'Name (e.g. Chris)'), in2 = textInput('line2', 'Line 2 (optional)');
+            container.appendChild(field('Line 1', in1));
+            container.appendChild(field('Line 2 (optional)', in2));
+            container.appendChild(h('p', { class: 'mm-note' }, 'Letters, numbers, - + . ! \' and <3 for a heart. Up to 20 characters per line.'));
+            refreshUI = function () { in1.value = state.line1; in2.value = state.line2; };
+            setTimeout(function () { api.centerCamera('iso'); }, 60);
+          }
+        }],
+        build: buildCard
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

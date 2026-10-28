@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-018 Cornucopia // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Cornucopia: a curled woven horn lying on its side with fruit spilling from the mouth.
+      // -----------------------------------------------------------------------
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      // -----------------------------------------------------------------------
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+      function mesh(name, list, group) {
+        return list.length ? { name: name, positions: concat(list), smoothGroup: group || name } : null;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a 0..1 switch and a named-option picker, both stored as plain numbers.
+      function toggle(group, key, label, off, on, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: 1, step: 1, value: value,
+          format: function (v) { return v >= 1 ? on : off; } };
+      }
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      var N_OUT = 110, N_IN = 14, SEG = 72;
+
+      var DEFAULTS = {
+        len: 120, mouthR: 20, curl: 150, taper: 0.55, wall: 2.4, depth: 18, flat: 0.3,
+        ribs: 10, ribAmp: 1.2, twist: 1.5,
+        fruits: 5, fruitR: 8
+      };
+
+      function horn(p) {
+        var L = p.len, R = p.mouthR, c = p.flat, w = p.wall, depth = Math.min(p.depth, L * 0.5);
+        var curl = (p.curl * DEG), NS = 240, i;
+        // Spine in the XZ plane from the mouth (origin, opening toward +x) back to the tip.
+        var sx = [0], sz = [0];
+        for (i = 1; i <= NS; i++) {
+          var sm = ((i - 0.5) / NS) * L, th = curl * Math.pow(sm / L, 1.3), ds = L / NS;
+          sx.push(sx[i - 1] - Math.cos(th) * ds);
+          sz.push(sz[i - 1] + Math.sin(th) * ds);
+        }
+        function spine(s) {
+          var f = clamp(s / L, 0, 1) * NS, k = Math.min(NS - 1, Math.floor(f)), t = f - k;
+          var x = sx[k] + (sx[k + 1] - sx[k]) * t, z = sz[k] + (sz[k + 1] - sz[k]) * t;
+          var dx = sx[k + 1] - sx[k], dz = sz[k + 1] - sz[k], l = Math.sqrt(dx * dx + dz * dz) || 1;
+          return [x, z, -dz / l, dx / l];
+        }
+        function rOut(s) { return R * Math.pow(clamp(1 - s / L, 0, 1), p.taper); }
+        var prof = [], u, s;
+        for (i = 0; i <= N_OUT; i++) {
+          u = Math.pow(i / N_OUT, 0.8);
+          s = L * (1 - u);
+          prof.push([i === 0 ? 0 : rOut(s), s, 1, u]);
+        }
+        prof.push([R - w, 0, 2, 1]);
+        for (i = 1; i <= N_IN; i++) {
+          s = (depth * i) / N_IN;
+          prof.push([Math.max(0.6, rOut(s) - w), s, 2, 1]);
+        }
+        prof.push([0, depth, 2, 1]);
+        return surface(prof, SEG, function (idx, j, th) {
+          var row = prof[idx], r = row[0], sp = spine(row[1]), ro = rOut(row[1]);
+          var rr = r;
+          if (row[2] === 1 && r > 1e-6) {
+            var env = smoothstep(0, 0.12, row[3]) * (1 - smoothstep(0.9, 1, row[3]));
+            rr = r * (1 + (p.ribAmp / R) * env * Math.sin(p.ribs * th - p.twist * TAU * row[1] / L));
+          }
+          var cy = c * ro, ch = Math.cos(th), sh = Math.sin(th);
+          var y = cy + rr * sh, x = sp[0] + sp[2] * rr * ch, z = sp[1] + sp[3] * rr * ch;
+          if (row[2] === 2) y = Math.max(y, 2);
+          else y = Math.max(y, 0);
+          return [x, y, z];
+        });
+      }
+
+      function fruitSet(p) {
+        var apples = [], gourds = [], grapes = [], stems = [];
+        var fr = p.fruitR, spots = [[1.2, -0.3], [2.1, 1.8], [2.6, -2.0], [3.9, 0.1], [4.7, 2.1], [5.0, -1.9]];
+        var n = Math.round(p.fruits), k;
+        for (k = 0; k < n; k++) {
+          var type = k % 3, r = fr * [1, 1.12, 0.78][(k + 1) % 3] * (0.92 + 0.08 * ((k * 7) % 3));
+          var x = spots[k][0] * fr, z = spots[k][1] * fr;
+          if (type === 0) {
+            apples.push(xform(ball(1, 1, 1, 36, function (pt) {
+              if (pt[1] < -0.78) pt[1] = -0.78;
+              var top = smoothstep(0.55, 1, pt[1]);
+              pt[1] -= 0.18 * top * top * (1 - Math.min(1, Math.sqrt(pt[0] * pt[0] + pt[2] * pt[2]) * 3));
+            }), { s: [r, r * 0.92, r], t: [x, r * 0.92 * 0.78, z] }));
+            stems.push(xform(cone(r * 0.09, r * 0.07, 0, r * 0.45, 12), { t: [x, r * 0.92 * 1.0, z], rz: 0.15 }));
+          } else if (type === 1) {
+            gourds.push(xform(ball(1, 1, 1, 48, function (pt) {
+              if (pt[1] < -0.78) pt[1] = -0.78;
+              var f = 1 + 0.07 * Math.cos(9 * Math.atan2(pt[2], pt[0]));
+              pt[0] *= f; pt[2] *= f;
+            }), { s: [r * 1.05, r * 0.8, r * 1.05], t: [x, r * 0.8 * 0.78, z] }));
+            stems.push(xform(cone(r * 0.12, r * 0.09, 0, r * 0.4, 12), { t: [x, r * 0.8 * 0.95, z] }));
+          } else {
+            var g = r * 0.42, y0 = g * 0.78, cs = [[-0.9, -0.9, 0], [0.9, -0.9, 0], [-0.9, 0.9, 0], [0.9, 0.9, 0], [0, 0, 1.25]], q;
+            for (q = 0; q < cs.length; q++) {
+              grapes.push(xform(ball(1, 1, 1, 24, function (pt) { if (pt[1] < -0.78) pt[1] = -0.78; }),
+                { s: g, t: [x + cs[q][0] * g, y0 + cs[q][2] * g * 1.1, z + cs[q][1] * g] }));
+            }
+            stems.push(xform(cone(g * 0.16, g * 0.12, 0, g * 1.1, 10), { t: [x, y0 + 2.1 * g, z] }));
+          }
+        }
+        return { apples: apples, gourds: gourds, grapes: grapes, stems: stems };
+      }
+
+      function build(p) {
+        var out = [], f = fruitSet(p);
+        out.push({ name: 'horn', positions: horn(p) });
+        pushMesh(out, mesh('apples', f.apples));
+        pushMesh(out, mesh('gourds', f.gourds));
+        pushMesh(out, mesh('grapes', f.grapes));
+        pushMesh(out, mesh('stems', f.stems));
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-018',
+        category: 'FALL // HARVEST',
+        title: 'Cornucopia',
+        fileName: 'Cornucopia',
+        palette: [
+          { name: 'Wicker Tan', color: '#d6a45f' },
+          { name: 'Apple Red', color: '#e11d48' },
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Grape Plum', color: '#9d6bd6' },
+          { name: 'Leaf Green', color: '#86efac' },
+          { name: 'Corn Gold', color: '#fde047' },
+          { name: 'Cocoa', color: '#5b3a24' },
+          { name: 'Cream', color: '#fff4dc' }
+        ],
+        defaultColor: '#d6a45f',
+        partNames: { horn: 'Horn', apples: 'Apples', gourds: 'Gourds', grapes: 'Grapes', stems: 'Stems' },
+        parameters: [
+          { group: 'Horn', key: 'len', label: 'Horn length', unit: ' mm', min: 70, max: 180, step: 1, value: DEFAULTS.len },
+          { group: 'Horn', key: 'mouthR', label: 'Mouth radius', unit: ' mm', min: 12, max: 30, step: 0.5, value: DEFAULTS.mouthR },
+          { group: 'Horn', key: 'curl', label: 'Curl (straight to tight)', unit: '°', min: 20, max: 260, step: 5, value: DEFAULTS.curl },
+          { group: 'Horn', key: 'taper', label: 'Taper (fat to pointy)', unit: '', min: 0.3, max: 1.2, step: 0.05, value: DEFAULTS.taper },
+          { group: 'Horn', key: 'wall', label: 'Wall thickness', unit: ' mm', min: 1.6, max: 4, step: 0.2, value: DEFAULTS.wall },
+          { group: 'Horn', key: 'depth', label: 'Inside depth (deep = supports)', unit: ' mm', min: 6, max: 45, step: 1, value: DEFAULTS.depth },
+          { group: 'Horn', key: 'flat', label: 'Flat underside (print grip)', unit: '', min: 0.1, max: 0.5, step: 0.05, value: DEFAULTS.flat },
+          { group: 'Weave', key: 'ribs', label: 'Weave ribs', unit: '', min: 4, max: 18, step: 1, value: DEFAULTS.ribs },
+          { group: 'Weave', key: 'ribAmp', label: 'Weave depth', unit: ' mm', min: 0, max: 2.5, step: 0.1, value: DEFAULTS.ribAmp },
+          { group: 'Weave', key: 'twist', label: 'Weave spiral (turns)', unit: '', min: 0, max: 4, step: 0.25, value: DEFAULTS.twist },
+          { group: 'Harvest', key: 'fruits', label: 'Fruit count', unit: '', min: 0, max: 6, step: 1, value: DEFAULTS.fruits },
+          { group: 'Harvest', key: 'fruitR', label: 'Fruit size', unit: ' mm', min: 5, max: 12, step: 0.5, value: DEFAULTS.fruitR }
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Classic horn', {}),
+          presetOf(DEFAULTS, 'Big harvest', { len: 150, mouthR: 26, fruits: 6, fruitR: 10 }),
+          presetOf(DEFAULTS, 'Tiny favor', { len: 80, mouthR: 14, fruits: 3, fruitR: 5.5, wall: 2 }),
+          presetOf(DEFAULTS, 'Tight curl', { curl: 230, len: 140, taper: 0.75 }),
+          presetOf(DEFAULTS, 'Plain empty horn', { fruits: 0, ribAmp: 0 }),
+          presetOf(DEFAULTS, 'Default cornucopia', {})
+        ],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

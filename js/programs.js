@@ -132,6 +132,69 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/gift-box-2.svg',
     programUrl: 'programs/gift-box-2.html',
     description: 'A working gift box with a lid that slips over a hollow box, shown in a cozy Christmas workshop with a turning table, fireplace, tree and falling snow. Ten presets plus square, round or hexagon shapes, wall, lid fit, ribbon bands and a classic, pom-pom or flat bow, then tap the box to stick on stars, hearts, trees and more. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 17,
+    title: 'Turkey Builder',
+    bundle: 'thanksgiving',
+    category: 'FALL // FIGURES',
+    thumbnailUrl: 'assets/thumbnails/turkey-builder.svg',
+    programUrl: 'programs/turkey-builder.html',
+    description: 'A plump turkey with a fan of tail feathers: set body size, head, neck and beak, then feather count, length, width and spread, an inner feather row and a base plate. Prints without supports at the default spread. Paint every part in the Color tool and export .STL.'
+  },
+  {
+    slot: 18,
+    title: 'Cornucopia',
+    bundle: 'thanksgiving',
+    category: 'FALL // HARVEST',
+    thumbnailUrl: 'assets/thumbnails/cornucopia.svg',
+    programUrl: 'programs/cornucopia.html',
+    description: 'A woven horn of plenty lying on its side with fruit spilling from the mouth: set length, mouth size, curl, taper, wall and inside depth, then the weave ribs and up to six apples, gourds and grape bunches. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 19,
+    title: 'Leaf Press Ornament',
+    bundle: 'thanksgiving',
+    category: 'FALL // LEAVES',
+    thumbnailUrl: 'assets/thumbnails/leaf-press.svg',
+    programUrl: 'programs/leaf-press.html',
+    description: 'A maple, oak or birch leaf with raised veins, made as a hanging ornament, a coaster or a cookie stamp. Set size, thickness, jagged edge and vein width, height and count. Paint the leaf and veins in the Color tool and export .STL.'
+  },
+  {
+    slot: 20,
+    title: 'Pumpkin Pie Slice',
+    bundle: 'thanksgiving',
+    category: 'FALL // KITCHEN',
+    thumbnailUrl: 'assets/thumbnails/pumpkin-pie-slice.svg',
+    programUrl: 'programs/pumpkin-pie-slice.html',
+    description: 'A pie slice trinket box with a drop-in lid: set the pie radius, slice angle and height, wall and lid fit, then the crimped crust and a whipped cream dollop. Tin and lid print side by side with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 21,
+    title: 'Acorn & Pinecone Set',
+    bundle: 'thanksgiving',
+    category: 'FALL // FOREST',
+    thumbnailUrl: 'assets/thumbnails/acorn-pinecone-set.svg',
+    programUrl: 'programs/acorn-pinecone-set.html',
+    description: 'Textured acorns and scaled pinecones to print as a set or as tree ornaments with hang loops. Set how many of each, their sizes, the cap bumps and the scale rows and depth. Everything stands on a flat base. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 22,
+    title: 'Scarecrow Stacker',
+    bundle: 'thanksgiving',
+    category: 'FALL // FIGURES',
+    thumbnailUrl: 'assets/thumbnails/scarecrow-stacker.svg',
+    programUrl: 'programs/scarecrow-stacker.html',
+    description: 'A patched-shirt scarecrow on a post with straw arms, a face and a hat: pick the hat and face style, then size the shirt, post, arms and head. Arms droop so it prints without supports. Paint every part in the Color tool and export .STL.'
+  },
+  {
+    slot: 23,
+    title: 'Gratitude Place Cards',
+    bundle: 'thanksgiving',
+    category: 'FALL // TABLE',
+    thumbnailUrl: 'assets/thumbnails/gratitude-place-cards.svg',
+    programUrl: 'programs/gratitude-place-cards.html',
+    description: 'A standing name card for the Thanksgiving table: type a name and optional second line, pick a lettering style, card shape and a leaf, acorn, pumpkin or turkey motif. The easel foot is built in. Paint card, lettering and motif in the Color tool and export .STL.'
   }
 ];
 
@@ -159,11 +222,12 @@ const BUNDLES = [
     description: 'Eggs, bunnies and spring flowers.' },
   { id: 'valentines', name: "Valentine's", accent: '#ff6ec7', at: [0, 3], size: [3, 1], planned: true,
     description: 'Hearts, gifts and love notes.' },
-  { id: 'thanksgiving', name: 'Thanksgiving & Fall', accent: '#d9822b', at: [3, 3], size: [3, 1], planned: true,
-    description: 'Harvest and autumn decor.' },
-  { id: 'newyear', name: 'New Year & Party', accent: '#ffd400', at: [6, 3], size: [3, 1], planned: true,
+  { id: 'thanksgiving', name: 'Thanksgiving & Fall', accent: '#d9822b', at: [3, 3], size: [7, 1],
+    description: 'Turkeys, harvest decor, fall leaves and place cards.',
+    generators: ['SLOT-17', 'SLOT-22', 'SLOT-18', 'SLOT-20', 'SLOT-19', 'SLOT-21', 'SLOT-23'] },
+  { id: 'newyear', name: 'New Year & Party', accent: '#ffd400', at: [10, 3], size: [2, 1], planned: true,
     description: 'Parties, toasts and countdowns.' },
-  { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [9, 3], size: [3, 1], planned: true,
+  { id: 'birthday', name: 'Birthdays', accent: '#b388ff', at: [16, 3], size: [3, 1], planned: true,
     description: 'Cake toppers and party favours.' },
   // Fidgets & personal
   { id: 'fidgets', name: 'Fidgets & Clickers', accent: '#00e5ff', at: [12, 0], size: [4, 2],

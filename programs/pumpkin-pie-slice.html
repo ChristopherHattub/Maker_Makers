@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-020 Pumpkin Pie Slice // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Pumpkin Pie Slice: a wedge trinket box (tin) with a drop-in lid topped by a crimped crust and whipped cream.
+      // -----------------------------------------------------------------------
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      // -----------------------------------------------------------------------
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+      function mesh(name, list, group) {
+        return list.length ? { name: name, positions: concat(list), smoothGroup: group || name } : null;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a 0..1 switch and a named-option picker, both stored as plain numbers.
+      function toggle(group, key, label, off, on, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: 1, step: 1, value: value,
+          format: function (v) { return v >= 1 ? on : off; } };
+      }
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      var ARC = 40;
+
+      var DEFAULTS = {
+        radius: 50, angle: 45, height: 20, wall: 2.4, floor: 2, lidT: 2.6, clear: 0.35,
+        crustW: 5, crustH: 1.6, crimp: 5, cream: 1, creamR: 7.5, creamH: 9
+      };
+
+      // Wedge outline (apex at the origin, opening from angle 0 to alpha toward +x/+z), inset by w.
+      function wedge(R, alpha, w, arcN, wave) {
+        var pts = [], ai = w > 0 ? Math.asin(Math.min(0.9, w / (R - w))) : 0, i, a, rr;
+        var d = w > 0 ? w / Math.sin(alpha / 2) : 0;
+        pts.push([d * Math.cos(alpha / 2), d * Math.sin(alpha / 2)]);
+        for (i = 0; i <= arcN; i++) {
+          a = ai + ((alpha - 2 * ai) * i) / arcN;
+          rr = R - w + (wave ? wave(a) : 0);
+          pts.push([rr * Math.cos(a), rr * Math.sin(a)]);
+        }
+        return pts;
+      }
+
+      function build(p) {
+        var R = p.radius, al = p.angle * DEG, H = p.height, w = p.wall, fl = p.floor, lt = p.lidT, cl = p.clear;
+        var out = [], tin = [], lid = [], crust = [], cream = [];
+        var ledgeW = 2, centroid = [R * 0.5 * Math.cos(al / 2), R * 0.5 * Math.sin(al / 2)];
+
+        // Tin: floor, wall and an inner ledge for the lid to rest on.
+        tin.push(fanPrism(wedge(R, al, 0.3, ARC), 0, fl, centroid));
+        tin.push(ringPrism(wedge(R, al, 0, ARC), wedge(R, al, w, ARC), 0, H));
+        tin.push(ringPrism(wedge(R, al, w, ARC), wedge(R, al, w + ledgeW, ARC), H - lt - 1.6, H - lt));
+
+        // Lid, laid beside the tin on the bed (it drops into the tin upside up).
+        var off = [0, 0, R * Math.sin(al) + 10];
+        var lidPoly = wedge(R, al, w + cl, ARC);
+        function shift(pos) { return xform(pos, { t: off }); }
+        lid.push(shift(fanPrism(lidPoly, 0, lt, centroid)));
+
+        // Crimped crust band along the arc.
+        var Rl = R - w - cl, nCr = Math.max(4, Math.round((al * Rl) / p.crimp)), steps = nCr * 4;
+        var ai = Math.asin(Math.min(0.9, (w + cl) / (R - w - cl)));
+        var A = [], B = [], i, a, ro, ri;
+        for (i = 0; i <= steps; i++) {
+          a = ai + ((al - 2 * ai) * i) / steps;
+          ro = Rl - 0.9 * (0.5 + 0.5 * Math.cos((TAU * nCr * i) / steps));
+          ri = Rl - p.crustW;
+          A.push([ro * Math.cos(a), ro * Math.sin(a)]);
+          B.push([ri * Math.cos(a), ri * Math.sin(a)]);
+        }
+        crust.push(shift(stripPrism(A, B, lt - 0.4, lt + p.crustH)));
+
+        // Whipped cream swirl.
+        if (p.cream >= 1) {
+          var rho = 0.58 * R, cx = rho * Math.cos(al / 2), cz = rho * Math.sin(al / 2);
+          var cr = Math.min(p.creamR, rho * Math.sin(al / 2) - 1.5, Rl - p.crustW - rho - 1);
+          cr = Math.max(3, cr);
+          var ch = p.creamH, prof = [[0, 0], [cr, 0], [cr * 1.0, ch * 0.16], [cr * 0.82, ch * 0.3], [cr * 0.9, ch * 0.4], [cr * 0.7, ch * 0.55], [cr * 0.55, ch * 0.66],
+            [cr * 0.6, ch * 0.74], [cr * 0.38, ch * 0.86], [cr * 0.16, ch * 0.96], [0, ch]];
+          prof = prof.map(function (q) { return [q[0], q[1] + lt - 0.4]; });
+          cream.push(shift(xform(lathe(prof, 48), { t: [cx, 0, cz] })));
+        }
+
+        pushMesh(out, mesh('tin', tin));
+        pushMesh(out, mesh('lid', lid));
+        pushMesh(out, mesh('crust', crust));
+        pushMesh(out, mesh('cream', cream));
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-020',
+        category: 'FALL // KITCHEN',
+        title: 'Pumpkin Pie Slice',
+        fileName: 'Pie_Slice_Box',
+        palette: [
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Crust Gold', color: '#e0a959' },
+          { name: 'Whipped Cream', color: '#fff7ec' },
+          { name: 'Cinnamon', color: '#b4783c' },
+          { name: 'Tin Silver', color: '#cbd5e1' },
+          { name: 'Cranberry Red', color: '#e11d48' },
+          { name: 'Cocoa', color: '#5b3a24' },
+          { name: 'Sage Green', color: '#86efac' }
+        ],
+        defaultColor: '#fdba74',
+        partNames: { tin: 'Tin', lid: 'Pie top', crust: 'Crust', cream: 'Whipped cream' },
+        parameters: [
+          { group: 'Slice', key: 'radius', label: 'Pie radius', unit: ' mm', min: 35, max: 70, step: 1, value: DEFAULTS.radius },
+          { group: 'Slice', key: 'angle', label: 'Slice angle', unit: '°', min: 30, max: 90, step: 1, value: DEFAULTS.angle },
+          { group: 'Slice', key: 'height', label: 'Box height', unit: ' mm', min: 12, max: 40, step: 1, value: DEFAULTS.height },
+          { group: 'Tin', key: 'wall', label: 'Wall thickness', unit: ' mm', min: 1.6, max: 3.5, step: 0.2, value: DEFAULTS.wall },
+          { group: 'Tin', key: 'floor', label: 'Floor thickness', unit: ' mm', min: 1.6, max: 4, step: 0.2, value: DEFAULTS.floor },
+          { group: 'Tin', key: 'lidT', label: 'Lid thickness', unit: ' mm', min: 2, max: 4, step: 0.2, value: DEFAULTS.lidT },
+          { group: 'Tin', key: 'clear', label: 'Lid fit gap (loose to snug)', unit: ' mm', min: 0.15, max: 0.7, step: 0.05, value: DEFAULTS.clear },
+          { group: 'Crust', key: 'crustW', label: 'Crust width', unit: ' mm', min: 3, max: 9, step: 0.5, value: DEFAULTS.crustW },
+          { group: 'Crust', key: 'crustH', label: 'Crust height', unit: ' mm', min: 0.8, max: 3.5, step: 0.1, value: DEFAULTS.crustH },
+          { group: 'Crust', key: 'crimp', label: 'Crimp spacing', unit: ' mm', min: 3, max: 9, step: 0.5, value: DEFAULTS.crimp },
+          toggle('Whipped cream', 'cream', 'Whipped cream', 'None', 'Dollop', DEFAULTS.cream),
+          { group: 'Whipped cream', key: 'creamR', label: 'Dollop radius', unit: ' mm', min: 4, max: 14, step: 0.5, value: DEFAULTS.creamR },
+          { group: 'Whipped cream', key: 'creamH', label: 'Dollop height', unit: ' mm', min: 5, max: 16, step: 0.5, value: DEFAULTS.creamH }
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Classic slice', {}),
+          presetOf(DEFAULTS, 'Big wedge', { radius: 62, angle: 55, height: 26 }),
+          presetOf(DEFAULTS, 'Skinny slice', { angle: 32, radius: 56 }),
+          presetOf(DEFAULTS, 'Mini favor', { radius: 38, angle: 60, height: 14, creamR: 5, creamH: 6, crustW: 3.5 }),
+          presetOf(DEFAULTS, 'Plain, no cream', { cream: 0 }),
+          presetOf(DEFAULTS, 'Default pie box', {})
+        ],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
