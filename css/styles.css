@@ -1129,3 +1129,20 @@ body.on-splash .container {
   box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 .world.exp .tile:active .tile-card { transform: scale(1.02); }
+
+/* v2 hover tiles: shared base tile, text label and slot number, and a hologram layer that pops out past the frame */
+.tile-base, .tile-slot, .tile-obj { display: none; pointer-events: none; }
+.world.exp .tile.has-3d .tile-card { overflow: visible; background: transparent; }
+.world.exp .tile.has-3d .tile-art img { visibility: hidden; }
+.world.exp .tile.has-3d:hover, .world.exp .tile.has-3d:focus-visible { z-index: 5; }
+.world.exp .tile.has-3d .tile-base { display: block; position: absolute; inset: 0; background-size: 100% 100%; background-repeat: no-repeat; }
+.world.exp .tile.has-3d .tile-obj { display: block; position: absolute; left: 50%; top: 42%; background-repeat: no-repeat; will-change: transform; }
+.world.exp .tile.has-3d .tile-slot {
+  display: flex; align-items: center; position: absolute; left: 14%; top: 10%; width: 25%; height: 8%; padding-left: 4px;
+  font: 600 8px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 0.04em; color: #3fe6ff;
+}
+.world.exp .tile.has-3d .tile-label {
+  display: block; left: 12%; right: 12%; bottom: 5.5%; padding: 0; background: none;
+  font: 600 9px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: #cfd8e3; text-shadow: 0 1px 2px #000;
+}
+.world.exp .tile.has-3d:hover .tile-label, .world.exp .tile.has-3d:focus-visible .tile-label { color: #fff; }

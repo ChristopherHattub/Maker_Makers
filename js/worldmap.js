@@ -77,7 +77,8 @@ const SPRITE_DIR = 'assets/thumbnails/sprites/';
 
 function spriteLoad() {
   if (!spriteManifest) {
-    spriteManifest = fetch(SPRITE_DIR + 'manifest.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const get = f => fetch(SPRITE_DIR + f).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    spriteManifest = Promise.all([get('manifest.json'), get('manifest-v2.json')]).then(([v1, v2]) => ({ v1, v2 }));
   }
   return spriteManifest;
 }
@@ -107,27 +108,93 @@ function spritePlay(tile) {
   d.timer = setInterval(tick, 1000 / d.m.fps);
 }
 
-function spriteApply(m) {
+function spriteApply(ms) {
   wEl.canvas.querySelectorAll('.tile').forEach(tile => {
     const img = tile.querySelector('.tile-art img[data-std]');
-    const entry = img && m.tiles[img.dataset.std.replace(/^.*\/([^/]+)\.\w+$/, '$1')];
-    if (!entry || tile.querySelector('.tile-sprite')) return;
-    const span = document.createElement('span');
-    span.className = 'tile-sprite';
-    span.setAttribute('aria-hidden', 'true');
-    span.style.backgroundImage = `url(${SPRITE_DIR}${m.sheets[entry.sheet].file})`;
-    span._sprite = { m, entry, timer: null };
-    tile.querySelector('.tile-art').appendChild(span);
-    tile.classList.add('has-sprite', 'has-pro');
-    spriteShow(span, 0);
+    const id = img && img.dataset.std.replace(/^.*\/([^/]+)\.\w+$/, '$1');
+    if (!id || tile.querySelector('.tile-sprite, .tile-obj')) return;
+    if (ms.v2 && ms.v2.tiles[id]) hoverApply(tile, ms.v2, id);
+    else if (ms.v1 && ms.v1.tiles[id]) spriteApplyV1(tile, ms.v1, ms.v1.tiles[id]);
   });
 }
 
+function spriteApplyV1(tile, m, entry) {
+  const span = document.createElement('span');
+  span.className = 'tile-sprite';
+  span.setAttribute('aria-hidden', 'true');
+  span.style.backgroundImage = `url(${SPRITE_DIR}${m.sheets[entry.sheet].file})`;
+  span._sprite = { m, entry, timer: null };
+  tile.querySelector('.tile-art').appendChild(span);
+  tile.classList.add('has-sprite', 'has-pro');
+  spriteShow(span, 0);
+}
+
+// v2 hover: shared base tile + a 24-frame rotating hologram layer that pops out of the frame on hover.
+// The label and slot number are text; the hologram layer may overflow the tile (see .tile-obj in styles.css).
+function hoverApply(tile, m, id) {
+  const entry = m.tiles[id];
+  const section = tile.closest('.region')?.dataset.region;
+  const art = tile.querySelector('.tile-art');
+  const base = document.createElement('span');
+  base.className = 'tile-base';
+  base.setAttribute('aria-hidden', 'true');
+  base.style.backgroundImage = `url(${SPRITE_DIR}${m.rims[section] || m.base})`;
+  const slot = document.createElement('span');
+  slot.className = 'tile-slot';
+  slot.setAttribute('aria-hidden', 'true');
+  slot.textContent = String(entry.slot).padStart(2, '0');
+  const obj = document.createElement('span');
+  obj.className = 'tile-obj';
+  obj.setAttribute('aria-hidden', 'true');
+  const size = m.cell * m.displayScale, sheet = m.sheets[entry.sheet];
+  obj.style.width = obj.style.height = `${size}px`;
+  obj.style.backgroundImage = `url(${SPRITE_DIR}${sheet.file})`;
+  obj.style.backgroundSize = `${sheet.width * m.displayScale}px ${sheet.height * m.displayScale}px`;
+  obj._hover = { m, entry, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0 };
+  art.append(base, slot, obj);
+  tile.classList.add('has-3d', 'has-pro');
+  hoverDraw(obj);
+}
+
+const easeOutBack = x => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
+
+function hoverDraw(obj) {
+  const h = obj._hover, m = h.m;
+  const e = easeOutBack(Math.min(1, h.p));
+  const scale = m.restScale + (1 - m.restScale) * e;
+  const col = h.frame % m.cols, row = m.rowsPerBlock * h.entry.block + Math.floor(h.frame / m.cols);
+  obj.style.backgroundPosition = `${-col * m.cell * m.displayScale}px ${-row * m.cell * m.displayScale}px`;
+  obj.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  obj.style.filter = `drop-shadow(0 0 ${3 + 9 * Math.min(1, h.p)}px rgba(60, 230, 255, ${0.35 + 0.4 * Math.min(1, h.p)}))`;
+}
+
+function hoverLoop(obj, now) {
+  const h = obj._hover, m = h.m, dt = Math.min(64, now - h.last);
+  h.last = now;
+  h.p = Math.max(0, Math.min(1, h.p + h.dir * dt / (h.dir > 0 ? 260 : 200)));
+  h.acc += dt;
+  const step = 1000 / m.fps;
+  while (h.acc >= step) { h.acc -= step; h.frame = (h.frame + 1) % m.frames; }
+  if (h.dir < 0 && h.p <= 0) { h.frame = 0; h.acc = 0; h.raf = 0; hoverDraw(obj); return; }
+  hoverDraw(obj);
+  h.raf = requestAnimationFrame(t => hoverLoop(obj, t));
+}
+
+function hoverStart(tile, on) {
+  const obj = tile.querySelector('.tile-obj');
+  if (!obj || !obj._hover || worldReducedMotion()) return;
+  const h = obj._hover;
+  h.dir = on ? 1 : -1;
+  if (!h.raf) { h.last = performance.now(); h.raf = requestAnimationFrame(t => hoverLoop(obj, t)); }
+}
+
 function spriteRemove() {
-  wEl.canvas.querySelectorAll('.tile.has-sprite').forEach(tile => {
+  wEl.canvas.querySelectorAll('.tile.has-sprite, .tile.has-3d').forEach(tile => {
     spriteStop(tile);
-    tile.querySelector('.tile-sprite')?.remove();
-    tile.classList.remove('has-sprite');
+    const obj = tile.querySelector('.tile-obj');
+    if (obj && obj._hover) cancelAnimationFrame(obj._hover.raf);
+    tile.querySelectorAll('.tile-sprite, .tile-base, .tile-slot, .tile-obj').forEach(n => n.remove());
+    tile.classList.remove('has-sprite', 'has-3d');
   });
 }
 
@@ -142,7 +209,7 @@ function worldSetExperimental(on) {
     img.onerror = () => { img.onerror = null; tile.classList.remove('has-pro'); img.src = img.dataset.std; };
     img.src = img.dataset.pro;
   });
-  if (on) spriteLoad().then(m => { if (m && worldState.experimental) spriteApply(m); });
+  if (on) spriteLoad().then(ms => { if (ms && worldState.experimental) spriteApply(ms); });
   else spriteRemove();
   const btn = document.getElementById('world-exp-toggle');
   if (btn) btn.setAttribute('aria-pressed', on);
@@ -213,14 +280,16 @@ function initWorldMap() {
     `${filled} generators · ${groups.filter(g => g.members.length).length} groups · ${open} open slots`;
 
   const expBtn = document.getElementById('world-exp-toggle');
-  const spriteTile = e => (worldState.experimental ? e.target.closest?.('.tile.has-sprite') : null);
-  wEl.canvas.addEventListener('mouseover', e => { const t = spriteTile(e); if (t) spritePlay(t); });
+  const spriteTile = e => (worldState.experimental ? e.target.closest?.('.tile.has-sprite, .tile.has-3d') : null);
+  const hoverOn = t => (t.classList.contains('has-3d') ? hoverStart(t, true) : spritePlay(t));
+  const hoverOff = t => (t.classList.contains('has-3d') ? hoverStart(t, false) : spriteStop(t));
+  wEl.canvas.addEventListener('mouseover', e => { const t = spriteTile(e); if (t) hoverOn(t); });
   wEl.canvas.addEventListener('mouseout', e => {
     const t = spriteTile(e);
-    if (t && !t.contains(e.relatedTarget)) spriteStop(t);
+    if (t && !t.contains(e.relatedTarget)) hoverOff(t);
   });
-  wEl.canvas.addEventListener('focusin', e => { const t = spriteTile(e); if (t) spritePlay(t); });
-  wEl.canvas.addEventListener('focusout', e => { const t = spriteTile(e); if (t) spriteStop(t); });
+  wEl.canvas.addEventListener('focusin', e => { const t = spriteTile(e); if (t) hoverOn(t); });
+  wEl.canvas.addEventListener('focusout', e => { const t = spriteTile(e); if (t) hoverOff(t); });
   if (expBtn) expBtn.addEventListener('click', () => worldSetExperimental(!worldState.experimental));
   let wasOn = false;
   try { wasOn = localStorage.getItem('mm-exp-view') === '1'; } catch (e) {}

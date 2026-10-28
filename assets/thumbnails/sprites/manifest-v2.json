@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "base": "base-tile.webp",
+  "rims": {},
+  "cell": 288,
+  "frames": 24,
+  "cols": 6,
+  "rowsPerBlock": 4,
+  "fps": 24,
+  "restScale": 0.41,
+  "displayScale": 0.85,
+  "sheets": [
+    {
+      "file": "obj-sheet-01.webp",
+      "width": 1728,
+      "height": 2304
+    }
+  ],
+  "tiles": {
+    "ghost-builder": {
+      "slot": 1,
+      "sheet": 0,
+      "block": 0
+    },
+    "pumpkin-plotter": {
+      "slot": 2,
+      "sheet": 0,
+      "block": 1
+    }
+  }
+}
