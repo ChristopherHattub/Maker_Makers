@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-072 Game Piece Pawn // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Game Piece Pawn: parameters, presets, palette and geometry. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Geometry kit: watertight solids from polygons (XZ plane, Y up). Triangles go into plain arrays.
+      // -----------------------------------------------------------------------
+      var K = (function () {
+        var TAU = Math.PI * 2;
+
+        function area2(p) {
+          var s = 0;
+          for (var i = 0; i < p.length; i++) { var a = p[i], b = p[(i + 1) % p.length]; s += a[0] * b[1] - b[0] * a[1]; }
+          return s;
+        }
+        // Outer loops have area2 < 0 (their top cap faces up); holes have area2 > 0.
+        function orient(p, outer) { return (area2(p) < 0) === outer ? p : p.slice().reverse(); }
+        function push(out, a, b, c) { out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+        function same(a, b) { return Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9; }
+
+        function segHit(p1, p2, p3, p4) {
+          if (same(p1, p3) || same(p1, p4) || same(p2, p3) || same(p2, p4)) return false;
+          var d1 = cross(p3, p4, p1), d2 = cross(p3, p4, p2), d3 = cross(p1, p2, p3), d4 = cross(p1, p2, p4);
+          return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+        }
+
+        // Join each hole to the outer loop with a zero-width bridge so one ear-clipping pass handles it.
+        function bridge(poly, holes) {
+          var hs = holes.slice().sort(function (a, b) { return maxX(b) - maxX(a); });
+          var all = hs.slice();
+          hs.forEach(function (h, hi) {
+            var mi = 0;
+            for (var i = 1; i < h.length; i++) if (h[i][0] > h[mi][0]) mi = i;
+            var M = h[mi];
+            var order = poly.map(function (p, i) { return i; }).sort(function (a, b) {
+              return dist2(poly[a], M) - dist2(poly[b], M);
+            });
+            var pick = -1;
+            for (var k = 0; k < order.length && pick < 0; k++) {
+              var V = poly[order[k]];
+              var ok = true;
+              for (var e = 0; e < poly.length && ok; e++) if (segHit(M, V, poly[e], poly[(e + 1) % poly.length])) ok = false;
+              for (var q = 0; q < all.length && ok; q++) {
+                var L = all[q];
+                for (var f = 0; f < L.length && ok; f++) if (segHit(M, V, L[f], L[(f + 1) % L.length])) ok = false;
+              }
+              if (ok) pick = order[k];
+            }
+            if (pick < 0) pick = order[0];
+            var rot = h.slice(mi).concat(h.slice(0, mi));
+            poly = poly.slice(0, pick + 1).concat(rot, [rot[0]], [poly[pick]], poly.slice(pick + 1));
+          });
+          return poly;
+        }
+        function maxX(p) { var m = -Infinity; for (var i = 0; i < p.length; i++) if (p[i][0] > m) m = p[i][0]; return m; }
+        function dist2(a, b) { var x = a[0] - b[0], z = a[1] - b[1]; return x * x + z * z; }
+
+        // Ear clipping for a loop with area2 < 0. Returns triangles [a, b, c] of [x, z] points facing up.
+        function earClip(poly) {
+          var idx = poly.map(function (p, i) { return i; });
+          var tris = [];
+          var i = 0, guard = 0, limit = poly.length * poly.length * 3 + 50;
+          while (idx.length > 3 && guard++ < limit) {
+            var m = idx.length;
+            i = i % m;
+            var a = poly[idx[(i + m - 1) % m]], b = poly[idx[i]], c = poly[idx[(i + 1) % m]];
+            var cr = cross(a, b, c);
+            var ear = false;
+            if (cr <= 1e-12) {
+              ear = true;
+              if (cr < -1e-12) {
+                for (var k = 0; k < m && ear; k++) {
+                  var q = poly[idx[k]];
+                  if (same(q, a) || same(q, b) || same(q, c)) continue;
+                  if (cross(a, b, q) <= 1e-12 && cross(b, c, q) <= 1e-12 && cross(c, a, q) <= 1e-12) ear = false;
+                }
+              }
+            }
+            if (ear) { tris.push([a, b, c]); idx.splice(i, 1); } else i++;
+          }
+          if (idx.length === 3) tris.push([poly[idx[0]], poly[idx[1]], poly[idx[2]]]);
+          else if (guard >= limit) {
+            // numerical trouble: fan the rest so the surface stays closed
+            for (var j = 1; j + 1 < idx.length; j++) tris.push([poly[idx[0]], poly[idx[j]], poly[idx[j + 1]]]);
+          }
+          return tris;
+        }
+
+        function triangulate(outer, holes) {
+          var poly = outer;
+          if (holes && holes.length) poly = bridge(outer, holes);
+          return earClip(poly);
+        }
+
+        function wallStrip(out, a, b, y0, y1) {
+          push(out, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]]);
+          push(out, [a[0], y0, a[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        function walls(out, loop, y0, y1) {
+          for (var i = 0; i < loop.length; i++) wallStrip(out, loop[i], loop[(i + 1) % loop.length], y0, y1);
+        }
+        function cap(out, tris, y, up) {
+          tris.forEach(function (t) {
+            if (up) push(out, [t[0][0], y, t[0][1]], [t[1][0], y, t[1][1]], [t[2][0], y, t[2][1]]);
+            else push(out, [t[0][0], y, t[0][1]], [t[2][0], y, t[2][1]], [t[1][0], y, t[1][1]]);
+          });
+        }
+
+        // Straight extrusion of a loop (with optional holes) from y0 to y1.
+        function extrude(out, outer, holes, y0, y1) {
+          outer = orient(outer, true);
+          holes = (holes || []).map(function (h) { return orient(h, false); });
+          var tris = triangulate(outer, holes);
+          cap(out, tris, y1, true);
+          cap(out, tris, y0, false);
+          walls(out, outer, y0, y1);
+          holes.forEach(function (h) { walls(out, h, y0, y1); });
+        }
+
+        // A stack of loops with the same point count joined by wall strips (bevels, tapers, domes).
+        // rings: [{ p: loop, y }], bottom to top. Holes pass straight through.
+        function rings(out, rs, holes) {
+          holes = (holes || []).map(function (h) { return orient(h, false); });
+          var ps = rs.map(function (r) { return orient(r.p, true); });
+          var y0 = rs[0].y, y1 = rs[rs.length - 1].y;
+          cap(out, triangulate(ps[0], holes), y0, false);
+          cap(out, triangulate(ps[ps.length - 1], holes), y1, true);
+          for (var r = 0; r + 1 < rs.length; r++) {
+            var A = ps[r], B = ps[r + 1], n = A.length;
+            for (var i = 0; i < n; i++) {
+              var j = (i + 1) % n;
+              push(out, [A[i][0], rs[r].y, A[i][1]], [A[j][0], rs[r].y, A[j][1]], [B[j][0], rs[r + 1].y, B[j][1]]);
+              push(out, [A[i][0], rs[r].y, A[i][1]], [B[j][0], rs[r + 1].y, B[j][1]], [B[i][0], rs[r + 1].y, B[i][1]]);
+            }
+          }
+          holes.forEach(function (h) { walls(out, h, y0, y1); });
+        }
+
+        function box(out, x0, y0, z0, x1, y1, z1) {
+          extrude(out, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], null, y0, y1);
+        }
+
+        // Revolve a profile [[r, y], ...] (bottom to top) around the Y axis. r = 0 makes a pole,
+        // r > 0 at either end gets a flat cap. Optional cuts split the result into several lists.
+        function lathe(out, prof, seg, cx, cz, open0, open1) {
+          cx = cx || 0; cz = cz || 0;
+          var m = prof.length;
+          function pt(i, j) {
+            var a = (j % seg) / seg * TAU;
+            return [cx + prof[i][0] * Math.cos(a), prof[i][1], cz + prof[i][0] * Math.sin(a)];
+          }
+          var pole = function (i) { return prof[i][0] < 1e-9; };
+          var c0 = [cx, prof[0][1], cz], c1 = [cx, prof[m - 1][1], cz];
+          if (!pole(0) && !open0) for (var j = 0; j < seg; j++) push(out, c0, pt(0, j), pt(0, j + 1));
+          if (!pole(m - 1) && !open1) for (var j2 = 0; j2 < seg; j2++) push(out, c1, pt(m - 1, j2 + 1), pt(m - 1, j2));
+          for (var i = 0; i + 1 < m; i++) {
+            if (pole(i) && pole(i + 1)) continue;
+            for (var k = 0; k < seg; k++) {
+              if (pole(i)) push(out, [cx, prof[i][1], cz], pt(i + 1, k), pt(i + 1, k + 1));
+              else if (pole(i + 1)) push(out, pt(i, k), [cx, prof[i + 1][1], cz], pt(i, k + 1));
+              else {
+                push(out, pt(i, k), pt(i + 1, k + 1), pt(i, k + 1));
+                push(out, pt(i, k), pt(i + 1, k), pt(i + 1, k + 1));
+              }
+            }
+          }
+        }
+
+        // ---- loops
+        function circle(cx, cz, r, n, ph) {
+          var p = [];
+          for (var i = 0; i < n; i++) { var a = (ph || 0) + i / n * TAU; p.push([cx + r * Math.cos(a), cz + r * Math.sin(a)]); }
+          return p;
+        }
+        function ellipse(cx, cz, rx, rz, n, ph) {
+          var p = [];
+          for (var i = 0; i < n; i++) { var a = (ph || 0) + i / n * TAU; p.push([cx + rx * Math.cos(a), cz + rz * Math.sin(a)]); }
+          return p;
+        }
+        function rrect(cx, cz, w, d, r, seg) {
+          r = Math.max(0.01, Math.min(r, w / 2 - 0.01, d / 2 - 0.01));
+          seg = seg || 6;
+          var p = [];
+          var cs = [[w / 2 - r, d / 2 - r, 0], [-(w / 2 - r), d / 2 - r, 90], [-(w / 2 - r), -(d / 2 - r), 180], [w / 2 - r, -(d / 2 - r), 270]];
+          cs.forEach(function (c) {
+            for (var i = 0; i <= seg; i++) {
+              var a = (c[2] + i / seg * 90) * Math.PI / 180;
+              p.push([cx + c[0] + r * Math.cos(a), cz + c[1] + r * Math.sin(a)]);
+            }
+          });
+          return p;
+        }
+        function rect(cx, cz, w, d) { return [[cx - w / 2, cz - d / 2], [cx + w / 2, cz - d / 2], [cx + w / 2, cz + d / 2], [cx - w / 2, cz + d / 2]]; }
+        // Thick line from a to b (2D) as a 4-point loop, ends extended by half the width.
+        function strokeQuad(a, b, w, ext) {
+          var dx = b[0] - a[0], dz = b[1] - a[1], l = Math.sqrt(dx * dx + dz * dz) || 1e-6;
+          dx /= l; dz /= l;
+          var e = ext ? w / 2 : 0, nx = -dz * w / 2, nz = dx * w / 2;
+          var ax = a[0] - dx * e, az = a[1] - dz * e, bx = b[0] + dx * e, bz = b[1] + dz * e;
+          return [[ax + nx, az + nz], [bx + nx, bz + nz], [bx - nx, bz - nz], [ax - nx, az - nz]];
+        }
+        // Convex loop moved inwards by d (negative d grows it).
+        function inset(p, d) {
+          var n = p.length, s = area2(p) > 0 ? 1 : -1, out = [];
+          for (var i = 0; i < n; i++) {
+            var a = p[(i + n - 1) % n], b = p[i], c = p[(i + 1) % n];
+            var e0 = unit(b[0] - a[0], b[1] - a[1]), e1 = unit(c[0] - b[0], c[1] - b[1]);
+            var n0 = [-e0[1] * s, e0[0] * s], n1 = [-e1[1] * s, e1[0] * s];
+            var k = d / Math.max(0.2, 1 + n0[0] * n1[0] + n0[1] * n1[1]);
+            out.push([b[0] + (n0[0] + n1[0]) * k, b[1] + (n0[1] + n1[1]) * k]);
+          }
+          return out;
+        }
+        function unit(x, z) { var l = Math.sqrt(x * x + z * z) || 1e-9; return [x / l, z / l]; }
+        function inside(p, x, z) {
+          var s = area2(p) > 0 ? 1 : -1;
+          for (var i = 0; i < p.length; i++) {
+            var a = p[i], b = p[(i + 1) % p.length];
+            if (((b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0])) * s < 0) return false;
+          }
+          return true;
+        }
+        function centroid(p) {
+          var x = 0, z = 0;
+          p.forEach(function (q) { x += q[0]; z += q[1]; });
+          return [x / p.length, z / p.length];
+        }
+        function xf(p, fn) { return p.map(function (q) { return fn(q); }); }
+        function rotate2(p, ang, cx, cz) {
+          var c = Math.cos(ang), s = Math.sin(ang);
+          return p.map(function (q) { var x = q[0] - (cx || 0), z = q[1] - (cz || 0); return [(cx || 0) + x * c - z * s, (cz || 0) + x * s + z * c]; });
+        }
+
+        // ---- transforms on a flat triangle array, from index `from` on
+        function map(out, from, fn) {
+          for (var i = from; i < out.length; i += 3) {
+            var r = fn(out[i], out[i + 1], out[i + 2]);
+            out[i] = r[0]; out[i + 1] = r[1]; out[i + 2] = r[2];
+          }
+        }
+        function move(out, from, dx, dy, dz) { map(out, from, function (x, y, z) { return [x + dx, y + dy, z + dz]; }); }
+        function spinY(out, from, ang) {
+          var c = Math.cos(ang), s = Math.sin(ang);
+          map(out, from, function (x, y, z) { return [x * c + z * s, y, -x * s + z * c]; });
+        }
+        // Move local (x, y, z) into the frame o + x*ex + y*ey + z*ez (ex, ey, ez right-handed).
+        function place(out, from, o, ex, ey, ez) {
+          map(out, from, function (x, y, z) {
+            return [o[0] + ex[0] * x + ey[0] * y + ez[0] * z, o[1] + ex[1] * x + ey[1] * y + ez[1] * z, o[2] + ex[2] * x + ey[2] * y + ez[2] * z];
+          });
+        }
+        // Stand a flat build (polygon in x/z, thickness in y) upright: (x, y, z) -> (x, -z, y), polygon z becomes -height.
+        function standUp(out, from) { map(out, from, function (x, y, z) { return [x, -z, y]; }); }
+        function f32(a) { return new Float32Array(a); }
+
+        function rng(seed) {
+          var s = seed >>> 0;
+          return function () {
+            s = (s + 0x6D2B79F5) >>> 0;
+            var t = s;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+
+        // Stroke font for digits, unit box 0..0.6 wide, 0..1 high.
+        var DIGITS = {
+          '0': [[[0, .15], [0, .85], [.1, 1], [.5, 1], [.6, .85], [.6, .15], [.5, 0], [.1, 0], [0, .15]]],
+          '1': [[[.08, .78], [.3, 1], [.3, 0]]],
+          '2': [[[0, .85], [.1, 1], [.5, 1], [.6, .85], [.6, .6], [0, 0], [.6, 0]]],
+          '3': [[[0, .9], [.1, 1], [.5, 1], [.6, .9], [.6, .62], [.45, .52], [.2, .52]], [[.45, .52], [.6, .4], [.6, .1], [.5, 0], [.1, 0], [0, .1]]],
+          '4': [[[.45, 0], [.45, 1], [0, .32], [.6, .32]]],
+          '5': [[[.55, 1], [.05, 1], [0, .55], [.4, .6], [.55, .5], [.6, .2], [.5, 0], [.1, 0], [0, .1]]],
+          '6': [[[.55, 1], [.15, .8], [0, .4], [0, .12], [.1, 0], [.5, 0], [.6, .12], [.6, .4], [.5, .52], [.1, .52], [0, .4]]],
+          '7': [[[0, 1], [.6, 1], [.2, 0]]],
+          '8': [[[.3, .52], [.05, .62], [.05, .9], [.15, 1], [.45, 1], [.55, .9], [.55, .62], [.3, .52], [.0, .4], [0, .1], [.1, 0], [.5, 0], [.6, .1], [.6, .4], [.3, .52]]],
+          '9': [[[.05, 0], [.45, .2], [.6, .6], [.6, .88], [.5, 1], [.1, 1], [0, .88], [0, .6], [.1, .48], [.5, .48], [.6, .6]]]
+        };
+        // Strokes of a whole number: list of [[x0, y0], [x1, y1]] in a box of the given height, centred on 0, 0.
+        function numberStrokes(text, height, underline) {
+          var s = String(text), adv = 0.8, w = (s.length - 1) * adv + 0.6, segs = [];
+          for (var i = 0; i < s.length; i++) {
+            (DIGITS[s.charAt(i)] || []).forEach(function (pl) {
+              for (var k = 0; k + 1 < pl.length; k++) {
+                segs.push([[(pl[k][0] + i * adv - w / 2) * height, (pl[k][1] - 0.5) * height], [(pl[k + 1][0] + i * adv - w / 2) * height, (pl[k + 1][1] - 0.5) * height]]);
+              }
+            });
+          }
+          if (underline) segs.push([[-w / 2 * height, -0.62 * height], [w / 2 * height, -0.62 * height]]);
+          return { segs: segs, width: w * height };
+        }
+
+        return {
+          TAU: TAU, area2: area2, orient: orient, push: push, extrude: extrude, rings: rings, box: box, lathe: lathe,
+          circle: circle, ellipse: ellipse, rrect: rrect, rect: rect, strokeQuad: strokeQuad, inset: inset, inside: inside,
+          centroid: centroid, xf: xf, rotate2: rotate2, map: map, move: move, spinY: spinY, place: place, standUp: standUp,
+          f32: f32, rng: rng, numberStrokes: numberStrokes, DIGITS: DIGITS
+        };
+      })();
+
+      // Head: a 45° chamfer under the widest point (no support), then a dome.
+      function headPoints(rn, rh, yTop) {
+        var yc = yTop - rh, pts = [[rn, yc - (rh - rn)], [rh, yc]];
+        for (var a = 15; a < 90; a += 15) pts.push([rh * Math.cos(a * Math.PI / 180), yc + rh * Math.sin(a * Math.PI / 180)]);
+        pts.push([0, yTop]);
+        return pts;
+      }
+
+      function buildPawn(p) {
+        var bR = p.baseDia / 2, bt = p.baseT, H = p.height, bw = p.bodyW / 100, hs = p.headSize / 100;
+        var style = Math.round(p.style), pts = [], iBase, iHead = -1, seg = Math.max(6, Math.round(p.facets));
+        var pr = Math.min(p.pocketDia / 2, bR - 2.2), pd = Math.min(p.pocketDepth, bt - 0.8);
+        if (p.weight === 1 && pr > 1 && pd > 0.5) pts.push([0, pd], [pr, pd], [pr, 0]); else pts.push([0, 0]);
+        pts.push([bR - 0.8, 0], [bR, 0.8], [bR, bt - 0.8], [bR - 0.8, bt]);
+        iBase = pts.length - 1;
+        var rs = bR * 0.62 * bw, rn, rh, yb, n, i, t;
+
+        if (style === 0) { // classic pawn
+          rn = bR * 0.30 * bw; rh = Math.max(rn + 0.8, bR * 0.5 * hs);
+          var rc = rn + bR * 0.24 * bw;
+          yb = H - 2 * rh + rn;
+          var yw = bt + (yb - bt) * 0.58, cTop = yw + (rc - rn) + 1.2;
+          pts.push([rs, bt]);
+          for (i = 1; i <= 8; i++) { t = i / 8; pts.push([rs + (rn - rs) * (1 - (1 - t) * (1 - t)), bt + (yw - bt) * t]); }
+          pts.push([rc, yw + (rc - rn)], [rc, cTop], [rn, cTop], [rn, yb]);
+          iHead = pts.length - 1;
+          headPoints(rn, rh, H).slice(1).forEach(function (q) { pts.push(q); });
+        } else if (style === 1) { // peg person
+          var rb = bR * 0.58 * bw; rn = bR * 0.22 * bw; rh = Math.max(rn + 0.8, bR * 0.46 * hs);
+          yb = H - 2 * rh + rn;
+          var ysh = bt + (yb - bt) * 0.8, q = rb - rn;
+          pts.push([rb * 1.12, bt], [rb, ysh - q]);
+          for (i = 1; i <= 6; i++) { var ph = i / 6 * Math.PI / 2; pts.push([rn + q * Math.cos(ph), ysh - q + q * Math.sin(ph)]); }
+          pts.push([rn, yb]);
+          iHead = pts.length - 1;
+          headPoints(rn, rh, H).slice(1).forEach(function (q2) { pts.push(q2); });
+        } else if (style === 2) { // cone with a rounded tip
+          var r0 = bR * 0.78 * bw, rt = Math.max(1.2, bR * 0.14 * hs);
+          pts.push([r0, bt], [rt, H - rt]);
+          for (i = 1; i < 6; i++) { var a2 = i / 6 * Math.PI / 2; pts.push([rt * Math.cos(a2), H - rt + rt * Math.sin(a2)]); }
+          pts.push([0, H]);
+        } else if (style === 3) { // bell
+          var rb2 = bR * 0.78 * bw, rt2 = bR * 0.2 * hs;
+          pts.push([rb2, bt]);
+          for (i = 1; i <= 10; i++) { t = i / 10; pts.push([rt2 + (rb2 - rt2) * Math.pow(1 - t, 2.2) * 0.98, bt + (H - bt - rt2) * t]); }
+          for (i = 1; i < 5; i++) { var a3 = i / 5 * Math.PI / 2; pts.push([rt2 * Math.cos(a3), H - rt2 + rt2 * Math.sin(a3)]); }
+          pts.push([0, H]);
+          iHead = -1;
+        } else { // gem: faceted crystal
+          seg = Math.max(5, Math.round(p.facets / 8));
+          var rg = bR * 0.74 * bw;
+          pts.push([rg, bt], [rg * 1.12, bt + (H - bt) * 0.34], [rg * 0.62 * hs, bt + (H - bt) * 0.78], [0, H]);
+        }
+        // split into base / body / head so each can be painted; rings are shared so the surface stays closed
+        var cuts = [0, iBase];
+        if (iHead > 0) cuts.push(iHead);
+        cuts.push(pts.length - 1);
+        var names = ['base', 'body', 'head'], out = [];
+        for (var c = 0; c + 1 < cuts.length; c++) {
+          var arr = [];
+          K.lathe(arr, pts.slice(cuts[c], cuts[c + 1] + 1), seg, 0, 0, c > 0, c + 2 < cuts.length);
+          out.push({ name: names[c], smoothGroup: 'pawn', positions: K.f32(arr) });
+        }
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-072',
+        category: 'TABLETOP // PIECES',
+        title: 'Game Piece Pawn',
+        fileName: 'Game_Pawn',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#f87171',
+        palette: [
+          { name: 'Dragon Red', color: '#f87171' },
+          { name: 'Ocean Blue', color: '#60a5fa' },
+          { name: 'Meadow Green', color: '#4ade80' },
+          { name: 'Sunny Yellow', color: '#fde047' },
+          { name: 'Arcane Violet', color: '#a78bfa' },
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { base: 'Base', body: 'Body', head: 'Head' },
+        parameters: [
+          { group: 'Shape', key: 'style', label: 'Style', unit: '', min: 0, max: 4, step: 1, value: 0, options: ['Classic pawn', 'Peg person', 'Cone', 'Bell', 'Gem'] },
+          { group: 'Shape', key: 'height', label: 'Height', unit: ' mm', min: 22, max: 70, step: 1, value: 40 },
+          { group: 'Shape', key: 'bodyW', label: 'Body width', unit: '%', min: 60, max: 130, step: 5, value: 100 },
+          { group: 'Shape', key: 'headSize', label: 'Head size', unit: '%', min: 60, max: 140, step: 5, value: 100 },
+          { group: 'Shape', key: 'facets', label: 'Facets (smooth ↔ faceted)', unit: ' sides', min: 8, max: 72, step: 2, value: 48,
+            format: function (v) { return v >= 64 ? 'Very smooth' : v + ' sides'; } },
+          { group: 'Base', key: 'baseDia', label: 'Base diameter', unit: ' mm', min: 14, max: 36, step: 1, value: 24 },
+          { group: 'Base', key: 'baseT', label: 'Base thickness', unit: ' mm', min: 3, max: 8, step: 0.5, value: 4 },
+          { group: 'Base', key: 'weight', label: 'Underside', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Solid', 'Weight pocket'] },
+          { group: 'Base', key: 'pocketDia', label: 'Pocket diameter', unit: ' mm', min: 6, max: 24, step: 1, value: 14 },
+          { group: 'Base', key: 'pocketDepth', label: 'Pocket depth', unit: ' mm', min: 1, max: 5, step: 0.5, value: 3 }
+        ],
+        presets: [
+          { label: 'Classic chess-style pawn', values: { style: 0, height: 40, bodyW: 100, headSize: 100, facets: 48, baseDia: 24, baseT: 4 } },
+          { label: 'Peg person', values: { style: 1, height: 36, bodyW: 100, headSize: 100, facets: 48, baseDia: 22, baseT: 3.5 } },
+          { label: 'Tall cone', values: { style: 2, height: 50, bodyW: 90, headSize: 100, facets: 40, baseDia: 22, baseT: 3.5 } },
+          { label: 'Bell', values: { style: 3, height: 44, bodyW: 100, headSize: 100, facets: 48, baseDia: 26, baseT: 4 } },
+          { label: 'Chunky gem', values: { style: 4, height: 38, bodyW: 110, headSize: 100, facets: 48, baseDia: 26, baseT: 4 } },
+          { label: 'Weighted pawn', values: { style: 0, height: 46, baseDia: 30, baseT: 6, weight: 1, pocketDia: 18, pocketDepth: 4 } },
+          { label: 'Default pawn', values: { style: 0, height: 40, bodyW: 100, headSize: 100, facets: 48, baseDia: 24, baseT: 4, weight: 0, pocketDia: 14, pocketDepth: 3 } }
+        ],
+        build: function (p) { return buildPawn(p); }
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

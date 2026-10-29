@@ -573,6 +573,96 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/tray-maker.svg',
     programUrl: 'programs/tray-maker.html',
     description: 'A tray in a rectangle with a grid of compartments, or a round tray with 1 to 8 pie sections and a centre post. Set size, wall and divider height, corner roundness and optional ear handles with finger holes. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 66,
+    title: 'Dice Tower',
+    bundle: 'tabletop',
+    category: 'TABLETOP // DICE',
+    thumbnailUrl: 'assets/thumbnails/dice-tower.svg',
+    programUrl: 'programs/dice-tower.html',
+    description: 'A tall tower with 2 to 6 angled baffle ramps and a landing tray. Set the die size, tower height, ramp steepness, wall thickness and tray length and rim. Ramps default to 45 degrees so it prints upright with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 67,
+    title: 'Dice Vault',
+    bundle: 'tabletop',
+    category: 'TABLETOP // DICE',
+    thumbnailUrl: 'assets/thumbnails/dice-vault.svg',
+    programUrl: 'programs/dice-vault.html',
+    description: 'A lidded dice box with an open bay or a grid of round, hex or square pockets, plus a friction lid with an optional honeycomb pattern. Set the die size, pocket layout, depth, wall and corner roundness. The lid prints beside the box with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 68,
+    title: 'Custom Dice Maker',
+    bundle: 'tabletop',
+    category: 'TABLETOP // DICE',
+    thumbnailUrl: 'assets/thumbnails/custom-dice.svg',
+    programUrl: 'programs/custom-dice.html',
+    description: 'A d4, d6, d8, d10, d12 or d20 with raised numbers or domed pips. Set the size, how rounded the edges are, number size, height and stroke thickness. The bottom face stays clear so it prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 69,
+    title: 'Miniature Base',
+    bundle: 'tabletop',
+    category: 'TABLETOP // MINIATURES',
+    thumbnailUrl: 'assets/thumbnails/miniature-base.svg',
+    programUrl: 'programs/miniature-base.html',
+    description: 'A round, square or oval wargame base with a smooth, cobblestone, rubble or hex paver surface, a raised rim and an optional magnet pocket underneath. Set the size, thickness, bevel, stone size and height. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 70,
+    title: 'Hex Terrain Tile',
+    bundle: 'tabletop',
+    category: 'TABLETOP // TERRAIN',
+    thumbnailUrl: 'assets/thumbnails/hex-terrain-tile.svg',
+    programUrl: 'programs/hex-terrain-tile.html',
+    description: 'A hexagon terrain tile with grass tufts, flagstones, water ripples or lava rock, a rim, and optional magnet pockets at the six corners or the centre. Set the edge length, thickness, detail size and height. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 71,
+    title: 'Card Deck Box',
+    bundle: 'tabletop',
+    category: 'TABLETOP // CARDS',
+    thumbnailUrl: 'assets/thumbnails/card-deck-box.svg',
+    programUrl: 'programs/card-deck-box.html',
+    description: 'A deck box with a friction lid, sized to your cards. Set the card size, deck thickness, sleeve padding and clearance, choose upright or flat, and add a divider for two decks or a window in the lid. The lid prints beside the box with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 72,
+    title: 'Game Piece Pawn',
+    bundle: 'tabletop',
+    category: 'TABLETOP // PIECES',
+    thumbnailUrl: 'assets/thumbnails/game-pawn.svg',
+    programUrl: 'programs/game-pawn.html',
+    description: 'A board game pawn in a classic, peg person, cone, bell or gem shape. Set the height, body width, head size and facets, and add a weight pocket under the base. The head has a 45 degree underside so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 73,
+    title: 'Spinner Dial',
+    bundle: 'tabletop',
+    category: 'TABLETOP // BOARD GAME PARTS',
+    thumbnailUrl: 'assets/thumbnails/spinner-dial.svg',
+    programUrl: 'programs/spinner-dial.html',
+    description: 'A spinner wheel with 2 to 12 alternating wedges, raised numbers, a hub post and a separate pointer that snaps on. Choose an arrow, dart or needle pointer and set the diameter, relief and pin clearance. Everything prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 74,
+    title: 'Chess Piece Set',
+    bundle: 'tabletop',
+    category: 'TABLETOP // CHESS',
+    thumbnailUrl: 'assets/thumbnails/chess-set.svg',
+    programUrl: 'programs/chess-set.html',
+    description: 'Pawn, rook, knight, bishop, queen and king in a classic, modern or minimal style, all six in a row or one at a time. Set the king height, base size and facets, and add a weight pocket. Heads and crowns use 45 degree undersides so the pieces print upright with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 75,
+    title: 'Character Standee',
+    bundle: 'tabletop',
+    category: 'TABLETOP // STANDEES',
+    thumbnailUrl: 'assets/thumbnails/character-standee.svg',
+    programUrl: 'programs/character-standee.html',
+    description: 'A flat stand-up figure on a slotted base, in a card, arch, shield, hexagon or round token shape, with a raised knight, wizard, rogue or monster, or a blank frame for your own art. Set the size, thickness, border and tab. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -638,7 +728,7 @@ const BUNDLES = [
     description: 'Pets, wildlife and fantasy beasts.' },
   { id: 'jewelry', name: 'Jewellery & Wearables', accent: '#f08cff', at: [8, 9], size: [4, 2], planned: true,
     description: 'Rings, pendants and charms.' },
-  { id: 'tabletop', name: 'Tabletop & Gaming', accent: '#8f9bff', at: [12, 9], size: [4, 2], planned: true,
+  { id: 'tabletop', name: 'Tabletop & Gaming', accent: '#8f9bff', at: [12, 9], size: [4, 2],
     description: 'Minis, terrain, dice and tokens.' }
 ];
 

@@ -314,5 +314,55 @@
     "hue": 18,
     "sat": 75,
     "light": 64
+  },
+  "dice-tower": {
+    "hue": 28,
+    "sat": 60,
+    "light": 62
+  },
+  "dice-vault": {
+    "hue": 268,
+    "sat": 65,
+    "light": 70
+  },
+  "custom-dice": {
+    "hue": 350,
+    "sat": 80,
+    "light": 68
+  },
+  "miniature-base": {
+    "hue": 215,
+    "sat": 25,
+    "light": 72
+  },
+  "hex-terrain-tile": {
+    "hue": 128,
+    "sat": 65,
+    "light": 62
+  },
+  "card-deck-box": {
+    "hue": 262,
+    "sat": 70,
+    "light": 72
+  },
+  "game-pawn": {
+    "hue": 8,
+    "sat": 80,
+    "light": 66
+  },
+  "spinner-dial": {
+    "hue": 48,
+    "sat": 85,
+    "light": 64
+  },
+  "chess-set": {
+    "hue": 40,
+    "sat": 30,
+    "light": 84
+  },
+  "character-standee": {
+    "hue": 220,
+    "sat": 75,
+    "light": 70
   }
 }

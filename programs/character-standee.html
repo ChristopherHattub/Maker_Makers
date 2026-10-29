@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-075 Character Standee // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Character Standee: parameters, presets, palette and geometry. The page layout, the viewport,
+    // the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Geometry kit: watertight solids from polygons (XZ plane, Y up). Triangles go into plain arrays.
+      // -----------------------------------------------------------------------
+      var K = (function () {
+        var TAU = Math.PI * 2;
+
+        function area2(p) {
+          var s = 0;
+          for (var i = 0; i < p.length; i++) { var a = p[i], b = p[(i + 1) % p.length]; s += a[0] * b[1] - b[0] * a[1]; }
+          return s;
+        }
+        // Outer loops have area2 < 0 (their top cap faces up); holes have area2 > 0.
+        function orient(p, outer) { return (area2(p) < 0) === outer ? p : p.slice().reverse(); }
+        function push(out, a, b, c) { out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+        function same(a, b) { return Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9; }
+
+        function segHit(p1, p2, p3, p4) {
+          if (same(p1, p3) || same(p1, p4) || same(p2, p3) || same(p2, p4)) return false;
+          var d1 = cross(p3, p4, p1), d2 = cross(p3, p4, p2), d3 = cross(p1, p2, p3), d4 = cross(p1, p2, p4);
+          return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+        }
+
+        // Join each hole to the outer loop with a zero-width bridge so one ear-clipping pass handles it.
+        function bridge(poly, holes) {
+          var hs = holes.slice().sort(function (a, b) { return maxX(b) - maxX(a); });
+          var all = hs.slice();
+          hs.forEach(function (h, hi) {
+            var mi = 0;
+            for (var i = 1; i < h.length; i++) if (h[i][0] > h[mi][0]) mi = i;
+            var M = h[mi];
+            var order = poly.map(function (p, i) { return i; }).sort(function (a, b) {
+              return dist2(poly[a], M) - dist2(poly[b], M);
+            });
+            var pick = -1;
+            for (var k = 0; k < order.length && pick < 0; k++) {
+              var V = poly[order[k]];
+              var ok = true;
+              for (var e = 0; e < poly.length && ok; e++) if (segHit(M, V, poly[e], poly[(e + 1) % poly.length])) ok = false;
+              for (var q = 0; q < all.length && ok; q++) {
+                var L = all[q];
+                for (var f = 0; f < L.length && ok; f++) if (segHit(M, V, L[f], L[(f + 1) % L.length])) ok = false;
+              }
+              if (ok) pick = order[k];
+            }
+            if (pick < 0) pick = order[0];
+            var rot = h.slice(mi).concat(h.slice(0, mi));
+            poly = poly.slice(0, pick + 1).concat(rot, [rot[0]], [poly[pick]], poly.slice(pick + 1));
+          });
+          return poly;
+        }
+        function maxX(p) { var m = -Infinity; for (var i = 0; i < p.length; i++) if (p[i][0] > m) m = p[i][0]; return m; }
+        function dist2(a, b) { var x = a[0] - b[0], z = a[1] - b[1]; return x * x + z * z; }
+
+        // Ear clipping for a loop with area2 < 0. Returns triangles [a, b, c] of [x, z] points facing up.
+        function earClip(poly) {
+          var idx = poly.map(function (p, i) { return i; });
+          var tris = [];
+          var i = 0, guard = 0, limit = poly.length * poly.length * 3 + 50;
+          while (idx.length > 3 && guard++ < limit) {
+            var m = idx.length;
+            i = i % m;
+            var a = poly[idx[(i + m - 1) % m]], b = poly[idx[i]], c = poly[idx[(i + 1) % m]];
+            var cr = cross(a, b, c);
+            var ear = false;
+            if (cr <= 1e-12) {
+              ear = true;
+              if (cr < -1e-12) {
+                for (var k = 0; k < m && ear; k++) {
+                  var q = poly[idx[k]];
+                  if (same(q, a) || same(q, b) || same(q, c)) continue;
+                  if (cross(a, b, q) <= 1e-12 && cross(b, c, q) <= 1e-12 && cross(c, a, q) <= 1e-12) ear = false;
+                }
+              }
+            }
+            if (ear) { tris.push([a, b, c]); idx.splice(i, 1); } else i++;
+          }
+          if (idx.length === 3) tris.push([poly[idx[0]], poly[idx[1]], poly[idx[2]]]);
+          else if (guard >= limit) {
+            // numerical trouble: fan the rest so the surface stays closed
+            for (var j = 1; j + 1 < idx.length; j++) tris.push([poly[idx[0]], poly[idx[j]], poly[idx[j + 1]]]);
+          }
+          return tris;
+        }
+
+        function triangulate(outer, holes) {
+          var poly = outer;
+          if (holes && holes.length) poly = bridge(outer, holes);
+          return earClip(poly);
+        }
+
+        function wallStrip(out, a, b, y0, y1) {
+          push(out, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]]);
+          push(out, [a[0], y0, a[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        function walls(out, loop, y0, y1) {
+          for (var i = 0; i < loop.length; i++) wallStrip(out, loop[i], loop[(i + 1) % loop.length], y0, y1);
+        }
+        function cap(out, tris, y, up) {
+          tris.forEach(function (t) {
+            if (up) push(out, [t[0][0], y, t[0][1]], [t[1][0], y, t[1][1]], [t[2][0], y, t[2][1]]);
+            else push(out, [t[0][0], y, t[0][1]], [t[2][0], y, t[2][1]], [t[1][0], y, t[1][1]]);
+          });
+        }
+
+        // Straight extrusion of a loop (with optional holes) from y0 to y1.
+        function extrude(out, outer, holes, y0, y1) {
+          outer = orient(outer, true);
+          holes = (holes || []).map(function (h) { return orient(h, false); });
+          var tris = triangulate(outer, holes);
+          cap(out, tris, y1, true);
+          cap(out, tris, y0, false);
+          walls(out, outer, y0, y1);
+          holes.forEach(function (h) { walls(out, h, y0, y1); });
+        }
+
+        // A stack of loops with the same point count joined by wall strips (bevels, tapers, domes).
+        // rings: [{ p: loop, y }], bottom to top. Holes pass straight through.
+        function rings(out, rs, holes) {
+          holes = (holes || []).map(function (h) { return orient(h, false); });
+          var ps = rs.map(function (r) { return orient(r.p, true); });
+          var y0 = rs[0].y, y1 = rs[rs.length - 1].y;
+          cap(out, triangulate(ps[0], holes), y0, false);
+          cap(out, triangulate(ps[ps.length - 1], holes), y1, true);
+          for (var r = 0; r + 1 < rs.length; r++) {
+            var A = ps[r], B = ps[r + 1], n = A.length;
+            for (var i = 0; i < n; i++) {
+              var j = (i + 1) % n;
+              push(out, [A[i][0], rs[r].y, A[i][1]], [A[j][0], rs[r].y, A[j][1]], [B[j][0], rs[r + 1].y, B[j][1]]);
+              push(out, [A[i][0], rs[r].y, A[i][1]], [B[j][0], rs[r + 1].y, B[j][1]], [B[i][0], rs[r + 1].y, B[i][1]]);
+            }
+          }
+          holes.forEach(function (h) { walls(out, h, y0, y1); });
+        }
+
+        function box(out, x0, y0, z0, x1, y1, z1) {
+          extrude(out, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], null, y0, y1);
+        }
+
+        // Revolve a profile [[r, y], ...] (bottom to top) around the Y axis. r = 0 makes a pole,
+        // r > 0 at either end gets a flat cap. Optional cuts split the result into several lists.
+        function lathe(out, prof, seg, cx, cz, open0, open1) {
+          cx = cx || 0; cz = cz || 0;
+          var m = prof.length;
+          function pt(i, j) {
+            var a = (j % seg) / seg * TAU;
+            return [cx + prof[i][0] * Math.cos(a), prof[i][1], cz + prof[i][0] * Math.sin(a)];
+          }
+          var pole = function (i) { return prof[i][0] < 1e-9; };
+          var c0 = [cx, prof[0][1], cz], c1 = [cx, prof[m - 1][1], cz];
+          if (!pole(0) && !open0) for (var j = 0; j < seg; j++) push(out, c0, pt(0, j), pt(0, j + 1));
+          if (!pole(m - 1) && !open1) for (var j2 = 0; j2 < seg; j2++) push(out, c1, pt(m - 1, j2 + 1), pt(m - 1, j2));
+          for (var i = 0; i + 1 < m; i++) {
+            if (pole(i) && pole(i + 1)) continue;
+            for (var k = 0; k < seg; k++) {
+              if (pole(i)) push(out, [cx, prof[i][1], cz], pt(i + 1, k), pt(i + 1, k + 1));
+              else if (pole(i + 1)) push(out, pt(i, k), [cx, prof[i + 1][1], cz], pt(i, k + 1));
+              else {
+                push(out, pt(i, k), pt(i + 1, k + 1), pt(i, k + 1));
+                push(out, pt(i, k), pt(i + 1, k), pt(i + 1, k + 1));
+              }
+            }
+          }
+        }
+
+        // ---- loops
+        function circle(cx, cz, r, n, ph) {
+          var p = [];
+          for (var i = 0; i < n; i++) { var a = (ph || 0) + i / n * TAU; p.push([cx + r * Math.cos(a), cz + r * Math.sin(a)]); }
+          return p;
+        }
+        function ellipse(cx, cz, rx, rz, n, ph) {
+          var p = [];
+          for (var i = 0; i < n; i++) { var a = (ph || 0) + i / n * TAU; p.push([cx + rx * Math.cos(a), cz + rz * Math.sin(a)]); }
+          return p;
+        }
+        function rrect(cx, cz, w, d, r, seg) {
+          r = Math.max(0.01, Math.min(r, w / 2 - 0.01, d / 2 - 0.01));
+          seg = seg || 6;
+          var p = [];
+          var cs = [[w / 2 - r, d / 2 - r, 0], [-(w / 2 - r), d / 2 - r, 90], [-(w / 2 - r), -(d / 2 - r), 180], [w / 2 - r, -(d / 2 - r), 270]];
+          cs.forEach(function (c) {
+            for (var i = 0; i <= seg; i++) {
+              var a = (c[2] + i / seg * 90) * Math.PI / 180;
+              p.push([cx + c[0] + r * Math.cos(a), cz + c[1] + r * Math.sin(a)]);
+            }
+          });
+          return p;
+        }
+        function rect(cx, cz, w, d) { return [[cx - w / 2, cz - d / 2], [cx + w / 2, cz - d / 2], [cx + w / 2, cz + d / 2], [cx - w / 2, cz + d / 2]]; }
+        // Thick line from a to b (2D) as a 4-point loop, ends extended by half the width.
+        function strokeQuad(a, b, w, ext) {
+          var dx = b[0] - a[0], dz = b[1] - a[1], l = Math.sqrt(dx * dx + dz * dz) || 1e-6;
+          dx /= l; dz /= l;
+          var e = ext ? w / 2 : 0, nx = -dz * w / 2, nz = dx * w / 2;
+          var ax = a[0] - dx * e, az = a[1] - dz * e, bx = b[0] + dx * e, bz = b[1] + dz * e;
+          return [[ax + nx, az + nz], [bx + nx, bz + nz], [bx - nx, bz - nz], [ax - nx, az - nz]];
+        }
+        // Convex loop moved inwards by d (negative d grows it).
+        function inset(p, d) {
+          var n = p.length, s = area2(p) > 0 ? 1 : -1, out = [];
+          for (var i = 0; i < n; i++) {
+            var a = p[(i + n - 1) % n], b = p[i], c = p[(i + 1) % n];
+            var e0 = unit(b[0] - a[0], b[1] - a[1]), e1 = unit(c[0] - b[0], c[1] - b[1]);
+            var n0 = [-e0[1] * s, e0[0] * s], n1 = [-e1[1] * s, e1[0] * s];
+            var k = d / Math.max(0.2, 1 + n0[0] * n1[0] + n0[1] * n1[1]);
+            out.push([b[0] + (n0[0] + n1[0]) * k, b[1] + (n0[1] + n1[1]) * k]);
+          }
+          return out;
+        }
+        function unit(x, z) { var l = Math.sqrt(x * x + z * z) || 1e-9; return [x / l, z / l]; }
+        function inside(p, x, z) {
+          var s = area2(p) > 0 ? 1 : -1;
+          for (var i = 0; i < p.length; i++) {
+            var a = p[i], b = p[(i + 1) % p.length];
+            if (((b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0])) * s < 0) return false;
+          }
+          return true;
+        }
+        function centroid(p) {
+          var x = 0, z = 0;
+          p.forEach(function (q) { x += q[0]; z += q[1]; });
+          return [x / p.length, z / p.length];
+        }
+        function xf(p, fn) { return p.map(function (q) { return fn(q); }); }
+        function rotate2(p, ang, cx, cz) {
+          var c = Math.cos(ang), s = Math.sin(ang);
+          return p.map(function (q) { var x = q[0] - (cx || 0), z = q[1] - (cz || 0); return [(cx || 0) + x * c - z * s, (cz || 0) + x * s + z * c]; });
+        }
+
+        // ---- transforms on a flat triangle array, from index `from` on
+        function map(out, from, fn) {
+          for (var i = from; i < out.length; i += 3) {
+            var r = fn(out[i], out[i + 1], out[i + 2]);
+            out[i] = r[0]; out[i + 1] = r[1]; out[i + 2] = r[2];
+          }
+        }
+        function move(out, from, dx, dy, dz) { map(out, from, function (x, y, z) { return [x + dx, y + dy, z + dz]; }); }
+        function spinY(out, from, ang) {
+          var c = Math.cos(ang), s = Math.sin(ang);
+          map(out, from, function (x, y, z) { return [x * c + z * s, y, -x * s + z * c]; });
+        }
+        // Move local (x, y, z) into the frame o + x*ex + y*ey + z*ez (ex, ey, ez right-handed).
+        function place(out, from, o, ex, ey, ez) {
+          map(out, from, function (x, y, z) {
+            return [o[0] + ex[0] * x + ey[0] * y + ez[0] * z, o[1] + ex[1] * x + ey[1] * y + ez[1] * z, o[2] + ex[2] * x + ey[2] * y + ez[2] * z];
+          });
+        }
+        // Stand a flat build (polygon in x/z, thickness in y) upright: (x, y, z) -> (x, -z, y), polygon z becomes -height.
+        function standUp(out, from) { map(out, from, function (x, y, z) { return [x, -z, y]; }); }
+        function f32(a) { return new Float32Array(a); }
+
+        function rng(seed) {
+          var s = seed >>> 0;
+          return function () {
+            s = (s + 0x6D2B79F5) >>> 0;
+            var t = s;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+
+        // Stroke font for digits, unit box 0..0.6 wide, 0..1 high.
+        var DIGITS = {
+          '0': [[[0, .15], [0, .85], [.1, 1], [.5, 1], [.6, .85], [.6, .15], [.5, 0], [.1, 0], [0, .15]]],
+          '1': [[[.08, .78], [.3, 1], [.3, 0]]],
+          '2': [[[0, .85], [.1, 1], [.5, 1], [.6, .85], [.6, .6], [0, 0], [.6, 0]]],
+          '3': [[[0, .9], [.1, 1], [.5, 1], [.6, .9], [.6, .62], [.45, .52], [.2, .52]], [[.45, .52], [.6, .4], [.6, .1], [.5, 0], [.1, 0], [0, .1]]],
+          '4': [[[.45, 0], [.45, 1], [0, .32], [.6, .32]]],
+          '5': [[[.55, 1], [.05, 1], [0, .55], [.4, .6], [.55, .5], [.6, .2], [.5, 0], [.1, 0], [0, .1]]],
+          '6': [[[.55, 1], [.15, .8], [0, .4], [0, .12], [.1, 0], [.5, 0], [.6, .12], [.6, .4], [.5, .52], [.1, .52], [0, .4]]],
+          '7': [[[0, 1], [.6, 1], [.2, 0]]],
+          '8': [[[.3, .52], [.05, .62], [.05, .9], [.15, 1], [.45, 1], [.55, .9], [.55, .62], [.3, .52], [.0, .4], [0, .1], [.1, 0], [.5, 0], [.6, .1], [.6, .4], [.3, .52]]],
+          '9': [[[.05, 0], [.45, .2], [.6, .6], [.6, .88], [.5, 1], [.1, 1], [0, .88], [0, .6], [.1, .48], [.5, .48], [.6, .6]]]
+        };
+        // Strokes of a whole number: list of [[x0, y0], [x1, y1]] in a box of the given height, centred on 0, 0.
+        function numberStrokes(text, height, underline) {
+          var s = String(text), adv = 0.8, w = (s.length - 1) * adv + 0.6, segs = [];
+          for (var i = 0; i < s.length; i++) {
+            (DIGITS[s.charAt(i)] || []).forEach(function (pl) {
+              for (var k = 0; k + 1 < pl.length; k++) {
+                segs.push([[(pl[k][0] + i * adv - w / 2) * height, (pl[k][1] - 0.5) * height], [(pl[k + 1][0] + i * adv - w / 2) * height, (pl[k + 1][1] - 0.5) * height]]);
+              }
+            });
+          }
+          if (underline) segs.push([[-w / 2 * height, -0.62 * height], [w / 2 * height, -0.62 * height]]);
+          return { segs: segs, width: w * height };
+        }
+
+        return {
+          TAU: TAU, area2: area2, orient: orient, push: push, extrude: extrude, rings: rings, box: box, lathe: lathe,
+          circle: circle, ellipse: ellipse, rrect: rrect, rect: rect, strokeQuad: strokeQuad, inset: inset, inside: inside,
+          centroid: centroid, xf: xf, rotate2: rotate2, map: map, move: move, spinY: spinY, place: place, standUp: standUp,
+          f32: f32, rng: rng, numberStrokes: numberStrokes, DIGITS: DIGITS
+        };
+      })();
+
+      // Figure silhouettes in a 0..1 box: u across (-1..1 of half width), v up. main = body colour, acc = accent colour.
+      var FIG = {
+        1: { // knight
+          main: [[[-0.45, 0.18], [0.45, 0.18], [0.38, 0.52], [0.18, 0.58], [-0.18, 0.58], [-0.38, 0.52]],
+            [[-0.78, 0.5], [-0.42, 0.5], [-0.42, 0.3], [-0.6, 0.14], [-0.78, 0.3]],
+            { e: [0, 0.72, 0.28, 0.18] }, [[0.585, 0.15], [0.655, 0.15], [0.655, 0.7], [0.62, 0.78], [0.585, 0.7]]],
+          acc: [{ e: [-0.6, 0.38, 0.07, 0.05] }, [[0.42, 0.2], [0.8, 0.2], [0.8, 0.25], [0.42, 0.25]],
+            [[-0.19, 0.69], [0.19, 0.69], [0.19, 0.735], [-0.19, 0.735]], [[-0.05, 0.88], [0.12, 0.99], [0.3, 0.9], [0.1, 0.86]]]
+        },
+        2: { // wizard
+          main: [[[-0.35, 0.62], [0.35, 0.62], [0.05, 0.98]], { e: [0, 0.52, 0.17, 0.12] },
+            [[-0.5, 0.04], [0.5, 0.04], [0.32, 0.42], [-0.32, 0.42]], { e: [0.68, 0.9, 0.08, 0.05] }],
+          acc: [{ e: [0, 0.62, 0.5, 0.045] }, [[-0.17, 0.5], [0.17, 0.5], [0, 0.2]], [[0.655, 0.06], [0.705, 0.06], [0.705, 0.88], [0.655, 0.88]],
+            { e: [0.02, 0.77, 0.045, 0.03] }]
+        },
+        3: { // rogue
+          main: [{ e: [0, 0.7, 0.26, 0.2] }, [[-0.22, 0.78], [0.22, 0.78], [0, 0.96]], [[-0.55, 0.04], [0.55, 0.04], [0.3, 0.55], [-0.3, 0.55]]],
+          acc: [[[-0.16, 0.64], [0.16, 0.64], [0.16, 0.72], [-0.16, 0.72]],
+            [[-0.8, 0.2], [-0.72, 0.2], [-0.52, 0.62], [-0.58, 0.64]], [[0.8, 0.2], [0.72, 0.2], [0.52, 0.62], [0.58, 0.64]]]
+        },
+        4: { // monster
+          main: [{ e: [0, 0.42, 0.62, 0.34] }, [[-0.45, 0.68], [-0.3, 0.66], [-0.55, 0.92]], [[0.45, 0.68], [0.3, 0.66], [0.55, 0.92]],
+            { e: [-0.72, 0.3, 0.13, 0.1] }, { e: [0.72, 0.3, 0.13, 0.1] }],
+          acc: [{ e: [-0.2, 0.5, 0.1, 0.07] }, { e: [0.2, 0.5, 0.1, 0.07] }, { e: [0, 0.62, 0.07, 0.05] },
+            [[-0.4, 0.32], [0.4, 0.32], [0.4, 0.29], [0.35, 0.2], [0.3, 0.29], [0.25, 0.2], [0.2, 0.29], [0.15, 0.2], [0.1, 0.29], [0.05, 0.2],
+              [0, 0.29], [-0.05, 0.2], [-0.1, 0.29], [-0.15, 0.2], [-0.2, 0.29], [-0.25, 0.2], [-0.3, 0.29], [-0.35, 0.2], [-0.4, 0.29]]]
+        }
+      };
+
+      function plateOutline(shape, W, H, tabW) {
+        var i, pts = [];
+        if (shape === 0) return K.rrect(0, H / 2, W, H, Math.min(8, W * 0.15), 8);
+        if (shape === 1) {
+          pts.push([-W / 2, 0], [W / 2, 0], [W / 2, H - W / 2]);
+          for (i = 1; i < 24; i++) pts.push([Math.cos(i / 24 * Math.PI) * W / 2, H - W / 2 + Math.sin(i / 24 * Math.PI) * W / 2]);
+          pts.push([-W / 2, H - W / 2]);
+          return pts;
+        }
+        if (shape === 2) {
+          var bw = Math.min(W / 2, tabW / 2 + 8);
+          pts.push([-bw, 0], [bw, 0]);
+          for (i = 1; i <= 10; i++) { var t = i / 10; pts.push([bw + (W / 2 - bw) * Math.sin(t * Math.PI / 2), H * 0.5 * t * t * 0.9 + H * 0.0]); }
+          pts.push([W / 2, H], [-W / 2, H]);
+          for (i = 10; i >= 1; i--) { var t2 = i / 10; pts.push([-(bw + (W / 2 - bw) * Math.sin(t2 * Math.PI / 2)), H * 0.5 * t2 * t2 * 0.9]); }
+          return pts;
+        }
+        if (shape === 3) {
+          for (i = 0; i < 6; i++) { var a = i / 6 * Math.PI * 2; pts.push([Math.cos(a) * W / 2, H / 2 + Math.sin(a) * H / 2 / 0.866]); }
+          return pts.map(function (q) { return [q[0], Math.max(0, Math.min(H, q[1]))]; });
+        }
+        return K.ellipse(0, H / 2, W / 2, H / 2, 56);
+      }
+
+      function buildStandee(p) {
+        var W = p.width, H = p.height, T = p.thick, tabW = p.tabW;
+        var plate = [], frame = [], fig = [], acc = [], base = [];
+        var outline = plateOutline(Math.round(p.shape), W, H, tabW);
+        var shape = Math.round(p.shape);
+        var sd = Math.max(2.4, p.baseT - 1.6), tabH = Math.min(p.tabH, sd - 0.2);
+        K.extrude(plate, outline, null, 0, T);
+        var ov = 0.6;
+        while (ov < H * 0.5 && !(K.inside(outline, -tabW / 2, ov) && K.inside(outline, tabW / 2, ov))) ov += 0.5;
+        ov += 1.2;
+        K.box(plate, -tabW / 2, 0, -tabH, tabW / 2, T, ov);
+        var relief = p.relief;
+        if (p.border > 0.1) {
+          var ins = (shape === 2 || shape === 3 ? 2.4 : 1.6) + 0;
+          K.extrude(frame, K.inset(outline, ins), [K.inset(outline, ins + p.border)], T - 0.3, T + relief);
+        }
+        var fs = p.figSize / 100 * (shape >= 3 ? 0.82 : 1), f = FIG[Math.round(p.figure)];
+        if (f) {
+          var map = function (q) { return [q[0] * W / 2 * fs, H * (0.5 + (q[1] - 0.5) * fs)]; };
+          var put = function (out, item, y0, y1) {
+            var loop = item.e ? K.ellipse(0, 0, item.e[2], item.e[3], 28).map(function (q) { return [q[0] + item.e[0], q[1] + item.e[1]]; }) : item;
+            K.extrude(out, loop.map(map), null, y0, y1);
+          };
+          f.main.forEach(function (it) { put(fig, it, T - 0.3, T + relief); });
+          f.acc.forEach(function (it) { put(acc, it, T + relief - 0.3, T + relief + 0.6); });
+        }
+        // base with a blind slot
+        var Lb = tabW + 16, Wb = T + 20, bt = p.baseT, clr = p.slotClr;
+        var bs = Math.round(p.baseShape);
+        var bo = bs === 0 ? K.circle(0, 0, Lb / 2, 56) : bs === 1 ? K.rrect(0, 0, Lb, Wb, 5, 6) : K.ellipse(0, 0, Lb / 2, Wb / 2 + 2, 56);
+        var slot = K.rect(0, 0, tabW + 2 * clr + 0.2, T + 2 * clr);
+        K.extrude(base, bo, null, 0, bt - sd);
+        K.extrude(base, bo, [slot], bt - sd - 0.5, bt);
+        var bx = W / 2 + 14 + Lb / 2, zc = (H - tabH) / 2;
+        K.move(base, 0, bx, 0, zc);
+        [plate, frame, fig, acc].forEach(function (a) { K.move(a, 0, 0, 0, 0); });
+        var minX = -W / 2, maxX = bx + Lb / 2, cx = (minX + maxX) / 2;
+        var parts = { plate: plate, frame: frame, figure: fig, accent: acc, base: base }, out = [];
+        Object.keys(parts).forEach(function (k) {
+          if (!parts[k].length) return;
+          K.move(parts[k], 0, -cx, 0, -zc);
+          out.push({ name: k, positions: K.f32(parts[k]) });
+        });
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-075',
+        category: 'TABLETOP // STANDEES',
+        title: 'Character Standee',
+        fileName: 'Character_Standee',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#94a3b8',
+        palette: [
+          { name: 'Dungeon Stone', color: '#94a3b8' },
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Dragon Red', color: '#f87171' },
+          { name: 'Ocean Blue', color: '#60a5fa' },
+          { name: 'Forest Green', color: '#4ade80' },
+          { name: 'Gold Trim', color: '#fde047' },
+          { name: 'Arcane Violet', color: '#a78bfa' },
+          { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { plate: 'Standee plate', frame: 'Border', figure: 'Figure', accent: 'Accents', base: 'Stand base' },
+        parameters: [
+          { group: 'Plate', key: 'shape', label: 'Plate shape', unit: '', min: 0, max: 4, step: 1, value: 1, options: ['Rounded card', 'Arch', 'Shield', 'Hexagon', 'Circle token'] },
+          { group: 'Plate', key: 'width', label: 'Width', unit: ' mm', min: 30, max: 90, step: 1, value: 50 },
+          { group: 'Plate', key: 'height', label: 'Height', unit: ' mm', min: 50, max: 130, step: 1, value: 80 },
+          { group: 'Plate', key: 'thick', label: 'Plate thickness', unit: ' mm', min: 2, max: 5, step: 0.2, value: 3 },
+          { group: 'Plate', key: 'border', label: 'Border width (0 = none)', unit: ' mm', min: 0, max: 4, step: 0.2, value: 1.6 },
+          { group: 'Figure', key: 'figure', label: 'Relief figure', unit: '', min: 0, max: 4, step: 1, value: 1, options: ['Blank (paste your art)', 'Knight', 'Wizard', 'Rogue', 'Monster'] },
+          { group: 'Figure', key: 'figSize', label: 'Figure size', unit: '%', min: 60, max: 110, step: 5, value: 90 },
+          { group: 'Figure', key: 'relief', label: 'Relief height', unit: ' mm', min: 0.6, max: 2, step: 0.1, value: 1 },
+          { group: 'Stand', key: 'tabW', label: 'Tab width', unit: ' mm', min: 12, max: 40, step: 1, value: 24 },
+          { group: 'Stand', key: 'tabH', label: 'Tab length', unit: ' mm', min: 4, max: 10, step: 0.5, value: 6 },
+          { group: 'Stand', key: 'baseShape', label: 'Base shape', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Round', 'Rounded rect', 'Oval'] },
+          { group: 'Stand', key: 'baseT', label: 'Base thickness', unit: ' mm', min: 5, max: 10, step: 0.5, value: 7.5 },
+          { group: 'Stand', key: 'slotClr', label: 'Slot clearance', unit: ' mm', min: 0.1, max: 0.6, step: 0.05, value: 0.3 }
+        ],
+        presets: [
+          { label: 'Knight on an arch', values: { shape: 1, figure: 1, width: 50, height: 80 } },
+          { label: 'Wizard shield', values: { shape: 2, figure: 2, width: 54, height: 84 } },
+          { label: 'Rogue hexagon', values: { shape: 3, figure: 3, width: 56, height: 80 } },
+          { label: 'Monster token', values: { shape: 4, figure: 4, width: 50, height: 50, tabH: 5 } },
+          { label: 'Blank frame for your art', values: { shape: 0, figure: 0, width: 55, height: 85, border: 2 } },
+          { label: 'Default standee', values: { shape: 1, width: 50, height: 80, thick: 3, border: 1.6, figure: 1, figSize: 90, relief: 1, tabW: 24, tabH: 6, baseShape: 0, baseT: 7.5, slotClr: 0.3 } }
+        ],
+        build: function (p) { return buildStandee(p); }
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
