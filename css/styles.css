@@ -1158,7 +1158,7 @@ body.on-splash .container {
 .world.exp .tile.has-3d:hover, .world.exp .tile.has-3d:focus-visible { z-index: 5; }
 .world.exp .tile.has-3d .tile-base { display: block; position: absolute; inset: 0; background-size: 100% 100%; background-repeat: no-repeat; }
 .world.exp .tile.has-3d .tile-obj { display: block; position: absolute; left: 50%; top: 42%; background-repeat: no-repeat; }
-.world.exp .tile.has-3d:hover .tile-obj, .world.exp .tile.has-3d:focus-visible .tile-obj { will-change: transform; }
+.world.exp .tile.has-3d .tile-obj.on { will-change: transform; }   /* only tiles popping out or turning get a layer (JS toggles .on) */
 .world.exp .tile.has-3d .tile-slot {
   display: flex; align-items: center; position: absolute; left: 14%; top: 10%; width: 25%; height: 8%; padding-left: 4px;
   font: 600 8px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 0.04em; color: #3fe6ff;

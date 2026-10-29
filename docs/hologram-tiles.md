@@ -26,10 +26,21 @@ for atlases already in the manifest.
 
 ## Loading
 
-The homepage shows each tile's poster first and only fetches the ~300 KB atlas when the tile is hovered, focused or
-tapped, or, while the browser is idle, for tiles on screen (one at a time; skipped under Data Saver / 2g). A tile whose
-manifest entry has no `poster` loads its atlas immediately, as before. Tiles with a hologram don't fetch their SVG
-thumbnail at all.
+The homepage shows each tile's poster first and only fetches and decodes the ~300 KB atlas (8 MB decoded) when the
+tile is hovered, focused or tapped. While the browser is idle it also fetches (bytes only, nothing decoded) the atlases
+of the 6 on-screen tiles nearest the middle of the view, at most 24 per page load; this is skipped under Data Saver /
+2g and with reduced motion. A tile whose manifest entry has no `poster` loads its atlas immediately, as before. Tiles
+with a hologram don't fetch their SVG thumbnail at all.
+
+Playback keeps the cost flat however many tiles exist (`js/worldmap.js`, `hoverLoad` and `holoTick`):
+
+- The atlas replaces the poster only after `img.decode()` resolves, so the first spin frame never stalls the main thread.
+- At most 3 tiles (1 on touch devices, which drop it as soon as the tile settles) keep an atlas swapped in; the oldest
+  one that is not animating goes back to its poster. Decoding all on-screen atlases used to take about 450 MB and
+  caused repeated multi-frame stalls.
+- One shared `requestAnimationFrame` loop steps every tile that is popping out or turning, and it stops when none are.
+  When a new hover would make more than 3 animate at once, tiles still turning back to rest snap home. A tile only gets
+  `will-change: transform` (class `.on`) while it is animating. Style writes are skipped when unchanged.
 
 - `<id>` is the basename of the generator's `thumbnailUrl` (for example `ghost-builder`).
 - The upload port defaults to 5190. If it is taken, add `&port=<n>` to the render URL and run `receive-render.mjs --port <n>`.
