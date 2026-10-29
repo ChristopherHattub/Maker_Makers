@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-092 Flexi Gecko // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Flexi Gecko: a print-in-place flexi creature made of ball-and-socket segments. The shared flexi kit comes from
+    // tools/flexi/flexi-lib.js and this creature from tools/flexi/flexi-gecko.js (rebuild with node tools/flexi/build.mjs).
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // =======================================================================
+      // Flexi kit (shared by every flexi creature; source: tools/flexi/flexi-lib.js)
+      // Print-in-place ball joints: each segment is one closed lathe shell with a ball on its
+      // front and a socket on its rear. The socket cavity is a sphere larger than the ball by
+      // the clearance gap, and its opening is narrower than the ball, so a segment cannot come out.
+      // =======================================================================
+      var TAU = Math.PI * 2;
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vlen(a) { return Math.sqrt(vdot(a, a)); }
+      function vnorm(a) { var l = vlen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+      function vrot(v, axis, ang) {
+        var k = vnorm(axis), c = Math.cos(ang), s = Math.sin(ang), kv = vcross(k, v), d = vdot(k, v) * (1 - c);
+        return [v[0] * c + kv[0] * s + k[0] * d, v[1] * c + kv[1] * s + k[1] * d, v[2] * c + kv[2] * s + k[2] * d];
+      }
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function smooth(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+
+      // Frame: o origin, a axis, u sideways, v up (the lathe's radial directions).
+      function frame(o, a, up) {
+        a = vnorm(a);
+        up = up || [0, 1, 0];
+        if (Math.abs(vdot(a, up)) > 0.98) up = [0, 0, 1];
+        var u = vnorm(vcross(up, a));
+        return { o: o, a: a, u: u, v: vcross(a, u) };
+      }
+
+      // Expands an indexed surface and makes sure the winding faces outward (positive volume).
+      function expandTris(pos, idx) {
+        var out = new Float32Array(idx.length * 3), vol = 0, i, k;
+        for (i = 0; i < idx.length; i++) for (k = 0; k < 3; k++) out[i * 3 + k] = pos[idx[i] * 3 + k];
+        for (i = 0; i < out.length; i += 9) {
+          vol += out[i] * (out[i + 4] * out[i + 8] - out[i + 5] * out[i + 7]) -
+            out[i + 1] * (out[i + 3] * out[i + 8] - out[i + 5] * out[i + 6]) +
+            out[i + 2] * (out[i + 3] * out[i + 7] - out[i + 4] * out[i + 6]);
+        }
+        if (vol < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (k = 0; k < 3; k++) { var t = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = t; }
+          }
+        }
+        return out;
+      }
+
+      // Lathe about frame.a. prof = [[r, s], ...] from a pole (r = 0) to a pole. ax/ay stretch the cross-section.
+      // opt.floor clamps every vertex to the bed plane y = floor (flat belly, no overhang under the model).
+      function lathe(fr, prof, seg, opt) {
+        opt = opt || {};
+        var ax = opt.ax || 1, ay = opt.ay || 1, floor = opt.floor;
+        var rings = prof.length - 2, vc = 2 + rings * seg, pos = new Float32Array(vc * 3), i, j;
+        function put(n, pr, th) {
+          var lx = pr[0] * ax * Math.cos(th), ly = pr[0] * ay * Math.sin(th), s = pr[1];
+          var x = fr.o[0] + fr.a[0] * s + fr.u[0] * lx + fr.v[0] * ly;
+          var y = fr.o[1] + fr.a[1] * s + fr.u[1] * lx + fr.v[1] * ly;
+          var z = fr.o[2] + fr.a[2] * s + fr.u[2] * lx + fr.v[2] * ly;
+          if (floor !== undefined && y < floor) y = floor;
+          pos[n * 3] = x; pos[n * 3 + 1] = y; pos[n * 3 + 2] = z;
+        }
+        put(0, prof[0], 0);
+        for (i = 0; i < rings; i++) for (j = 0; j < seg; j++) put(1 + i * seg + j, prof[i + 1], (j / seg) * TAU);
+        put(vc - 1, prof[prof.length - 1], 0);
+        var idx = [], top = vc - 1;
+        function rs(r) { return 1 + r * seg; }
+        for (j = 0; j < seg; j++) idx.push(0, rs(0) + ((j + 1) % seg), rs(0) + j);
+        for (i = 0; i < rings - 1; i++) {
+          for (j = 0; j < seg; j++) {
+            var nj = (j + 1) % seg;
+            idx.push(rs(i) + j, rs(i) + nj, rs(i + 1) + nj, rs(i) + j, rs(i + 1) + nj, rs(i + 1) + j);
+          }
+        }
+        for (j = 0; j < seg; j++) idx.push(rs(rings - 1) + j, rs(rings - 1) + ((j + 1) % seg), top);
+        return expandTris(pos, idx);
+      }
+
+      // Pole-to-pole profile of a body of revolution: radius fn over 0..1 (zero at both ends gives round ends).
+      function revProfile(s0, s1, rfn, n) {
+        var p = [[0, s0]];
+        for (var i = 1; i < n; i++) { var u = i / n; p.push([Math.max(rfn(u), 0.05), lerp(s0, s1, u)]); }
+        p.push([0, s1]);
+        return p;
+      }
+      function ellipseProfile(a, b, n) { // semi-axis a along the axis, b across
+        var p = [[0, -a]];
+        for (var i = 1; i < n; i++) { var t = (i / n) * Math.PI; p.push([b * Math.sin(t), -a * Math.cos(t)]); }
+        p.push([0, a]);
+        return p;
+      }
+      function sphereShell(c, r, seg, floor) {
+        return lathe(frame(c, [1, 0, 0], [0, 1, 0]), ellipseProfile(r, r, 7), seg || 12, { floor: floor });
+      }
+      function coneShell(base, dir, baseR, h, seg, sink, floor) {
+        var fr = frame(base, dir, [0, 1, 0]);
+        return lathe(fr, [[0, h], [baseR * 0.55, h * 0.45], [baseR, 0], [baseR, -sink], [0, -sink]], seg || 8, { floor: floor });
+      }
+
+      // ---- Flat slabs (wings, fins, feet, plates): extruded outline with a chamfered top edge ----
+      function earClip(poly) {
+        var n = poly.length, ids = [], out = [], i;
+        for (i = 0; i < n; i++) ids.push(i);
+        function area2(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+        var guard = 0;
+        while (ids.length > 3 && guard++ < 5000) {
+          var cut = false;
+          for (i = 0; i < ids.length; i++) {
+            var i0 = ids[(i + ids.length - 1) % ids.length], i1 = ids[i], i2 = ids[(i + 1) % ids.length];
+            var a = poly[i0], b = poly[i1], c = poly[i2];
+            if (area2(a, b, c) <= 1e-9) continue;
+            var inside = false;
+            for (var k = 0; k < ids.length; k++) {
+              var q = ids[k];
+              if (q === i0 || q === i1 || q === i2) continue;
+              var p = poly[q];
+              if (area2(a, b, p) >= -1e-9 && area2(b, c, p) >= -1e-9 && area2(c, a, p) >= -1e-9) { inside = true; break; }
+            }
+            if (inside) continue;
+            out.push(i0, i1, i2);
+            ids.splice(i, 1);
+            cut = true;
+            break;
+          }
+          if (!cut) break;
+        }
+        if (ids.length === 3) out.push(ids[0], ids[1], ids[2]);
+        return out;
+      }
+      function polyArea(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s / 2;
+      }
+      // poly: [[x, y], ...] outline. basis {o, x, y, z}: the outline lies in x/y and is raised thickness t along z.
+      function slab(poly, basis, t, ch) {
+        if (polyArea(poly) < 0) poly = poly.slice().reverse();
+        var n = poly.length, cx = 0, cy = 0, i;
+        for (i = 0; i < n; i++) { cx += poly[i][0]; cy += poly[i][1]; }
+        cx /= n; cy /= n;
+        var rad = 0;
+        for (i = 0; i < n; i++) rad += Math.hypot(poly[i][0] - cx, poly[i][1] - cy);
+        rad /= n;
+        ch = Math.min(ch === undefined ? 0.6 : ch, t * 0.45);
+        var k = 1 - ch / Math.max(rad, 1);
+        var layers = [[0, 1], [t - ch, 1], [t, k]], pos = [];
+        layers.forEach(function (L) {
+          for (var q = 0; q < n; q++) {
+            var x = cx + (poly[q][0] - cx) * L[1], y = cy + (poly[q][1] - cy) * L[1], z = L[0];
+            pos.push(basis.o[0] + basis.x[0] * x + basis.y[0] * y + basis.z[0] * z,
+              basis.o[1] + basis.x[1] * x + basis.y[1] * y + basis.z[1] * z,
+              basis.o[2] + basis.x[2] * x + basis.y[2] * y + basis.z[2] * z);
+          }
+        });
+        var tri = earClip(poly), idx = [], j;
+        for (j = 0; j < tri.length; j += 3) idx.push(2 * n + tri[j], 2 * n + tri[j + 1], 2 * n + tri[j + 2]);
+        for (j = 0; j < tri.length; j += 3) idx.push(tri[j + 2], tri[j + 1], tri[j]);
+        for (var L2 = 0; L2 < 2; L2++) {
+          for (j = 0; j < n; j++) {
+            var nj = (j + 1) % n, a0 = L2 * n + j, a1 = L2 * n + nj, b0 = (L2 + 1) * n + j, b1 = (L2 + 1) * n + nj;
+            idx.push(a0, a1, b1, a0, b1, b0);
+          }
+        }
+        return expandTris(new Float32Array(pos), idx);
+      }
+      // Slab lying flat on the bed: outline in the x/z ground plane, sitting on y = 0, rotated by yaw about the point at, pointing along heading.
+      function flatSlab(poly, at, heading, t, ch) {
+        var x = [Math.cos(heading), 0, -Math.sin(heading)], z = [Math.sin(heading), 0, Math.cos(heading)];
+        // local x along heading, local y to the left of it; extrusion goes up (+y)
+        return slab(poly, { o: at, x: x, y: [z[0], 0, z[2]], z: [0, 1, 0] }, t, ch);
+      }
+
+      // ---- Ball joint dimensions for a joint whose end faces have radius rJ and clearance g ----
+      function jointDims(rJ, g) {
+        var R = Math.max(1.25 + g, 0.47 * rJ);
+        var nR = Math.max(0.75, 0.22 * R);
+        var ao = Math.max(nR + g + 0.25, 0.8 * R);
+        ao = Math.min(ao, R - 0.15);
+        nR = Math.min(nR, ao - g - 0.15);
+        var Rs = R + g + 0.06; // printed sphere facets sit a little inside the true sphere, so the cavity is a touch generous
+        var d = Math.sqrt(Rs * Rs - ao * ao);
+        var lam = Math.max(1.6, 0.35 * rJ);
+        var e = Math.max(d + lam, Math.sqrt(R * R - nR * nR) + 0.7);
+        return { R: R, n: nR, Rs: Rs, ao: ao, d: d, e: e, rJ: rJ, g: g };
+      }
+
+      // Ball and neck on a host body (neck runs ov mm into the host, which must be solid there).
+      // c = ball centre, back = unit vector from the ball toward the host.
+      function ballUnit(c, back, jd, ov, up, floor) {
+        var fr = frame(c, vmul(back, -1), up);
+        var aEnd = Math.PI - Math.asin(jd.n / jd.R), prof = [[0, jd.R]], i;
+        for (i = 1; i <= 7; i++) { var a = (aEnd * i) / 7; prof.push([jd.R * Math.sin(a), jd.R * Math.cos(a)]); }
+        prof.push([jd.n, -(jd.e + ov)], [0, -(jd.e + ov)]);
+        return lathe(fr, prof, 16, { floor: floor });
+      }
+
+      // ---- Chain of socketed segments ----
+      // o.J0 first ball centre, o.dir start direction, o.P pitch per segment (socket centre to ball centre),
+      // o.rj joint end radii (length P.length + 1), o.yaw / o.pitch per joint (radians), o.g clearance,
+      // o.bulge bead fullness, o.tip length of the closing cap on the last segment, o.hAxis(k) axis height at joint k.
+      function chain(o) {
+        var g = o.g, seg = o.seg || 20, floor = o.floor === undefined ? 0 : o.floor, up = o.up || [0, 1, 0];
+        var n = o.P.length, jd = [], k;
+        for (k = 0; k < n; k++) jd.push(jointDims(o.rj[k], g));
+        var J = [o.J0.slice()], segs = [], dir = vnorm(o.dir);
+        for (k = 1; k <= n; k++) {
+          var yaw = (o.yaw ? o.yaw[k - 1] || 0 : 0) + (o.bend || 0);
+          if (yaw) dir = vrot(dir, up, yaw);
+          var pk = o.pitch ? o.pitch[k - 1] || 0 : 0;
+          if (pk) dir = vrot(dir, vcross(dir, up), pk);
+          var jin = jd[k - 1], jout = k < n ? jd[k] : null;
+          var eOut = jout ? jout.e : 0;
+          var P = Math.max(o.P[k - 1], eOut - jin.d + 3.2, eOut + jin.Rs * 1.08 + 1.5); // body must close over the whole cavity
+          if (o.hAxis && pk) { // a lifted section must still never dip below the height its joints need
+            var need = (o.hAxis(k) - J[k - 1][1]) / P;
+            if (dir[1] < need) {
+              var hd0 = vnorm([dir[0], 0, dir[2]]), c0 = Math.cos(Math.asin(clamp(need, -0.35, 0.9)));
+              dir = vnorm([hd0[0] * c0, clamp(need, -0.35, 0.9), hd0[2] * c0]);
+            }
+          }
+          if (o.hAxis && !pk) {
+            var hd = vnorm([dir[0], 0, dir[2]]), dy = o.hAxis(k) - J[k - 1][1], sn = clamp(dy / P, -0.35, 0.35);
+            dir = vnorm([hd[0] * Math.cos(Math.asin(sn)), sn, hd[2] * Math.cos(Math.asin(sn))]);
+          }
+          var C = J[k - 1], fr = frame(C, dir, up);
+          var sR = -jin.d, sF = P - eOut;
+          var rr = o.rj[k - 1], rf = o.rj[k], bl = typeof o.bulge === 'function' ? o.bulge(k) : (o.bulge === undefined ? 0.25 : o.bulge);
+          var radFn = (function (rr, rf, bl) {
+            return function (u) { return lerp(rr, rf, smooth(u)) * (1 + bl * Math.pow(Math.sin(Math.PI * u), 1.3)); };
+          })(rr, rf, bl);
+          var prof = [], i, ch = Math.min(0.7, 0.18 * Math.min(rr, rf));
+          if (jout) {
+            prof.push([0, P + jout.R]);
+            var aEnd = Math.PI - Math.asin(jout.n / jout.R);
+            for (i = 1; i <= 7; i++) { var a = (aEnd * i) / 7; prof.push([jout.R * Math.sin(a), P + jout.R * Math.cos(a)]); }
+            prof.push([jout.n, sF], [rf - ch * 2, sF]);
+          } else {
+            var tip = o.tip === undefined ? rf * 1.4 : o.tip;
+            prof.push([0, sF + tip]);
+            for (i = 1; i <= 6; i++) { var t = (Math.PI / 2) * (i / 7); prof.push([rf * Math.sin(t), sF + tip * Math.cos(t)]); }
+            prof.push([rf, sF]);
+          }
+          var nb = 14;
+          for (i = 0; i <= nb; i++) {
+            var uu = 1 - i / nb, s = lerp(sR + ch, sF - (jout ? ch : 0), uu);
+            if (!jout && i === 0) continue;
+            prof.push([radFn(uu), s]);
+          }
+          prof.push([rr - ch * 2, sR]);
+          // socket cavity, circumscribed so the facets never come inside the true sphere
+          var bo = Math.acos(-jin.d / jin.Rs), M = 5, dB = bo / M, Rc = jin.Rs / Math.cos(dB / 2), az = 1 / Math.cos(Math.PI / seg);
+          prof.push([jin.ao, sR]);
+          for (i = 1; i < M; i++) { var b = bo - dB * i; prof.push([Rc * Math.sin(b) * az, Rc * Math.cos(b)]); }
+          prof.push([0, Rc]);
+          var shell = lathe(fr, prof, seg, { floor: floor });
+          segs.push({ k: k, fr: fr, P: P, sR: sR, sF: sF, rad: radFn, rr: rr, rf: rf, jin: jin, jout: jout, shell: shell, dir: dir.slice(), C: C.slice() });
+          J.push(vadd(C, vmul(dir, P)));
+        }
+        var jd0 = o.rootExtra ? { R: jd[0].R, n: jd[0].n, e: jd[0].e + o.rootExtra } : jd[0];
+        var rootBall = ballUnit(J[0], vmul(vnorm(o.dir), -1), jd0, o.ov || 2.5, up, floor);
+        var res = { segs: segs, J: J, jd: jd, rootBall: rootBall };
+        window.MM_FLEXI_CHAINS = (window.MM_FLEXI_CHAINS || []).concat([res]);
+        return res;
+      }
+      // Point on a segment body: axial fraction u (0 = rear face, 1 = front face), angle th (0 = up, +pi/2 = sideways), radius factor kk.
+      function onSeg(sg, u, th, kk) {
+        var s = lerp(sg.sR, sg.sF, u), r = sg.rad(u) * (kk === undefined ? 1 : kk), f = sg.fr;
+        return [f.o[0] + f.a[0] * s + (f.v[0] * Math.cos(th) + f.u[0] * Math.sin(th)) * r,
+          f.o[1] + f.a[1] * s + (f.v[1] * Math.cos(th) + f.u[1] * Math.sin(th)) * r,
+          f.o[2] + f.a[2] * s + (f.v[2] * Math.cos(th) + f.u[2] * Math.sin(th)) * r];
+      }
+      function outward(sg, th) { var f = sg.fr; return vnorm(vadd(vmul(f.v, Math.cos(th)), vmul(f.u, Math.sin(th)))); }
+      function axisAt(sg, u) { return vadd(sg.fr.o, vmul(sg.fr.a, lerp(sg.sR, sg.sF, u))); }
+
+      // ---- Scene: shells grouped by paintable entry and by rigid body (bodies are what must stay apart) ----
+      function Scene() { this.groups = {}; this.order = []; this.bodies = {}; this.colors = {}; }
+      Scene.prototype.add = function (entry, body, tris, color) {
+        if (!this.groups[entry]) { this.groups[entry] = []; this.order.push(entry); }
+        if (color) this.colors[entry] = color;
+        this.groups[entry].push(tris);
+        (this.bodies[body] = this.bodies[body] || []).push(tris);
+      };
+      Scene.prototype.entries = function () {
+        var self = this;
+        window.MM_FLEXI_BODIES = this.bodies;
+        return this.order.map(function (name) {
+          var list = self.groups[name], len = 0, i;
+          list.forEach(function (a) { len += a.length; });
+          var all = new Float32Array(len), at = 0;
+          list.forEach(function (a) { all.set(a, at); at += a.length; });
+          var e = { name: name, positions: all, singlePart: true };
+          if (self.colors[name]) e.color = self.colors[name];
+          return e;
+        });
+      };
+
+      // Standard clearance and segment parameters shared by every flexi generator
+      function gapParam(group) {
+        return { group: group || 'Print-in-place', key: 'gap', label: 'Joint clearance (loose ↔ tight)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: 0.45 };
+      }
+      // Evenly tapering joint radii: front radius rA at joint 0, tail radius rB at the last joint.
+      function taperRadii(n, rA, rB, minR) {
+        var r = [];
+        for (var i = 0; i <= n; i++) r.push(Math.max(minR || 3.7, lerp(rA, rB, Math.pow(i / n, 0.85))));
+        return r;
+      }
+
+      var FLEXI_PALETTE = [
+        { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+        { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+        { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Phantom Ice', color: '#93c5fd' },
+        { name: 'Sunny Yellow', color: '#fde047' }, { name: 'Shadow Black', color: '#334155' }
+      ];
+      function deg(a) { return (a * Math.PI) / 180; }
+      // Fills in every parameter default so a preset only lists what it changes.
+      function makePresets(params, list) {
+        var base = {};
+        params.forEach(function (q) { base[q.key] = q.value; });
+        return list.map(function (item) {
+          var values = {};
+          Object.keys(base).forEach(function (k) { values[k] = base[k]; });
+          Object.keys(item[1]).forEach(function (k) { values[k] = item[1][k]; });
+          return { label: item[0], values: values };
+        });
+      }
+
+      // ---- Placement helpers ----
+      function heading(v) { return Math.atan2(-v[2], v[0]); }         // ground-plane heading of a vector
+      function hdir(h) { return [Math.cos(h), 0, -Math.sin(h)]; }     // unit vector for a heading
+      // Ellipsoid with semi-axes a (along dir), w (sideways) and h (up), centred on c.
+      function blobShell(c, dir, a, w, h, seg, floor) {
+        return lathe(frame(c, dir, [0, 1, 0]), ellipseProfile(a, w, 8), seg || 14, { ay: h / w, floor: floor });
+      }
+      // Point on the ground plane just at the flank of a chain segment (side = +1 or -1), at the height a limb leaves it.
+      function flank(sg, side, yLimb, u, inset) {
+        var mid = axisAt(sg, u === undefined ? 0.5 : u), r = sg.rad(u === undefined ? 0.5 : u), dy = mid[1] - yLimb;
+        var w = Math.sqrt(Math.max(r * r - dy * dy, 1)) - (inset || 0);
+        var side3 = vnorm([sg.fr.u[0], 0, sg.fr.u[2]]);
+        return [mid[0] + side3[0] * side * w, 0, mid[2] + side3[2] * side * w];
+      }
+      // A short chain that hangs off a host body (legs, arms, flippers). Its ball sits on the host, so the host
+      // must be solid around `attach` (a ground-plane point on the flank). Straight at rest so it prints flat.
+      // o: sc, host (rigid body id), id, entry, color, attach, head (heading in radians), n, rj0, rj1, pitch, g,
+      //    yaw (array, small), bend, tip, foot (outline fn(len) or null), footEntry, footColor
+      function limb(sc, o) {
+        var rj = taperRadii(o.n, o.rj0, o.rj1, 3.7), dir = hdir(o.head), jd0 = jointDims(rj[0], o.g), P = [], k;
+        for (k = 0; k < o.n; k++) P.push(o.pitch);
+        var extra = o.lean ? rj[0] * Math.tan(Math.min(Math.abs(o.lean), 1.2)) + 0.6 : 0.4; // keeps the first segment's rim off a slanted flank
+        var J0 = [o.attach[0] + dir[0] * (jd0.e + extra), 0.85 * rj[0], o.attach[2] + dir[2] * (jd0.e + extra)];
+        var ch = chain({ J0: J0, dir: dir, P: P, rj: rj, yaw: o.yaw, g: o.g, bulge: o.bulge === undefined ? 0.18 : o.bulge, tip: o.tip, bend: o.bend,
+          ov: 3.2, seg: 16, rootExtra: extra, hAxis: function (j) { return 0.85 * rj[j]; } });
+        sc.add(o.hostEntry || o.entry, o.host, ch.rootBall, o.hostColor || o.color);
+        ch.segs.forEach(function (sg) { sc.add(o.entry, o.id + sg.k, sg.shell, o.color); });
+        if (o.foot) {
+          var last = ch.segs[o.n - 1], at = axisAt(last, 0.75);
+          sc.add(o.footEntry || o.entry, o.id + o.n, flatSlab(o.foot, [at[0], 0, at[2]], heading(last.fr.a), 2.2, 0.5), o.footColor || o.color);
+        }
+        return ch;
+      }
+      // Fan of toes for a foot: root at the origin, toes pointing along +x. len = toe length, count = toes.
+      function footPoly(len, count, spread) {
+        var r0 = len * 0.38, rh = r0 * 0.7, pts = [[-3, -rh], [0, -rh]], i;
+        var wa = count > 1 ? (spread / (count - 1)) * 0.42 : spread * 0.5;
+        for (i = 0; i < count; i++) {
+          var a = count > 1 ? lerp(-spread, spread, i / (count - 1)) : 0;
+          pts.push([Math.cos(a - wa) * r0, Math.sin(a - wa) * r0], [Math.cos(a) * len, Math.sin(a) * len], [Math.cos(a + wa) * r0, Math.sin(a + wa) * r0]);
+        }
+        pts.push([0, rh], [-3, rh]);
+        return pts;
+      }
+      function wiggle(n, amp, waves, phase) { // per-joint yaw (radians) for an S-curve
+        var y = [];
+        for (var k = 1; k <= n; k++) y.push(deg(amp) * Math.sin(TAU * waves * ((k - 0.5) / n) + (phase || 0)));
+        return y;
+      }
+      // Ground-plane outline helper: mirror an outline across the heading axis
+      function mirrorPoly(poly, sd) { return poly.map(function (q) { return [q[0], q[1] * sd]; }); }
+
+      // Head: a lathe from the nose (u = 0) back to the neck face (u = 1) with its own shape; point(u, th, k) finds spots on it.
+      function headShell(J0, dir, jd0, rRear, L, Wh, Wsn, ay, floor) {
+        var sRear = -jd0.e, sNose = sRear - L, fr = frame(J0, dir, [0, 1, 0]);
+        function R(u) {
+          var rnd = u < 0.14 ? Math.sqrt(1 - Math.pow(1 - u / 0.14, 2)) : 1;
+          return Math.max(lerp(Wsn, Wh, smooth((u - 0.3) / 0.45)) * (1 - 0.14 * smooth((u - 0.82) / 0.18)) * rnd, 0.3);
+        }
+        var prof = [[0, sNose]], i;
+        for (i = 1; i <= 16; i++) { var u = i / 17; prof.push([R(u), lerp(sNose, sRear, u)]); }
+        prof.push([rRear, sRear], [0, sRear]);
+        return {
+          shell: lathe(fr, prof, 24, { ay: ay, floor: floor }), fr: fr, R: R, sNose: sNose, sRear: sRear,
+          point: function (u, th, kk) {
+            var s = lerp(sNose, sRear, u), r = R(u) * (kk || 1);
+            return [fr.o[0] + fr.a[0] * s + fr.u[0] * Math.sin(th) * r, fr.o[1] + fr.a[1] * s + Math.cos(th) * r * ay, fr.o[2] + fr.a[2] * s + fr.u[2] * Math.sin(th) * r];
+          }
+        };
+      }
+
+      // -----------------------------------------------------------------------
+      // Gecko: a wide head with big eyes, a short body, four jointed legs with toes and a long tail
+      // -----------------------------------------------------------------------
+      function geckoRadii(p, n, nb) {
+        var r = [];
+        for (var k = 0; k <= n; k++) {
+          var v;
+          if (k < nb) v = p.bodyR * (0.78 + 0.22 * smooth(k / 2));
+          else v = lerp(p.bodyR * 0.92, p.tailR, Math.pow((k - nb) / Math.max(n - nb, 1), 0.85));
+          r.push(Math.max(3.7, v));
+        }
+        return r;
+      }
+
+      function buildGecko(p) {
+        var g = p.gap, nb = Math.round(p.bodySegs), nt = Math.round(p.tailSegs), n = nb + nt, sc = new Scene(), k;
+        var rj = geckoRadii(p, n, nb), Y0 = 0.85 * rj[0], jd0 = jointDims(rj[0], g), P = [];
+        for (k = 1; k <= n; k++) P.push(p.pitch * (k <= nb ? 1 : lerp(1, 0.8, (k - nb) / nt)));
+        var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 2.4, bend: p.__bend,
+          hAxis: function (j) { return 0.85 * rj[j]; } });
+        var hs = p.headSize, hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], 26 * hs, 1.35 * rj[0] * hs, 0.55 * rj[0] * hs, 0.62, 0);
+        sc.add('head', 'head', hd.shell, '#fdba74');
+        sc.add('head', 'head', ch.rootBall, '#fdba74');
+        [-1, 1].forEach(function (sd) {
+          sc.add('eyes', 'head', blobShell(hd.point(0.6, sd * deg(58), 0.95), [1, 0, 0], 3.2 * p.eyeSize, 3.2 * p.eyeSize, 3.2 * p.eyeSize, 12, 0), '#334155');
+        });
+        ch.segs.forEach(function (sg) {
+          var id = 'seg' + sg.k;
+          sc.add(sg.k % 2 ? 'bodyA' : 'bodyB', id, sg.shell, sg.k % 2 ? '#fdba74' : '#fde047');
+          if (p.spots > 0 && sg.k <= nb + 4 && sg.rf > 4.4) {
+            var su = clamp((sg.jin.Rs * 1.2 + 1 - sg.sR) / (sg.sF - sg.sR), 0.5, 0.8);
+            sc.add('spots', id, blobShell(onSeg(sg, su, 0, 0.98), [1, 0, 0], 1.9, 1.9, 1.0, 10, 0), '#d8b4fe');
+          }
+        });
+        // four legs: two on the shoulders, two on the hips
+        var legHosts = [[2, -1], [nb, 1]];
+        legHosts.forEach(function (lh, li) {
+          var sg = ch.segs[Math.min(lh[0], n) - 1];
+          [-1, 1].forEach(function (sd) {
+            var rj0 = p.legThick, yL = 0.85 * rj0, attach = flank(sg, sd, yL, 0.5, 0.3);
+            var side3 = vnorm([sg.fr.u[0], 0, sg.fr.u[2]]), tail = vnorm([sg.fr.a[0], 0, sg.fr.a[2]]);
+            var splay = deg(li ? p.splayRear : p.splayFront);
+            var v = vadd(vmul(side3, sd * Math.cos(splay)), vmul(tail, lh[1] * Math.sin(splay)));
+            limb(sc, { host: 'seg' + sg.k, hostEntry: sg.k % 2 ? 'bodyA' : 'bodyB', hostColor: '#fdba74', id: 'leg' + li + (sd > 0 ? 'r' : 'l'), entry: 'legs', color: '#fb923c', attach: attach, head: heading(v), lean: splay, n: 2,
+              rj0: rj0, rj1: rj0 * 0.9, pitch: p.legLen, g: g, yaw: [0, 0], bend: p.__bend, tip: 2.5, foot: footPoly(p.toeLen, Math.round(p.toes), 0.78), footEntry: 'toes', footColor: '#fde047' });
+          });
+        });
+        return sc.entries();
+      }
+
+      var GECKO_PARAMS = [
+        { group: 'Body & tail', key: 'bodySegs', label: 'Body segments (neck to hips)', unit: '', min: 4, max: 8, step: 1, value: 5 },
+        { group: 'Body & tail', key: 'tailSegs', label: 'Tail segments', unit: '', min: 5, max: 14, step: 1, value: 9 },
+        { group: 'Body & tail', key: 'pitch', label: 'Segment length', unit: ' mm', min: 8, max: 14, step: 0.5, value: 9.5 },
+        { group: 'Body & tail', key: 'bodyR', label: 'Body thickness (radius)', unit: ' mm', min: 5, max: 9, step: 0.5, value: 6.5 },
+        { group: 'Body & tail', key: 'tailR', label: 'Tail thickness at the tip', unit: ' mm', min: 3.7, max: 5, step: 0.1, value: 3.8 },
+        { group: 'Body & tail', key: 'bead', label: 'Bead fullness (smooth ↔ knobbly)', unit: '', min: 0, max: 0.45, step: 0.05, value: 0.2 },
+        { group: 'Pose', key: 'wiggle', label: 'Body wiggle (straight ↔ curvy)', unit: '°', min: 0, max: 9, step: 0.5, value: 4 },
+        { group: 'Pose', key: 'waves', label: 'Waves along the body', unit: '', min: 0.5, max: 2.5, step: 0.25, value: 1 },
+        { group: 'Head', key: 'headSize', label: 'Head size', unit: '×', min: 0.8, max: 1.4, step: 0.05, value: 1 },
+        { group: 'Head', key: 'eyeSize', label: 'Eye size', unit: '×', min: 0.6, max: 1.4, step: 0.05, value: 1 },
+        { group: 'Head', key: 'spots', label: 'Back spots', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+        { group: 'Legs & toes', key: 'legLen', label: 'Leg segment length', unit: ' mm', min: 8, max: 16, step: 0.5, value: 11 },
+        { group: 'Legs & toes', key: 'legThick', label: 'Leg thickness (radius)', unit: ' mm', min: 3.7, max: 6, step: 0.1, value: 4.4 },
+        { group: 'Legs & toes', key: 'splayFront', label: 'Front legs sweep (back ↔ forward)', unit: '°', min: 0, max: 45, step: 1, value: 25 },
+        { group: 'Legs & toes', key: 'splayRear', label: 'Hind legs sweep (out ↔ back)', unit: '°', min: 0, max: 45, step: 1, value: 20 },
+        { group: 'Legs & toes', key: 'toes', label: 'Toes per foot', unit: '', min: 3, max: 5, step: 1, value: 5 },
+        { group: 'Legs & toes', key: 'toeLen', label: 'Toe length', unit: ' mm', min: 6, max: 14, step: 0.5, value: 9 },
+        gapParam()
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-092',
+        category: 'FLEXI // REPTILES',
+        title: 'Flexi Gecko',
+        fileName: 'Flexi_Gecko',
+        defaultColor: '#fdba74',
+        palette: FLEXI_PALETTE,
+        partNames: { head: 'Head', eyes: 'Eyes', bodyA: 'Body beads', bodyB: 'Body beads, alternate', spots: 'Back spots', legs: 'Legs', toes: 'Toes' },
+        parameters: GECKO_PARAMS,
+        presets: makePresets(GECKO_PARAMS, [
+          ['Default gecko', {}],
+          ['Chunky leopard gecko', { bodyR: 8, tailR: 5, tailSegs: 6, bead: 0.3, headSize: 1.2, legThick: 5.2, legLen: 9.5 }],
+          ['Long tail', { tailSegs: 14, wiggle: 6, waves: 1.5 }],
+          ['Big-eyed tokay', { eyeSize: 1.35, headSize: 1.25, spots: 1 }],
+          ['Flat out (easy print)', { wiggle: 0, splayFront: 30, splayRear: 30 }]
+        ]),
+        build: buildGecko
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
