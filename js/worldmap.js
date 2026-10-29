@@ -262,7 +262,7 @@ function hoverApply(tile, m, id) {
   obj.style.width = obj.style.height = `${size}px`;
   // The 24-frame atlas is big (~300 KB), so tiles start on a small still of frame 0 and fetch the atlas on demand.
   const sheetCss = `${sheet.width * m.displayScale}px ${sheet.height * m.displayScale}px`;
-  obj._hover = { m, entry, lay, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0,
+  obj._hover = { m, entry, lay, size, p: 0, dir: 0, frame: 0, acc: 0, pos: '', tf: '', glow: '', pre: null,
                  ready: !entry.poster, loading: null, evict: holoCoarse, visible: false, sheetUrl: `${SPRITE_DIR}${sheet.file}`, sheetCss };
   if (entry.poster) {
     obj.style.backgroundImage = `url(${SPRITE_DIR}${entry.poster})`;
@@ -278,85 +278,139 @@ function hoverApply(tile, m, id) {
   hoverWatch(obj);
 }
 
-// A decoded atlas is about 8 MB, so warming all of them is only done with a mouse; touch devices load on tap
-// and fall back to the still once the tile has settled.
+// A decoded atlas is about 8 MB, so only the hovered tile and the last few keep theirs on screen: every other tile
+// shows its small poster. Touch devices keep one and drop it once the tile has settled.
 const holoCoarse = window.matchMedia && matchMedia('(hover: none), (pointer: coarse)').matches;
+const HOLO_KEEP = holoCoarse ? 1 : 3;    // atlases kept swapped in at once
+const HOLO_WARM = 6;                     // atlases fetched ahead of hover at once
+const HOLO_WARM_MAX = 24;                // ... and per page load
+const holoReady = [];                    // tiles showing their atlas, oldest first
+const holoActive = new Set();            // tiles popping out or turning, all driven by one rAF loop
+const holoWarm = new Set();              // tiles whose atlas is fetched but not yet shown
+const holoQueue = [];
+let holoBusy = false, holoObserver = null, holoRaf = 0, holoLast = 0, holoWarmed = 0;
+const holoDts = [];
 const entryHasPoster = h => Boolean(h.entry.poster);
+
 function hoverEvict(obj) {
-  const h = obj._hover;
-  h.ready = false; h.loading = null; h.frame = 0;
+  const h = obj._hover, i = holoReady.indexOf(obj);
+  if (i >= 0) holoReady.splice(i, 1);
+  h.ready = false; h.loading = null; h.frame = 0; h.pos = '';
   obj.style.backgroundImage = `url(${SPRITE_DIR}${h.entry.poster})`;
   obj.style.backgroundSize = '100% 100%';
   obj.style.backgroundPosition = '0 0';
   hoverDraw(obj);
 }
 
+// Swap the atlas in once it is decoded (img.decode() does that off the main thread), so the first frame never stalls.
 function hoverLoad(obj) {
   const h = obj._hover;
   if (h.ready || h.loading) return h.loading;
-  h.loading = new Promise(resolve => {
-    const im = new Image();
-    im.onload = () => {
-      h.ready = true;
-      obj.style.backgroundImage = `url(${h.sheetUrl})`;
-      obj.style.backgroundSize = h.sheetCss;
-      hoverDraw(obj);
-      resolve();
-    };
-    im.onerror = () => { h.loading = null; resolve(); };
-    im.src = h.sheetUrl;
-  });
-  return h.loading;
+  const im = h.pre || (h.pre = holoFetch(h));
+  const loading = h.loading = (im.decode ? im.decode() : new Promise((ok, no) => { im.onload = ok; im.onerror = no; })).then(() => {
+    if (h.loading !== loading) return;     // evicted meanwhile
+    h.ready = true; h.pos = '';
+    obj.style.backgroundImage = `url(${h.sheetUrl})`;
+    obj.style.backgroundSize = h.sheetCss;
+    holoWarm.delete(obj);
+    if (entryHasPoster(h)) {
+      holoReady.push(obj);
+      while (holoReady.length > HOLO_KEEP) {
+        const old = holoReady.find(o => o !== obj && !holoActive.has(o));
+        if (!old) break;
+        hoverEvict(old);
+      }
+    }
+    hoverDraw(obj);
+  }, () => { if (h.loading === loading) h.loading = null; h.pre = null; holoWarm.delete(obj); });
+  return loading;
 }
 
-// Warm the atlases of tiles on screen, one at a time while the browser is idle, so most hovers start instantly.
-// Skipped on Data Saver / slow connections, where the atlas is fetched on first hover or tap instead.
-const holoQueue = [];
-let holoBusy = false, holoObserver = null;
+function holoFetch(h) {
+  const im = new Image();
+  im.src = h.sheetUrl;
+  return im;
+}
+
+// Fetch the atlases of the few tiles nearest the middle of the view, one at a time while the browser is idle, so
+// most hovers start instantly. The bytes only warm the cache (nothing is decoded until hover). Skipped on Data Saver /
+// slow connections and with reduced motion, where the atlas is fetched on first hover or tap instead.
 function hoverWatch(obj) {
   const c = navigator.connection;
-  if (obj._hover.ready || holoCoarse || !('IntersectionObserver' in window) || (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')))) return;
+  if (obj._hover.ready || holoCoarse || worldReducedMotion() || !('IntersectionObserver' in window) || (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')))) return;
   holoObserver = holoObserver || new IntersectionObserver(entries => {
     entries.forEach(en => {
-      const h = en.target._hover;
+      const o = en.target, h = o._hover;
       h.visible = en.isIntersecting;
-      if (en.isIntersecting && !h.ready && !holoQueue.includes(en.target)) holoQueue.push(en.target);
+      if (en.isIntersecting) { if (!h.ready && !h.pre && !holoQueue.includes(o)) holoQueue.push(o); }
+      else if (!h.ready && !h.loading) { h.pre = null; holoWarm.delete(o); }     // left the view: let go of the warm copy
     });
     holoPump();
   }, { rootMargin: '100px' });
   holoObserver.observe(obj);
 }
 function holoPump() {
-  if (holoBusy) return;
-  let obj;
-  while ((obj = holoQueue.shift()) && (!obj.isConnected || obj._hover.ready || !obj._hover.visible));
+  if (holoBusy || holoWarm.size >= HOLO_WARM || holoWarmed >= HOLO_WARM_MAX) return;
+  for (let i = holoQueue.length - 1; i >= 0; i--) {
+    const o = holoQueue[i], h = o._hover;
+    if (!o.isConnected || h.ready || h.pre || !h.visible) holoQueue.splice(i, 1);
+  }
+  const vr = wEl.vp.getBoundingClientRect(), cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
+  let obj = null, best = Infinity;
+  holoQueue.forEach(o => {
+    const r = o.getBoundingClientRect(), d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+    if (d < best) { best = d; obj = o; }
+  });
   if (!obj) return;
+  holoQueue.splice(holoQueue.indexOf(obj), 1);
   holoBusy = true;
   const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
-  idle(() => hoverLoad(obj).then(() => { holoBusy = false; holoPump(); }));
+  const next = () => { holoBusy = false; holoPump(); };
+  idle(() => {
+    const h = obj._hover;
+    if (h.ready || h.pre || !h.visible || !obj.isConnected) return next();
+    holoWarmed++;
+    holoWarm.add(obj);
+    const im = h.pre = holoFetch(h);
+    im.onload = im.onerror = next;
+  });
 }
 
 const easeOutBack = x => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
 
+// Only writes what changed: the atlas offset on a frame step, the transform and glow while popping out or in.
 function hoverDraw(obj) {
   const h = obj._hover, m = h.m;
   const e = easeOutBack(Math.min(1, h.p));
   const scale = m.restScale + (1 - m.restScale) * e;
   const lay = h.lay, step = lay.seq[h.frame], f = Math.abs(step);
   const col = f % lay.cols, row = lay.rows * lay.block + Math.floor(f / lay.cols);
-  if (h.ready) obj.style.backgroundPosition = `${-col * m.cell * m.displayScale}px ${-row * m.cell * m.displayScale}px`;
-  obj.style.transform = `translate(-50%, -50%) scale(${(Object.is(step, -0) || step < 0 ? -1 : 1) * scale}, ${scale})`;
-  obj.style.filter = `drop-shadow(0 0 ${3 + 9 * Math.min(1, h.p)}px rgba(60, 230, 255, ${0.35 + 0.4 * Math.min(1, h.p)}))`;
+  if (h.ready) {
+    const pos = `${-col * m.cell * m.displayScale}px ${-row * m.cell * m.displayScale}px`;
+    if (pos !== h.pos) obj.style.backgroundPosition = h.pos = pos;
+  }
+  const tf = `translate(-50%, -50%) scale(${(Object.is(step, -0) || step < 0 ? -1 : 1) * scale}, ${scale})`;
+  if (tf !== h.tf) obj.style.transform = h.tf = tf;
+  const glow = `drop-shadow(0 0 ${3 + 9 * Math.min(1, h.p)}px rgba(60, 230, 255, ${0.35 + 0.4 * Math.min(1, h.p)}))`;
+  if (glow !== h.glow) obj.style.filter = h.glow = glow;
 }
 
-// Frames only change on display refreshes. Stepping every 41.7 ms (24 fps) on a 60 Hz screen alternates 2 and 3
-// refreshes per frame, which reads as judder. So measure the refresh interval and step a whole number of refreshes.
-function hoverLoop(obj, now) {
-  const h = obj._hover, m = h.m, dt = Math.min(64, now - h.last);
-  h.last = now;
-  (h.dts = h.dts || []).push(dt);
-  if (h.dts.length > 12) h.dts.shift();
-  const r = h.dts.length >= 5 ? [...h.dts].sort((a, b) => a - b)[Math.floor(h.dts.length / 2)] : 16.7;
+// One loop steps every active tile. Frames only change on display refreshes. Stepping every 41.7 ms (24 fps) on a
+// 60 Hz screen alternates 2 and 3 refreshes per frame, which reads as judder. So measure the refresh interval and
+// step a whole number of refreshes.
+function holoTick(now) {
+  holoRaf = 0;
+  const dt = Math.min(64, now - holoLast);
+  holoLast = now;
+  holoDts.push(dt);
+  if (holoDts.length > 12) holoDts.shift();
+  const r = holoDts.length >= 5 ? [...holoDts].sort((a, b) => a - b)[Math.floor(holoDts.length / 2)] : 16.7;
+  holoActive.forEach(obj => { if (obj.isConnected) hoverStep(obj, dt, r); else holoActive.delete(obj); });
+  if (holoActive.size) holoRaf = requestAnimationFrame(holoTick);
+}
+
+function hoverStep(obj, dt, r) {
+  const h = obj._hover, m = h.m;
   const n = Math.max(1, Math.round(1000 / m.fps / r));
   h.p = Math.max(0, Math.min(1, h.p + h.dir * dt / (h.dir > 0 ? 260 : 200)));
   if (!h.ready) h.acc = 0;     // hold on the still until the atlas arrives
@@ -370,13 +424,17 @@ function hoverLoop(obj, now) {
     if (h.dir < 0 && h.p <= 0 && h.frame === 0) break;
   }
   if (h.acc < 0) h.acc = 0;
-  if (h.dir < 0 && h.p <= 0 && h.frame === 0) {
-    h.acc = 0; h.raf = 0;
-    if (h.evict && h.ready && entryHasPoster(h)) hoverEvict(obj); else hoverDraw(obj);
-    return;
-  }
-  hoverDraw(obj);
-  h.raf = requestAnimationFrame(t => hoverLoop(obj, t));
+  if (h.dir < 0 && h.p <= 0 && h.frame === 0) hoverRest(obj);
+  else hoverDraw(obj);
+}
+
+// Back at the rest pose: leave the loop, and on touch devices drop the atlas.
+function hoverRest(obj) {
+  const h = obj._hover;
+  h.p = 0; h.dir = 0; h.frame = 0; h.acc = 0;
+  holoActive.delete(obj);
+  obj.classList.remove('on');
+  if (h.evict && h.ready && entryHasPoster(h)) hoverEvict(obj); else hoverDraw(obj);
 }
 
 function hoverStart(tile, on) {
@@ -384,15 +442,29 @@ function hoverStart(tile, on) {
   if (!obj || !obj._hover || worldReducedMotion()) return;
   const h = obj._hover;
   h.dir = on ? 1 : -1;
-  if (on) hoverLoad(obj);
-  if (!h.raf) { h.last = performance.now(); h.raf = requestAnimationFrame(t => hoverLoop(obj, t)); }
+  if (on) {
+    hoverLoad(obj);
+    for (let i = holoReady.length - 1; i >= 0; i--) if (!holoReady[i].isConnected) holoReady.splice(i, 1);    // tiles rebuilt by a re-layout
+    holoWarm.forEach(o => { if (!o.isConnected) holoWarm.delete(o); });
+    // A fast mouse can leave several tiles still turning back to rest; snap the oldest ones home.
+    holoActive.forEach(o => { if (o !== obj && o._hover.dir < 0 && holoActive.size > 3) hoverRest(o); });
+  }
+  holoActive.add(obj);
+  obj.classList.add('on');      // gets its own layer only while it moves
+  if (!holoRaf) { holoLast = performance.now(); holoRaf = requestAnimationFrame(holoTick); }
 }
 
 function spriteRemove() {
   wEl.canvas.querySelectorAll('.tile.has-sprite, .tile.has-3d').forEach(tile => {
     spriteStop(tile);
     const obj = tile.querySelector('.tile-obj');
-    if (obj && obj._hover) cancelAnimationFrame(obj._hover.raf);
+    if (obj && obj._hover) {
+      holoActive.delete(obj);
+      holoWarm.delete(obj);
+      if (holoObserver) holoObserver.unobserve(obj);
+      const i = holoReady.indexOf(obj);
+      if (i >= 0) holoReady.splice(i, 1);
+    }
     tile.querySelectorAll('.tile-sprite, .tile-base, .tile-slot, .tile-obj').forEach(n => n.remove());
     tile.classList.remove('has-sprite', 'has-3d');
   });
