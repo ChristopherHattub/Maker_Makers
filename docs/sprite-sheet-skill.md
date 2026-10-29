@@ -1,4 +1,6 @@
-# Tile hover assets skill v3 (for Gemini)
+# Tile hover assets skill v3 (for Gemini) — retired
+
+> **Retired.** Hover tiles are now rendered from each generator's real 3D model; see [hologram-tiles.md](hologram-tiles.md). This page is kept only as the record of how the older Gemini frames (still viewable with `?gemini`) were made. Do not use it for new generators.
 
 Version 3 asks Gemini for **one generator per image, a 16-frame half turn (0–180°) that the site mirrors for the rest**, because two generators and 24 frames per image gave uneven, repeated frames, and Gemini cannot draw the second half of a turn (270–360°) reliably. It supersedes v1 (scan-line sheets) and v2 (two generators per sheet). The base tile is unchanged.
 

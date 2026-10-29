@@ -46,17 +46,20 @@ The port can also be set with the `PORT` environment variable. The default is 51
 
 ## Checking your change
 
-There are no automated tests or linters. Check by hand:
+There are no automated tests or linters for the site. Check by hand:
 
 1. Start `npm run dev`.
-2. Load the home screen. Check the generator map tiles and the header buttons.
-3. Open a slot (including an empty one) and check the viewer, the iframe, and the download button.
-4. Open the printer map and check the markers, the directory and the status line.
-5. Submit a test idea, then check the queue and "Export Queue (.JSON)".
-6. Resize the window to a phone width and check the layout.
-7. Check the browser console for errors.
+2. Load the home screen. Check the map tiles, the hologram on hover, the details panel, search, sort and the header buttons.
+3. Open a generator and check the viewer, the iframe, Save STL and Send to Workshop.
+4. Open the Workshop and add a shape and a generator.
+5. Open the printer map and check the markers, the directory and the status line.
+6. Submit a test idea, then check the queue and "Export Queue (.JSON)".
+7. Resize the window to a phone width and check the layout.
+8. Check the browser console for errors.
 
-Network-dependent parts (Leaflet, map tiles, Nominatim, Overpass) need an internet connection. Expect the map to show its fallback when offline.
+For a generator's geometry there is a script: `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html ["Preset label"]` builds the model in Node and reports whether every solid is watertight and manifold.
+
+Network-dependent parts (Leaflet, three.js for generators and the Workshop, map tiles, Nominatim, Overpass) need an internet connection. Expect the map to show its fallback when offline.
 
 ## Editor settings
 

@@ -2,7 +2,7 @@
 
 The map screen (`#map-screen`) shows public 3D printers and makerspaces on a Leaflet map, with a directory list alongside it. It needs no API key.
 
-> **Status:** uncommitted working-tree change. Verified listings are in `data/public-printers.json`, and unverified OpenStreetMap candidates are in `data/osm-candidates.json`. Verification is ongoing, starting with New Hampshire.
+> **Status:** verified listings are in `data/public-printers.json` (9 entries), and unverified OpenStreetMap candidates are in `data/osm-candidates.json` (340 entries). Verification is ongoing, starting with New England.
 
 ## Two layers
 
@@ -15,15 +15,15 @@ OpenStreetMap confirms that a space exists and where it is. It does not confirm 
 
 ## Screen layout
 
-- **Control bar.** "Reset to US & Canada", a search box with "Scan Sector", the candidates checkbox, and "Back to Grid".
+- **Control bar.** "Reset to US & Canada", a search box with "Scan Sector", the candidates checkbox, and "Back to Generators". A note below it says the visitor's location is never requested.
 - **Directory.** A list of cards, one per location, with the hub count ("N ACTIVE"). Clicking a card flies the map to that location and opens its popup.
 - **Map.** Markers for each location. Clicking a marker opens a popup with the name, type, address, equipment, public access, cost and verification details, and a link to the official site or submission page.
 - **Status line.** The meta tag at the top of the screen. It reports what the last action did: scanning, geocoding, no results, or the scan result.
 
 ## Initialization
 
-1. At page load, `loadPublicPrinters()` in `js/app.js` fetches `data/public-printers.json` into `PUBLIC_PRINTERS`. If the fetch or parse fails, the list is empty.
-2. The Leaflet map is created the first time the screen is shown (`initLeafletMap()`). It opens centered on North America (`NORTH_AMERICA_VIEW`: `[48.5, -100]`, zoom 3) with Esri's World Street Map tiles. On that first open, the map asks for the visitor's position (`centerMapOnUser()`) and zooms to it if allowed. If permission is denied or the position is unavailable, the North America view stays.
+1. At page load, `loadPublicPrinters()` in `js/app.js` fetches `data/public-printers.json` into `PUBLIC_PRINTERS` and `data/osm-candidates.json` into `CANDIDATE_PRINTERS` (and fills in the candidate count). If a fetch or parse fails, that list is empty.
+2. The Leaflet map is created the first time the screen is shown (`initLeafletMap()`). It opens centered on North America (`NORTH_AMERICA_VIEW`: `[48.5, -100]`, zoom 3) with Esri's World Street Map tiles. It never asks for the visitor's position.
 3. If the data finishes loading after the map exists, the map re-renders the list.
 
 Later visits call `invalidateSize()` so the map redraws at the right size.
@@ -78,10 +78,7 @@ Since the data is loaded at run time, no code change is needed.
 
 ## Live search
 
-Two entry points call the same function, `scanGlobalPrintersNear(lat, lng, label)`:
-
-- **No location request.** The site never calls `navigator.geolocation`. Location comes only from the optional search box; coordinates sent to Overpass are rounded to two decimals.
-- **Search.** Enter in the search box, or "Scan Sector", geocodes the text with OpenStreetMap Nominatim (`limit=1`) and scans around the first result.
+The site never calls `navigator.geolocation`. The only way in is the optional search box: Enter, or "Scan Sector", runs `searchLocationWorldwide()`, which geocodes the text with OpenStreetMap Nominatim (`limit=1`) and calls `scanGlobalPrintersNear(lat, lng, label)` on the first result. Coordinates sent to Overpass are rounded to two decimals. If geocoding fails, the map resets to the US & Canada view.
 
 The scan builds its results in this order:
 
@@ -109,6 +106,7 @@ If nothing is found, the map shows the full verified list with the status "NO PU
 
 ## Known issues
 
+- Unverified candidates keep their link in `website`, but popups only link `url`, so candidate popups show no website link.
 - Live OSM results are inserted into popups and cards without escaping. A `website` tag containing a `javascript:` URL would become a link. See [architecture.md](architecture.md#known-issues).
 - Both JSON files are loaded from `data/`, which Pages publishes along with the rest of the repo root.
 - The Dover PDF policy could not be read during verification; its service page was checked instead.

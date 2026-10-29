@@ -160,7 +160,10 @@ Paint resets when the page reloads. The engine does not save it.
 | Button | Output |
 | --- | --- |
 | Export .STL | Binary STL, one solid, Z-up, on the bed. No color (STL cannot carry color). |
+| Export .OBJ (colors) | `<name>-obj.zip` with `<name>.obj` and `<name>.mtl`, one material per Color-tab color (see [Print tab](#print-tab)). |
 | Download standalone .html generator | A single HTML file that contains the generator, the shared styles and the engine. |
+
+Every export and the standalone download go through the engine's consent modal (`confirmDownload`); the download button stays disabled until the box is ticked.
 
 The file name is the `File name` field in the Export block at the bottom of the Print tab, which starts from `fileName`.
 
@@ -176,8 +179,6 @@ The standalone button fetches the generator's own HTML, then inlines `shared/gen
 
 The download needs the page served over `http(s)`, so it works on the dev server and on GitHub Pages. Opening the file directly from disk (`file://`) shows "Open the generator through the site to download it".
 
-The site's grid viewer uses the same bundling for its **Download** button, so both give the same file.
-
 Keep these rules so the bundling stays correct:
 
 - Never write a literal `</script>` inside the engine or the config. Write `<\/script>`. The inlined text would otherwise close the script early.
@@ -189,7 +190,7 @@ Keep these rules so the bundling stays correct:
 The engine applies these. A generator should not restyle the page.
 
 - **Header.** The id and category on top, the title below it. Three buttons on the right: *Find local printer for this STL* (green), *Download program (.html)* (amber), and *Back to grid*.
-- **Inside the site viewer.** The viewer's own top bar already shows the id, title and the same three buttons, so a generator loaded in the viewer hides its header and fills the frame. The engine adds `mm-framed` to `<body>` when the page is in an iframe. The viewer hides its empty placeholder panel for any slot that has a `programUrl` (the `has-program` class in `css/styles.css`). Opened on its own, the generator keeps its header.
+- **Inside the site viewer.** The viewer's own top bar shows the id and title with *Save STL*, *Send to Workshop* and *Back to Generators*, so a generator loaded in the viewer hides its header and fills the frame. The viewer reaches into the frame through `window.MM_STAGE` (set by the engine), so keep the engine's button ids (`mm-export-stl`) as they are. The engine adds `mm-framed` to `<body>` when the page is in an iframe. The viewer hides its empty placeholder panel for any slot that has a `programUrl` (the `has-program` class in `css/styles.css`). Opened on its own, the generator keeps its header.
 - **Panel.** Left column, 380 px wide on desktop. Tabs at the top (Parametric, Color tool, Print). There is no footer: the Export block (triangle count, file name, Export .STL, standalone download, disclaimer) sits at the bottom of the Print tab so the other tabs show more settings. Button text wraps, so long labels never overflow.
 - **Viewport.** Right column. Orbit by dragging. The top-left hint and the top-right size readout (`X x Y x Z MM`) are fixed. *Front* and *Iso* sit at the bottom right.
 - **Colors and fonts.** Blueprint palette from `css/styles.css`: deep navy background, cyan for lines and active states, green and amber for the two secondary actions. Monospace font throughout.
@@ -227,6 +228,11 @@ Use these in `mount()` so extra controls look like the rest of the panel:
 7. Add a slot entry in `js/programs.js`, pointing `programUrl` at the page (see [generator-registry.md](generator-registry.md)).
 8. Do nothing for the footer disclaimer: the engine adds it.
 9. Open the page in the preview. Check that the Color tool lists sensible parts, that paint survives a slider change, that the STL opens, and that the standalone download runs.
+10. Render its hologram tile for the homepage (see [hologram-tiles.md](hologram-tiles.md)).
+
+## Workshop embed
+
+Loaded with `?embed=workshop`, the engine shows only the Parametric controls and posts the built model to the parent after every rebuild (`mm-model`); the parent can send `mm-set-params`. A generator whose state lives outside its parameters (placed stamps, carves) should define `embedState: { get(), set(v) }` so that state survives the trip. Nothing else is needed per generator. See [workshop.md](workshop.md).
 
 ## Disclaimer
 
