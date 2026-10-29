@@ -443,7 +443,6 @@ function regionHTML(r) {
     return `
       <button class="tile${col ? ' has-left' : ''}${row ? ' has-up' : ''}" type="button" data-id="${p.id}" data-search="${search}"
               style="left:${col * C}px; top:${row * C}px" aria-label="${escapeHTML(p.title)}, ${escapeHTML(g.name)}">
-        <span class="tile-glow" aria-hidden="true"></span>
         <span class="tile-card">
           <span class="tile-art">${thumb}</span>
           <span class="tile-label">${escapeHTML(p.title)}</span>
@@ -475,7 +474,8 @@ function workshopTileHTML() {
             aria-label="Workshop: a free-range 3D editor. Import STL files, add shapes, move, scale and rotate.">
       <span class="ws-grid" aria-hidden="true"></span>
       <svg class="ws-holo" viewBox="0 0 240 150" aria-hidden="true">
-        <g class="ws-orbit">
+        <defs><filter id="ws-glow" color-interpolation-filters="sRGB" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="0" stdDeviation="3.6" flood-color="#00e5ff" flood-opacity="0.42"/></filter></defs>
+        <g filter="url(#ws-glow)">
           <path class="ws-f" d="M40 96 L70 80 L100 96 L100 128 L70 144 L40 128Z M40 96 L70 112 L100 96 M70 112 L70 144"/>
           <circle class="ws-f" cx="170" cy="100" r="26"/><ellipse class="ws-f" cx="170" cy="100" rx="26" ry="8"/>
           <path class="ws-f" d="M120 40 L150 82 L90 82Z M120 40 L120 82"/>
