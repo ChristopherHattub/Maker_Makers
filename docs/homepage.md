@@ -35,6 +35,7 @@ Everything is data in `js/programs.js`; see [generator-registry.md](generator-re
 ## How it is built
 
 - `js/worldmap.js` holds layout, rendering, camera, selection, input and the minimap. The map is a `div` moved with one CSS `transform`, so panning and zooming stay smooth.
+- Camera cost: pointer, wheel and key events only update `worldState.cam`; `worldApply` writes the transform (and the minimap) once per animation frame. Nothing in that path reads layout (the viewport rectangle is cached and refreshed per gesture and on resize). While the camera moves the `moving` class is on the map (tiles ignore the pointer, so hover effects do not start and stop under a sliding map), and the zoomed-out "far" look (`far` class, thresholds `FAR_ON` / `FAR_OFF` with a gap so it never flickers) is applied only when the camera settles, because restyling the map mid-gesture repaints the whole layer and stalls it. The minimap's region background is painted once into a cached canvas and reused every frame; it is skipped when the minimap is hidden (phones). Search waits for a short pause in typing. Stepping between tiles of one group only swaps the panel's detail part.
 - Planned regions paint their empty cells as a repeating background, and taps are mapped to cells with arithmetic.
 - Region outlines are SVG paths computed from the tile count; layout is `layoutWorld`, sort and the saved arrangement are `worldViewGroups`.
 - The map fills the window between the header and footer, so the disclaimer stays visible.

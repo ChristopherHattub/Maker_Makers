@@ -739,6 +739,8 @@ body.on-splash .container {
 }
 
 .world-viewport.panning { cursor: grabbing; }
+/* While the camera moves, tiles ignore the pointer, so hover effects do not start and stop under a sliding map */
+.world.moving .world-canvas { pointer-events: none; }
 .world-viewport:focus-visible { box-shadow: inset 0 0 0 2px var(--bp-cyan); }
 
 .world-canvas {
