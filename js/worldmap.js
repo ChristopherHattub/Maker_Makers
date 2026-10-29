@@ -263,7 +263,7 @@ function hoverApply(tile, m, id) {
   // The 24-frame atlas is big (~300 KB), so tiles start on a small still of frame 0 and fetch the atlas on demand.
   const sheetCss = `${sheet.width * m.displayScale}px ${sheet.height * m.displayScale}px`;
   obj._hover = { m, entry, lay, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0,
-                 ready: !entry.poster, loading: null, visible: false, sheetUrl: `${SPRITE_DIR}${sheet.file}`, sheetCss };
+                 ready: !entry.poster, loading: null, evict: holoCoarse, visible: false, sheetUrl: `${SPRITE_DIR}${sheet.file}`, sheetCss };
   if (entry.poster) {
     obj.style.backgroundImage = `url(${SPRITE_DIR}${entry.poster})`;
     obj.style.backgroundSize = '100% 100%';
@@ -276,6 +276,19 @@ function hoverApply(tile, m, id) {
   tile.classList.add('has-3d', 'has-pro');
   hoverDraw(obj);
   hoverWatch(obj);
+}
+
+// A decoded atlas is about 8 MB, so warming all of them is only done with a mouse; touch devices load on tap
+// and fall back to the still once the tile has settled.
+const holoCoarse = window.matchMedia && matchMedia('(hover: none), (pointer: coarse)').matches;
+const entryHasPoster = h => Boolean(h.entry.poster);
+function hoverEvict(obj) {
+  const h = obj._hover;
+  h.ready = false; h.loading = null; h.frame = 0;
+  obj.style.backgroundImage = `url(${SPRITE_DIR}${h.entry.poster})`;
+  obj.style.backgroundSize = '100% 100%';
+  obj.style.backgroundPosition = '0 0';
+  hoverDraw(obj);
 }
 
 function hoverLoad(obj) {
@@ -302,7 +315,7 @@ const holoQueue = [];
 let holoBusy = false, holoObserver = null;
 function hoverWatch(obj) {
   const c = navigator.connection;
-  if (obj._hover.ready || !('IntersectionObserver' in window) || (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')))) return;
+  if (obj._hover.ready || holoCoarse || !('IntersectionObserver' in window) || (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')))) return;
   holoObserver = holoObserver || new IntersectionObserver(entries => {
     entries.forEach(en => {
       const h = en.target._hover;
@@ -357,7 +370,11 @@ function hoverLoop(obj, now) {
     if (h.dir < 0 && h.p <= 0 && h.frame === 0) break;
   }
   if (h.acc < 0) h.acc = 0;
-  if (h.dir < 0 && h.p <= 0 && h.frame === 0) { h.acc = 0; h.raf = 0; hoverDraw(obj); return; }
+  if (h.dir < 0 && h.p <= 0 && h.frame === 0) {
+    h.acc = 0; h.raf = 0;
+    if (h.evict && h.ready && entryHasPoster(h)) hoverEvict(obj); else hoverDraw(obj);
+    return;
+  }
   hoverDraw(obj);
   h.raf = requestAnimationFrame(t => hoverLoop(obj, t));
 }
@@ -443,7 +460,6 @@ function regionHTML(r) {
         <div class="region-head" data-act="group">
           <h3>${escapeHTML(g.name)}</h3>
           <span class="region-meta">${filled ? `${filled}` : 'COMING SOON'}</span>
-          <p>${escapeHTML(g.description || '')}</p>
         </div>
         <div class="region-slots" style="top:${C}px; width:${r.w * C}px; height:${r.h * C}px${filled ? '' : `; background-image:${EMPTY_CELL_SVG}; background-size:${C}px ${C}px`}">
           ${tiles}
@@ -554,7 +570,8 @@ function worldApply() {
   const { x, y, k } = worldState.cam;
   wEl.canvas.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
   wEl.root.classList.toggle('far', k < 0.5);
-  worldDrawMinimap();
+  // The minimap is redrawn at most once per frame however many pointer events arrive.
+  if (!worldState.miniRaf) worldState.miniRaf = requestAnimationFrame(() => { worldState.miniRaf = 0; worldDrawMinimap(); });
 }
 
 function worldRedraw() { worldApply(); }

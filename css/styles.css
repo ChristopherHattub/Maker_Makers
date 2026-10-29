@@ -640,11 +640,17 @@ footer {
     width: 100%;
     justify-content: stretch;
   }
+  .header-actions { flex-wrap: nowrap; gap: 0.35rem; }
   .header-actions .btn {
-    flex: 1;
-    font-size: 0.7rem;
-    padding: 0.5rem 0.5rem;
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 0.6rem;
+    letter-spacing: 0;
+    line-height: 1.15;
+    padding: 0.4rem 0.25rem;
+    white-space: normal;
   }
+  .brand-title p { display: none; }
   .container {
     padding: 1rem;
   }
@@ -1102,7 +1108,11 @@ body.on-splash .container {
 .panel-note { display: block; margin-top: 0.4rem; font-size: 0.64rem; color: #6f96c2; text-align: center; }
 
 @media (max-width: 760px) {
-  .world-title { width: calc(100% - 5rem); padding: 0.5rem; }
+  .world-title { left: 0.5rem; top: 0.5rem; width: calc(100% - 3.9rem); padding: 0.4rem; }
+  .world-title .bp-input { padding: 0.3rem 0.5rem; font-size: 0.74rem; }
+  .world-sort { margin-top: 0.3rem; }
+  .world-controls { right: 0.5rem; top: 0.5rem; gap: 0.25rem; }
+  .world-controls .btn { width: 2.1rem; height: 2.1rem; }
   .world-title h2, .world-title p { display: none; }
   .world.has-selection .world-title { display: none; }
   .world-minimap { display: none; }
@@ -1147,7 +1157,8 @@ body.on-splash .container {
 .world.exp .tile.has-3d .tile-art img { visibility: hidden; }
 .world.exp .tile.has-3d:hover, .world.exp .tile.has-3d:focus-visible { z-index: 5; }
 .world.exp .tile.has-3d .tile-base { display: block; position: absolute; inset: 0; background-size: 100% 100%; background-repeat: no-repeat; }
-.world.exp .tile.has-3d .tile-obj { display: block; position: absolute; left: 50%; top: 42%; background-repeat: no-repeat; will-change: transform; }
+.world.exp .tile.has-3d .tile-obj { display: block; position: absolute; left: 50%; top: 42%; background-repeat: no-repeat; }
+.world.exp .tile.has-3d:hover .tile-obj, .world.exp .tile.has-3d:focus-visible .tile-obj { will-change: transform; }
 .world.exp .tile.has-3d .tile-slot {
   display: flex; align-items: center; position: absolute; left: 14%; top: 10%; width: 25%; height: 8%; padding-left: 4px;
   font: 600 8px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 0.04em; color: #3fe6ff;
