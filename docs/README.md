@@ -15,6 +15,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [file-structure.md](file-structure.md) | Every file in the repo and what it is for |
 | [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the generator contract, and how to add a generator |
 | [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, the Color tool, exports, and the visual rules |
+| [flexi-creatures.md](flexi-creatures.md) | The ten print-in-place flexi animals (slots 91-100): ball-joint kit, clearance rules and the check script |
 | [homepage.md](homepage.md) | The pannable world map of grouped generator tiles and how to add to it |
 | [printer-map.md](printer-map.md) | The printer radar: data, search, and how to add a printer |
 | [development.md](development.md) | Running the site locally and the live-reload dev server |

@@ -13,6 +13,7 @@ node scripts/receive-render.mjs --out /tmp/holo &
 # open in a browser (it renders and uploads each atlas):
 #   http://localhost:5185/tools/hologram.html?gen=all&save=1          all generators in js/programs.js
 #   http://localhost:5185/tools/hologram.html?gen=spider&save=1       one generator (thumbnail id)
+#   add &port=5232 (and run receive-render.mjs --port 5232) if :5190 is already taken
 python3 scripts/build-holo.py /tmp/holo
 ```
 

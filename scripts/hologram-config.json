@@ -364,5 +364,35 @@
     "hue": 220,
     "sat": 75,
     "light": 70
+  },
+  "flexi-dragon": {
+    "hue": 150
+  },
+  "flexi-gecko": {
+    "hue": 38
+  },
+  "flexi-crocodile": {
+    "hue": 135
+  },
+  "flexi-octopus": {
+    "hue": 285
+  },
+  "flexi-scorpion": {
+    "hue": 28
+  },
+  "flexi-centipede": {
+    "hue": 22
+  },
+  "flexi-turtle": {
+    "hue": 160
+  },
+  "flexi-shark": {
+    "hue": 205
+  },
+  "flexi-seahorse": {
+    "hue": 335
+  },
+  "flexi-caterpillar": {
+    "hue": 110
   }
 }

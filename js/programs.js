@@ -663,6 +663,96 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/character-standee.svg',
     programUrl: 'programs/character-standee.html',
     description: 'A flat stand-up figure on a slotted base, in a card, arch, shield, hexagon or round token shape, with a raised knight, wizard, rogue or monster, or a blank frame for your own art. Set the size, thickness, border and tab. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 91,
+    title: 'Flexi Dragon',
+    bundle: 'flexi',
+    category: 'FLEXI // DRAGONS',
+    thumbnailUrl: 'assets/thumbnails/flexi-dragon.svg',
+    programUrl: 'programs/flexi-dragon.html',
+    description: 'A print-in-place articulated dragon: a head with horns, a chain of ball-jointed beads for neck, body and tail, back spikes, bat wings, paws and a tail spade. Set segment count and thickness, wiggle, horns, spikes, wing span and joint clearance. Joints are printed in place, nothing to assemble. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 92,
+    title: 'Flexi Gecko',
+    bundle: 'flexi',
+    category: 'FLEXI // REPTILES',
+    thumbnailUrl: 'assets/thumbnails/flexi-gecko.svg',
+    programUrl: 'programs/flexi-gecko.html',
+    description: 'A print-in-place gecko with big eyes, a jointed body and tail, and four jointed legs ending in toes. Set body and tail segments, thickness, wiggle, leg length and sweep, toes and joint clearance. Everything lies flat so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 93,
+    title: 'Flexi Crocodile',
+    bundle: 'flexi',
+    category: 'FLEXI // REPTILES',
+    thumbnailUrl: 'assets/thumbnails/flexi-crocodile.svg',
+    programUrl: 'programs/flexi-crocodile.html',
+    description: 'A print-in-place crocodile with a long snout, back plates, a jointed body and tail and four stubby jointed legs. Set snout length, body and tail segments, thickness, back plates, legs and joint clearance. Everything lies flat so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 94,
+    title: 'Flexi Octopus',
+    bundle: 'flexi',
+    category: 'FLEXI // SEA CREATURES',
+    thumbnailUrl: 'assets/thumbnails/flexi-octopus.svg',
+    programUrl: 'programs/flexi-octopus.html',
+    description: 'A print-in-place octopus: a domed head with eyes and up to eight ball-jointed arms that curl across the bed. Set head size, number of arms, segments per arm, arm thickness, curl and joint clearance. Everything lies flat so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 95,
+    title: 'Flexi Scorpion',
+    bundle: 'flexi',
+    category: 'FLEXI // BUGS',
+    thumbnailUrl: 'assets/thumbnails/flexi-scorpion.svg',
+    programUrl: 'programs/flexi-scorpion.html',
+    description: 'A print-in-place scorpion with jointed claw arms and pincers, eight walking legs and a long jointed tail with a stinger. Set tail length, body size, claw size and reach, leg fan, tail lift and joint clearance. Prints flat with no supports unless you lift the tail. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 96,
+    title: 'Flexi Centipede',
+    bundle: 'flexi',
+    category: 'FLEXI // BUGS',
+    thumbnailUrl: 'assets/thumbnails/flexi-centipede.svg',
+    programUrl: 'programs/flexi-centipede.html',
+    description: 'A print-in-place centipede: a long chain of ball-jointed beads with a pair of legs on every bead, feelers and tail prongs. Set 8 to 22 segments, thickness, wiggle, leg length and sweep, feelers and joint clearance. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 97,
+    title: 'Flexi Turtle',
+    bundle: 'flexi',
+    category: 'FLEXI // SEA CREATURES',
+    thumbnailUrl: 'assets/thumbnails/flexi-turtle.svg',
+    programUrl: 'programs/flexi-turtle.html',
+    description: 'A print-in-place turtle with a domed shell and plates, a jointed neck and head, four jointed flippers and a jointed tail. Set shell size and height, neck length, flipper length and sweep, paddle size and joint clearance. Everything rests on the bed so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 98,
+    title: 'Flexi Shark',
+    bundle: 'flexi',
+    category: 'FLEXI // SEA CREATURES',
+    thumbnailUrl: 'assets/thumbnails/flexi-shark.svg',
+    programUrl: 'programs/flexi-shark.html',
+    description: 'A print-in-place shark: a pointed snout, a chain of ball-jointed beads, an upright dorsal fin, flat side fins and a tail fin. Set segment count, body thickness, snout, swim wiggle, fin sizes and joint clearance. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 99,
+    title: 'Flexi Seahorse',
+    bundle: 'flexi',
+    category: 'FLEXI // SEA CREATURES',
+    thumbnailUrl: 'assets/thumbnails/flexi-seahorse.svg',
+    programUrl: 'programs/flexi-seahorse.html',
+    description: 'A print-in-place seahorse lying on its side: a snout and crown, an arched neck, a round belly and a curling tail of ball-jointed beads, with back ridges and a fin. Set segments, belly size, neck arch, tail curl, snout and joint clearance. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 100,
+    title: 'Flexi Caterpillar',
+    bundle: 'flexi',
+    category: 'FLEXI // BUGS',
+    thumbnailUrl: 'assets/thumbnails/flexi-caterpillar.svg',
+    programUrl: 'programs/flexi-caterpillar.html',
+    description: 'A print-in-place caterpillar: big round ball-jointed beads with little feet, a head with eyes and two antennae. Set segment count, bead size and fullness, taper, wiggle, feet, antennae and joint clearance. The easiest flexi to print, with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -724,6 +814,9 @@ const BUNDLES = [
     description: 'Puzzles, spinners and pieces to play with.' },
   { id: 'garden', name: 'Garden', accent: '#7bd34a', at: [0, 9], size: [4, 2], planned: true,
     description: 'Planters, markers and plant stands.' },
+  { id: 'flexi', name: 'Flexi Creatures', accent: '#5eead4',
+    description: 'Print-in-place articulated animals: a dragon, gecko, crocodile, octopus, scorpion, centipede, turtle, shark, seahorse and caterpillar.',
+    generators: ['SLOT-91', 'SLOT-92', 'SLOT-93', 'SLOT-94', 'SLOT-95', 'SLOT-96', 'SLOT-97', 'SLOT-98', 'SLOT-99', 'SLOT-100'] },
   { id: 'animals', name: 'Animals & Creatures', accent: '#ffb86b', at: [4, 9], size: [4, 2], planned: true,
     description: 'Pets, wildlife and fantasy beasts.' },
   { id: 'jewelry', name: 'Jewellery & Wearables', accent: '#f08cff', at: [8, 9], size: [4, 2], planned: true,

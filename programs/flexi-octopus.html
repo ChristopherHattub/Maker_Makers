@@ -413,6 +413,12 @@
         };
       }
 
+      // Lateral distance at which a flat slab (height t) may start so it stays clear of a segment's socket cavity.
+      function slabRoot(sg, t) {
+        var Y = sg.fr.o[1], Rc = sg.jin.Rs * 1.07 + 0.8, dy = Math.max(Y - t, 0);
+        return Math.max(1, Math.sqrt(Math.max(Rc * Rc - dy * dy, 0)));
+      }
+
       // -----------------------------------------------------------------------
       // Octopus: a domed head with eight jointed arms radiating across the bed
       // -----------------------------------------------------------------------
