@@ -5,6 +5,7 @@
 // `size` fields in js/programs.js are ignored). See docs/homepage.md.
 
 const WORLD = { CELL: 128, TILE: 128, PAD: 8, REGION_GAP: 16, MIN_K: 0.18, MAX_K: 2.4 };
+const FAR_ON = 0.5, FAR_OFF = 0.56;   // zoom levels that switch the "far" look on and off (a gap, so it never flickers)
 const SORT_MODES = {
   default: 'Groups, biggest in the middle',
   name: 'Groups, A to Z',
@@ -23,7 +24,15 @@ const worldState = {
   anim: null,
   size: { w: 1, h: 1 },
   ready: false,
-  drawQueued: false,
+  applyRaf: 0,      // pending frame that writes the camera transform
+  settleT: 0,       // timer that fires when the camera has stopped moving
+  moving: false,    // true while the camera is moving (see worldMotion)
+  far: false,       // zoomed far out: region names enlarge (see worldSettled)
+  vpRect: null,     // cached viewport rectangle, so pointer moves never read layout
+  miniBase: null,   // cached minimap background (regions), redrawn only when the layout changes
+  miniOn: true,
+  searchT: 0,
+  panelKey: '',
   mode: 'default',
   groupOrder: [],   // group ids in the order they were packed when the visitor started rearranging
   order: {},        // custom tile order per group id, from drag and drop (see worldMoveTile)
@@ -526,6 +535,8 @@ function worldBuild() {
   worldState.regions = layoutWorld(groups);
   wEl.canvas.innerHTML = worldState.regions.map(regionHTML).join('') + workshopTileHTML() + '<div class="cell-cursor" id="cell-cursor" hidden></div>';
   wEl.cursor = document.getElementById('cell-cursor');
+  wEl.tiles = [...wEl.canvas.querySelectorAll('.tile')];
+  worldState.miniBase = null;
 
   const filled = groups.reduce((n, g) => n + g.members.length, 0);
   document.getElementById('world-stats').textContent =
@@ -541,12 +552,17 @@ function worldSizeToWindow() {
   const header = document.querySelector('header');
   const footer = document.querySelector('footer');
   const h = window.innerHeight - (header ? header.offsetHeight : 0) - (footer ? footer.offsetHeight : 0);
-  wEl.root.style.height = `${Math.max(window.innerWidth <= 760 ? 540 : 360, h)}px`;
+  const px = `${Math.max(window.innerWidth <= 760 ? 540 : 360, h)}px`;
+  if (wEl.root.style.height !== px) wEl.root.style.height = px;
 }
 
 function worldResized() {
   const r = wEl.vp.getBoundingClientRect();
   if (!r.width) return;
+  worldState.vpRect = r;
+  const miniOn = wEl.mini.offsetWidth > 0;   // hidden on phones: skip drawing it
+  if (r.width === worldState.size.w && r.height === worldState.size.h && miniOn === worldState.miniOn) return;
+  worldState.miniOn = miniOn;
   worldState.size = { w: r.width, h: r.height };
   worldRedraw();
 }
@@ -562,16 +578,42 @@ function worldMapShown() {
   }
 }
 
-window.addEventListener('resize', () => { if (wEl.root) worldMapShown(); });
+// Resize events can fire many times per frame (and on phones as the address bar slides), so handle one per frame.
+let worldResizeRaf = 0;
+window.addEventListener('resize', () => {
+  if (!wEl.root || worldResizeRaf) return;
+  worldResizeRaf = requestAnimationFrame(() => { worldResizeRaf = 0; worldMapShown(); });
+});
 
 // ---------- camera ----------
 
+// Asks for the camera transform to be written. Pointer, wheel and key events can come many times per frame,
+// so they only update worldState.cam and the write happens once, in the next frame.
 function worldApply() {
+  if (!worldState.applyRaf) worldState.applyRaf = requestAnimationFrame(worldFlush);
+}
+
+function worldFlush() {
+  if (worldState.applyRaf) { cancelAnimationFrame(worldState.applyRaf); worldState.applyRaf = 0; }
   const { x, y, k } = worldState.cam;
   wEl.canvas.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
-  wEl.root.classList.toggle('far', k < 0.5);
-  // The minimap is redrawn at most once per frame however many pointer events arrive.
-  if (!worldState.miniRaf) worldState.miniRaf = requestAnimationFrame(() => { worldState.miniRaf = 0; worldDrawMinimap(); });
+  worldDrawMinimap();
+  worldMotion();
+}
+
+// While the camera moves nothing but the transform changes: restyling the map mid-gesture (the "far" look, hover
+// effects) makes the browser repaint the whole layer, which shows up as a hitch. That waits until it settles.
+function worldMotion() {
+  if (!worldState.moving) { worldState.moving = true; if (!worldState.arranging) wEl.root.classList.add('moving'); }
+  clearTimeout(worldState.settleT);
+  worldState.settleT = setTimeout(worldSettled, 140);
+}
+
+function worldSettled() {
+  worldState.moving = false;
+  wEl.root.classList.remove('moving');
+  const far = worldState.cam.k < (worldState.far ? FAR_OFF : FAR_ON);
+  if (far !== worldState.far) { worldState.far = far; wEl.root.classList.toggle('far', far); }
 }
 
 function worldRedraw() { worldApply(); }
@@ -599,7 +641,7 @@ function worldAnimateTo(target, ms = 650) {
     const k = from.k * Math.pow(target.k / from.k, t);
     const cx = c0.x + (c1.x - c0.x) * t, cy = c0.y + (c1.y - c0.y) * t;
     worldState.cam = { k, x: w / 2 - cx * k, y: h / 2 - cy * k };
-    worldApply();
+    worldFlush();
     worldState.anim = t < 1 ? requestAnimationFrame(step) : null;
   };
   worldState.anim = requestAnimationFrame(step);
@@ -657,20 +699,23 @@ function worldRegion(id) { return worldState.regions.find(r => r.group.id === id
 
 function worldSelect(sel) {
   worldState.sel = sel;
-  document.querySelectorAll('.tile.selected').forEach(t => t.classList.remove('selected'));
-  document.querySelectorAll('.region.selected').forEach(t => t.classList.remove('selected'));
+  (worldState.selEls || []).forEach(el => el.classList.remove('selected'));
+  worldState.selEls = [];
   if (wEl.cursor) wEl.cursor.hidden = true;
-  if (!sel) { wEl.panel.hidden = true; wEl.root.classList.remove('has-selection'); return; }
+  if (!sel) { wEl.panel.hidden = true; worldState.panelKey = ''; wEl.root.classList.remove('has-selection'); return; }
 
   wEl.root.classList.add('has-selection');
   sel.region.el = sel.region.el || wEl.canvas.querySelector(`[data-region="${sel.region.group.id}"]`);
   sel.region.el.classList.add('selected');
+  worldState.selEls.push(sel.region.el);
   let rect, k = Math.min(2, Math.max(worldState.cam.k, 1.3));
 
   if (sel.type === 'tile') {
     const i = sel.region.group.members.indexOf(sel.prog);
     sel.col = i % sel.region.w; sel.row = Math.floor(i / sel.region.w);
-    wEl.canvas.querySelector(`.tile[data-id="${sel.prog.id}"]`).classList.add('selected');
+    const tileEl = wEl.canvas.querySelector(`.tile[data-id="${sel.prog.id}"]`);
+    tileEl.classList.add('selected');
+    worldState.selEls.push(tileEl);
     rect = cellRect(sel.region, sel.col, sel.row);
   } else if (sel.type === 'empty') {
     rect = cellRect(sel.region, sel.col, sel.row);
@@ -705,13 +750,6 @@ function worldTileTap(prog, region) {
 function worldRenderPanel() {
   const s = worldState.sel;
   const g = s.region.group;
-  const open = g.members.length ? 0 : s.region.w * s.region.h;
-  const members = g.members.map(p => `
-    <button type="button" class="panel-member${s.prog === p ? ' on' : ''}" data-act="pick" data-id="${p.id}" title="${escapeHTML(p.title)}">
-      ${p.thumbnailUrl ? `<img src="${p.thumbnailUrl}" alt="">` : ''}
-      <span>${escapeHTML(p.title)}</span>
-    </button>`).join('');
-
   let detail = '';
   if (s.type === 'tile') {
     const p = s.prog;
@@ -734,8 +772,19 @@ function worldRenderPanel() {
       </div>`;
   }
 
-  wEl.panel.style.setProperty('--accent', g.accent);
-  wEl.panel.innerHTML = `
+  // Stepping between tiles of the same group only swaps the detail and the highlighted member; the group part
+  // (and its thumbnails) is rebuilt only when the group changes.
+  const key = g.id + ':' + g.members.length;
+  if (worldState.panelKey !== key || !wEl.panel.firstElementChild) {
+    worldState.panelKey = key;
+    const open = g.members.length ? 0 : s.region.w * s.region.h;
+    const members = g.members.map(p => `
+    <button type="button" class="panel-member" data-act="pick" data-id="${p.id}" title="${escapeHTML(p.title)}">
+      ${p.thumbnailUrl ? `<img src="${p.thumbnailUrl}" alt="">` : ''}
+      <span>${escapeHTML(p.title)}</span>
+    </button>`).join('');
+    wEl.panel.style.setProperty('--accent', g.accent);
+    wEl.panel.innerHTML = `
     <button type="button" class="panel-close" data-act="close" aria-label="Close details">&#10006;</button>
     <div class="panel-group">
       <span class="panel-kicker">GROUP</span>
@@ -744,7 +793,11 @@ function worldRenderPanel() {
       <div class="panel-stats"><strong>${g.members.length}</strong> generator${g.members.length === 1 ? '' : 's'} ${open ? ` &middot; <strong>${open}</strong> open slot${open === 1 ? '' : 's'}` : ''}</div>
       ${members ? `<div class="panel-members">${members}</div>` : '<div class="panel-soon">No generators in this group yet.</div>'}
     </div>
-    ${detail}`;
+    <div class="panel-detail"></div>`;
+  }
+  wEl.panel.querySelectorAll('.panel-member.on').forEach(m => m.classList.remove('on'));
+  if (s.prog) wEl.panel.querySelector(`.panel-member[data-id="${s.prog.id}"]`)?.classList.add('on');
+  wEl.panel.querySelector('.panel-detail').innerHTML = detail;
 }
 
 function worldPanelClick(e) {
@@ -802,16 +855,21 @@ function bindWorldInput() {
   const pointers = new Map();
   let drag = null, lastPinch = null, tileDrag = null;
 
-  const rel = e => { const r = vp.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  // The viewport rectangle is read when a gesture starts, not on every event (a read after a style write forces layout).
+  const rel = (e, fresh) => {
+    const r = (fresh || !worldState.vpRect) ? (worldState.vpRect = vp.getBoundingClientRect()) : worldState.vpRect;
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
 
   vp.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     worldStopAnim();
+    if (worldState.moving) { worldState.moving = false; wEl.root.classList.remove('moving'); }   // a tap must hit the tile
     if (worldState.arranging && !pointers.size) {
       const tile = e.target.closest('.tile');
       if (tile) { tileDrag = { id: e.pointerId, tile, sx: e.clientX, sy: e.clientY, moved: false, raf: 0 }; return; }
     }
-    pointers.set(e.pointerId, rel(e));
+    pointers.set(e.pointerId, rel(e, true));
     if (pointers.size === 1) {
       drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, cx: worldState.cam.x, cy: worldState.cam.y, moved: false };
     } else if (pointers.size === 2) {
@@ -874,7 +932,7 @@ function bindWorldInput() {
     e.preventDefault();
     worldStopAnim();
     if (e.ctrlKey || e.metaKey) {
-      const p = rel(e);
+      const p = rel(e, !worldState.moving);
       worldZoomAt(p.x, p.y, worldState.cam.k * Math.exp(-e.deltaY * 0.01));
     } else {
       worldState.cam.x -= e.deltaX; worldState.cam.y -= e.deltaY;
@@ -930,9 +988,15 @@ function bindWorldInput() {
     toolsBtn.classList.toggle('open', open);
     if (open) wEl.search.focus({ preventScroll: true });
   });
-  wEl.search.addEventListener('input', () => worldSearch(wEl.search.value));
+  // Each search restyles every tile, so wait for a pause in typing.
+  wEl.search.addEventListener('input', () => {
+    clearTimeout(worldState.searchT);
+    worldState.searchT = setTimeout(() => worldSearch(wEl.search.value), 140);
+  });
   wEl.search.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
+    clearTimeout(worldState.searchT);
+    worldSearch(wEl.search.value, false);
     const first = wEl.canvas.querySelector('.tile.match');
     if (!first) return;
     const prog = PROGRAMS.find(p => p.id === first.dataset.id);
@@ -940,10 +1004,10 @@ function bindWorldInput() {
   });
 
   // Minimap: press or drag to jump the camera.
-  let miniDown = false;
+  let miniDown = false, miniRect = null;
   const miniJump = e => {
     const m = worldMiniGeom();
-    const r = wEl.mini.getBoundingClientRect();
+    const r = miniRect;
     const wx = (e.clientX - r.left - m.ox) / m.s + worldState.bounds.x;
     const wy = (e.clientY - r.top - m.oy) / m.s + worldState.bounds.y;
     worldStopAnim();
@@ -951,7 +1015,7 @@ function bindWorldInput() {
     worldState.cam.x = w / 2 - wx * k; worldState.cam.y = h / 2 - wy * k;
     worldApply();
   };
-  wEl.mini.addEventListener('pointerdown', e => { miniDown = true; wEl.mini.setPointerCapture(e.pointerId); miniJump(e); });
+  wEl.mini.addEventListener('pointerdown', e => { miniDown = true; miniRect = wEl.mini.getBoundingClientRect(); wEl.mini.setPointerCapture(e.pointerId); miniJump(e); });
   wEl.mini.addEventListener('pointermove', e => { if (miniDown) miniJump(e); });
   wEl.mini.addEventListener('pointerup', () => { miniDown = false; });
 }
@@ -960,9 +1024,9 @@ function worldSearch(query, pan = true) {
   const q = query.trim().toLowerCase();
   wEl.root.classList.toggle('searching', Boolean(q));
   let first = null;
-  wEl.canvas.querySelectorAll('.tile').forEach(t => {
+  wEl.tiles.forEach(t => {
     const hit = Boolean(q) && t.dataset.search.includes(q);
-    t.classList.toggle('match', hit);
+    if (t.classList.contains('match') !== hit) t.classList.toggle('match', hit);
     if (hit && !first) first = t;
   });
   if (first && pan) {
@@ -982,31 +1046,38 @@ function worldMiniGeom() {
   return { s, ox: (W - b.w * s) / 2, oy: (H - b.h * s) / 2 };
 }
 
-function worldDrawMinimap() {
-  if (!wEl.mini || worldState.drawQueued) return;
-  worldState.drawQueued = true;
-  requestAnimationFrame(() => {
-    worldState.drawQueued = false;
-    const ctx = wEl.mini.getContext('2d');
-    const { s, ox, oy } = worldMiniGeom();
-    const b = worldState.bounds;
-    ctx.clearRect(0, 0, wEl.mini.width, wEl.mini.height);
-    worldState.regions.forEach(r => {
-      const x = ox + (r.px - b.x) * s, y = oy + (r.py - b.y) * s, w = r.pw * s, h = r.ph * s;
-      ctx.globalAlpha = r.group.members.length ? 0.85 : 0.28;
-      ctx.fillStyle = r.group.accent || '#00e5ff';
-      ctx.fillRect(x, y, w, h);
-    });
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = '#00e5ff';
-    ctx.fillRect(ox + (WORKSHOP.at[0] * WORLD.CELL - b.x) * s, oy + (WORKSHOP.at[1] * WORLD.CELL - b.y) * s, WORKSHOP.cols * WORLD.CELL * s, WORKSHOP.rows * WORLD.CELL * s);
-    ctx.globalAlpha = 1;
-    const { cam, size } = worldState;
-    const vx = ox + (-cam.x / cam.k - b.x) * s, vy = oy + (-cam.y / cam.k - b.y) * s;
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#ffffff';
-    ctx.strokeRect(vx, vy, size.w / cam.k * s, size.h / cam.k * s);
+// The regions never move while the camera does, so they are painted once into a cached canvas; each frame only
+// copies that and strokes the viewport rectangle. Skipped entirely when the minimap is hidden (phones).
+function worldMiniBase() {
+  const c = document.createElement('canvas');
+  c.width = wEl.mini.width; c.height = wEl.mini.height;
+  const ctx = c.getContext('2d');
+  const { s, ox, oy } = worldMiniGeom();
+  const b = worldState.bounds;
+  worldState.regions.forEach(r => {
+    ctx.globalAlpha = r.group.members.length ? 0.85 : 0.28;
+    ctx.fillStyle = r.group.accent || '#00e5ff';
+    ctx.fillRect(ox + (r.px - b.x) * s, oy + (r.py - b.y) * s, r.pw * s, r.ph * s);
   });
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = '#00e5ff';
+  ctx.fillRect(ox + (WORKSHOP.at[0] * WORLD.CELL - b.x) * s, oy + (WORKSHOP.at[1] * WORLD.CELL - b.y) * s, WORKSHOP.cols * WORLD.CELL * s, WORKSHOP.rows * WORLD.CELL * s);
+  return c;
+}
+
+function worldDrawMinimap() {
+  if (!wEl.mini || !worldState.miniOn) return;
+  const ctx = wEl.mini.getContext('2d');
+  const { s, ox, oy } = worldMiniGeom();
+  const b = worldState.bounds;
+  if (!worldState.miniBase) worldState.miniBase = worldMiniBase();
+  ctx.clearRect(0, 0, wEl.mini.width, wEl.mini.height);
+  ctx.drawImage(worldState.miniBase, 0, 0);
+  const { cam, size } = worldState;
+  const vx = ox + (-cam.x / cam.k - b.x) * s, vy = oy + (-cam.y / cam.k - b.y) * s;
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#ffffff';
+  ctx.strokeRect(vx, vy, size.w / cam.k * s, size.h / cam.k * s);
 }
 
 // ---------- sorting and rearranging ----------
