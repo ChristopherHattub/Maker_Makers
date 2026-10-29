@@ -13,7 +13,7 @@ The whole home screen is one big pannable, zoomable 2D map. Every group of gener
 - **Search:** the box in the top left dims every tile that does not match (title, category, description or group) and pans to the first match.
 - **Keyboard:** Tab moves between tiles and selects the focused one, Enter opens it, Esc closes the panel.
 
-Hovering a tile lifts it with a glowing energy pool and rippling ring beneath it, and the connectors to its neighbours brighten. Zoomed far out, region names enlarge and tile labels hide. Reduced-motion settings turn the animations off. The site collects no data: search and camera state live only in the page, and the sort and arrangement stay in the visitor's own browser.
+Each tile shows the shared base tile with the generator's name and slot number as text. Hovering (or focusing) it lights a glowing pool beneath it and pops out a spinning hologram of the generator's real 3D model; see [hologram-tiles.md](hologram-tiles.md). The large tile in the middle opens the Workshop ([workshop.md](workshop.md)). Zoomed far out, region names enlarge and tile labels hide. Reduced-motion settings turn the animations off. The site collects no data: search and camera state live only in the page, and the sort and arrangement stay in the visitor's own browser.
 
 ## Layout, sorting and rearranging
 

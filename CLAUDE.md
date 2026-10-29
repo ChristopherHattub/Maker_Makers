@@ -41,7 +41,7 @@ Defaults and presets should print with no supports. Say in a slider label which 
 
 ## Exports
 
-**Export .STL** (binary, no colour) and **Export .OBJ (colors)**: a zip containing `name.obj` + `name.mtl`, one material per Color-tab colour, for Bambu / Orca / Prusa to map to filaments. **There is no 3MF export**; it was replaced and no print settings are written. Every download goes through the consent modal (`confirmDownload`). The generator header also has Save STL and Send to Workshop; the Workshop saves STL and OBJ zip too.
+**Export .STL** (binary, no colour) and **Export .OBJ (colors)**: a zip containing `name.obj` + `name.mtl`, one material per Color-tab colour, for Bambu / Orca / Prusa to map to filaments. **There is no 3MF export**; it was replaced and no print settings are written. Every download goes through the consent modal (`confirmDownload`). The site viewer's top bar also has Save STL and Send to Workshop; the Workshop saves STL and OBJ zip too.
 
 ## Privacy rule (hard rule): no data collection
 
@@ -53,7 +53,7 @@ The site collects nothing and sends nothing about visitors anywhere. No analytic
 
 ## Conventions
 
-JS: single quotes, semicolons, 2-space indent, `var`/function style inside generators. UTF-8, LF, final newline (`.editorconfig`). Plain-text titles and descriptions (inserted as HTML unescaped; no `&` or `<`). Escape anything that comes from outside the repo's own data. Keep docs in step with code: update `docs/` in the same change.
+JS: single quotes, semicolons, 2-space indent, `var`/function style inside generators. UTF-8, LF, final newline (`.editorconfig`). Plain-text titles and descriptions (the homepage escapes them; keep them free of markup). Escape anything that comes from outside the repo's own data. Keep docs in step with code: update `docs/` in the same change.
 
 ## Known untested / open items
 

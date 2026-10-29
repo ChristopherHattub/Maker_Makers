@@ -16,3 +16,6 @@ npm-debug.log*
 .env.*
 *.local
 tmp/
+
+# Claude Code agent worktrees
+.claude/worktrees/

@@ -6,7 +6,7 @@ Thanks for helping with Maker Makers. The project is small on purpose: plain fil
 
 - **No build step and no dependencies.** Don't add npm packages, bundlers, or frameworks for a small feature. Use the dev server and browser APIs that already exist.
 - **Relative paths only.** Every URL to a local file must be relative, so the site works on GitHub Pages project URLs. See [deployment.md](deployment.md).
-- **Keep the data in data files.** Generators belong in `js/programs.js`, and printers in `data/public-printers.json`. Don't hardcode them into rendering code.
+- **Keep the data in data files.** Generators and groups belong in `js/programs.js`, and printers in `data/public-printers.json`. Don't hardcode them into rendering code.
 - **Escape anything from outside.** Text that comes from search results, OpenStreetMap, or user input must not be inserted as raw HTML. Plain values from the repo's own data files are trusted (see [architecture.md](architecture.md#known-issues)).
 - **Degrade gracefully.** Storage, geolocation and external services can all fail. Wrap them, and show a sensible fallback.
 
@@ -29,10 +29,14 @@ Thanks for helping with Maker Makers. The project is small on purpose: plain fil
 
 **Adding a generator**
 
-- [ ] Standalone HTML in `programs/`, using a relative path
-- [ ] Thumbnail in `assets/thumbnails/`
-- [ ] Slot updated in `js/programs.js` (`title`, `category`, `thumbnailUrl`, `programUrl`, `description`, `bundle`)
-- [ ] Viewer and download checked on that slot
+- [ ] Generator page in `programs/`, using the shared engine and relative paths
+- [ ] `check-mesh.mjs` passes for the defaults and every preset
+- [ ] Thumbnail SVG in `assets/thumbnails/`
+- [ ] Slot added in `js/programs.js` (`title`, `category`, `thumbnailUrl`, `programUrl`, `description`, `bundle`)
+- [ ] Hologram tile rendered and committed (`holo-<id>.webp`, `manifest-v2.json`)
+- [ ] Viewer, exports and phone layout checked on that slot
+
+The full workflow is in the generator skill (`.claude/skills/makermakers-generator/SKILL.md`).
 
 **Adding a verified printer listing**
 

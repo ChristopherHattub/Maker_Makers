@@ -13,7 +13,7 @@ Sources of truth (read them before changing anything, they may have moved on sin
 ## Workflow
 
 1. **Copy** `programs/ghost-builder.html` to `programs/<kebab-name>.html`. Keep the head and tail exactly (see Page rules). Delete the ghost geometry, stamps, `mount`, `onHover`, `onPick` unless the new model needs them.
-2. **Config**: set `code` (next free `MM-00N`, matches slot number), `category` (`UPPER // CASE` label, e.g. `SPOOKY // FIGURES`), `title`, `fileName` (no extension), `palette`, `partNames`, `parameters`, `presets`.
+2. **Config**: set `code` (`MM-` plus the slot number in three digits, e.g. `MM-066`), `category` (`UPPER // CASE` label, e.g. `SPOOKY // FIGURES`), `title`, `fileName` (no extension), `palette`, `partNames`, `parameters`, `presets`.
 3. **Write `build(params, api)`** (contract below). Aim for one closed, watertight surface per printable solid.
 4. **Check printability** with the script: `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html ["Preset label"]`. Run it for the defaults and for every preset, plus slider extremes (temporarily edit values).
 5. **Register the slot and thumbnail** (below).
@@ -111,7 +111,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
 
 ## Slot and thumbnail
 
-`js/programs.js` has a `GENERATORS` list; `PROGRAMS` is built from it (any slot number works). Activate a slot by appending an entry to `GENERATORS` (slot 1 = Ghost Builder is the model to follow):
+`js/programs.js` has a `GENERATORS` list; `PROGRAMS` is built from it (any slot number works, gaps are fine) and the homepage map shows every entry with a `programUrl`. Activate a slot by appending an entry to `GENERATORS` (slot 1 = Ghost Builder is the model to follow):
 
 ```js
 {
@@ -124,17 +124,18 @@ Every generator's **defaults and presets must print with no supports, or as few 
 }
 ```
 
-- Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. Add `bundle: '<group id>'` to its `GENERATORS` entry (see Bundles below) and record the slot in `docs/slot-registry.md`. Slots 76-90 are reserved for animals; the next free slot is 101.
-- Titles/categories/descriptions are inserted as HTML unescaped: plain text, no `&`, `<`.
-- A slot with `programUrl` is "ONLINE" (viewer iframe, Download enabled); without `thumbnailUrl` it shows the empty crosshair.
-- **Thumbnail**: see the next section. File `assets/thumbnails/<kebab-name>.svg`, same name as the page.
+- Use the next free slot; the `code` in the config (`MM-0NN`) matches the slot number. Add `bundle: '<bundle id>'` to put it in a map region (see Bundles below); without one it lands in the automatic "More" region. Record the slot in `docs/slot-registry.md`. Slots 76-90 are reserved for animals; the next free slot is 101.
+- Titles, categories and descriptions are plain text (the homepage escapes them; keep them free of markup).
+- A slot with `programUrl` gets a homepage tile and loads in the viewer; without `thumbnailUrl` the tile shows a plus sign.
+- **Thumbnail**: see the next section. File `assets/thumbnails/<kebab-name>.svg`, same name as the page. It is shown in the homepage details panel and the Workshop's Generators set, and its basename is the hologram tile id.
+- **Hologram tile**: every new generator also gets a rendered hover hologram on the homepage. Follow `docs/hologram-tiles.md` (render `tools/hologram.html?gen=<thumbnail id>&save=1`, then `scripts/build-holo.py`) and commit `assets/thumbnails/sprites/holo-<id>.webp` plus `manifest-v2.json`. Tune colour in `scripts/hologram-config.json`.
 
 ## Thumbnail style
 
-All slot thumbnails share one look, so the grid reads as a set. **Start from [thumbnail-template.svg](thumbnail-template.svg)** (copy it, set the `MM-00N` code and `TITLE`, draw the subject where the SUBJECT comment is). Do not change the frame.
+All slot thumbnails share one look, so the grid reads as a set. **Start from [thumbnail-template.svg](thumbnail-template.svg)** (copy it, set the `MM-0NN` code and `TITLE`, draw the subject where the SUBJECT comment is). Do not change the frame.
 
 - Canvas `viewBox="0 0 400 300"` (4:3, shown `object-fit: cover`), no external fonts/images/filters. Subject centered, x 70-330, y 40-250, with its base resting on the build plate ellipse (cy 248). Draw the model's most recognizable view (front or 3/4), not a technical drawing.
-- Frame (already in the template, matches the site CSS): radial navy background (`#14407f` > `#0d2b59` > `#06152d`), 20 px/100 px cyan grid, glowing build plate ellipse with a contact shadow, cyan corner brackets, a `MM-00N` chip top-left, and the title in `Courier New` 12 px, letter-spacing 3, `#eef7ff`, bottom center (upper case, plain text).
+- Frame (already in the template, matches the site CSS): radial navy background (`#14407f` > `#0d2b59` > `#06152d`), 20 px/100 px cyan grid, glowing build plate ellipse with a contact shadow, cyan corner brackets, a `MM-0NN` chip top-left, and the title in `Courier New` 12 px, letter-spacing 3, `#eef7ff`, bottom center (upper case, plain text).
 - Shading (fake 3D, the same on every thumbnail): fill each solid with a radial gradient lit from the upper left. `url(#mat)` is the default cool bone/white; `url(#warm)` for orange-ish models, `url(#green)` for greenery. Outline every solid with `stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"`. Add one soft specular streak per major form (`stroke="url(#gloss)"`, width 5-7, round caps) on the upper-left edge. Cavities and holes are `#06152d`/`#0a2246` with a slightly darker inner shape for depth. Overlap order = depth order.
 - Accent: exactly one small purple `#c084fc` detail (a band, buckle, dots or trim; no star stamps) with a white 1.2-1.4 stroke. At most one other hue (the model's own material).
 - Thin parts (legs, handles) are drawn as stacked strokes: cyan wide, mid-blue, light, then a thin white highlight.
@@ -143,39 +144,39 @@ All slot thumbnails share one look, so the grid reads as a set. **Start from [th
 
 ## Bundles
 
-A bundle (a "group") is a region of the homepage world map (Halloween, Christmas...). Bundles live in the `BUNDLES` array in `js/programs.js`, under `GENERATORS`:
+A bundle groups generators under a theme (Halloween, Christmas...) and is one tinted region on the homepage map. Bundles live in the `BUNDLES` array in `js/programs.js`, under `GENERATORS`:
 
 ```js
-{ id: 'halloween', name: 'Halloween', description: 'Plain text.', accent: '#ff8a1f',
+{ id: 'halloween', name: 'Halloween', accent: '#ff8a1f', description: 'Plain text.',
   generators: ['SLOT-02', 'SLOT-03'] }   // optional ordered list of generator ids
 ```
 
 - Declare membership on the generator with `bundle: 'halloween'` (string, or an array for several bundles) in its `GENERATORS` entry, and/or list its id in the bundle's `generators`. The two are merged without duplicates; the list sets display order, tagged generators are appended.
-- To make a new bundle, append an entry to `BUNDLES` and tag its generators. Position and size are automatic (see docs/homepage.md); `planned: true` reserves an empty region.
-- Only generators with a `programUrl` count as members. Use plain text (no `&`, `<`) in names and descriptions.
-- Each tile shows a hologram of the real model on hover; render one for every new generator (docs/hologram-tiles.md).
+- To make a new bundle, append an entry to `BUNDLES` (id, name, accent, description) and tag its generators. Position and size on the map are automatic (`at` / `size` are ignored). `planned: true` reserves a placeholder region with no generators.
+- Only generators with a `programUrl` count as members. Use plain text in names and descriptions.
+- Nothing extra to draw for a bundle; see `docs/homepage.md` for the map.
 
 ## Visual style conventions (engine-owned, do not override)
 
 Every generator shows the engine's disclaimer at the bottom of the Print tab (as-is, print at your own risk, not legal advice). It comes from `generator-core.js` automatically; do not add your own or hide it. Wording is edited in `generator-core.js`, `index.html` and `DISCLAIMER.md` together. The engine also shows a consent modal (`confirmDownload`, must tick the checkbox) before every .STL/.OBJ export; it is automatic, so never add a download button that bypasses it, never call export functions directly from generator code, and a new download type must go through `confirmDownload` too.
 
 
-Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool / Print; no footer: the Print tab's Export block holds triangle count, file name, Export .STL, standalone download and the disclaimer, so other tabs show more settings. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Optional generator tabs (`tabs`, see Config) sit after Parametric. Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
+Blueprint look: deep navy, cyan lines/active states, green ("Find local printer") and amber ("Download program") secondary actions, monospace throughout. Panel 380 px left on desktop, tabs Parametric / Color tool / Print; no footer: the Print tab's Export block holds triangle count, file name, Export .STL, standalone download and the disclaimer, so other tabs show more settings. Viewport right with orbit, size readout, Front/Iso buttons, 160 mm build plate. Slider groups, Presets, `mount()` extras and View are accordion sections (first group open; optional `openGroups` and `extrasTitle` config fields; put the most-used group first). Optional generator tabs (`tabs`, see Config) sit after Parametric. Below 860 px the layout is a pinned viewport (top 40%) over a resizable bottom sheet with sticky tabs, big touch sliders; the page never scrolls. Inside the site viewer (iframe) the engine adds `mm-framed` and hides its own header; the viewer's top bar has Save STL, Send to Workshop and Back to Generators instead. Slider labels: short, plain, optional parenthetical hint like `Eye slant (cute ↔ fierce)`.
 
 ## Verification checklist (live preview)
 
 Start the dev server with the preview tool (`maker-makers`, port 5173, from `.claude/launch.json`; never run servers with Bash), then:
 
 - [ ] `programs/<name>.html` loads standalone: no console errors, model visible, header shows code/category/title.
-- [ ] Open from the homepage: the tile shows its thumbnail/hologram, viewer iframe loads the generator, header buttons work, no placeholder "NO GENERATOR LOADED".
+- [ ] Open from the homepage map: the tile shows its hologram on hover, the details panel shows the thumbnail, the viewer iframe loads the generator, Save STL and Send to Workshop work, no placeholder "NO GENERATOR LOADED".
 - [ ] Every slider and preset rebuilds the model with no gaps, spikes or inside-out faces; try min and max of each. Triangle count stays reasonable.
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
 - [ ] Print tab shows the realistic render (colors kept, changing Material updates it live) and has no other options.
 - [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed).
-- [ ] Export .OBJ (colors) after painting two parts: unzip it; `name.obj` references `name.mtl`, which has one material per used color, and `usemtl` groups cover all triangles. A new download type must go through `confirmDownload`.
-- [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
+- [ ] Export .OBJ (colors) after painting two parts: `<name>-obj.zip` holds `<name>.obj` and `<name>.mtl`, with one `newmtl` per used color and a `usemtl` group per color covering all faces. A new download type must go through `confirmDownload`.
+- [ ] "Download standalone .html generator" (Print tab, and *Download program (.html)* in the standalone header) produces one working file (needs http, not file://).
 - [ ] Clicking Export .STL opens the consent modal; the download button stays disabled until the box is ticked; Cancel/Esc/backdrop close it without downloading.
 - [ ] The Disclaimer block shows at the bottom of the Print tab under the Export block (engine-provided; never remove or override it in a generator page) and expands to readable text.
 - [ ] Phone width (resize to 375x667 and 390x844): no page scroll or horizontal scroll, model visible above the sliders, sheet handle drags, Print tab shows Export block, accordion sections open/close.

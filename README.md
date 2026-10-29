@@ -1,6 +1,6 @@
 # Maker Makers
 
-A static website for hosting parametric STL / OBJ generators and customizers, plus a free, keyless map of public 3D printers and makerspaces.
+A static website for hosting parametric STL / OBJ generators and customizers, a free-range 3D Workshop editor, and a free, keyless map of public 3D printers and makerspaces.
 
 No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it runs anywhere a static file host does, including GitHub Pages.
 
@@ -9,20 +9,17 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 ```
 .
 ├── index.html            # Page markup
-├── css/
-│   └── styles.css        # All site styles
+├── css/                  # styles.css (site), workshop.css (Workshop)
 ├── js/
-│   ├── programs.js       # Slot registry (generators; the grid grows with it)
+│   ├── programs.js       # Slot registry: GENERATORS and BUNDLES (map regions)
 │   ├── worldmap.js       # Homepage world map
 │   ├── workshop.js       # Workshop 3D editor
-│   └── app.js            # Navigation, viewer, idea queue, printer map
-├── data/
-│   └── public-printers.json  # Verified printer listings: name, coordinates, source, verified date
-├── assets/
-│   └── thumbnails/       # Slot thumbnail images
-├── programs/             # Standalone HTML generator programs
-├── scripts/
-│   └── dev-server.mjs    # Zero-dependency live-reload dev server
+│   └── app.js            # Router, viewer, idea queue, printer map
+├── data/                 # Printer listings (verified) and OSM candidates
+├── assets/thumbnails/    # Slot thumbnails; sprites/ holds the hologram hover tiles
+├── programs/             # Generator pages; shared/ is the engine every generator uses
+├── tools/                # hologram.html (renders hologram tiles), flexi/ (flexi creature sources)
+├── scripts/              # Dev server and hologram build scripts
 └── .nojekyll             # Tells Pages to serve files as-is
 ```
 
@@ -46,9 +43,12 @@ npm run serve -- --port 8080
 
 ## Adding a generator
 
-1. Put the generator's standalone HTML file in `programs/`, for example `programs/honeycomb-hook.html`.
+1. Put the generator page in `programs/`, for example `programs/honeycomb-hook.html`. It holds only its config and `build()`; the shared engine in `programs/shared/` supplies the UI and exports (see [docs/generator-styling.md](docs/generator-styling.md)).
 2. Put its thumbnail in `assets/thumbnails/`.
-3. In `js/programs.js`, fill in that slot's `title`, `category`, `thumbnailUrl` and `programUrl` using relative paths such as `programs/honeycomb-hook.html`. To group it with others, add `bundle: '<bundle id>'` (bundles are registered in `BUNDLES` in the same file; each bundle is a cluster on the homepage).
+3. In `js/programs.js`, add a `GENERATORS` entry with the next free `slot` and its `title`, `category`, `thumbnailUrl`, `programUrl` and `description`, using relative paths such as `programs/honeycomb-hook.html`. To group it with others, add `bundle: '<bundle id>'` (groups are registered in `BUNDLES` in the same file; each is a region on the homepage map).
+4. Render its hologram hover tile (see [docs/hologram-tiles.md](docs/hologram-tiles.md)).
+
+The full checklist is in [docs/generator-registry.md](docs/generator-registry.md).
 
 Always use relative paths (no leading `/`) so the site works both locally and under a GitHub Pages project URL like `https://<user>.github.io/<repo>/`.
 
