@@ -633,7 +633,9 @@ function worldFitRect(rect, minK, maxK, animate) {
 // The home view: centred on the Workshop tile, close enough to read the first ring of groups around it.
 function worldHome(instant) {
   const C = WORLD.CELL, { w, h } = worldState.size;
-  const k = worldClamp(Math.min(w / (9.5 * C), h / (7 * C)), 0.3, 1);
+  // On a phone, start further out so the groups around the Workshop show too.
+  const k = w < 760 ? worldClamp(w / (13 * C), WORLD.MIN_K, 1)
+                    : worldClamp(Math.min(w / (9.5 * C), h / (7 * C)), 0.3, 1);
   worldFocusRect({ x: WORKSHOP.at[0] * C, y: WORKSHOP.at[1] * C, w: WORKSHOP.cols * C, h: WORKSHOP.rows * C }, k, !instant);
 }
 
