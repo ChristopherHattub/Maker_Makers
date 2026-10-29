@@ -15,14 +15,15 @@
   background-size: 32px 32px; transform: perspective(300px) rotateX(58deg) translateY(30%) scale(1.6); transform-origin: 50% 100%;
   -webkit-mask-image: linear-gradient(transparent, #000 60%); mask-image: linear-gradient(transparent, #000 60%);
 }
-.workshop-tile .ws-holo { position: absolute; left: 6%; top: 4%; width: 88%; height: 70%; overflow: visible; filter: drop-shadow(0 0 8px rgba(0,229,255,.8)); }
+/* The glow is an SVG filter inside the drawing, so it is rasterised once; the bob animates the whole <svg> by transform on the compositor */
+.workshop-tile .ws-holo { position: absolute; left: 6%; top: 4%; width: 88%; height: 70%; overflow: visible; will-change: transform; animation: ws-bob 5s ease-in-out infinite; }
 .workshop-tile .ws-f { fill: rgba(0, 229, 255, 0.1); stroke: #6ff3ff; stroke-width: 1.6; stroke-linejoin: round; }
-.workshop-tile .ws-orbit { transform-origin: 120px 90px; animation: ws-bob 5s ease-in-out infinite; }
-@keyframes ws-bob { 50% { transform: translateY(-6px); } }
+@keyframes ws-bob { 50% { transform: translateY(-11px); } }
+.world.far .workshop-tile .ws-holo { animation-play-state: paused; }
 .workshop-tile .ws-label { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; }
 .workshop-tile .ws-label strong { display: block; font-size: 1.5rem; letter-spacing: 6px; text-transform: uppercase; color: var(--bp-cyan); text-shadow: 0 0 14px rgba(0,229,255,.8); }
 .workshop-tile .ws-label em { font-style: normal; font-size: 0.72rem; color: #9ec3e6; }
-@media (prefers-reduced-motion: reduce) { .workshop-tile, .workshop-tile .ws-orbit { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .workshop-tile, .workshop-tile .ws-holo { animation: none; transition: none; } }
 
 /* ---- editor page ---- */
 #workshop-screen { display: none; }

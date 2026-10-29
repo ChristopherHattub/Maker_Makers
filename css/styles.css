@@ -718,6 +718,9 @@ body.on-splash .container {
   padding: 0;
 }
 
+/* The header is not over the map, so its blur has nothing to show; skip the backdrop pass on the home screen */
+body.on-splash header { backdrop-filter: none; }
+
 .world {
   position: relative;
   overflow: hidden;
@@ -764,9 +767,8 @@ body.on-splash .container {
   top: 1rem;
   width: min(300px, calc(100% - 2rem));
   padding: 0.75rem 0.9rem;
-  background: rgba(6, 21, 45, 0.88);
+  background: rgba(6, 21, 45, 0.94);
   border: 1px solid var(--bp-cyan-dim);
-  backdrop-filter: blur(6px);
 }
 
 .world-title h2 { font-size: 1rem; letter-spacing: 3px; text-transform: uppercase; }
@@ -925,19 +927,24 @@ body.on-splash .container {
 
 .tile:hover, .tile:focus-visible, .tile.selected { z-index: 10; outline: none; }
 
-/* Connectors to the tile on the left and the tile above */
+/* Connectors to the tile on the left and the tile above. The glow is baked into a gradient (no blurred box-shadow per connector). */
 .tile::before, .tile::after {
   content: '';
   position: absolute;
-  background: var(--accent);
+  display: none;
   opacity: 0.45;
-  box-shadow: 0 0 6px var(--accent);
   transition: opacity 0.25s;
   pointer-events: none;
 }
 
-.tile::before { display: none; right: 100%; top: 50%; width: 16px; height: 2px; }
-.tile::after  { display: none; bottom: 100%; left: 50%; width: 2px; height: 16px; }
+.tile::before {
+  right: 100%; top: calc(50% - 5px); width: 16px; height: 12px;
+  background: linear-gradient(to bottom, transparent 8%, color-mix(in srgb, var(--accent) 16%, transparent) 33%, var(--accent) 41.7% 58.3%, color-mix(in srgb, var(--accent) 16%, transparent) 67%, transparent 92%);
+}
+.tile::after {
+  bottom: 100%; left: calc(50% - 5px); width: 12px; height: 16px;
+  background: linear-gradient(to right, transparent 8%, color-mix(in srgb, var(--accent) 16%, transparent) 33%, var(--accent) 41.7% 58.3%, color-mix(in srgb, var(--accent) 16%, transparent) 67%, transparent 92%);
+}
 .tile.has-left::before, .tile.has-up::after { display: block; }
 
 .tile-card {
@@ -971,30 +978,6 @@ body.on-splash .container {
   text-overflow: ellipsis;
 }
 
-/* Energy pool glowing on the "floor" beneath the tile */
-.tile-glow {
-  position: absolute;
-  left: 50%;
-  bottom: -20px;
-  width: 170%;
-  height: 46px;
-  transform: translateX(-50%) scale(0.4);
-  opacity: 0;
-  background: radial-gradient(ellipse at center, var(--accent) 0%, color-mix(in srgb, var(--accent) 45%, transparent) 35%, transparent 70%);
-  filter: blur(9px);
-  transition: opacity 0.3s, transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-  pointer-events: none;
-}
-
-.tile-glow::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  opacity: 0;
-}
-
 .tile:hover .tile-card, .tile:focus-visible .tile-card, .tile.selected .tile-card {
   transform: translateY(-14px) scale(1.12);
   border-color: var(--accent);
@@ -1003,15 +986,8 @@ body.on-splash .container {
 
 .tile:hover .tile-art img, .tile:focus-visible .tile-art img { transform: scale(1.1); }
 .tile:hover .tile-label, .tile:focus-visible .tile-label, .tile.selected .tile-label { color: var(--accent); }
-.tile:hover .tile-glow, .tile:focus-visible .tile-glow, .tile.selected .tile-glow { opacity: 1; transform: translateX(-50%) scale(1); }
-.tile:hover .tile-glow::after, .tile:focus-visible .tile-glow::after, .tile.selected .tile-glow::after { animation: tile-ripple 1.2s ease-out infinite; }
 .tile:hover::before, .tile:hover::after, .tile.selected::before, .tile.selected::after { opacity: 1; }
 .tile:active .tile-card { transform: translateY(-6px) scale(1.04); }
-
-@keyframes tile-ripple {
-  0% { transform: scale(0.3); opacity: 0.9; }
-  100% { transform: scale(1.1); opacity: 0; }
-}
 
 /* Selected empty slot */
 .cell-cursor {
@@ -1023,13 +999,23 @@ body.on-splash .container {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 60%, transparent);
   pointer-events: none;
+}
+
+/* The pulse fades a pre-drawn stronger glow in and out; animating box-shadow itself repaints every frame */
+.cell-cursor::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  box-shadow: 0 0 36px var(--accent);
+  opacity: 0;
   animation: cursor-pulse 1.4s ease-in-out infinite;
 }
 
 .cell-cursor[hidden] { display: none; }
 
 @keyframes cursor-pulse {
-  50% { box-shadow: 0 0 36px var(--accent); }
+  50% { opacity: 1; }
 }
 
 /* Search: dim everything that is not a match */
@@ -1047,7 +1033,6 @@ body.on-splash .container {
   background: rgba(6, 21, 45, 0.94);
   border: 1px solid var(--accent);
   box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 30%, transparent);
-  backdrop-filter: blur(8px);
   animation: panel-in 0.3s ease-out;
   user-select: text;
   -webkit-user-select: text;
@@ -1132,8 +1117,8 @@ body.on-splash .container {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tile-card, .tile-glow, .tile-art img, .region, .world-hint { transition: none; }
-  .tile:hover .tile-glow::after, .tile:focus-visible .tile-glow::after, .tile.selected .tile-glow::after, .cell-cursor { animation: none; }
+  .tile-card, .tile-art img, .region, .world-hint { transition: none; }
+  .cell-cursor::after { animation: none; }
   .world-panel { animation: none; }
 }
 
@@ -1145,7 +1130,6 @@ body.on-splash .container {
 .tile-sprite { position: absolute; inset: 0; background-repeat: no-repeat; pointer-events: none; display: none; }
 .world.exp .tile.has-sprite .tile-sprite { display: block; }
 .world.exp .tile.has-sprite .tile-art img { visibility: hidden; }
-.world.exp .tile-glow { display: none; }
 .world.exp .tile:hover, .world.exp .tile:focus-visible, .world.exp .tile.selected { z-index: 2; }
 .world.exp .tile:hover .tile-card, .world.exp .tile:focus-visible .tile-card, .world.exp .tile.selected .tile-card {
   transform: scale(1.06);

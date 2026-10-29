@@ -13,7 +13,7 @@ The whole home screen is one big pannable, zoomable 2D map. Every group of gener
 - **Search:** the box in the top left dims every tile that does not match (title, category, description or group) and pans to the first match.
 - **Keyboard:** Tab moves between tiles and selects the focused one, Enter opens it, Esc closes the panel.
 
-Each tile shows the shared base tile with the generator's name and slot number as text. Hovering (or focusing) it lights a glowing pool beneath it and pops out a spinning hologram of the generator's real 3D model; see [hologram-tiles.md](hologram-tiles.md). The large tile in the middle opens the Workshop ([workshop.md](workshop.md)). Zoomed far out, region names enlarge and tile labels hide. Reduced-motion settings turn the animations off. The site collects no data: search and camera state live only in the page, and the sort and arrangement stay in the visitor's own browser.
+Each tile shows the shared base tile with the generator's name and slot number as text. Hovering (or focusing) it pops out a spinning hologram of the generator's real 3D model; see [hologram-tiles.md](hologram-tiles.md). The large tile in the middle opens the Workshop ([workshop.md](workshop.md)). Zoomed far out, region names enlarge and tile labels hide. Reduced-motion settings turn the animations off. The site collects no data: search and camera state live only in the page, and the sort and arrangement stay in the visitor's own browser.
 
 ## Layout, sorting and rearranging
 
@@ -40,6 +40,7 @@ Everything is data in `js/programs.js`; see [generator-registry.md](generator-re
 - Region outlines are SVG paths computed from the tile count; layout is `layoutWorld`, sort and the saved arrangement are `worldViewGroups`.
 - The map fills the window between the header and footer, so the disclaimer stays visible.
 - Styles are the "HOMEPAGE WORLD MAP" section at the end of `css/styles.css`.
+- Paint cost: the map is repainted whenever the camera settles at a new scale, so nothing on it (apart from the hologram layer) uses a blurred `box-shadow`, `backdrop-filter` or `filter` on a per-tile or per-connector basis. Tile connectors are gradients with the glow baked in, the selected-slot pulse fades a pre-drawn glow by `opacity`, the Workshop tile's glow is an SVG filter inside the drawing and only its transform animates (paused while the map is zoomed out), and the overlays on top of the map (title box, details panel, header on this screen) are near-opaque instead of blurred. Keep new map visuals to gradients, opacity and transform.
 
 ## Growing further
 
