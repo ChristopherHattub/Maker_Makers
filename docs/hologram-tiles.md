@@ -16,7 +16,16 @@ node scripts/receive-render.mjs --out /tmp/holo &
 python3 scripts/build-holo.py /tmp/holo
 ```
 
-`build-holo.py` writes `assets/thumbnails/sprites/holo-<id>.webp` and updates `manifest-v2.json`. Commit both.
+`build-holo.py` writes `assets/thumbnails/sprites/holo-<id>.webp` plus a 192 px still of frame 0, `poster-<id>.webp`
+(~10 KB), and updates `manifest-v2.json`. Commit all three. `python3 scripts/build-holo.py --posters` backfills posters
+for atlases already in the manifest.
+
+## Loading
+
+The homepage shows each tile's poster first and only fetches the ~300 KB atlas when the tile is hovered, focused or
+tapped, or, while the browser is idle, for tiles on screen (one at a time; skipped under Data Saver / 2g). A tile whose
+manifest entry has no `poster` loads its atlas immediately, as before. Tiles with a hologram don't fetch their SVG
+thumbnail at all.
 
 ## Tuning
 

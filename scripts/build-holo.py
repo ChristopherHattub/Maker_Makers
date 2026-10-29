@@ -19,7 +19,27 @@ def generators():
     items = re.findall(r"slot:\s*(\d+),\s*title:\s*'((?:[^'\\]|\\.)*)'.*?thumbnailUrl:\s*'[^']*?/([^/']+)\.svg'", block, re.S)
     return {i: int(s) for s, t, i in items}
 
+POSTER = 192
+
+def write_poster(im, ident):
+    """Frame 0 as a small still, shown until the full 24-frame atlas has been fetched."""
+    cell = im.width // 6
+    im.crop((0, 0, cell, cell)).resize((POSTER, POSTER), Image.LANCZOS).save(
+        OUT / f'poster-{ident}.webp', 'WEBP', quality=80, alpha_quality=80, method=6)
+
+def backfill():
+    """python3 scripts/build-holo.py --posters : posters for every atlas already in the manifest."""
+    mpath = OUT / 'manifest-v2.json'
+    m = json.loads(mpath.read_text())
+    for ident, e in m['tiles'].items():
+        if e.get('source') != 'holo': continue
+        write_poster(Image.open(OUT / e['file']).convert('RGBA'), ident)
+        e['poster'] = f'poster-{ident}.webp'
+    mpath.write_text(json.dumps(m, indent=2) + '\n')
+    print('posters written')
+
 def main():
+    if sys.argv[1] == '--posters': return backfill()
     src = Path(sys.argv[1])
     slots = generators()
     mpath = OUT / 'manifest-v2.json'
@@ -30,10 +50,11 @@ def main():
         im = Image.open(png).convert('RGBA')
         name = f'holo-{ident}.webp'
         im.save(OUT / name, 'WEBP', quality=80, alpha_quality=80, method=6)
+        write_poster(im, ident)
         prev = m['tiles'].get(ident)
         entry = {'slot': slots.get(ident, prev['slot'] if prev else 0), 'file': name, 'width': im.width, 'height': im.height,
                  'cols': 6, 'frames': 24, 'rowsPerBlock': 4, 'block': 0, 'mirror': False, 'order': list(range(24)),
-                 'source': 'holo'}
+                 'source': 'holo', 'poster': f'poster-{ident}.webp'}
         if prev:
             old = prev.get('gemini') if prev.get('source') == 'holo' else {k: v for k, v in prev.items() if k != 'holo'}
             if old and old.get('file') != name:

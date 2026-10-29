@@ -79,7 +79,8 @@
         "rowsPerBlock": 4,
         "block": 0,
         "mirror": true
-      }
+      },
+      "poster": "poster-ghost-builder.webp"
     },
     "pumpkin-plotter": {
       "slot": 2,
@@ -144,7 +145,8 @@
         "rowsPerBlock": 4,
         "block": 0,
         "mirror": true
-      }
+      },
+      "poster": "poster-pumpkin-plotter.webp"
     },
     "spider": {
       "slot": 3,
@@ -209,7 +211,8 @@
         "rowsPerBlock": 4,
         "block": 0,
         "mirror": true
-      }
+      },
+      "poster": "poster-spider.webp"
     },
     "snowman": {
       "slot": 4,
@@ -276,7 +279,8 @@
         "rowsPerBlock": 8,
         "block": 0,
         "mirror": false
-      }
+      },
+      "poster": "poster-snowman.webp"
     },
     "witch-hat": {
       "slot": 5,
@@ -340,7 +344,8 @@
         "rowsPerBlock": 4,
         "block": 0,
         "mirror": true
-      }
+      },
+      "poster": "poster-witch-hat.webp"
     },
     "snowflake": {
       "slot": 6,
@@ -402,7 +407,8 @@
         "rowsPerBlock": 4,
         "block": 0,
         "mirror": true
-      }
+      },
+      "poster": "poster-snowflake.webp"
     },
     "acorn-pinecone-set": {
       "slot": 21,
@@ -440,7 +446,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-acorn-pinecone-set.webp"
     },
     "balloon-twister": {
       "slot": 39,
@@ -478,7 +485,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-balloon-twister.webp"
     },
     "banner-letters": {
       "slot": 40,
@@ -516,7 +524,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-banner-letters.webp"
     },
     "birthday-crown": {
       "slot": 43,
@@ -554,7 +563,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-birthday-crown.webp"
     },
     "bunny-builder": {
       "slot": 31,
@@ -592,7 +602,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-bunny-builder.webp"
     },
     "butterfly-wings": {
       "slot": 34,
@@ -630,7 +641,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-butterfly-wings.webp"
     },
     "cake-stacker": {
       "slot": 36,
@@ -668,7 +680,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-cake-stacker.webp"
     },
     "candle-number": {
       "slot": 37,
@@ -706,7 +719,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-candle-number.webp"
     },
     "chick-hatcher": {
       "slot": 32,
@@ -744,7 +758,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-chick-hatcher.webp"
     },
     "confetti-cannon": {
       "slot": 25,
@@ -782,7 +797,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-confetti-cannon.webp"
     },
     "conversation-hearts": {
       "slot": 28,
@@ -820,7 +836,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-conversation-hearts.webp"
     },
     "cornucopia": {
       "slot": 18,
@@ -858,7 +875,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-cornucopia.webp"
     },
     "countdown-clock": {
       "slot": 24,
@@ -896,7 +914,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-countdown-clock.webp"
     },
     "cupcake-maker": {
       "slot": 42,
@@ -934,7 +953,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-cupcake-maker.webp"
     },
     "egg-basket": {
       "slot": 35,
@@ -972,7 +992,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-egg-basket.webp"
     },
     "egg-decorator": {
       "slot": 30,
@@ -1010,7 +1031,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-egg-decorator.webp"
     },
     "flower-pot": {
       "slot": 33,
@@ -1048,7 +1070,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-flower-pot.webp"
     },
     "gift-box-2": {
       "slot": 16,
@@ -1086,7 +1109,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-gift-box-2.webp"
     },
     "gift-box": {
       "slot": 9,
@@ -1124,7 +1148,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-gift-box.webp"
     },
     "gratitude-place-cards": {
       "slot": 23,
@@ -1162,7 +1187,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-gratitude-place-cards.webp"
     },
     "holiday-tree": {
       "slot": 8,
@@ -1200,7 +1226,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-holiday-tree.webp"
     },
     "image-clicker": {
       "slot": 12,
@@ -1238,7 +1265,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-image-clicker.webp"
     },
     "key-clicker": {
       "slot": 10,
@@ -1276,7 +1304,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-key-clicker.webp"
     },
     "leaf-press": {
       "slot": 19,
@@ -1314,7 +1343,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-leaf-press.webp"
     },
     "name-keychain": {
       "slot": 11,
@@ -1352,7 +1382,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-name-keychain.webp"
     },
     "ornament-stacker": {
       "slot": 13,
@@ -1390,7 +1421,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-ornament-stacker.webp"
     },
     "party-hat": {
       "slot": 26,
@@ -1428,7 +1460,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-party-hat.webp"
     },
     "party-popper": {
       "slot": 41,
@@ -1466,7 +1499,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-party-popper.webp"
     },
     "party-whistle": {
       "slot": 27,
@@ -1504,7 +1538,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-party-whistle.webp"
     },
     "pinata": {
       "slot": 38,
@@ -1542,7 +1577,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-pinata.webp"
     },
     "pottery-wheel": {
       "slot": 15,
@@ -1580,7 +1616,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-pottery-wheel.webp"
     },
     "pumpkin-pie-slice": {
       "slot": 20,
@@ -1618,7 +1655,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-pumpkin-pie-slice.webp"
     },
     "scarecrow-stacker": {
       "slot": 22,
@@ -1656,7 +1694,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-scarecrow-stacker.webp"
     },
     "skull-sculptor": {
       "slot": 7,
@@ -1694,7 +1733,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-skull-sculptor.webp"
     },
     "turkey-builder": {
       "slot": 17,
@@ -1732,7 +1772,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-turkey-builder.webp"
     },
     "valentines-card": {
       "slot": 29,
@@ -1770,7 +1811,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-valentines-card.webp"
     },
     "chain": {
       "slot": 49,
@@ -1808,7 +1850,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-chain.webp"
     },
     "fidget-slider": {
       "slot": 45,
@@ -1846,7 +1889,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-fidget-slider.webp"
     },
     "flipper": {
       "slot": 50,
@@ -1884,7 +1928,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-flipper.webp"
     },
     "gear-train": {
       "slot": 44,
@@ -1922,7 +1967,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-gear-train.webp"
     },
     "rattle-ball": {
       "slot": 48,
@@ -1960,7 +2006,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-rattle-ball.webp"
     },
     "spinner-ring": {
       "slot": 46,
@@ -1998,7 +2045,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-spinner-ring.webp"
     },
     "spiral-tower": {
       "slot": 47,
@@ -2036,7 +2084,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-spiral-tower.webp"
     },
     "clover-chain": {
       "slot": 54,
@@ -2074,7 +2123,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-clover-chain.webp"
     },
     "firework-burst": {
       "slot": 55,
@@ -2112,7 +2162,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-firework-burst.webp"
     },
     "leprechaun-hat": {
       "slot": 52,
@@ -2150,7 +2201,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-leprechaun-hat.webp"
     },
     "lucky-horseshoe": {
       "slot": 53,
@@ -2188,7 +2240,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-lucky-horseshoe.webp"
     },
     "pot-of-gold": {
       "slot": 51,
@@ -2226,7 +2279,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-pot-of-gold.webp"
     },
     "star-spangled-star": {
       "slot": 56,
@@ -2264,7 +2318,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-star-spangled-star.webp"
     },
     "bookend-builder": {
       "slot": 63,
@@ -2302,7 +2357,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-bookend-builder.webp"
     },
     "coaster-set": {
       "slot": 59,
@@ -2340,7 +2396,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-coaster-set.webp"
     },
     "geo-vase": {
       "slot": 57,
@@ -2378,7 +2435,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-geo-vase.webp"
     },
     "photo-frame": {
       "slot": 60,
@@ -2416,7 +2474,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-photo-frame.webp"
     },
     "remote-caddy": {
       "slot": 64,
@@ -2454,7 +2513,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-remote-caddy.webp"
     },
     "shelf-bracket": {
       "slot": 62,
@@ -2492,7 +2552,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-shelf-bracket.webp"
     },
     "tealight-lantern": {
       "slot": 58,
@@ -2530,7 +2591,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-tealight-lantern.webp"
     },
     "tray-maker": {
       "slot": 65,
@@ -2568,7 +2630,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-tray-maker.webp"
     },
     "wall-hook-rack": {
       "slot": 61,
@@ -2606,7 +2669,8 @@
         22,
         23
       ],
-      "source": "holo"
+      "source": "holo",
+      "poster": "poster-wall-hook-rack.webp"
     }
   }
 }

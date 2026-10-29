@@ -260,12 +260,67 @@ function hoverApply(tile, m, id) {
   if (lay.mirror) for (let i = order.length - 2; i > 0; i--) lay.seq.push(-order[i]);   // negative = mirrored frame
   const size = m.cell * m.displayScale, sheet = entry.file ? entry : m.sheets[entry.sheet];
   obj.style.width = obj.style.height = `${size}px`;
-  obj.style.backgroundImage = `url(${SPRITE_DIR}${sheet.file})`;
-  obj.style.backgroundSize = `${sheet.width * m.displayScale}px ${sheet.height * m.displayScale}px`;
-  obj._hover = { m, entry, lay, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0 };
+  // The 24-frame atlas is big (~300 KB), so tiles start on a small still of frame 0 and fetch the atlas on demand.
+  const sheetCss = `${sheet.width * m.displayScale}px ${sheet.height * m.displayScale}px`;
+  obj._hover = { m, entry, lay, size, p: 0, dir: 0, frame: 0, raf: 0, last: 0, acc: 0,
+                 ready: !entry.poster, loading: null, visible: false, sheetUrl: `${SPRITE_DIR}${sheet.file}`, sheetCss };
+  if (entry.poster) {
+    obj.style.backgroundImage = `url(${SPRITE_DIR}${entry.poster})`;
+    obj.style.backgroundSize = '100% 100%';
+    obj.style.backgroundPosition = '0 0';
+  } else {
+    obj.style.backgroundImage = `url(${obj._hover.sheetUrl})`;
+    obj.style.backgroundSize = sheetCss;
+  }
   art.append(base, slot, obj);
   tile.classList.add('has-3d', 'has-pro');
   hoverDraw(obj);
+  hoverWatch(obj);
+}
+
+function hoverLoad(obj) {
+  const h = obj._hover;
+  if (h.ready || h.loading) return h.loading;
+  h.loading = new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => {
+      h.ready = true;
+      obj.style.backgroundImage = `url(${h.sheetUrl})`;
+      obj.style.backgroundSize = h.sheetCss;
+      hoverDraw(obj);
+      resolve();
+    };
+    im.onerror = () => { h.loading = null; resolve(); };
+    im.src = h.sheetUrl;
+  });
+  return h.loading;
+}
+
+// Warm the atlases of tiles on screen, one at a time while the browser is idle, so most hovers start instantly.
+// Skipped on Data Saver / slow connections, where the atlas is fetched on first hover or tap instead.
+const holoQueue = [];
+let holoBusy = false, holoObserver = null;
+function hoverWatch(obj) {
+  const c = navigator.connection;
+  if (obj._hover.ready || !('IntersectionObserver' in window) || (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')))) return;
+  holoObserver = holoObserver || new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      const h = en.target._hover;
+      h.visible = en.isIntersecting;
+      if (en.isIntersecting && !h.ready && !holoQueue.includes(en.target)) holoQueue.push(en.target);
+    });
+    holoPump();
+  }, { rootMargin: '100px' });
+  holoObserver.observe(obj);
+}
+function holoPump() {
+  if (holoBusy) return;
+  let obj;
+  while ((obj = holoQueue.shift()) && (!obj.isConnected || obj._hover.ready || !obj._hover.visible));
+  if (!obj) return;
+  holoBusy = true;
+  const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
+  idle(() => hoverLoad(obj).then(() => { holoBusy = false; holoPump(); }));
 }
 
 const easeOutBack = x => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
@@ -276,7 +331,7 @@ function hoverDraw(obj) {
   const scale = m.restScale + (1 - m.restScale) * e;
   const lay = h.lay, step = lay.seq[h.frame], f = Math.abs(step);
   const col = f % lay.cols, row = lay.rows * lay.block + Math.floor(f / lay.cols);
-  obj.style.backgroundPosition = `${-col * m.cell * m.displayScale}px ${-row * m.cell * m.displayScale}px`;
+  if (h.ready) obj.style.backgroundPosition = `${-col * m.cell * m.displayScale}px ${-row * m.cell * m.displayScale}px`;
   obj.style.transform = `translate(-50%, -50%) scale(${(Object.is(step, -0) || step < 0 ? -1 : 1) * scale}, ${scale})`;
   obj.style.filter = `drop-shadow(0 0 ${3 + 9 * Math.min(1, h.p)}px rgba(60, 230, 255, ${0.35 + 0.4 * Math.min(1, h.p)}))`;
 }
@@ -291,7 +346,8 @@ function hoverLoop(obj, now) {
   const r = h.dts.length >= 5 ? [...h.dts].sort((a, b) => a - b)[Math.floor(h.dts.length / 2)] : 16.7;
   const n = Math.max(1, Math.round(1000 / m.fps / r));
   h.p = Math.max(0, Math.min(1, h.p + h.dir * dt / (h.dir > 0 ? 260 : 200)));
-  h.acc += dt;
+  if (!h.ready) h.acc = 0;     // hold on the still until the atlas arrives
+  else h.acc += dt;
   // After the pointer leaves, shrink back but keep turning (twice as fast) until the loop lands on frame 0, so the
   // tile settles on the rest pose without a snap.
   const step = r * (h.dir < 0 ? Math.max(1, Math.round(n / 2)) : n);
@@ -311,6 +367,7 @@ function hoverStart(tile, on) {
   if (!obj || !obj._hover || worldReducedMotion()) return;
   const h = obj._hover;
   h.dir = on ? 1 : -1;
+  if (on) hoverLoad(obj);
   if (!h.raf) { h.last = performance.now(); h.raf = requestAnimationFrame(t => hoverLoop(obj, t)); }
 }
 
@@ -328,15 +385,28 @@ function worldSetExperimental(on) {
   worldState.experimental = on;
   WORLD.TILE = on ? WORLD.CELL : 112;
   wEl.root.classList.toggle('exp', on);
-  wEl.canvas.querySelectorAll('.tile-art img[data-std]').forEach(img => {
+  const imgs = wEl.canvas.querySelectorAll('.tile-art img[data-std]');
+  const setImg = img => {
     const tile = img.closest('.tile');
     if (!on) { tile.classList.remove('has-pro'); img.src = img.dataset.std; return; }
     img.onload = () => { if (img.src.includes('/pro/')) tile.classList.add('has-pro'); };
     img.onerror = () => { img.onerror = null; tile.classList.remove('has-pro'); img.src = img.dataset.std; };
     img.src = img.dataset.pro;
-  });
-  if (on) spriteLoad().then(ms => { if (ms && worldState.experimental) spriteApply(ms); });
-  else spriteRemove();
+  };
+  if (on) {
+    // Hologram tiles hide their <img>, so only fetch artwork for tiles the manifest doesn't cover.
+    spriteLoad().then(ms => {
+      if (!worldState.experimental) return;
+      imgs.forEach(img => {
+        const id = img.dataset.std.replace(/^.*\/([^/]+)\.\w+$/, '$1');
+        if (!(ms && ms.v2 && ms.v2.tiles[id])) setImg(img);
+      });
+      if (ms) spriteApply(ms);
+    });
+  } else {
+    imgs.forEach(setImg);
+    spriteRemove();
+  }
   worldSelect(null);
   worldRedraw();
 }
@@ -350,7 +420,7 @@ function regionHTML(r) {
   const tiles = g.members.map((p, i) => {
     const col = i % r.w, row = Math.floor(i / r.w);
     const thumb = p.thumbnailUrl
-      ? `<img src="${p.thumbnailUrl}" data-std="${p.thumbnailUrl}" data-pro="${proThumbUrl(p.thumbnailUrl)}" alt="" loading="lazy" draggable="false">`
+      ? `<img data-std="${p.thumbnailUrl}" data-pro="${proThumbUrl(p.thumbnailUrl)}" alt="" loading="lazy" draggable="false">`
       : '<span class="tile-empty">+</span>';
     const search = escapeHTML(`${p.title} ${p.category} ${p.description} ${g.name}`.toLowerCase());
     return `
