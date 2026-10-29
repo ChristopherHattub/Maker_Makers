@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-059 Coaster Set // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+
+      function mesh(name, list, group, single) {
+        if (!list.length) return null;
+        var m = { name: name, positions: concat(list), smoothGroup: group || name };
+        if (single) m.singlePart = true;
+        return m;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a named-option picker stored as a plain number (2 names = buttons, 3+ = dropdown).
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+
+
+      // --- extra helpers (extrusions, boxes, rounded rectangles, sweeps) ---
+      function box(x0, y0, z0, x1, y1, z1) {
+        return fanPrism([[x0, z0], [x1, z0], [x1, z1], [x0, z1]], y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      // Rounded rectangle outline about (cx, cz): n + 1 points per corner, so the point count never changes with r.
+      function rrectPts(cx, cz, hw, hd, r, n) {
+        r = Math.max(0.05, Math.min(r, hw - 0.01, hd - 0.01));
+        var cs = [[hw - r, hd - r, 0], [-(hw - r), hd - r, 90], [-(hw - r), -(hd - r), 180], [hw - r, -(hd - r), 270]];
+        var pts = [], i, k, a;
+        for (i = 0; i < 4; i++) {
+          for (k = 0; k <= n; k++) {
+            a = (cs[i][2] + (90 * k) / n) * DEG;
+            pts.push([cx + cs[i][0] + r * Math.cos(a), cz + cs[i][1] + r * Math.sin(a)]);
+          }
+        }
+        return pts;
+      }
+      // three.js only fixes hole winding when the outline is counter-clockwise, so make it so.
+      function ccw(pts) {
+        var a = 0, i, n = pts.length;
+        for (i = 0; i < n; i++) a += pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1];
+        return a < 0 ? pts.slice().reverse() : pts;
+      }
+      // A flat plate from plan outline pts [x, z] (holes: list of outlines), spanning y0..y1. Uses three.js triangulation.
+      function extrude(THREE, outer, holes, y0, y1, seg) {
+        var sh = new THREE.Shape(ccw(outer.map(function (p) { return [p[0], -p[1]]; })).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], -p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: y1 - y0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        return orient(xform(Float32Array.from(g.attributes.position.array), { rx: -Math.PI / 2, t: [0, y0, 0] }));
+      }
+      // A vertical plate: outline pts [x, y] in the XY plane, extruded along z from z0 to z1.
+      function extrudeXY(THREE, outer, holes, z0, z1, seg) {
+        var sh = new THREE.Shape(ccw(outer).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: z1 - z0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        return orient(xform(Float32Array.from(g.attributes.position.array), { t: [0, 0, z0] }));
+      }
+      // A vertical plate in the YZ plane: outline pts [y, z], extruded along x from x0 to x1.
+      function extrudeYZ(THREE, outer, holes, x0, x1, seg) {
+        var sh = new THREE.Shape(ccw(outer).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        var a = g.attributes.position.array, out = new Float32Array(a.length), i;
+        for (i = 0; i < a.length; i += 3) { out[i] = a[i + 2] + x0; out[i + 1] = a[i]; out[i + 2] = a[i + 1]; }
+        return orient(out);
+      }
+      function mirrorX(pos, dx) { return xform(pos, { s: [-1, 1, 1], t: [dx || 0, 0, 0] }); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function rnd(i, seed) { var s = Math.sin(i * 127.1 + (seed || 0) * 311.7) * 43758.5453; return s - Math.floor(s); }
+      function arcPts(cx, cz, r, a0, a1, n) {
+        var pts = [], i;
+        for (i = 0; i <= n; i++) pts.push([cx + r * Math.cos(a0 + (a1 - a0) * i / n), cz + r * Math.sin(a0 + (a1 - a0) * i / n)]);
+        return pts;
+      }
+      // A tube along a path in 3D with a radius at each point. Both ends are closed (give radius 0 at the ends).
+      // path[i] = [x, y, z], rad[i]; the cross-section plane is spanned by the X axis and (dir x X).
+      function sweep(path, rad, seg) {
+        var n = path.length, prof = [], i;
+        for (i = 0; i < n; i++) prof.push([rad[i], i]);
+        var dirs = [];
+        for (i = 0; i < n; i++) {
+          var a = path[Math.max(0, i - 1)], b = path[Math.min(n - 1, i + 1)];
+          var d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
+          d = [d[0] / l, d[1] / l, d[2] / l];
+          // N = d x X (X = 1,0,0) = (0, d.z, -d.y)
+          var nn = [0, d[2], -d[1]], nl = Math.sqrt(nn[1] * nn[1] + nn[2] * nn[2]) || 1;
+          dirs.push([0, nn[1] / nl, nn[2] / nl]);
+        }
+        return surface(prof, seg, function (i, j, th) {
+          var r = rad[i], c = Math.cos(th) * r, s = Math.sin(th) * r, P = path[i], N = dirs[i];
+          return [P[0] + c, P[1] + s * N[1], P[2] + s * N[2]];
+        }, false);
+      }
+
+      // Coaster Set: a set of coasters in many outlines with a rim and a raised pattern, plus a matching holder.
+      var DEFAULTS = { shape: 0, size: 92, corner: 55, lobes: 10, lobeDepth: 6, thick: 4, rimW: 3, rimH: 2, pattern: 1, pat: 8, patH: 1.2, count: 4, gap: 10, holder: 1, holderH: 34, holderWall: 2.4, tol: 0.8, notch: 40 };
+      var SHAPES = ['Round', 'Square', 'Hexagon', 'Octagon', 'Triangle', 'Scallop', 'Flower'];
+      var PATTERNS = ['None', 'Rings', 'Dots', 'Honeycomb', 'Spokes'];
+      var NPT = 160;
+
+      // Outline radius at angle th for the chosen shape. `a` = flat-to-centre distance (or radius).
+      function rho(p, th) {
+        var a = p.size / 2, k = Math.round(p.shape);
+        if (k === 0) return a;
+        if (k === 5) return a * (1 - (p.lobeDepth / 100) * (1 - Math.abs(Math.cos((p.lobes * th) / 2))));
+        if (k === 6) return a * (1 - (p.lobeDepth / 100) * (1 - Math.cos(p.lobes * th)) / 2 * 2);
+        var N = [4, 6, 8, 3][k - 1], pw = 40 - 0.37 * p.corner;
+        function f(t) { var s = 0, i; for (i = 0; i < N; i++) { var c = Math.cos(t - (i * TAU) / N); if (c > 0) s += Math.pow(c, pw); } return Math.pow(s, 1 / pw); }
+        return a * f(0) / f(th);
+      }
+      function outlineAt(p, scale) {
+        var pts = [], i, th, r;
+        for (i = 0; i < NPT; i++) { th = (i / NPT) * TAU; r = rho(p, th) * scale; pts.push([r * Math.cos(th), r * Math.sin(th)]); }
+        return pts;
+      }
+      function minR(p, scale) { var m = 1e9, i; for (i = 0; i < NPT; i++) m = Math.min(m, rho(p, (i / NPT) * TAU) * scale); return m; }
+
+      function patternShapes(p, rin, y0, y1) {
+        var out = [], s = p.pat, i, j, k = Math.round(p.pattern);
+        if (k === 1) {
+          for (var r = s; r + s * 0.25 < rin; r += s) out.push(ringPrism(circlePts(0, 0, r + s * 0.22, 72), circlePts(0, 0, r - s * 0.22, 72), y0, y1));
+          if (rin > s * 0.5) out.push(fanPrism(circlePts(0, 0, Math.min(s * 0.3, rin), 24), y0, y1, [0, 0]));
+        } else if (k === 2) {
+          var dr = s * 0.27, row = 0;
+          for (var z = -rin; z <= rin; z += s * 0.866, row++) {
+            for (var x = -rin - s; x <= rin + s; x += s) {
+              var cx = x + (row % 2 ? s / 2 : 0);
+              if (Math.sqrt(cx * cx + z * z) + dr < rin) out.push(fanPrism(circlePts(cx, z, dr, 16), y0, y1, [cx, z]));
+            }
+          }
+        } else if (k === 3) {
+          var Rh = s * 0.5, ro = Rh * 0.98, ri = ro - Math.max(0.9, s * 0.1) / 0.866, rowh = 0;
+          for (var zz = -rin; zz <= rin; zz += Rh * 1.5, rowh++) {
+            for (var xx = -rin - s; xx <= rin + s; xx += Rh * 1.7320508) {
+              var cxx = xx + (rowh % 2 ? Rh * 0.8660254 : 0);
+              if (Math.sqrt(cxx * cxx + zz * zz) + ro < rin) {
+                var A = [], B = [];
+                for (j = 0; j < 6; j++) { var aa = (j * TAU) / 6 + Math.PI / 6; A.push([cxx + ro * Math.cos(aa), zz + ro * Math.sin(aa)]); B.push([cxx + ri * Math.cos(aa), zz + ri * Math.sin(aa)]); }
+                out.push(ringPrism(A, B, y0, y1));
+              }
+            }
+          }
+        } else if (k === 4) {
+          var n = Math.max(6, Math.round((TAU * rin * 0.55) / (s * 1.4))), r0 = Math.min(rin * 0.22, 14);
+          for (i = 0; i < n; i++) {
+            var an = (i / n) * TAU;
+            out.push(stroke(r0 * Math.cos(an), r0 * Math.sin(an), (rin - 0.5) * Math.cos(an), (rin - 0.5) * Math.sin(an), Math.max(1.4, s * 0.2), y0, y1));
+          }
+          out.push(fanPrism(circlePts(0, 0, r0 * 0.7, 28), y0, y1, [0, 0]));
+        }
+        return out;
+      }
+
+      function holderMeshes(p, count) {
+        var a = p.size / 2, t = p.holderWall, tol = p.tol, floorT = 2.4, H = p.holderH;
+        var iS = (a + tol) / a, oS = (a + tol + t) / a;
+        var outer = outlineAt(p, oS), inner = outlineAt(p, iS), i, A = [], B = [], keep = [];
+        var half = (p.notch / 2) / (a + tol + t);   // half the notch angle (rad)
+        var start = Math.PI / 2 + half, end = Math.PI / 2 - half + TAU;
+        for (i = 0; i < NPT; i++) {
+          var th = (i / NPT) * TAU, d = th < Math.PI / 2 - half ? th + TAU : th;
+          if (d >= start && d <= end) keep.push(i);
+        }
+        keep.sort(function (x, y) { var tx = (x / NPT) * TAU, ty = (y / NPT) * TAU; tx = tx < Math.PI / 2 - half ? tx + TAU : tx; ty = ty < Math.PI / 2 - half ? ty + TAU : ty; return tx - ty; });
+        if (p.notch < 1) { return [fanPrism(outer, 0, floorT, [0, 0]), ringPrism(outer, inner, floorT - 0.3, H)]; }
+        keep.forEach(function (ix) { A.push(outer[ix]); B.push(inner[ix]); });
+        return [fanPrism(outer, 0, floorT, [0, 0]), stripPrism(A, B, floorT - 0.3, H)];
+      }
+
+      function build(p) {
+        var out = [], n = Math.round(p.count), a = p.size / 2, t = p.thick, i;
+        var cols = Math.ceil(Math.sqrt(n)), rowsN = Math.ceil(n / cols), pitch = p.size + p.gap + 4;
+        var outer = outlineAt(p, 1), rimW = p.rimW, rimInner = outlineAt(p, (a - rimW) / a);
+        var inner = rimW > 0 ? minR(p, (a - rimW) / a) : minR(p, 1);
+        var slab = [fanPrism(outer, 0, t, [0, 0])];
+        var rim = [], pat = [];
+        if (p.rimH > 0 && rimW > 0) rim.push(ringPrism(outer, rimInner, t - 0.3, t + p.rimH));
+        if (Math.round(p.pattern) > 0) pat = patternShapes(p, inner - 1.2, t - 0.3, t + p.patH);
+        var slabs = [], rims = [], pats = [];
+        for (i = 0; i < n; i++) {
+          var cx = (i % cols - (cols - 1) / 2) * pitch, cz = (Math.floor(i / cols) - (rowsN - 1) / 2) * pitch, tr = { t: [cx, 0, cz] };
+          slab.forEach(function (m) { slabs.push(xform(m, tr)); });
+          rim.forEach(function (m) { rims.push(xform(m, tr)); });
+          pat.forEach(function (m) { pats.push(xform(m, tr)); });
+        }
+        pushMesh(out, mesh('coaster', slabs));
+        pushMesh(out, mesh('rim', rims));
+        pushMesh(out, mesh('pattern', pats));
+        if (p.holder >= 1) {
+          var hx = (cols * pitch) / 2 + p.size / 2 + p.holderWall + 12, hm = holderMeshes(p, n);
+          pushMesh(out, mesh('holder', hm.map(function (m) { return xform(m, { t: [hx, 0, 0] }); })));
+        }
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-059',
+        category: 'HOME // TABLEWARE',
+        title: 'Coaster Set',
+        fileName: 'Coaster_Set',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Sage Green', color: '#a7c4a0' },
+          { name: 'Terracotta', color: '#e8a07a' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Ocean Glass', color: '#93c5fd' }, { name: 'Blush', color: '#fda4af' },
+          { name: 'Walnut', color: '#8a6a4f' }, { name: 'Charcoal', color: '#3b3f4a' }
+        ],
+        defaultColor: '#f1f5f9',
+        partNames: { coaster: 'Coaster', rim: 'Rim', pattern: 'Pattern', holder: 'Holder' },
+        openGroups: ['Outline'],
+        parameters: [
+          choice('Outline', 'shape', 'Shape', SHAPES, DEFAULTS.shape),
+          slider('Outline', 'size', 'Size across', ' mm', 70, 120, 1, DEFAULTS.size),
+          slider('Outline', 'corner', 'Corners (sharp ↔ round)', '%', 0, 100, 1, DEFAULTS.corner),
+          slider('Outline', 'lobes', 'Lobes (scallop, flower)', '', 5, 18, 1, DEFAULTS.lobes),
+          slider('Outline', 'lobeDepth', 'Lobe depth', '%', 2, 14, 1, DEFAULTS.lobeDepth),
+          slider('Body', 'thick', 'Thickness', ' mm', 3, 10, 0.5, DEFAULTS.thick),
+          slider('Body', 'rimW', 'Rim width', ' mm', 0, 8, 0.5, DEFAULTS.rimW),
+          slider('Body', 'rimH', 'Rim height', ' mm', 0, 5, 0.5, DEFAULTS.rimH),
+          choice('Pattern', 'pattern', 'Pattern', PATTERNS, DEFAULTS.pattern),
+          slider('Pattern', 'pat', 'Pattern size', ' mm', 4, 18, 0.5, DEFAULTS.pat),
+          slider('Pattern', 'patH', 'Pattern height', ' mm', 0.6, 3, 0.2, DEFAULTS.patH),
+          slider('Set', 'count', 'Coasters in the set', '', 1, 8, 1, DEFAULTS.count),
+          slider('Set', 'gap', 'Space between coasters', ' mm', 4, 30, 1, DEFAULTS.gap),
+          choice('Holder', 'holder', 'Holder', ['No holder', 'With holder'], DEFAULTS.holder),
+          slider('Holder', 'holderH', 'Holder height', ' mm', 15, 80, 1, DEFAULTS.holderH),
+          slider('Holder', 'holderWall', 'Holder wall', ' mm', 1.6, 4, 0.2, DEFAULTS.holderWall),
+          slider('Holder', 'tol', 'Fit clearance', ' mm', 0.3, 2, 0.1, DEFAULTS.tol),
+          slider('Holder', 'notch', 'Finger notch width (0 = none)', ' mm', 0, 70, 1, DEFAULTS.notch)
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Default round set', {}),
+          presetOf(DEFAULTS, 'Honeycomb hexagons', { shape: 2, corner: 60, pattern: 3, pat: 9, rimH: 1.5 }),
+          presetOf(DEFAULTS, 'Flower coasters', { shape: 6, lobes: 8, lobeDepth: 8, pattern: 4, pat: 7 }),
+          presetOf(DEFAULTS, 'Soft squares', { shape: 1, corner: 85, pattern: 2, pat: 8, size: 90 }),
+          presetOf(DEFAULTS, 'Scalloped, plain', { shape: 5, lobes: 12, lobeDepth: 5, pattern: 0, rimH: 0, rimW: 0 })
+        ],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

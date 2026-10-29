@@ -492,6 +492,87 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/star-spangled-star.svg',
     programUrl: 'programs/star-spangled-star.html',
     description: 'A chunky star plaque with a raised rim, a centre star and small spangle stars on each point. Use it as a coaster, ornament or wall star. Set the number of points, size, how spiky it is, thickness, rim width and the decoration. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 57,
+    title: 'Geo Vase',
+    bundle: 'decor',
+    category: 'HOME // VASES',
+    thumbnailUrl: 'assets/thumbnails/geo-vase.svg',
+    programUrl: 'programs/geo-vase.html',
+    description: 'A hollow vase with a smooth, fluted, twisted or low-poly faceted body. Set height, base, belly and neck width, belly height, lip flare, flute count and depth, twist, facets, wall and floor thickness and an optional foot ring. Keep the base wide and the twist gentle and it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 58,
+    title: 'Tea Light Lantern',
+    bundle: 'decor',
+    category: 'HOME // LIGHTING',
+    thumbnailUrl: 'assets/thumbnails/tealight-lantern.svg',
+    programUrl: 'programs/tealight-lantern.html',
+    description: 'A lantern made for battery powered LED tea lights only, never a real flame. Pick 3 to 12 sides, height, the tea light width you measured, and a pierced pattern of stars, diamonds, circles, slots, leaves or hearts. Open, rim ring or lid top. The panel shows fire safety guidelines. Prints with no supports unless you add the lid. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 59,
+    title: 'Coaster Set',
+    bundle: 'decor',
+    category: 'HOME // TABLEWARE',
+    thumbnailUrl: 'assets/thumbnails/coaster-set.svg',
+    programUrl: 'programs/coaster-set.html',
+    description: 'A fully customisable coaster set with a matching holder. Pick round, square, hexagon, octagon, triangle, scallop or flower outlines, corner softness, thickness, rim, and a raised pattern of rings, dots, honeycomb or spokes. Choose 1 to 8 coasters and a stacking holder with a finger notch. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 60,
+    title: 'Photo Frame Maker',
+    bundle: 'decor',
+    category: 'HOME // PICTURE FRAMES',
+    thumbnailUrl: 'assets/thumbnails/photo-frame.svg',
+    programUrl: 'programs/photo-frame.html',
+    description: 'A picture frame sized to your photo, with a pocket in the back for the photo and glass. Choose square, rounded, oval or cut corners, five edge styles (flat, bevel, bead, stepped, cove), border width and depth, and a hang loop or a separate easel leg. Prints face up with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 61,
+    title: 'Wall Hook Rack',
+    bundle: 'organization',
+    category: 'HOME // HOOKS and SHELVES',
+    thumbnailUrl: 'assets/thumbnails/wall-hook-rack.svg',
+    programUrl: 'programs/wall-hook-rack.html',
+    description: 'A wall rack with 1 to 8 pegs in four styles (straight, tip bend, ball knob, wide cap), counterbored screw holes, and optional shelf with plain or gusseted support. Set length, height, peg length and width, tilt and shelf depth. Prints on its back with no supports unless the tip bend is strong. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 62,
+    title: 'Floating Shelf Bracket',
+    bundle: 'decor',
+    category: 'HOME // SHELF BRACKETS',
+    thumbnailUrl: 'assets/thumbnails/shelf-bracket.svg',
+    programUrl: 'programs/shelf-bracket.html',
+    description: 'A screw-on bracket to carry a shelf board, with a back plate and one or two standing webs in wedge, swoosh, open frame or lattice styles. Set depth, wall height, rest thickness, plate size and screw holes, as a single bracket or a pair. Prints on its back with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 63,
+    title: 'Bookend Builder',
+    bundle: 'decor',
+    category: 'HOME // BOOKENDS',
+    thumbnailUrl: 'assets/thumbnails/bookend-builder.svg',
+    programUrl: 'programs/bookend-builder.html',
+    description: 'A bookend with a cut-out silhouette: a book stack, mountains, a city skyline, rolling waves or an arch window. Set width, height, panel and foot size, gussets, detail and variation, as a single bookend or a mirrored pair. Prints upright on its foot with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 64,
+    title: 'Cable and Remote Caddy',
+    bundle: 'organization',
+    category: 'HOME // DESK and COUCH',
+    thumbnailUrl: 'assets/thumbnails/remote-caddy.svg',
+    programUrl: 'programs/remote-caddy.html',
+    description: 'A caddy with 1 to 6 upright pockets for remotes or controllers, a low front wall, floor holes for cables, a wider foot for stability and an optional side comb that holds 2 to 8 cables. Set the pocket size to fit your remote. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 65,
+    title: 'Tray Maker',
+    bundle: 'organization',
+    category: 'HOME // TRAYS',
+    thumbnailUrl: 'assets/thumbnails/tray-maker.svg',
+    programUrl: 'programs/tray-maker.html',
+    description: 'A tray in a rectangle with a grid of compartments, or a round tray with 1 to 8 pie sections and a centre post. Set size, wall and divider height, corner roundness and optional ear handles with finger holes. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -545,9 +626,9 @@ const BUNDLES = [
   { id: 'pottery', name: 'Pottery', accent: '#00ff9d', at: [0, 5], size: [4, 2],
     description: 'Throw and sculpt clay vessels.',
     generators: ['SLOT-15'] },
-  { id: 'decor', name: 'Home & Decor', accent: '#4aa3ff', at: [4, 5], size: [4, 2], planned: true,
+  { id: 'decor', name: 'Home & Decor', accent: '#4aa3ff', at: [4, 5], size: [4, 2],
     description: 'Vases, lamps, frames and wall art.' },
-  { id: 'organization', name: 'Organisation', accent: '#38d6c4', at: [16, 6], size: [4, 2], planned: true,
+  { id: 'organization', name: 'Organisation', accent: '#38d6c4', at: [16, 6], size: [4, 2],
     description: 'Hooks, trays, holders and storage.' },
   { id: 'toys', name: 'Toys & Games', accent: '#ff5252', at: [12, 5], size: [4, 2], planned: true,
     description: 'Puzzles, spinners and pieces to play with.' },

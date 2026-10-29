@@ -269,5 +269,50 @@
     "hue": 218,
     "sat": 85,
     "light": 68
+  },
+  "geo-vase": {
+    "hue": 270,
+    "sat": 70,
+    "light": 70
+  },
+  "tealight-lantern": {
+    "hue": 42,
+    "sat": 90,
+    "light": 65
+  },
+  "coaster-set": {
+    "hue": 175,
+    "sat": 75,
+    "light": 62
+  },
+  "photo-frame": {
+    "hue": 38,
+    "sat": 80,
+    "light": 62
+  },
+  "wall-hook-rack": {
+    "hue": 28,
+    "sat": 75,
+    "light": 60
+  },
+  "shelf-bracket": {
+    "hue": 210,
+    "sat": 80,
+    "light": 65
+  },
+  "bookend-builder": {
+    "hue": 150,
+    "sat": 70,
+    "light": 60
+  },
+  "remote-caddy": {
+    "hue": 195,
+    "sat": 85,
+    "light": 62
+  },
+  "tray-maker": {
+    "hue": 18,
+    "sat": 75,
+    "light": 64
   }
 }

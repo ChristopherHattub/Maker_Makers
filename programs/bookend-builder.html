@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-063 Bookend Builder // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+
+      function mesh(name, list, group, single) {
+        if (!list.length) return null;
+        var m = { name: name, positions: concat(list), smoothGroup: group || name };
+        if (single) m.singlePart = true;
+        return m;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a named-option picker stored as a plain number (2 names = buttons, 3+ = dropdown).
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+
+
+      // --- extra helpers (extrusions, boxes, rounded rectangles, sweeps) ---
+      function box(x0, y0, z0, x1, y1, z1) {
+        return fanPrism([[x0, z0], [x1, z0], [x1, z1], [x0, z1]], y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      // Rounded rectangle outline about (cx, cz): n + 1 points per corner, so the point count never changes with r.
+      function rrectPts(cx, cz, hw, hd, r, n) {
+        r = Math.max(0.05, Math.min(r, hw - 0.01, hd - 0.01));
+        var cs = [[hw - r, hd - r, 0], [-(hw - r), hd - r, 90], [-(hw - r), -(hd - r), 180], [hw - r, -(hd - r), 270]];
+        var pts = [], i, k, a;
+        for (i = 0; i < 4; i++) {
+          for (k = 0; k <= n; k++) {
+            a = (cs[i][2] + (90 * k) / n) * DEG;
+            pts.push([cx + cs[i][0] + r * Math.cos(a), cz + cs[i][1] + r * Math.sin(a)]);
+          }
+        }
+        return pts;
+      }
+      // three.js only fixes hole winding when the outline is counter-clockwise, so make it so.
+      function ccw(pts) {
+        var a = 0, i, n = pts.length;
+        for (i = 0; i < n; i++) a += pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1];
+        return a < 0 ? pts.slice().reverse() : pts;
+      }
+      // A flat plate from plan outline pts [x, z] (holes: list of outlines), spanning y0..y1. Uses three.js triangulation.
+      function extrude(THREE, outer, holes, y0, y1, seg) {
+        var sh = new THREE.Shape(ccw(outer.map(function (p) { return [p[0], -p[1]]; })).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], -p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: y1 - y0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        return orient(xform(Float32Array.from(g.attributes.position.array), { rx: -Math.PI / 2, t: [0, y0, 0] }));
+      }
+      // A vertical plate: outline pts [x, y] in the XY plane, extruded along z from z0 to z1.
+      function extrudeXY(THREE, outer, holes, z0, z1, seg) {
+        var sh = new THREE.Shape(ccw(outer).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: z1 - z0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        return orient(xform(Float32Array.from(g.attributes.position.array), { t: [0, 0, z0] }));
+      }
+      // A vertical plate in the YZ plane: outline pts [y, z], extruded along x from x0 to x1.
+      function extrudeYZ(THREE, outer, holes, x0, x1, seg) {
+        var sh = new THREE.Shape(ccw(outer).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        var a = g.attributes.position.array, out = new Float32Array(a.length), i;
+        for (i = 0; i < a.length; i += 3) { out[i] = a[i + 2] + x0; out[i + 1] = a[i]; out[i + 2] = a[i + 1]; }
+        return orient(out);
+      }
+      function mirrorX(pos, dx) { return xform(pos, { s: [-1, 1, 1], t: [dx || 0, 0, 0] }); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function rnd(i, seed) { var s = Math.sin(i * 127.1 + (seed || 0) * 311.7) * 43758.5453; return s - Math.floor(s); }
+      function arcPts(cx, cz, r, a0, a1, n) {
+        var pts = [], i;
+        for (i = 0; i <= n; i++) pts.push([cx + r * Math.cos(a0 + (a1 - a0) * i / n), cz + r * Math.sin(a0 + (a1 - a0) * i / n)]);
+        return pts;
+      }
+      // A tube along a path in 3D with a radius at each point. Both ends are closed (give radius 0 at the ends).
+      // path[i] = [x, y, z], rad[i]; the cross-section plane is spanned by the X axis and (dir x X).
+      function sweep(path, rad, seg) {
+        var n = path.length, prof = [], i;
+        for (i = 0; i < n; i++) prof.push([rad[i], i]);
+        var dirs = [];
+        for (i = 0; i < n; i++) {
+          var a = path[Math.max(0, i - 1)], b = path[Math.min(n - 1, i + 1)];
+          var d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
+          d = [d[0] / l, d[1] / l, d[2] / l];
+          // N = d x X (X = 1,0,0) = (0, d.z, -d.y)
+          var nn = [0, d[2], -d[1]], nl = Math.sqrt(nn[1] * nn[1] + nn[2] * nn[2]) || 1;
+          dirs.push([0, nn[1] / nl, nn[2] / nl]);
+        }
+        return surface(prof, seg, function (i, j, th) {
+          var r = rad[i], c = Math.cos(th) * r, s = Math.sin(th) * r, P = path[i], N = dirs[i];
+          return [P[0] + c, P[1] + s * N[1], P[2] + s * N[2]];
+        }, false);
+      }
+
+      // Bookend Builder: a standing panel with a silhouette, a foot that slides under the books, and gussets. Prints upright on its foot.
+      var DEFAULTS = { style: 0, width: 100, hgt: 140, panel: 7, foot: 90, footT: 6, gussets: 2, count: 5, cut: 1, pair: 1, seed: 3 };
+      var STYLES = ['Stacked books', 'Mountains', 'City skyline', 'Rolling waves', 'Arch window'];
+
+      // Returns { outers: [[x, v] polygon...], holes: [[x, v] polygon...] }; v is height up the wall.
+      function silhouette(p) {
+        var W = p.width, H = p.hgt, n = Math.round(p.count), st = Math.round(p.style), i, k;
+        var outers = [], holes = [];
+        if (st === 0) { // stacked books, each a little narrower than the one below so nothing overhangs
+          var v = 0, bh = H / n, wPrev = W, xPrev = 0;
+          for (i = 0; i < n; i++) {
+            var w = i === 0 ? W * (0.9 + 0.1 * rnd(0, p.seed)) : wPrev * (0.9 + 0.08 * rnd(i, p.seed));
+            var room = i === 0 ? 0 : (wPrev - w) / 2, xc = xPrev + (rnd(i + 40, p.seed) * 2 - 1) * room, h = bh + (i === 0 ? 0 : 0.4);
+            outers.push([[xc - w / 2, v], [xc + w / 2, v], [xc + w / 2, v + h - 0.8], [xc - w / 2, v + h - 0.8]]);
+            if (p.cut >= 1 && h > 14) {
+              var hh = Math.min(2.2, h * 0.08), cy = v + h * 0.5;
+              holes.push([[xc - w / 2 + 8, cy - hh], [xc + w / 2 - 8, cy - hh], [xc + w / 2 - 8, cy + hh], [xc - w / 2 + 8, cy + hh]]);
+            }
+            v += bh; wPrev = w; xPrev = xc;
+          }
+        } else if (st === 1) { // mountains
+          var peaks = [], pk = Math.max(2, Math.round(n / 2));
+          for (k = 0; k < pk; k++) peaks.push({ c: -W / 2 + (W * (k + 0.5 + (rnd(k, p.seed) - 0.5) * 0.5)) / pk, h: 0.6 + 0.4 * rnd(k + 9, p.seed), w: W * (0.5 / pk + 0.25) });
+          var top = [], N = 90;
+          for (i = 0; i <= N; i++) {
+            var x = -W / 2 + (W * i) / N, hv = 0.28;
+            peaks.forEach(function (q) { hv = Math.max(hv, q.h * (1 - Math.abs(x - q.c) / q.w)); });
+            top.push([x, Math.max(0.22, hv) * H]);
+          }
+          outers.push([[-W / 2, 0], [W / 2, 0]].concat(top.slice().reverse()));
+          if (p.cut >= 1) { var hc = []; for (i = 0; i < 28; i++) hc.push([-W * 0.28 + W * 0.075 * Math.cos((i / 28) * TAU), H * 0.16 + W * 0.075 * Math.sin((i / 28) * TAU)]); holes.push(hc); }
+        } else if (st === 2) { // skyline
+          var bw = W / n;
+          for (i = 0; i < n; i++) {
+            var hb = H * (0.45 + 0.55 * rnd(i, p.seed)), x0 = -W / 2 + i * bw - 0.3, x1 = x0 + bw + 0.6;
+            outers.push([[x0, 0], [x1, 0], [x1, hb], [x0, hb]]);
+            if (p.cut >= 1) {
+              var wx = Math.min(bw * 0.22, 7), rowsW = Math.floor((hb - 16 - wx) / (wx * 2.2));
+              for (var r = 0; r < rowsW; r++) for (var c = 0; c < 2; c++) {
+                var wcx = x0 + (bw + 0.6) * (c === 0 ? 0.3 : 0.7), wcy = 10 + wx + r * wx * 2.2 + (c === 0 ? 0 : wx * 0.8);
+                holes.push([[wcx - wx / 2, wcy - wx / 2], [wcx + wx / 2, wcy - wx / 2], [wcx + wx / 2, wcy + wx / 2], [wcx - wx / 2, wcy + wx / 2]]);
+              }
+            }
+          }
+        } else if (st === 3) { // waves
+          var top2 = [], N2 = 100, cyc = Math.max(1, n / 2);
+          for (i = 0; i <= N2; i++) { var xx = -W / 2 + (W * i) / N2; top2.push([xx, H * 0.7 + H * 0.1 * Math.sin((xx / W + 0.5) * TAU * cyc)]); }
+          outers.push([[-W / 2, 0], [W / 2, 0]].concat(top2.slice().reverse()));
+          if (p.cut >= 1) {
+            for (var band = 0; band < 2; band++) {
+              var up = [], dn = [], off = H * (0.5 - band * 0.2);
+              for (i = 0; i <= 60; i++) {
+                var x2 = -W / 2 + 10 + ((W - 20) * i) / 60, y2 = off + H * 0.07 * Math.sin((x2 / W + 0.5) * TAU * cyc + 0.8);
+                up.push([x2, y2 + 2.2]); dn.push([x2, y2 - 2.2]);
+              }
+              holes.push(up.concat(dn.reverse()));
+            }
+          }
+        } else { // arch
+          var R = W / 2, pts = [[-R, 0], [R, 0]];
+          for (i = 0; i <= 40; i++) { var a = (i / 40) * Math.PI; pts.push([R * Math.cos(a), H - R + R * Math.sin(a)]); }
+          outers.push(pts);
+          if (p.cut >= 1) {
+            var ri = R - 16, hp = [];
+            hp.push([-ri, 24]); hp.push([ri, 24]);
+            for (i = 0; i <= 40; i++) { var a2 = (i / 40) * Math.PI; hp.push([ri * Math.cos(a2), H - R + ri * Math.sin(a2) - 0]); }
+            holes.push(hp);
+          }
+        }
+        return { outers: outers, holes: holes };
+      }
+
+      function oneBookend(p, THREE) {
+        var sil = silhouette(p), t = p.panel, F = p.foot, ft = p.footT, W = p.width, H = p.hgt, parts = [], k;
+        // each piece of the silhouette gets the cut-outs whose centre lies inside its bounds
+        sil.outers.forEach(function (o) {
+          var mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+          o.forEach(function (q) { mnx = Math.min(mnx, q[0]); mxx = Math.max(mxx, q[0]); mny = Math.min(mny, q[1]); mxy = Math.max(mxy, q[1]); });
+          var mine = sil.holes.filter(function (h) {
+            var cx = 0, cy = 0; h.forEach(function (q) { cx += q[0]; cy += q[1]; }); cx /= h.length; cy /= h.length;
+            return cx > mnx && cx < mxx && cy > mny && cy < mxy;
+          });
+          parts.push(extrudeXY(THREE, o, mine, 0, t));
+        });
+        // the foot lies on the bed behind the panel's back face and under the books
+        var foot = [box(-W / 2 + 0.4, 0, 0.5, W / 2 - 0.4, ft, t + F)];
+        var gN = Math.round(p.gussets), gH = Math.min(H * 0.45, F * 0.9);
+        for (k = 0; k < gN; k++) {
+          var gx = gN === 1 ? 0 : -W / 2 + 14 + (k * (W - 28)) / (gN - 1);
+          foot.push(extrudeYZ(THREE, [[ft - 0.4, t - 0.5], [ft - 0.4, t + F * 0.92], [ft + gH, t - 0.5]], null, gx - 2.2, gx + 2.2));
+        }
+        return { panel: parts, foot: foot };
+      }
+
+      function build(p, api) {
+        var THREE = api.THREE, out = [], a = oneBookend(p, THREE), panel = a.panel.slice(), foot = a.foot.slice();
+        if (Math.round(p.pair) === 1) {
+          var dx = p.width + 18;
+          a.panel.forEach(function (m) { panel.push(mirrorX(m, dx)); });
+          a.foot.forEach(function (m) { foot.push(mirrorX(m, dx)); });
+        }
+        pushMesh(out, mesh('panel', panel));
+        pushMesh(out, mesh('foot', foot));
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-063',
+        category: 'HOME // BOOKENDS',
+        title: 'Bookend Builder',
+        fileName: 'Bookends',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Walnut', color: '#8a6a4f' },
+          { name: 'Sage Green', color: '#a7c4a0' }, { name: 'Terracotta', color: '#e8a07a' },
+          { name: 'Ocean Glass', color: '#93c5fd' }, { name: 'Blush', color: '#fda4af' },
+          { name: 'Brass', color: '#d6b160' }, { name: 'Charcoal', color: '#3b3f4a' }
+        ],
+        defaultColor: '#f1f5f9',
+        partNames: { panel: 'Panel', foot: 'Foot & gussets' },
+        parameters: [
+          choice('Silhouette', 'style', 'Style', STYLES, DEFAULTS.style),
+          slider('Silhouette', 'count', 'Detail (books, peaks, buildings, waves)', '', 2, 10, 1, DEFAULTS.count),
+          choice('Silhouette', 'cut', 'Cut-outs', ['Solid', 'With cut-outs'], DEFAULTS.cut),
+          slider('Silhouette', 'seed', 'Variation', '', 1, 9, 1, DEFAULTS.seed),
+          slider('Size', 'width', 'Width', ' mm', 60, 150, 1, DEFAULTS.width),
+          slider('Size', 'hgt', 'Height', ' mm', 80, 200, 1, DEFAULTS.hgt),
+          slider('Size', 'panel', 'Panel thickness', ' mm', 4, 14, 0.5, DEFAULTS.panel),
+          slider('Foot', 'foot', 'Foot length (under the books)', ' mm', 40, 130, 1, DEFAULTS.foot),
+          slider('Foot', 'footT', 'Foot thickness', ' mm', 4, 12, 0.5, DEFAULTS.footT),
+          slider('Foot', 'gussets', 'Gussets', '', 0, 4, 1, DEFAULTS.gussets),
+          choice('Foot', 'pair', 'Set', ['Single', 'Mirrored pair'], DEFAULTS.pair)
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Default book stack pair', {}),
+          presetOf(DEFAULTS, 'Mountain range', { style: 1, count: 6, hgt: 150 }),
+          presetOf(DEFAULTS, 'City skyline', { style: 2, count: 6, hgt: 150, width: 110 }),
+          presetOf(DEFAULTS, 'Rolling waves', { style: 3, count: 4 }),
+          presetOf(DEFAULTS, 'Arch window', { style: 4, hgt: 150 })
+        ],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
