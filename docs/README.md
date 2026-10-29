@@ -1,5 +1,7 @@
 # Maker Makers Documentation
 
+Agents: start at [../CLAUDE.md](../CLAUDE.md).
+
 Maker Makers is a static website with two jobs:
 
 1. **Generator showcase.** A pannable, zoomable world map of grouped generator tiles (related groups side by side, with room reserved for future generators) where parametric STL / OBJ generators (standalone HTML programs) are attached, previewed, and downloaded.
@@ -14,8 +16,12 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [architecture.md](architecture.md) | How the page, scripts and screens fit together, state, and external services |
 | [file-structure.md](file-structure.md) | Every file in the repo and what it is for |
 | [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the generator contract, and how to add a generator |
+| [slot-registry.md](slot-registry.md) | Every built slot, reserved ranges (76-90 animals) and groups |
 | [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, the Color tool, exports, and the visual rules |
 | [flexi-creatures.md](flexi-creatures.md) | The ten print-in-place flexi animals (slots 91-100): ball-joint kit, clearance rules and the check script |
+| [workshop.md](workshop.md) | The Workshop 3D editor and the `?embed=workshop` generator hook |
+| [hologram-tiles.md](hologram-tiles.md) | Hover holograms rendered from the real models (posters, `build-holo.py`) |
+| [sprite-sheet-skill.md](sprite-sheet-skill.md) | Abandoned Gemini hover-frame workflow (historical) |
 | [homepage.md](homepage.md) | The pannable world map of grouped generator tiles and how to add to it |
 | [printer-map.md](printer-map.md) | The printer radar: data, search, and how to add a printer |
 | [development.md](development.md) | Running the site locally and the live-reload dev server |

@@ -1,3 +1,5 @@
+> **ABANDONED / historical.** Gemini-drawn hover frames were replaced by holograms rendered from the real 3D models (see [hologram-tiles.md](hologram-tiles.md)). Do not use this workflow for new generators. It is kept because the base tile (`assets/thumbnails/sprites/base-tile.webp`, built by `scripts/build-hover-sheets.py`) and the old frames (`?gemini` on the homepage URL) still come from it. The "42 generators" count below is out of date; the site now has 84 (see [slot-registry.md](slot-registry.md)).
+
 # Tile hover assets skill v3 (for Gemini)
 
 Version 3 asks Gemini for **one generator per image, a 16-frame half turn (0–180°) that the site mirrors for the rest**, because two generators and 24 frames per image gave uneven, repeated frames, and Gemini cannot draw the second half of a turn (270–360°) reliably. It supersedes v1 (scan-line sheets) and v2 (two generators per sheet). The base tile is unchanged.

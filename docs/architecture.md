@@ -2,7 +2,7 @@
 
 ## Overview
 
-The site is a single HTML page (`index.html`) with three screens that share one page. A small script (`js/app.js`) switches between them by showing and hiding sections. There is no router, no framework, and no server-side code.
+The site is a single HTML page (`index.html`) with four screens that share one page. A small script (`js/app.js`) switches between them by showing and hiding sections. There is no router, no framework, and no server-side code.
 
 ```
 index.html
@@ -10,6 +10,7 @@ index.html
  ├── <main>
  │    └── Generator world map (pannable regions of tiles)   #splash-screen
  │    ├── #viewer-screen   generator viewer (iframe + controls)
+ │    ├── #workshop-screen Workshop 3D editor (js/workshop.js)
  │    └── #map-screen      printer radar (Leaflet + directory list)
  ├── Idea modal (#idea-modal)
  └── Footer
@@ -18,7 +19,8 @@ index.html
 Script load order at the bottom of `index.html`:
 
 1. `js/programs.js` defines the `PROGRAMS` array (the slot registry).
-2. `js/app.js` renders everything and wires up the UI. It runs `initSplash()` at the end of the file, and starts loading `data/public-printers.json` in the background.
+2. `js/worldmap.js` (homepage map) and `js/workshop.js` (Workshop editor) define the homepage map and Workshop that `app.js` calls.
+3. `js/app.js` renders everything and wires up the UI. It runs `initSplash()` at the end of the file, and starts loading `data/public-printers.json` in the background.
 
 Leaflet 1.9.4 is loaded from unpkg in the `<head>` (CSS) and before the local scripts (JS).
 
@@ -83,6 +85,6 @@ These are current behaviors to know about. None are blocking for the static, tru
 
 - **Unescaped HTML.** Titles, categories, descriptions, and the printer fields are inserted with `innerHTML` without escaping. Data from `PROGRAMS` and the printer JSON file is trusted, but live OpenStreetMap results are not. Their name, address and equipment text appear in popups and cards, and their `website` tag becomes an `href`. A `javascript:` URL in that tag would run when clicked. Validate or escape these before the scan results are shown.
 - **Saved ideas are unescaped too.** The idea log writes the stored title and description as HTML. Only the submitting browser sees them, but they should still be escaped.
-- **Export buttons are placeholders.** The viewer's "Export .STL" and "Export .OBJ" buttons are disabled and not wired.
+- **Viewer buttons.** The viewer header has Save STL (clicks the generator's own export button, consent modal included) and Send to Workshop. Exporting itself happens inside the generator (STL, and OBJ + MTL zip; there is no 3MF).
 - **Silent scan failures.** Overpass errors are swallowed, so a failed scan looks like an empty one.
 - **Distance check is in degrees.** Deciding which verified listings to include in a scan uses a degree distance, not kilometers.

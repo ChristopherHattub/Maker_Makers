@@ -35,6 +35,8 @@ The homepage shows generators as grouped, connected tiles. Generators are listed
 
 Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field names the group, filled left to right, top to bottom. A region grows downward when it has more generators than cells, so leave a spare row below it. Groups with no `at` are packed below everything else. Any generator in no group lands in an automatic "More" region. See [homepage.md](homepage.md).
 
+The full list of built slots, reserved ranges (76-90 animals) and the next free slot is in [slot-registry.md](slot-registry.md).
+
 ## Active slots
 
 A slot is **active** when it has a `programUrl`, and only active slots get a homepage tile. A tile without a `thumbnailUrl` shows a plus sign. The viewer reads `programUrl` directly.
@@ -47,7 +49,7 @@ A generator is a page in `programs/` that loads the shared engine. The page hold
 - It is loaded in an `<iframe>` in the viewer. Its sliders, Color tool and export buttons appear inside that frame.
 - It must work with no server and no build step. It can fetch three.js from its CDN, and nothing else.
 - The viewer's "Download Program (.HTML)" button, and the generator's own "Download standalone .html generator" button, both save one self-contained file. The shared files are inlined into it.
-- The two "Export .STL / .OBJ" buttons in the viewer are placeholders. Exporting happens inside the generator.
+- Exporting happens inside the generator (Export .STL, and Export .OBJ (colors), a zip of .obj + .mtl). The viewer header's Save STL just triggers the generator's own button. There is no 3MF export.
 
 Use relative paths only, such as `programs/ghost-builder.html`, never a path starting with `/`. Relative paths work locally and under a GitHub Pages project URL.
 
@@ -74,7 +76,7 @@ Use relative paths only, such as `programs/ghost-builder.html`, never a path sta
 
 ## Navigation
 
-The URL hash tracks the screen, so the browser Back and Forward buttons work: no hash is the generators grid, `#/generator/SLOT-01` is a generator, `#/map` is the printer map. Back from a generator returns to the grid. The generator iframe is swapped with `location.replace` so it adds no history entries of its own.
+The URL hash tracks the screen, so the browser Back and Forward buttons work: no hash is the homepage map, `#/generator/SLOT-01` is a generator, `#/workshop` is the Workshop, `#/map` is the printer map. Back from a generator returns to the grid. The generator iframe is swapped with `location.replace` so it adds no history entries of its own.
 
 ## Notes
 

@@ -4,10 +4,13 @@ The homepage (the former "experimental view", now the only view) shows each gene
 hologram of the generator's real 3D model that pops out and spins on hover. The holograms are rendered from the
 generators themselves, so a new or changed generator only needs a re-render.
 
+Memory aid for new generators: every new generator needs a hologram (poster + atlas + manifest entry), or its tile falls back to the SVG thumbnail. Gemini sheets are no longer used ([sprite-sheet-skill.md](sprite-sheet-skill.md)). Some tiles are still weak (thin, flat or low-contrast models); retune with `scripts/hologram-config.json` and re-render that one generator.
+
 ## Re-render everything (or one generator)
 
 ```
 git pull origin main
+# render in a real browser; the page needs WebGL
 node scripts/dev-server.mjs --port 5185 &
 node scripts/receive-render.mjs --out /tmp/holo &
 # open in a browser (it renders and uploads each atlas):

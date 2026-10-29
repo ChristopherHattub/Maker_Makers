@@ -13,7 +13,9 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 │   └── styles.css        # All site styles
 ├── js/
 │   ├── programs.js       # Slot registry (generators; the grid grows with it)
-│   └── app.js            # Homepage hub, viewer, idea queue, printer map
+│   ├── worldmap.js       # Homepage world map
+│   ├── workshop.js       # Workshop 3D editor
+│   └── app.js            # Navigation, viewer, idea queue, printer map
 ├── data/
 │   └── public-printers.json  # Verified printer listings: name, coordinates, source, verified date
 ├── assets/
@@ -24,7 +26,7 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 └── .nojekyll             # Tells Pages to serve files as-is
 ```
 
-Full documentation lives in [docs/](docs/README.md).
+Full documentation lives in [docs/](docs/README.md). AI agents: start at [CLAUDE.md](CLAUDE.md).
 
 ## Running locally with live reload
 

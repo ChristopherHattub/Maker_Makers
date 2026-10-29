@@ -2,7 +2,7 @@
 
 The map screen (`#map-screen`) shows public 3D printers and makerspaces on a Leaflet map, with a directory list alongside it. It needs no API key.
 
-> **Status:** uncommitted working-tree change. Verified listings are in `data/public-printers.json`, and unverified OpenStreetMap candidates are in `data/osm-candidates.json`. Verification is ongoing, starting with New Hampshire.
+> **Status:** committed. Verified listings are in `data/public-printers.json`, and unverified OpenStreetMap candidates are in `data/osm-candidates.json`. Verification is ongoing, starting with New Hampshire.
 
 ## Two layers
 
@@ -23,7 +23,7 @@ OpenStreetMap confirms that a space exists and where it is. It does not confirm 
 ## Initialization
 
 1. At page load, `loadPublicPrinters()` in `js/app.js` fetches `data/public-printers.json` into `PUBLIC_PRINTERS`. If the fetch or parse fails, the list is empty.
-2. The Leaflet map is created the first time the screen is shown (`initLeafletMap()`). It opens centered on North America (`NORTH_AMERICA_VIEW`: `[48.5, -100]`, zoom 3) with Esri's World Street Map tiles. On that first open, the map asks for the visitor's position (`centerMapOnUser()`) and zooms to it if allowed. If permission is denied or the position is unavailable, the North America view stays.
+2. The Leaflet map is created the first time the screen is shown (`initLeafletMap()`). It opens centered on North America (`NORTH_AMERICA_VIEW`: `[48.5, -100]`, zoom 3) with Esri's World Street Map tiles. The site never asks for the visitor's location; the North America view stays until they search for a place.
 3. If the data finishes loading after the map exists, the map re-renders the list.
 
 Later visits call `invalidateSize()` so the map redraws at the right size.

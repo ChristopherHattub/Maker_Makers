@@ -18,7 +18,8 @@ Sources of truth (read them before changing anything, they may have moved on sin
 4. **Check printability** with the script: `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html ["Preset label"]`. Run it for the defaults and for every preset, plus slider extremes (temporarily edit values).
 5. **Register the slot and thumbnail** (below).
 6. **Verify live** with the checklist at the end. Do not report done without opening it in the preview.
-7. **Docs**: update `docs/generator-registry.md` / `docs/file-structure.md` if they describe the slot list or thumbnails. Commit only your own files (other work may be in the tree: stage by path, never `git add -A`).
+7. **Hologram tile**: render poster + atlas per `docs/hologram-tiles.md`.
+8. **Docs**: update `docs/slot-registry.md` (and `docs/file-structure.md` if needed). Commit only your own files (other work may be in the tree: stage by path, never `git add -A`).
 
 ## Mobile layout is mandatory and engine-owned
 
@@ -26,7 +27,7 @@ Every generator, new or existing, **must** use the shared phone layout from `gen
 
 ## Print tab realistic render is engine-owned
 
-Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**, plus the **Export block** (triangle count, file name, Export .STL, standalone .html download, disclaimer); there are no slicer settings. The Export block has **Export .STL** and **Export .OBJ (colors)**; the 3MF carries the Color-tab colors for any slicer (engine-owned, nothing to add per generator). Never put export, file name or download controls in another tab. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
+Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**, plus the **Export block** (triangle count, file name, Export .STL, standalone .html download, disclaimer); there are no slicer settings. The Export block has **Export .STL** and **Export .OBJ (colors)**; the OBJ zip carries the Color-tab colors as materials for Bambu, Orca and Prusa (engine-owned, nothing to add per generator; there is no 3MF export). Never put export, file name or download controls in another tab. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
 
 ## Page rules (the standalone bundler depends on these)
 
@@ -110,7 +111,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
 
 ## Slot and thumbnail
 
-`js/programs.js` has a `GENERATORS` list; the grid builds `PROGRAMS` from it and adds rows automatically (at least 40 sockets, any slot number works). Activate a slot by appending an entry to `GENERATORS` (slot 1 = Ghost Builder is the model to follow):
+`js/programs.js` has a `GENERATORS` list; `PROGRAMS` is built from it (any slot number works). Activate a slot by appending an entry to `GENERATORS` (slot 1 = Ghost Builder is the model to follow):
 
 ```js
 {
@@ -123,7 +124,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
 }
 ```
 
-- Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. Generators are no longer featured individually; the Featured carousel shows bundles only. If the generator belongs to a theme, add `bundle: '<bundle id>'` to its `GENERATORS` entry (see Bundles below).
+- Use the next free slot; the `code` in the config (`MM-00N`) matches the slot number. Add `bundle: '<group id>'` to its `GENERATORS` entry (see Bundles below) and record the slot in `docs/slot-registry.md`. Slots 76-90 are reserved for animals; the next free slot is 101.
 - Titles/categories/descriptions are inserted as HTML unescaped: plain text, no `&`, `<`.
 - A slot with `programUrl` is "ONLINE" (viewer iframe, Download enabled); without `thumbnailUrl` it shows the empty crosshair.
 - **Thumbnail**: see the next section. File `assets/thumbnails/<kebab-name>.svg`, same name as the page.
@@ -142,17 +143,17 @@ All slot thumbnails share one look, so the grid reads as a set. **Start from [th
 
 ## Bundles
 
-A bundle groups generators under a theme (Halloween, Christmas...). Bundles live in the `BUNDLES` array in `js/programs.js`, under `GENERATORS`:
+A bundle (a "group") is a region of the homepage world map (Halloween, Christmas...). Bundles live in the `BUNDLES` array in `js/programs.js`, under `GENERATORS`:
 
 ```js
-{ id: 'halloween', name: 'Halloween Bundle', description: 'Plain text.', featured: true,
+{ id: 'halloween', name: 'Halloween', description: 'Plain text.', accent: '#ff8a1f',
   generators: ['SLOT-02', 'SLOT-03'] }   // optional ordered list of generator ids
 ```
 
 - Declare membership on the generator with `bundle: 'halloween'` (string, or an array for several bundles) in its `GENERATORS` entry, and/or list its id in the bundle's `generators`. The two are merged without duplicates; the list sets display order, tagged generators are appended.
-- To make a new bundle, append an entry to `BUNDLES` and tag its generators. `featured: true` shows it in the Featured carousel (bundles are the only featured items). Every bundle with members gets a filter chip above the generators grid. Bundles are never grid items.
+- To make a new bundle, append an entry to `BUNDLES` and tag its generators. Position and size are automatic (see docs/homepage.md); `planned: true` reserves an empty region.
 - Only generators with a `programUrl` count as members. Use plain text (no `&`, `<`) in names and descriptions.
-- Thumbnails shown for a bundle are the members' own `thumbnailUrl`s; nothing extra to draw.
+- Each tile shows a hologram of the real model on hover; render one for every new generator (docs/hologram-tiles.md).
 
 ## Visual style conventions (engine-owned, do not override)
 
@@ -166,13 +167,14 @@ Blueprint look: deep navy, cyan lines/active states, green ("Find local printer"
 Start the dev server with the preview tool (`maker-makers`, port 5173, from `.claude/launch.json`; never run servers with Bash), then:
 
 - [ ] `programs/<name>.html` loads standalone: no console errors, model visible, header shows code/category/title.
-- [ ] Open from the grid: socket shows the thumbnail, viewer iframe loads the generator, header buttons work, no placeholder "NO GENERATOR LOADED".
+- [ ] Open from the homepage: the tile shows its thumbnail/hologram, viewer iframe loads the generator, header buttons work, no placeholder "NO GENERATOR LOADED".
 - [ ] Every slider and preset rebuilds the model with no gaps, spikes or inside-out faces; try min and max of each. Triangle count stays reasonable.
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
 - [ ] Print tab shows the realistic render (colors kept, changing Material updates it live) and has no other options.
-- [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed). - [ ] Export .OBJ (colors) after painting two parts: unzip it; `3D/3dmodel.model` has one `basematerials` entry per used color and `Metadata/model_settings.config` one `<volume>` per color covering all triangles. A new download type must go through `confirmDownload`.
+- [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed).
+- [ ] Export .OBJ (colors) after painting two parts: unzip it; `name.obj` references `name.mtl`, which has one material per used color, and `usemtl` groups cover all triangles. A new download type must go through `confirmDownload`.
 - [ ] "Download standalone .html generator" and the viewer's Download both produce one working file (needs http, not file://).
 - [ ] Clicking Export .STL opens the consent modal; the download button stays disabled until the box is ticked; Cancel/Esc/backdrop close it without downloading.
 - [ ] The Disclaimer block shows at the bottom of the Print tab under the Export block (engine-provided; never remove or override it in a generator page) and expands to readable text.

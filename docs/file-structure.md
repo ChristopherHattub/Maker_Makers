@@ -4,23 +4,32 @@
 .
 ├── index.html               Page markup: header, three screens, idea modal, footer
 ├── css/
-│   └── styles.css           All site styles (blueprint theme, homepage world map, map, modal)
+│   ├── styles.css           All site styles (blueprint theme, homepage world map, map, modal)
+│   └── workshop.css         Workshop editor and tile styles
 ├── js/
 │   ├── programs.js          GENERATORS list and the PROGRAMS slot array built from it
 │   ├── worldmap.js          Homepage world map: layout, camera, selection, minimap
-│   └── app.js               Rendering, homepage world map, viewer, idea queue, printer map
+│   ├── workshop.js          Workshop 3D editor
+│   └── app.js               Navigation, viewer, idea queue, printer map
 ├── data/
 │   ├── public-printers.json Verified printer listings (solid dots, directory)
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
 ├── assets/
-│   └── thumbnails/          Slot thumbnail images (ghost-builder.svg, ...)
+│   └── thumbnails/          Slot thumbnail SVGs; sprites/ holds hologram atlases, posters, manifest-v2.json
 ├── programs/                Generator pages (ghost-builder.html, ...)
 │   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
 ├── scripts/
-│   └── dev-server.mjs       Zero-dependency static server with live reload
+│   ├── dev-server.mjs       Zero-dependency static server with live reload
+│   ├── receive-render.mjs, build-holo.py, hologram-config.json   Hologram tile pipeline
+│   └── build-hover-sheets.py, build-sprite-sheets.py, sprite-tints.json   Old Gemini sprite pipeline (abandoned; base tile only)
+├── tools/
+│   ├── hologram.html        Renders a generator to a hologram atlas
+│   └── flexi/               Source + builder + clearance check for the flexi creatures
+├── CLAUDE.md, AGENTS.md     Agent entry point (AGENTS.md just points to CLAUDE.md)
 ├── .claude/
-│   └── launch.json          Preview-server config (runs dev-server.mjs on port 5173)
-├── docs/                    This documentation
+│   ├── launch.json          Preview-server config (runs dev-server.mjs on port 5173)
+│   └── skills/makermakers-generator/   Skill for making generators + check-mesh.mjs
+├── docs/                    This documentation (start at README.md)
 ├── .editorconfig            UTF-8, LF line endings, 2-space indent, final newline
 ├── .gitignore               OS, editor, node_modules, .env and tmp/ entries
 ├── .nojekyll                Tells GitHub Pages to serve files as-is
