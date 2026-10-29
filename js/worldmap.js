@@ -920,6 +920,14 @@ function bindWorldInput() {
   document.getElementById('world-zoom-out').addEventListener('click', () => zoomBy(1 / 1.4));
   document.getElementById('world-fit').addEventListener('click', worldFitAll);
 
+  const toolsBtn = document.getElementById('world-tools-toggle'), tools = document.getElementById('world-tools');
+  toolsBtn.addEventListener('click', () => {
+    const open = tools.hidden;
+    tools.hidden = !open;
+    toolsBtn.setAttribute('aria-expanded', String(open));
+    toolsBtn.classList.toggle('open', open);
+    if (open) wEl.search.focus({ preventScroll: true });
+  });
   wEl.search.addEventListener('input', () => worldSearch(wEl.search.value));
   wEl.search.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;

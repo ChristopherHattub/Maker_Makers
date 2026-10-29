@@ -46,11 +46,14 @@
         <div class="world-hud world-title">
           <h2>Generator Map</h2>
           <p id="world-stats"></p>
+          <button class="btn world-tools-toggle" type="button" id="world-tools-toggle" aria-expanded="false" aria-controls="world-tools">Search &amp; sort <span aria-hidden="true">&#9662;</span></button>
+          <div class="world-tools" id="world-tools" hidden>
           <input type="search" id="world-search" class="bp-input" placeholder="Search generators..." aria-label="Search generators" autocomplete="off">
           <div class="world-sort">
             <select id="world-sort" class="bp-input" aria-label="Sort generators"></select>
             <button class="btn" type="button" id="world-arrange" aria-pressed="false">Rearrange</button>
             <button class="btn" type="button" id="world-reset" hidden title="Forget my arrangement">Reset</button>
+          </div>
           </div>
         </div>
 

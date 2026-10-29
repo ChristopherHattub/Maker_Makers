@@ -1179,3 +1179,9 @@ body.on-splash .container {
 .world.arranging .tile.dragging { cursor: grabbing; z-index: 40; opacity: 0.92; pointer-events: none; will-change: transform; }
 .world.exp .cell-cursor { width: 128px; height: 128px; }
 .world-sort [hidden] { display: none; }
+
+/* Search / sort tools start collapsed behind one button */
+.world-tools-toggle { width: 100%; padding: 0.35rem 0.6rem; font-size: 0.72rem; text-align: left; }
+.world-tools-toggle.open span { display: inline-block; transform: rotate(180deg); }
+.world-tools { margin-top: 0.4rem; }
+.world-tools[hidden] { display: none; }
