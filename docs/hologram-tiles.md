@@ -32,7 +32,7 @@ manifest entry has no `poster` loads its atlas immediately, as before. Tiles wit
 thumbnail at all.
 
 - `<id>` is the basename of the generator's `thumbnailUrl` (for example `ghost-builder`).
-- The upload port is fixed at 5190 in `tools/hologram.html`. If another session holds it, stop that receiver first (or render one at a time); `receive-render.mjs --port` only changes the receiver side.
+- The upload port defaults to 5190. If it is taken, add `&port=<n>` to the render URL and run `receive-render.mjs --port <n>`.
 - `build-holo.py` needs Python 3 with Pillow.
 - Each atlas is 6 x 4 cells of 288 px: 24 frames, 15° apart, a full clockwise turn with no mirroring. The homepage plays it at 20 fps while the tile is hovered or focused.
 

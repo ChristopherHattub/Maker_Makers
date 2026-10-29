@@ -27,7 +27,7 @@
 │   └── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
 ├── scripts/
 │   ├── dev-server.mjs       Zero-dependency static server with live reload
-│   ├── receive-render.mjs   Receives the atlases tools/hologram.html uploads (port 5190)
+│   ├── receive-render.mjs   Receives the atlases tools/hologram.html uploads (default port 5190)
 │   ├── build-holo.py        Turns those atlases into holo-<id>.webp and updates manifest-v2.json
 │   ├── hologram-config.json Per-generator hologram colour and framing
 │   ├── build-hover-sheets.py, build-sprite-sheets.py, sprite-tints.json
