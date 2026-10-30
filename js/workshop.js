@@ -181,11 +181,11 @@ function wsInit(root) {
     <div class="ws-main">
       <div class="ws-stage" id="ws-stage">
         <div class="ws-tools">
-          <button data-m="translate" class="on" title="Move (W). You can also just drag a shape.">✋<small>Move</small></button>
-          <button data-m="rotate" title="Turn it round (E)">🔄<small>Turn</small></button>
-          <button data-m="scale" title="Make it bigger or smaller (R)">⤢<small>Size</small></button>
-          <button data-a="snap" class="on" title="Snap to the grid (G)">🧲<small>Snap</small></button>
-          <button data-a="focus" title="Centre the view on the selected shape (F)">🎯<small>Centre</small></button>
+          <button data-m="translate" class="on" title="Move (M). You can also just drag a shape.">✋<small>Move</small><kbd>M</kbd></button>
+          <button data-m="rotate" title="Turn it round (R)">🔄<small>Turn</small><kbd>R</kbd></button>
+          <button data-m="scale" title="Make it bigger or smaller (S)">⤢<small>Size</small><kbd>S</kbd></button>
+          <button data-a="snap" class="on" title="Snap to the grid (G)">🧲<small>Snap</small><kbd>G</kbd></button>
+          <button data-a="focus" title="Centre the view on the selected shape (F)">🎯<small>Centre</small><kbd>F</kbd></button>
           <button data-v="top" title="Look from above">⬆️<small>Top</small></button>
           <button data-v="front" title="Look from the front">👀<small>Front</small></button>
           <button data-v="iso" title="3D view">🧊<small>3D</small></button>
@@ -586,9 +586,30 @@ function wsBindUI() {
   });
 
   const root = wsEl.root;
+  // Hold a move / turn / size button to keep pressing it. One history entry is committed when it is let go.
+  const HOLD_MS = { nudge: 50, turn: 60, grow: 150 };
+  let hold = null;
+  const holdStop = () => {
+    if (!hold) return;
+    clearTimeout(hold.t0); clearInterval(hold.t1);
+    const h = hold; hold = null;
+    window.removeEventListener('pointerup', holdStop); window.removeEventListener('pointercancel', holdStop);
+    if (h.did) wsCommit();
+  };
+  root.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.ws-side button[data-a]');
+    const a = b && b.dataset.a, kind = a && a.split(':')[0];
+    if (!HOLD_MS[kind] || e.button !== 0 || WS.mini) return;
+    holdStop();
+    const tick = () => { if (wsVisualAction(a, true)) hold.did = true; };
+    hold = { did: false }; tick();
+    hold.t0 = setTimeout(() => { hold.t1 = setInterval(tick, HOLD_MS[kind]); }, 350);
+    window.addEventListener('pointerup', holdStop); window.addEventListener('pointercancel', holdStop);
+  });
   root.addEventListener('click', e => {
     const b = e.target.closest('[data-a],[data-m],[data-v],[data-set],[data-add]');
     if (!b) return;
+    if (e.detail > 0 && HOLD_MS[(b.dataset.a || '').split(':')[0]] && b.closest('.ws-side')) return;   // mouse / touch presses were handled on pointerdown
     if (b.dataset.m) { WS.mode = b.dataset.m; root.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('on', x === b)); WS.tc.setMode(WS.mode); }
     else if (b.dataset.v) wsView(b.dataset.v);
     else if (b.dataset.set) { WS.set = b.dataset.set; WS.q = ''; document.getElementById('ws-q').value = ''; wsRenderCatalog(); }
@@ -612,7 +633,7 @@ function wsBindUI() {
     else if (mod && k === 'd') { e.preventDefault(); wsDuplicate(); }
     else if (mod && k === 'a') { e.preventDefault(); wsSelect(WS.objs.filter(o => o.mesh.visible && !o.locked)); }
     else if (k === 'delete' || k === 'backspace') { e.preventDefault(); wsDelete(); }
-    else if (k === 'w' || k === 'e' || k === 'r') root.querySelector(`[data-m="${{ w: 'translate', e: 'rotate', r: 'scale' }[k]}"]`).click();
+    else if (!mod && (k === 'm' || k === 'r' || k === 's')) root.querySelector(`[data-m="${{ m: 'translate', r: 'rotate', s: 'scale' }[k]}"]`).click();
     else if (k === 'g') wsAction('snap');
     else if (k === 'b') wsDropSelected();
     else if (k === 'h') wsToggle('hidden');
@@ -744,7 +765,7 @@ function wsRenderSide() {
       <div class="ws-btns3">${B('bool-union', '🧩', 'Merge')}${B('bool-subtract', '✂️', 'Cut')}${B('bool-intersect', '🔗', 'Overlap')}</div>`;
   }
   side.innerHTML = `<div><h4>Selection</h4>${insp}</div><div><h4>Scene (${WS.objs.length})</h4><ul class="ws-list">${list || '<li class="ws-note">Empty</li>'}</ul>
-    <p class="ws-note">Keys: W move · E rotate · R scale · G snap · B drop to bed · H hide · F focus · Ctrl+D duplicate · Ctrl+Z undo · Del delete</p>
+    <p class="ws-note">Keys: M move · R rotate · S scale · G snap · B drop to bed · H hide · F focus · Ctrl+D duplicate · Ctrl+Z undo · Del delete</p>
     <div class="ws-btns" style="margin:4px 0"><button data-a="export">💾 Save STL</button><button data-a="exportObj">🎨 Save OBJ (colours)</button></div><p class="ws-note">Private: files never leave your browser.</p></div>`;
   side.onclick = e => {
     const li = e.target.closest('li[data-id]');
@@ -787,17 +808,19 @@ function wsSideInput(e) {
 }
 
 // Big visual buttons: "nudge:x,y,z", "turn:axis,degrees", "grow:sx,sy,sz", "color:#hex".
-function wsVisualAction(a) {
-  if (WS.mini) { wsToast('Press Done to unlock the shape first.'); return; }
+// With keep set the history entry is left to the caller (hold-to-repeat); returns whether anything was changed.
+function wsVisualAction(a, keep) {
+  if (WS.mini) { wsToast('Press Done to unlock the shape first.'); return false; }
   const [kind, arg] = a.split(':'), v = arg.split(',');
   const list = WS.sel.filter(o => !o.locked);
-  if (!list.length) return;
+  if (!list.length) return false;
   if (kind === 'nudge') list.forEach(o => { const n = v.map(Number); if (n[2] > 0) o.free = true; o.mesh.position.add(new THREE.Vector3(...n).multiplyScalar(WS.step)); });
   else if (kind === 'turn') list.forEach(o => o.mesh.rotateOnWorldAxis(new THREE.Vector3(v[0] === 'x' ? 1 : 0, v[0] === 'y' ? 1 : 0, v[0] === 'z' ? 1 : 0), Number(v[1]) * Math.PI / 180));
   else if (kind === 'grow') list.forEach(o => o.mesh.scale.multiply(new THREE.Vector3(...v.map(Number))));
   else if (kind === 'color') list.forEach(o => { o.color = parseInt(v[0].slice(1), 16); o.mesh.material.color.setHex(o.color); });
   if (kind !== 'color') { wsKeepOnBed(); wsAttachGizmo(); }
-  wsCommit(); wsInspectorValues();
+  if (keep) wsInspectorValues(); else { wsCommit(); wsInspectorValues(); }
+  return true;
 }
 
 // ---------------------------------------------------------------- boolean merge / cut

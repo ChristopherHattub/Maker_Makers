@@ -5,7 +5,7 @@ A large tile in the middle of the homepage map opens `#/workshop`, a 3D editor f
 ## Using it
 
 - **Add:** pick a shape in the tab at the top. Collapsed, it shows the current set as a horizontal strip; "All sets" pulls down every set, and the search box filters across all sets.
-- **Move:** drag a shape across the bed. **Turn / Size:** the gizmo buttons (keys E, R). The side panel has big picture buttons instead of number boxes: a move pad, spin / tip / flip, bigger / smaller / taller / flatter / wider / thinner, and colour dots. Shape pictures in the tab are renders of the real 3D shapes.
+- **Move:** drag a shape across the bed. **Turn / Size:** the gizmo buttons (keys R, S). The side panel has big picture buttons instead of number boxes: a move pad, spin / tip / flip, bigger / smaller / taller / flatter / wider / thinner, and colour dots. Shape pictures in the tab are renders of the real 3D shapes.
 - **Import / export:** Open STL (or drop files on the viewport); Save STL writes the whole visible scene as one file.
 - **Generators:** the Generators set lists the finished generators (fidgets, clickers and other functional models are left out for now). Adding one places that generator's real default model. Double-click it to zoom in and open a mini editor (the generator's own Parametric controls) beside it; the shape rebuilds as you change sliders.
 - **From a generator:** the site viewer's top bar has Save STL and Send to Workshop. Send to Workshop opens the Workshop with the current model, its settings and any stamps loaded as an editable shape (`window.MM_WORKSHOP_INBOX`, filled by `sendToWorkshop()` in `js/app.js`).
@@ -13,10 +13,11 @@ A large tile in the middle of the homepage map opens `#/workshop`, a 3D editor f
 - **Quality of life:** undo/redo, duplicate, delete, multi-select (shift-click), drop to bed, centre, mirror, hide, lock, colour, snap, top/front/iso views, a build-plate size with out-of-bounds warning, autosave.
 - **Merge / Cut / Intersect:** select two or more shapes (the first selected is the base) and use the Combine buttons in the inspector. The result is one new shape; Ctrl+Z restores the originals. It uses three-bvh-csg 0.0.16 (with three 0.160), loaded from esm.sh on first use, and works best on closed shapes.
 - **Up / Down** lift a shape off the bed (it floats) and lower it back; it never goes below the bed, and "To bed" drops it.
+- **Hold to repeat:** holding a Move, Turn or Size button in the side panel keeps pressing it (after a short delay) until let go; the whole hold is one undo step (`pointerdown` handler in `wsInit`, `wsVisualAction(a, true)`). Keyboard activation still acts once.
 - **Arrow keys** nudge the selection (tiny / small / big step chips set the size; Shift = 5x, Alt = 1 mm, PageUp / PageDown = up / down). The Centre button in the left toolbar zooms the view onto the selected shape.
 - **Editing a generator shape:** double-click it for a controls-only mini editor. The shape updates in the main view as you change sliders. It is locked in place (no moving, scaling, adding or deleting) until you press Done. Click the shape in the main view to stamp or place things; the click is converted to the generator's coordinates and sent to its active tool (`mm-pick`). Stamps are kept with the shape (generators with stamps export `embedState`).
 - **Save:** Save STL and Save OBJ (a zip with .obj + .mtl that keeps each shape's colour for Bambu, Orca and Prusa; no print settings) are in the top bar and the side panel.
-- **Keys:** W/E/R move/rotate/scale, G snap, B drop to bed, H hide, F focus, Ctrl+D duplicate, Ctrl+Z / Ctrl+Shift+Z undo / redo, Del delete.
+- **Keys:** M/R/S move/rotate/scale (shown on the left tool buttons), G snap, B drop to bed, H hide, F focus, Ctrl+D duplicate, Ctrl+Z / Ctrl+Shift+Z undo / redo, Del delete.
 
 ## Privacy
 
