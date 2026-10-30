@@ -338,7 +338,7 @@
 
       // Ball profile helpers. Both ball shapes have a bottom steeper than 45 degrees from the bed, so a print
       // that starts at the pin never has to bridge. yb is the (negative) bottom, yt the top, centre at y = 0.
-      var RB0 = 0.85; // radius of the flat tip the ball stands on (just wider than the 0.75 mm pin, so nothing bridges)
+      var RB0 = 2.0; // radius of the flat the ball is printed from: wide enough to bond to the support, not a point
       function ballProfile(Rb, round) {
         if (round >= 1) {
           var ph = 40 * PI / 180, pr = Rb * Math.cos(ph), py = -Rb * Math.sin(ph); // sphere down to 40 degrees below the equator
@@ -422,7 +422,7 @@
       // overhangs more than about 40 degrees from vertical, so it prints with no supports at any setting.
       var ELEV = 47 * PI / 180;
       function lanternGraph(p) {
-        var N = Math.round(p.sides), T = Math.round(p.tiers), R = p.size, D = TAU / N, J = [], bars = [], k, i;
+        var N = Math.round(p.sides), T = Math.max(Math.round(p.tiers), p.size > 24 ? 2 : 1), R = p.size, D = TAU / N, J = [], bars = [], k, i;
         var rad = function (kk) { return R * (T === 1 ? 0.8 : 0.78 + 0.22 * Math.sin(PI * kk / T)); };
         var ys = [0];
         for (k = 0; k < T; k++) {
@@ -456,7 +456,7 @@
         });
         J.forEach(function (q, k) { append(cage, joint(q, k === G.hubT ? rj * 1.5 : rj)); });
         // ball stands low, on a short pin on the floor hub; it must fit clear of every bar and be wider than every opening
-        var round = p.round, pinLen = 2.2, hubTop = J[G.hubB][1] + rj;
+        var round = p.round, pinLen = 3.2, hubTop = J[G.hubB][1] + rj;
         var barsR = G.E.map(function (e) { return [J[e[0]], J[e[1]], rbar]; });
         var Rb, lo, hiR = 4, it;
         function place(R0) { var b = ballProfile(R0, round); return { prof: b, yc: hubTop + pinLen - b.yb }; }
@@ -481,7 +481,11 @@
           var rr = G.rad(0) + rj + 2.5;
           out.push({ name: 'raft', positions: toF32(cylY(rr, 0, 1.0, 48)) });
         }
-        if (p.pin >= 1) out.push({ name: 'pin', positions: toF32(cylY(0.75, hubTop - 1.0, pb.yc + pb.prof.yb + 0.4, 10)) });
+        if (p.pin >= 1) {
+          // a stout pedestal on the floor hub (r 3.2) narrowing in a 40 degree cone to a 1.7 mm neck under the ball's flat
+          var yTip = pb.yc + pb.prof.yb;
+          out.push({ name: 'pin', positions: toF32(lathe([[0, lift], [3.2, lift], [3.2, yTip - 1.5], [1.7, yTip + 0.4], [0, yTip + 0.4]], 16)) });
+        }
         var res = out;
         res.info = { ballRadius: Rb, lo: lo, hi: hiR, grown: attempt, size: p.size };
         return res;
@@ -514,7 +518,7 @@
         V.forEach(function (q) { if (q[1] - rj < ymin + 1) rr = Math.max(rr, Math.sqrt(q[0] * q[0] + q[2] * q[2])); });
         if (p.raft >= 1) {
           out.push({ name: 'raft', positions: toF32(cylY(rr + rj + 2.5, ymin, ymin + 1.0, 48)) });
-          if (p.pin >= 1) out.push({ name: 'pin', positions: toF32(cylY(0.65, ymin + 0.6, yBallBottom + 0.4, 10)) });
+          if (p.pin >= 1) out.push({ name: 'pin', positions: toF32(cylY(1.5, ymin + 0.6, yBallBottom + 0.4, 12)) });
         }
         return dropToBed(out);
       }
@@ -535,15 +539,15 @@
         partNames: { cage: 'Cage', ball: 'Ball', raft: 'Raft', pin: 'Snap-off pin' },
         parameters: [
           { group: 'Cage', key: 'shape', label: 'Cage shape (only Lantern prints with no supports)', unit: '', min: 0, max: 4, step: 1, value: 0, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
-          { group: 'Cage', key: 'sides', label: 'Lantern sides', unit: '', min: 4, max: 8, step: 1, value: 6 },
-          { group: 'Cage', key: 'tiers', label: 'Lantern tiers (rows of diamonds)', unit: '', min: 1, max: 4, step: 1, value: 2 },
-          { group: 'Cage', key: 'size', label: 'Cage size (grows a little if the ball would not fit)', unit: ' mm', min: 16, max: 34, step: 1, value: 22 },
+          { group: 'Cage', key: 'sides', label: 'Lantern sides', unit: '', min: 6, max: 8, step: 1, value: 6 },
+          { group: 'Cage', key: 'tiers', label: 'Lantern tiers (rows of diamonds; big cages need 2)', unit: '', min: 1, max: 3, step: 1, value: 2 },
+          { group: 'Cage', key: 'size', label: 'Cage size (grows a little if the ball would not fit)', unit: ' mm', min: 16, max: 28, step: 1, value: 22 },
           { group: 'Cage', key: 'strut', label: 'Bar thickness', unit: ' mm', min: 1, max: 2.4, step: 0.1, value: 1.5 },
           { group: 'Ball', key: 'ball', label: 'Ball size (small to large)', unit: '%', min: 0, max: 1, step: 0.05, value: 0.6, format: function (v) { return Math.round(v * 100) + '%'; } },
           { group: 'Ball', key: 'round', label: 'Ball shape (round has a 40 degree point underneath)', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Diamond', 'Round'] },
-          { group: 'Ball', key: 'gap', label: 'Rattle room around ball', unit: ' mm', min: 0.4, max: 1.2, step: 0.1, value: 0.6 },
+          { group: 'Ball', key: 'gap', label: 'Rattle room around ball', unit: ' mm', min: 0.4, max: 1.0, step: 0.1, value: 0.6 },
           { group: 'Print', key: 'raft', label: 'Raft under the cage', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
-          { group: 'Print', key: 'pin', label: 'Snap-off pin holding ball (off = the ball floats and needs slicer supports)', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] }
+          { group: 'Print', key: 'pin', label: 'Snap-off pedestal holding ball (off = the ball floats and needs slicer supports)', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] }
         ],
         presets: [
           { label: 'Default lantern', values: { shape: 0, sides: 6, tiers: 2, size: 22, strut: 1.5, ball: 0.6, round: 0, gap: 0.6, raft: 1, pin: 1 } },
