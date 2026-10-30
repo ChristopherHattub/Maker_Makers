@@ -508,7 +508,7 @@
         }
         if (p.plaque >= 1) {
           // flat plaque on the front (+Z) with raised numbers
-          var pw = p.plaqueW, ph = Math.min(p.band + 4, 20) * 0.9, py = p.band * 0.5, zf = Rout;
+          var pw = p.plaqueW, ph = Math.min(p.band + 4, 20) * 0.9, py = Math.max(p.band * 0.5, ph / 2), zf = Rout;   // plaque bottom stays on the bed
           var pts = rrect(pw / 2, ph / 2, 3, 6).map(function (q) { return [q[0], q[1] + py]; });
           pl.push(prismXY(pts, zf - 1.8, zf + 1.6));
           var s = String(Math.round(p.age)), u = Math.min(ph * 0.62 / 6, (pw * 0.8) / Math.max(4.4 * s.length, 4));

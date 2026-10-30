@@ -281,7 +281,11 @@
           }
           emblem.push(upright(stroke(-S * 0.3, 0, S * 0.3, 0, 2.2, fa, fb), yc));
         } else if (e === 2) { // clover
-          emblem.push(upright(fanPrism(cloverPoly(S, p.leaves >= 1 ? 4 : 3, 180, 180), rf - 2, rf + 1.4), yc));
+          // a big clover would poke below the brim: lift it until its lowest leaf rests on the brim
+          var cl = cloverPoly(S, p.leaves >= 1 ? 4 : 3, 180, 180), low = 0;
+          cl.forEach(function (q) { low = Math.max(low, q[1]); });
+          var yk = Math.max(yc, bt + low), rk = rAt(yk);
+          emblem.push(upright(fanPrism(cl, rk - 2, rk + 1.4), yk));
         }
 
         pushMesh(out, mesh('hat', [hat]));

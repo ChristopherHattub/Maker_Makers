@@ -412,11 +412,12 @@
         }
         spots.forEach(function (q) { [1, -1].forEach(function (s) { sp.push(slab(circlePts(s * q.x, q.z, q.r, 24), yb, yt + 0.2)); }); });
         // body, head and antennae lie on the bed
-        var bl = p.bodyL / 2, body = [xform(ball(3.1, 3.1, bl, 40), { t: [0, 3.1, 0] }), xform(ball(3.7, 3.4, 3.7, 32), { t: [0, 3.2, -bl - 1.5] })], ants = [];
+        var bl = p.bodyL / 2, body = [xform(ball(3.1, 3.1, bl, 40), { t: [0, 3.1, 0] }), xform(ball(3.7, 3.4, 3.7, 32), { t: [0, 3.4, -bl - 1.5] })], ants = [];
         if (p.ant >= 1) [1, -1].forEach(function (s) {
           var hz = -bl - 3, pts = curve([[s * 1.2, hz], [s * p.antenna * 0.3, hz - p.antenna * 0.5], [s * p.antenna * 0.55, hz - p.antenna]], 6);
-          for (i = 0; i < pts.length - 1; i++) ants.push(capsule(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 1.7, 0, 1.8));
-          ants.push(slab(circlePts(pts[pts.length - 1][0], pts[pts.length - 1][1], 2.1, 20), 0, 1.8));
+          // alternate segment heights by a hair so neighbouring segments never share a side edge
+          for (i = 0; i < pts.length - 1; i++) ants.push(capsule(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 1.7, 0, i % 2 ? 1.82 : 1.8));
+          ants.push(slab(circlePts(pts[pts.length - 1][0], pts[pts.length - 1][1], 2.1, 20), 0, 1.84));
         });
         pushMesh(out, mesh('wings', wings)); pushMesh(out, mesh('veins', veins)); pushMesh(out, mesh('border', border));
         pushMesh(out, mesh('spots', sp)); pushMesh(out, mesh('body', body)); pushMesh(out, mesh('antennae', ants));

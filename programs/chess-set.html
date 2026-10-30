@@ -315,89 +315,209 @@
 
       var ORDER = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
       var SIZE = { pawn: [0.70, 0.52], rook: [0.85, 0.58], knight: [0.85, 0.68], bishop: [0.82, 0.76], queen: [0.95, 0.90], king: [1.0, 1.0] };
-      // Knight head, facing right, in a 0..1 box
-      var HORSE = [[0.04, 0], [0.96, 0], [0.9, 0.2], [0.78, 0.3], [0.9, 0.44], [1.0, 0.56], [1.0, 0.66], [0.9, 0.74], [0.74, 0.86],
-        [0.66, 1.0], [0.54, 0.9], [0.44, 1.0], [0.34, 0.88], [0.16, 0.66], [0.05, 0.38]];
-      var HORSE_MIN = [[0.04, 0], [0.96, 0], [0.96, 0.55], [0.62, 1.0], [0.32, 1.0], [0.04, 0.4]];
+      var THEMES = ['Classic', 'Modern', 'Minimal', 'Gothic', 'Crystal', 'Chunky'];
+      // How each theme draws a piece: base (0 bevel + plinth, 1 stepped, 2 flat), curve (0 eased stem, 1 straight),
+      // collar rings, head / stem / base scale, spiked tops, a fixed facet count (0 = the Facets slider).
+      var LOOKS = [
+        { base: 0, curve: 0, collars: 1, head: 1, slim: 1, wide: 1, spike: false, seg: 0 },
+        { base: 1, curve: 1, collars: 1, head: 1, slim: 1, wide: 1, spike: false, seg: 0 },
+        { base: 2, curve: 1, collars: 0, head: 1, slim: 1, wide: 1, spike: false, seg: 0, flatKnight: true },
+        { base: 0, curve: 0, collars: 2, head: 0.9, slim: 0.8, wide: 0.9, spike: true, seg: 0 },
+        { base: 1, curve: 1, collars: 1, head: 1.05, slim: 1, wide: 1, spike: false, seg: 8 },
+        { base: 1, curve: 0, collars: 1, head: 1.2, slim: 1.2, wide: 1.12, spike: false, seg: 0 }
+      ];
+      // Old flat knight silhouette (Minimal theme and the "Flat" knight option), facing right in a 0..1 box
+      var HORSE_FLAT = [[0.04, 0], [0.96, 0], [0.96, 0.55], [0.62, 1.0], [0.32, 1.0], [0.04, 0.4]];
+      // Sculpted knight: horizontal sections bottom to top, [t, front, back, half width] in base radii,
+      // t = 0 at the pedestal and 1 at the poll; the muzzle points +x. Undersides are clamped to 45° when built.
+      var HORSE_ROWS = [
+        [0.00, 0.52, -0.62, 0.50], [0.10, 0.62, -0.64, 0.48], [0.22, 0.56, -0.63, 0.45], [0.32, 0.50, -0.60, 0.42],
+        [0.42, 0.62, -0.57, 0.40], [0.52, 0.88, -0.54, 0.38], [0.60, 1.12, -0.51, 0.37], [0.645, 1.04, -0.50, 0.36],
+        [0.69, 1.24, -0.49, 0.36], [0.76, 1.22, -0.47, 0.36], [0.83, 0.98, -0.44, 0.36], [0.89, 0.70, -0.41, 0.35],
+        [0.94, 0.44, -0.35, 0.31], [0.98, 0.24, -0.24, 0.24], [1.00, 0.08, -0.12, 0.15]
+      ];
 
-      function stem(pts, st, r0, y0, r1, y1) {
+      function stem(pts, curve, r0, y0, r1, y1) {
         for (var i = 1; i <= 8; i++) {
-          var t = i / 8, e = st === 0 ? 1 - (1 - t) * (1 - t) : t;
+          var t = i / 8, e = curve === 0 ? 1 - (1 - t) * (1 - t) : t;
           pts.push([r0 + (r1 - r0) * e, y0 + (y1 - y0) * t]);
         }
       }
-      // Ring collar: flares out at 45°, flat top, steps back to the neck. Returns the y at its top.
-      function collar(pts, st, rn, y, rc) {
-        if (st === 2) return y;
-        var yt = y + (rc - rn) + 1.2;
-        pts.push([rc, y + (rc - rn)], [rc, yt], [rn, yt]);
-        return yt;
+      // Collar rings: each flares out at 45°, has a flat top and steps back to the neck. Returns the y at the top.
+      function collar(pts, n, rn, y, rc) {
+        for (var k = 0; k < n; k++) {
+          var r = rn + (rc - rn) * (k ? 0.7 : 1);
+          if (k) { y += 1.2; pts.push([rn, y]); }
+          var yt = y + (r - rn) + 1.2;
+          pts.push([r, y + (r - rn)], [r, yt], [rn, yt]);
+          y = yt;
+        }
+        return y;
       }
-      function ballPoints(rn, rh, yTop) {
+      function ballPoints(rn, rh, yTop, step) {
         var yc = yTop - rh, pts = [[rn, yc - (rh - rn)], [rh, yc]];
-        for (var a = 15; a < 90; a += 15) pts.push([rh * Math.cos(a * Math.PI / 180), yc + rh * Math.sin(a * Math.PI / 180)]);
+        for (var a = step || 15; a < 90; a += step || 15) pts.push([rh * Math.cos(a * Math.PI / 180), yc + rh * Math.sin(a * Math.PI / 180)]);
         pts.push([0, yTop]);
         return pts;
       }
+      // A pointed finial: 45° flare from the neck, then a cone to the tip.
+      function spikePoints(rn, rs, y0, yTop) {
+        return [[rn, y0], [rs, y0 + (rs - rn)], [0, yTop]];
+      }
 
-      function makePiece(name, b, h, st, p, seg) {
+      // Section of the sculpted head: a rounded box from back to front, narrower towards the muzzle.
+      function horseLoop(f, g, w, taper, n) {
+        var c = (f + g) / 2, a = (f - g) / 2, loop = [];
+        for (var i = 0; i < n; i++) {
+          var th = i / n * Math.PI * 2, cs = Math.cos(th), sn = Math.sin(th);
+          var x = c + a * Math.sign(cs) * Math.pow(Math.abs(cs), 0.75);
+          var z = w * Math.sign(sn) * Math.pow(Math.abs(sn), 0.75) * (1 - taper * Math.max(0, cs));
+          loop.push([x, z]);
+        }
+        return loop;
+      }
+      function horseZ(f, g, w, taper, x) {
+        var c = (f + g) / 2, a = (f - g) / 2, u = Math.min(1, Math.abs((x - c) / a));
+        var cs = Math.pow(u, 1 / 0.75), sn = Math.sqrt(Math.max(0, 1 - cs * cs));
+        return w * Math.pow(sn, 0.75) * (1 - taper * (x > c ? cs : 0));
+      }
+
+      function sculptedKnight(out, b, yK, h, L, n) {
+        var hK = (h - yK) * 0.88, rows = [], prev = null;
+        HORSE_ROWS.forEach(function (r) {
+          var y = yK + r[0] * hK, row = { y: y, f: r[1] * b, g: r[2] * b, w: r[3] * b * L.slim };
+          if (prev) {
+            var dy = y - prev.y;   // nothing may lean out further than it rises
+            row.f = Math.min(row.f, prev.f + dy); row.g = Math.max(row.g, prev.g - dy); row.w = Math.min(row.w, prev.w + dy);
+          }
+          rows.push(row); prev = row;
+        });
+        var taper = function (r) { return r.f > 0.7 * b ? 0.34 : 0.18; };
+        K.rings(out, rows.map(function (r, i) {
+          return { p: horseLoop(r.f, r.g, r.w, taper(r), n), y: i ? r.y : yK - 0.4 };
+        }));
+        var top = rows[rows.length - 1].y;
+        // ears, a little back of the poll
+        [-1, 1].forEach(function (sz) {
+          var from = out.length, eh = h - (top - hK * 0.06);
+          K.lathe(out, [[b * 0.12, 0], [0, eh]], Math.max(6, Math.round(n / 3)), 0, 0);
+          K.map(out, from, function (x, y, z) { return [x - b * 0.06 + y * 0.25, y + top - hK * 0.06, z + sz * b * 0.1]; });   // lean forward a little
+        });
+        if (L.lowpoly) return;
+        // mane: a row of tufts down the back of the neck
+        for (var t = 0.28; t < 0.92; t += 0.08) {
+          var ri = 0, k;
+          for (k = 0; k + 1 < rows.length && rows[k + 1].y < yK + t * hK; k++) ri = k + 1;
+          var gx = rows[ri].g + b * 0.07, ty = yK + t * hK, rt = b * 0.1, ht = hK * 0.11;
+          K.rings(out, [
+            { p: K.ellipse(gx, 0, rt * 0.55, rt * 0.5, 10), y: ty },
+            { p: K.ellipse(gx - rt * 0.25, 0, rt, rt * 0.7, 10), y: ty + ht * 0.45 },
+            { p: K.ellipse(gx - rt * 0.2, 0, rt * 0.45, rt * 0.4, 10), y: ty + ht }
+          ]);
+        }
+        // eyes: small domes on both cheeks
+        var er = rows.filter(function (r) { return r.y >= yK + 0.8 * hK; })[0] || rows[rows.length - 2];
+        var ex = er.g + (er.f - er.g) * 0.62, ez = horseZ(er.f, er.g, er.w, taper(er), ex), dr = b * 0.085;
+        [0, Math.PI].forEach(function (spin) {
+          var from = out.length;
+          K.lathe(out, [[dr, -0.6], [dr, 0], [dr * 0.7, dr * 0.5], [0, dr * 0.75]], 10, 0, 0);
+          K.standUp(out, from);   // dome now points +z
+          K.move(out, from, ex, er.y, ez - 0.3);
+          if (spin) { K.map(out, from, function (x, y, z) { return [x, y, -z]; }); flipWinding(out, from); }
+        });
+        // nostril ridge at the end of the muzzle
+        var mr = rows.reduce(function (a, r) { return r.f > a.f ? r : a; }, rows[0]);
+        K.rings(out, [
+          { p: K.ellipse(mr.f - b * 0.12, 0, b * 0.1, mr.w * 0.62, 12), y: mr.y - hK * 0.05 },
+          { p: K.ellipse(mr.f - b * 0.08, 0, b * 0.12, mr.w * 0.7, 12), y: mr.y },
+          { p: K.ellipse(mr.f - b * 0.14, 0, b * 0.08, mr.w * 0.55, 12), y: mr.y + hK * 0.05 }
+        ]);
+      }
+      // Mirroring flips triangles inside out; swap two corners of every triangle from `from` on.
+      function flipWinding(out, from) {
+        for (var i = from; i < out.length; i += 9) {
+          for (var c = 0; c < 3; c++) { var tmp = out[i + 3 + c]; out[i + 3 + c] = out[i + 6 + c]; out[i + 6 + c] = tmp; }
+        }
+      }
+
+      function makePiece(name, b, h, L, p, seg) {
         var arr = [], pts = [], bt = Math.max(2.6, h * 0.075), i;
         var pr = Math.min(p.pocketDia / 2, b - 2.2), pd = Math.min(p.pocketDepth, bt - 0.8);
         if (p.weight === 1 && pr > 1 && pd > 0.5) pts.push([0, pd], [pr, pd], [pr, 0]); else pts.push([0, 0]);
         pts.push([b - 0.8, 0], [b, 0.8], [b, bt - 0.8], [b - 0.8, bt]);
-        var ys = bt, rs = b * 0.64;
-        if (st === 0) { pts.push([b * 0.82, bt], [b * 0.82, bt * 1.45], [rs * 1.08, bt * 1.45]); ys = bt * 1.45; }
-        else if (st === 1) { pts.push([b * 0.8, bt], [b * 0.8, bt * 1.6], [rs, bt * 1.6]); ys = bt * 1.6; }
+        var ys = bt, rs = Math.min(b * 0.64 * L.slim, b * 0.74), head = L.head * p.headScale / 100;
+        if (L.base === 0) { pts.push([b * 0.82, bt], [b * 0.82, bt * 1.45], [rs * 1.08, bt * 1.45]); ys = bt * 1.45; }
+        else if (L.base === 1) { pts.push([b * 0.8, bt], [b * 0.8, bt * 1.6], [rs, bt * 1.6]); ys = bt * 1.6; }
         else pts.push([rs, bt]);
+        var collars = p.collars > 0 ? p.collars - 1 : L.collars;
         var extras = [];
 
         if (name === 'pawn' || name === 'bishop') {
-          var rn = b * (name === 'pawn' ? 0.3 : 0.27), rh = b * (name === 'pawn' ? 0.5 : 0.44);
-          var egg = name === 'bishop' ? 1.5 : 1.0;
-          var fin = name === 'bishop' ? b * 0.17 : 0;
-          var top = h - (fin ? fin * 1.6 : 0);
-          var yb = top - rh * (1 + egg) + (rn - rh) * 0 - (rh - rn) * 0;
-          yb = top - rh * egg - rh + rn;
+          var rn = b * (name === 'pawn' ? 0.3 : 0.27) * L.slim, rh = b * (name === 'pawn' ? 0.5 : 0.44) * head;
+          rh = Math.max(rh, rn + 0.6);
+          var egg = name === 'bishop' ? (L.spike ? 1.75 : 1.5) : 1.0;
+          var fin = name === 'bishop' ? b * 0.17 : (L.spike ? b * 0.14 : 0);
+          var top = h - (fin ? fin * (L.spike ? 2.2 : 1.6) : 0);
+          var yb = top - rh * egg - rh + rn;
           var yw = ys + (yb - ys) * 0.55;
-          stem(pts, st, rs, ys, rn, yw);
-          var yc = collar(pts, st, rn, yw, rn + b * 0.24);
+          stem(pts, L.curve, rs, ys, rn, yw);
+          var yc = collar(pts, collars, rn, yw, rn + b * 0.24);
           pts.push([rn, Math.max(yc, yb)]);
           var yc2 = Math.max(yc, yb) + (rh - rn);
           pts.push([rh, yc2]);
           for (i = 1; i < 6; i++) { var a = i / 6 * Math.PI / 2; pts.push([rh * Math.cos(a), yc2 + rh * egg * Math.sin(a)]); }
           pts.push([0, yc2 + rh * egg]);
-          if (fin) extras.push(function (out) { K.lathe(out, ballPoints(fin * 0.35, fin, h).map(function (q) { return q; }), seg, 0, 0); });
+          if (fin) extras.push(function (out) {
+            var y0 = yc2 + rh * egg - 0.6;
+            K.lathe(out, L.spike ? spikePoints(fin * 0.3, fin * 0.55, y0, h) : ballPoints(fin * 0.35, fin, h, seg <= 8 ? 30 : 15), seg, 0, 0);
+          });
+          // a thin raised band around the bishop's mitre
+          if (name === 'bishop') extras.push(function (out) {
+            var yr = yc2 + rh * egg * 0.28, rr = rh * Math.sqrt(1 - 0.28 * 0.28);
+            K.lathe(out, [[rr - 0.6, yr - 0.6], [rr + 0.45, yr], [rr + 0.45, yr + 0.9], [rr - 0.6, yr + 1.5]], seg, 0, 0);
+          });
         } else if (name === 'rook') {
-          var rn2 = b * 0.5, rp = b * 0.74, yT = h - h * 0.13;
+          var rn2 = b * 0.5 * L.slim, rp = Math.max(b * 0.74 * Math.max(1, head * 0.95), rn2 + 1), yT = h - h * 0.13;
+          var flat = L.base === 2 && collars === 0;
           var yneck = yT - (rp - rn2) - 1.5;
-          stem(pts, st, rs, ys, rn2, yneck - (st === 2 ? 0 : 0));
-          if (st !== 2) pts.push([rn2, yneck], [rp, yneck + (rp - rn2)], [rp, yT], [0, yT]);
+          stem(pts, L.curve, rs, ys, rn2, yneck);
+          if (!flat) pts.push([rn2, yneck], [rp, yneck + (rp - rn2)], [rp, yT], [0, yT]);
           else pts.push([rp * 0.9, yT], [0, yT]);
-          if (st !== 2) {
-            var n = 6, rin = rp * 0.55;
+          if (!flat) {
+            var n = L.spike ? 8 : 6, rin = rp * 0.55;
             extras.push(function (out) {
               for (var m = 0; m < n; m++) {
                 var c = m / n * Math.PI * 2, hw = Math.PI / n * 0.62, poly = [], k;
                 for (k = 0; k <= 4; k++) poly.push([rp * Math.cos(c - hw + 2 * hw * k / 4), rp * Math.sin(c - hw + 2 * hw * k / 4)]);
                 for (k = 4; k >= 0; k--) poly.push([rin * Math.cos(c - hw + 2 * hw * k / 4), rin * Math.sin(c - hw + 2 * hw * k / 4)]);
                 K.extrude(out, poly, null, yT - 0.4, h);
+                if (L.spike) K.lathe(out, [[rp * 0.12, h - 0.3], [0, h + rp * 0.35]], 8, (rp + rin) / 2 * Math.cos(c), (rp + rin) / 2 * Math.sin(c));
               }
             });
           }
         } else if (name === 'queen' || name === 'king') {
-          var rn3 = b * 0.3, rcr = b * (name === 'queen' ? 0.66 : 0.6), tall = name === 'king' ? b * 0.45 : b * 0.2;
+          var rn3 = b * 0.3 * L.slim, rcr = b * (name === 'queen' ? 0.66 : 0.6) * Math.min(1.15, head);
+          var kTop = Math.round(p.kingTop);
+          var tall = name === 'king' ? b * 0.45 : b * (L.spike ? 0.34 : 0.2);
           var yT2 = h - tall, yb2 = yT2 - (rcr - rn3) - 1;
           var yw2 = ys + (yb2 - ys) * 0.5;
-          stem(pts, st, rs, ys, rn3, yw2);
-          var yc3 = collar(pts, st, rn3, yw2, rn3 + b * 0.24);
+          stem(pts, L.curve, rs, ys, rn3, yw2);
+          var yc3 = collar(pts, collars, rn3, yw2, rn3 + b * 0.24);
           pts.push([rn3, Math.max(yc3, yb2)]);
           var y0c = Math.max(yc3, yb2);
           pts.push([rcr, y0c + (rcr - rn3)], [rcr, yT2], [0, yT2]);
           if (name === 'king') {
             var cwid = b * 0.15;
             extras.push(function (out) {
-              K.box(out, -cwid / 2, yT2 - 0.4, -cwid / 2, cwid / 2, h, cwid / 2);
-              K.box(out, -b * 0.22, h - b * 0.3, -cwid / 2 + 0.01, b * 0.22, h - b * 0.15, cwid / 2 - 0.01);
+              if (kTop === 1) {   // orb with a small cross
+                K.lathe(out, ballPoints(b * 0.1, b * 0.2, h - b * 0.12, seg <= 8 ? 30 : 15), seg, 0, 0);
+                K.box(out, -cwid / 3, h - b * 0.16, -cwid / 3, cwid / 3, h, cwid / 3);
+              } else if (kTop === 2) {   // spire
+                K.lathe(out, spikePoints(b * 0.12, b * 0.22, yT2 - 0.4, h), seg, 0, 0);
+              } else {   // cross
+                K.box(out, -cwid / 2, yT2 - 0.4, -cwid / 2, cwid / 2, h, cwid / 2);
+                K.box(out, -b * 0.22, h - b * 0.3, -cwid / 2 + 0.01, b * 0.22, h - b * 0.15, cwid / 2 - 0.01);
+              }
             });
           } else {
             extras.push(function (out) {
@@ -406,20 +526,24 @@
                 var c2 = m / n2 * Math.PI * 2;
                 K.lathe(out, [[b * 0.1, yT2 - 0.4], [0, yT2 + tall * 0.9]], 8, rcr * 0.72 * Math.cos(c2), rcr * 0.72 * Math.sin(c2));
               }
-              K.lathe(out, ballPoints(b * 0.05, b * 0.18, h), seg, 0, 0);
+              K.lathe(out, ballPoints(b * 0.05, b * 0.18, h, seg <= 8 ? 30 : 15), seg, 0, 0);
             });
           }
-        } else { // knight: short pedestal, then a flat horse head
-          var rn4 = b * 0.62, yK = h * 0.3;
-          stem(pts, st, rs, ys, rn4, yK);
+        } else { // knight: short pedestal, then the horse head
+          var rn4 = b * 0.62, yK = h * (L.flatKnight || p.knight === 1 ? 0.3 : 0.24);
+          stem(pts, L.curve, rs, ys, rn4, yK);
           pts.push([0, yK]);
           extras.push(function (out) {
-            var shape = st === 2 ? HORSE_MIN : HORSE, wK = b * 1.4, hK = h - yK + 0.8, poly = [];
-            shape.forEach(function (q) { poly.push([(q[0] - 0.5) * wK, -(yK - 0.8 + q[1] * hK)]); });
-            var cen = K.centroid(poly), tk = b * 0.95, from = out.length;
-            function sc(f) { return poly.map(function (q) { return [cen[0] + (q[0] - cen[0]) * f, cen[1] + (q[1] - cen[1]) * f]; }); }
-            K.rings(out, [{ p: sc(0.78), y: -tk / 2 }, { p: poly, y: -tk / 2 + tk * 0.16 }, { p: poly, y: tk / 2 - tk * 0.16 }, { p: sc(0.78), y: tk / 2 }]);
-            K.standUp(out, from);
+            if (L.flatKnight || p.knight === 1) {
+              var wK = b * 1.4, hK = h - yK + 0.8, poly = [];
+              HORSE_FLAT.forEach(function (q) { poly.push([(q[0] - 0.5) * wK, -(yK - 0.8 + q[1] * hK)]); });
+              var cen = K.centroid(poly), tk = b * 0.95, from = out.length;
+              var sc = function (f) { return poly.map(function (q) { return [cen[0] + (q[0] - cen[0]) * f, cen[1] + (q[1] - cen[1]) * f]; }); };
+              K.rings(out, [{ p: sc(0.78), y: -tk / 2 }, { p: poly, y: -tk / 2 + tk * 0.16 }, { p: poly, y: tk / 2 - tk * 0.16 }, { p: sc(0.78), y: tk / 2 }]);
+              K.standUp(out, from);
+            } else {
+              sculptedKnight(out, b, yK, h, L, L.seg ? 10 : Math.max(20, Math.min(40, seg)));
+            }
           });
         }
         K.lathe(arr, pts, seg, 0, 0);
@@ -428,15 +552,17 @@
       }
 
       function buildChess(p) {
-        var H = p.kingH, st = Math.round(p.style), seg = Math.max(12, Math.round(p.facets));
-        var b0 = H * 0.19 * p.baseScale / 100, sel = Math.round(p.piece);
+        var H = p.kingH, L = LOOKS[Math.round(p.style)] || LOOKS[0];
+        L = Object.assign({ lowpoly: !!L.seg }, L);
+        var seg = L.seg || Math.max(12, Math.round(p.facets));
+        var b0 = H * 0.19 * p.baseScale / 100 * L.wide, sel = Math.round(p.piece);
         var list = sel === 0 ? ORDER : [ORDER[sel - 1]];
         var out = [], x = 0, spans = [];
         list.forEach(function (name, idx) {
           var b = b0 * SIZE[name][0], h = H * SIZE[name][1];
           if (idx > 0) x += spans[idx - 1] + b + 3;
           spans.push(b);
-          var arr = makePiece(name, b, h, st, p, seg);
+          var arr = makePiece(name, b, h, L, p, seg);
           K.move(arr, 0, x, 0, 0);
           out.push({ name: name, positions: K.f32(arr) });
         });
@@ -463,9 +589,14 @@
           { name: 'Amethyst', color: '#a78bfa' }
         ],
         partNames: { pawn: 'Pawn', rook: 'Rook', knight: 'Knight', bishop: 'Bishop', queen: 'Queen', king: 'King' },
+        openGroups: ['Style', 'Set'],
         parameters: [
+          { group: 'Style', key: 'style', label: 'Theme', unit: '', min: 0, max: 5, step: 1, value: 0, options: THEMES },
+          { group: 'Style', key: 'headScale', label: 'Head size', unit: '%', min: 80, max: 125, step: 5, value: 100 },
+          { group: 'Style', key: 'collars', label: 'Collar rings', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Theme default', 'None', 'One', 'Two'] },
+          { group: 'Style', key: 'kingTop', label: 'King top', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Cross', 'Orb', 'Spire'] },
+          { group: 'Style', key: 'knight', label: 'Knight', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Sculpted head', 'Flat silhouette'] },
           { group: 'Set', key: 'piece', label: 'Pieces', unit: '', min: 0, max: 6, step: 1, value: 0, options: ['All six', 'Pawn', 'Rook', 'Knight', 'Bishop', 'Queen', 'King'] },
-          { group: 'Set', key: 'style', label: 'Style', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Classic', 'Modern', 'Minimal'] },
           { group: 'Set', key: 'kingH', label: 'King height', unit: ' mm', min: 50, max: 110, step: 1, value: 72 },
           { group: 'Set', key: 'baseScale', label: 'Base size', unit: '%', min: 70, max: 130, step: 5, value: 100 },
           { group: 'Set', key: 'facets', label: 'Facets (smooth ↔ faceted)', unit: ' sides', min: 12, max: 72, step: 2, value: 48,
@@ -479,8 +610,11 @@
           { label: 'Modern stepped set', values: { piece: 0, style: 1, kingH: 72, baseScale: 100 } },
           { label: 'Minimal set', values: { piece: 0, style: 2, kingH: 70, baseScale: 105 } },
           { label: 'Just the knight', values: { piece: 3, style: 0, kingH: 72 } },
+          { label: 'Gothic set', values: { piece: 0, style: 3, kingH: 80, baseScale: 100, kingTop: 2, collars: 0 } },
+          { label: 'Crystal set', values: { piece: 0, style: 4, kingH: 72, baseScale: 100, collars: 0 } },
+          { label: 'Chunky kids set', values: { piece: 0, style: 5, kingH: 60, baseScale: 100, kingTop: 1, collars: 0 } },
           { label: 'Travel set (small)', values: { piece: 0, style: 2, kingH: 52, baseScale: 100 } },
-          { label: 'Default set', values: { piece: 0, style: 0, kingH: 72, baseScale: 100, facets: 48, weight: 0, pocketDia: 14, pocketDepth: 3 } }
+          { label: 'Default set', values: { piece: 0, style: 0, headScale: 100, collars: 0, kingTop: 0, knight: 0, kingH: 72, baseScale: 100, facets: 48, weight: 0, pocketDia: 14, pocketDepth: 3 } }
         ],
         build: function (p) { return buildChess(p); }
       };

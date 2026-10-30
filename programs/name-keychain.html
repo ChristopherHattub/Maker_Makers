@@ -146,7 +146,7 @@
       var CASES = [['typed', 'As typed'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
 
       // Non-slider choices live here; the Name tab edits them.
-      var state = { line1: 'Chris', line2: '', font: 'rounded', shape: 'rounded', hole: 'left', caps: 'typed' };
+      var state = { line1: 'TEXT', line2: '', font: 'rounded', shape: 'rounded', hole: 'left', caps: 'typed' };
       var refreshNameUI = null;
 
       // -----------------------------------------------------------------------
@@ -519,7 +519,7 @@
             };
 
             container.appendChild(h('h3', { class: 'mm-group-title' }, 'Your name'));
-            var in1 = textInput('line1', 'Line 1 (e.g. Chris)');
+            var in1 = textInput('line1', 'Line 1 (e.g. Sam)');
             var in2 = textInput('line2', 'Line 2 (optional)');
             container.appendChild(field('Line 1', in1));
             container.appendChild(field('Line 2 (optional)', in2));

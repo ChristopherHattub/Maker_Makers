@@ -208,7 +208,7 @@
 
       var DEFAULTS = {
         scale: 100, bodyW: 14, bodyH: 28, poleH: 12, patches: 1,
-        armLen: 28, armDrop: 55, armR: 2.6, tufts: 1,
+        armLen: 28, armDrop: 50, armR: 2.6, tufts: 1,
         headR: 11, face: 0,
         hat: 0, brim: 20, crownH: 13,
         base: 1, baseR: 26
@@ -231,17 +231,17 @@
           patch.push(xform(fanPrism([[-2.6, -3], [2.6, -3], [2.6, 3], [-2.6, 3]], 0, 1.4, [0, 0]), { rx: Math.PI / 2, rz: 0.2, t: [W * 0.32, y1 + H * 0.58, W * 0.86] }));
         }
 
-        // Arms angle down so they print without supports; straw tufts continue the arm.
-        var ys = y1 + H * 0.82, d = armDir(p.armDrop);
+        // Arms reach up and out: a raised arm grows from the shoulder, so it prints without supports
+        // (a drooping arm would start its tip in mid-air). Straw tufts continue the arm.
+        var ys = y1 + H * 0.72, d = armDir(p.armDrop);
         [-1, 1].forEach(function (s) {
-          var sx = s * W * 0.7, rz = Math.atan2(-s * Math.cos(d), -Math.sin(d));
+          var sx = s * W * 0.7, rz = Math.atan2(-s * Math.cos(d), Math.sin(d));
           arms.push(xform(cone(p.armR, p.armR * 0.85, -p.armR * 0.5, p.armLen, 24), { rz: rz, t: [sx, ys, 0] }));
           if (p.tufts >= 1) {
-            var ex = sx + s * Math.cos(d) * p.armLen, ey = ys - Math.sin(d) * p.armLen, k;
+            var ex = sx + s * Math.cos(d) * p.armLen, ey = ys + Math.sin(d) * p.armLen, k;
             var offs = [-14, -7, 0, 7, 14];
             for (k = 0; k < offs.length; k++) {
-              var rz2 = Math.atan2(-s * Math.cos(d + s * offs[k] * DEG * 0), -Math.sin(d));
-              rz2 += s * offs[k] * DEG;
+              var rz2 = Math.atan2(-s * Math.cos(d), Math.sin(d)) + s * offs[k] * DEG;
               straw.push(xform(cone(1.5, 0, 0, 10 + (k % 2) * 3, 8), { rz: rz2, t: [ex, ey, (k - 2) * 1.3] }));
             }
           }
@@ -323,7 +323,7 @@
           { group: 'Body', key: 'poleH', label: 'Post height', unit: ' mm', min: 4, max: 36, step: 1, value: DEFAULTS.poleH },
           toggle('Body', 'patches', 'Shirt patches', 'None', 'Patched', DEFAULTS.patches),
           { group: 'Arms', key: 'armLen', label: 'Arm length', unit: ' mm', min: 16, max: 44, step: 1, value: DEFAULTS.armLen },
-          { group: 'Arms', key: 'armDrop', label: 'Arm droop (flat = supports)', unit: '°', min: 35, max: 85, step: 1, value: DEFAULTS.armDrop },
+          { group: 'Arms', key: 'armDrop', label: 'Arm raise (below 45° needs supports)', unit: '°', min: 45, max: 85, step: 1, value: DEFAULTS.armDrop },
           { group: 'Arms', key: 'armR', label: 'Arm thickness', unit: ' mm', min: 1.8, max: 4.5, step: 0.1, value: DEFAULTS.armR },
           toggle('Arms', 'tufts', 'Straw tufts', 'None', 'Straw', DEFAULTS.tufts),
           { group: 'Head', key: 'headR', label: 'Head size', unit: ' mm', min: 7, max: 16, step: 0.5, value: DEFAULTS.headR },

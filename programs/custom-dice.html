@@ -482,6 +482,9 @@
           });
           K.place(nums, from2, cen, uu, nrm, ez);
         });
+        // sit the bed face on the plate (the solid is built around the origin)
+        for (var yi = 1; yi < die.length; yi += 3) die[yi] += half;
+        for (var yj = 1; yj < nums.length; yj += 3) nums[yj] += half;
         return [{ name: 'die', positions: K.f32(die) }].concat(nums.length ? [{ name: 'numbers', positions: K.f32(nums) }] : []);
       }
       function N_UNDER(type) { return type !== 'd4' && type !== 'd6'; }

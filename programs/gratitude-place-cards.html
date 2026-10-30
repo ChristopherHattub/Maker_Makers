@@ -330,7 +330,7 @@
       var CASE_KEYS = ['typed', 'upper', 'lower'];
       var CASE_NAMES = ['As typed', 'Uppercase', 'Lowercase'];
       // Only the typed text lives outside the parameters; font, case, shape and motif are choice parameters.
-      var state = { line1: 'Chris', line2: '', font: 'rounded', shape: 'rounded', motif: 'leaf', caps: 'typed' };
+      var state = { line1: 'TEXT', line2: '', font: 'rounded', shape: 'rounded', motif: 'leaf', caps: 'typed' };
       function choice(group, tab, key, label, names, value) {
         return { group: group, tab: tab, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
           format: function (v) { return names[Math.round(v)]; } };
@@ -533,7 +533,7 @@
               return input;
             };
             container.appendChild(h('h3', { class: 'mm-group-title' }, 'Guest name'));
-            var in1 = textInput('line1', 'Name (e.g. Chris)'), in2 = textInput('line2', 'Line 2 (optional)');
+            var in1 = textInput('line1', 'Name (e.g. Sam)'), in2 = textInput('line2', 'Line 2 (optional)');
             container.appendChild(field('Line 1', in1));
             container.appendChild(field('Line 2 (optional)', in2));
             container.appendChild(h('p', { class: 'mm-note' }, 'Letters, numbers, - + . ! \' and <3 for a heart. Up to 20 characters per line.'));

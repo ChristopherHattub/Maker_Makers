@@ -6,12 +6,12 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 
 | Slots | State |
 | --- | --- |
-| 1-75 | Built, except **slot 14, which is unused** (a gap; the homepage only shows slots with a `programUrl`). 74 generators. |
+| 1-75 | Built, except **slots 14 and 39, which are unused** (gaps; the homepage only shows slots with a `programUrl`; 39 was the Balloon Twister, removed). 73 generators. |
 | 76-90 | **Reserved for animals** (the `animals` group, currently `planned`). The picks are not decided yet; do not use these slots for anything else. |
 | 91-100 | Built: the ten Flexi Creatures. |
 | 101+ | Free. Any number works. |
 
-Total built: 84 generators in 20 groups (4 groups are `planned` and empty: toys, garden, animals, jewelry). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys, garden, animals, jewelry). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -54,7 +54,6 @@ Total built: 84 generators in 20 groups (4 groups are `planned` and empty: toys,
 | 36 | Cake Stacker | birthday | `cake-stacker.html` |
 | 37 | Candle Number Topper | birthday | `candle-number.html` |
 | 38 | Pull-String Pinata | birthday | `pinata.html` |
-| 39 | Balloon Twister | birthday | `balloon-twister.html` |
 | 40 | Banner Letters | birthday | `banner-letters.html` |
 | 41 | Party Popper Spinner | birthday | `party-popper.html` |
 | 42 | Cupcake Maker | birthday | `cupcake-maker.html` |
@@ -112,7 +111,7 @@ Total built: 84 generators in 20 groups (4 groups are `planned` and empty: toys,
 | valentines | Valentine's | 2 |
 | thanksgiving | Thanksgiving & Fall | 7 |
 | newyear | New Year & Party | 4 |
-| birthday | Birthdays | 8 |
+| birthday | Birthdays | 7 |
 | stpatricks | St. Patrick's Day | 4 |
 | july4 | Fourth of July | 2 |
 | fidgets | Fidgets & Clickers | 9 |

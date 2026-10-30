@@ -11,7 +11,7 @@
         }
         for (k = 1; k <= n; k++) {
           if (k <= 4) yaw.push(-deg(p.neckBend));
-          else if (k <= belly + 1) yaw.push(deg(p.neckBend) * 0.45);
+          else if (k <= belly + 1) yaw.push(Math.max(deg(p.neckBend) * 0.45, deg(p.tailCurl) * 0.6));   // the belly already turns forward
           else yaw.push(deg(p.tailCurl) * lerp(0.6, 1, (k - belly) / (n - belly)));
         }
         var Y0 = 0.85 * rj[0], jd0 = jointDims(rj[0], g), P = [];
@@ -21,8 +21,12 @@
         var hs = p.headSize, hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], 16 * hs, 1.55 * rj[0] * hs, 0.9 * rj[0] * hs, 0.85, 0);
         sc.add('head', 'head', hd.shell, '#fda4af');
         sc.add('head', 'head', ch.rootBall, '#fda4af');
-        var nose = hd.point(0, 0, 1); // snout tube sticks out of the nose
-        sc.add('head', 'head', blobShell([nose[0] - p.snout / 2 + 3, Y0, nose[2]], [1, 0, 0], p.snout / 2, 2.6, 2.6, 14, 0), '#fda4af');
+        // snout: a tube from the front of the face, pointing forward (away from the fin) and a little down,
+        // lying on the bed so it prints without supports; a small bulge marks the mouth
+        var sd = vnorm([0.28, 0, -1]), base = hd.point(0.22, 0, 0), sr0 = 2.6;
+        var sc0 = [base[0] + sd[0] * p.snout / 2, sr0, base[2] + sd[2] * p.snout / 2];
+        sc.add('head', 'head', blobShell(sc0, sd, p.snout / 2 + 2, sr0, sr0, 14, 0), '#fda4af');
+        sc.add('head', 'head', blobShell([base[0] + sd[0] * (p.snout + 1), 3, base[2] + sd[2] * (p.snout + 1)], sd, 2.6, 3, 3, 12, 0), '#fda4af');
         [-1, 1].forEach(function (sd) { sc.add('eyes', 'head', blobShell(hd.point(0.55, sd * deg(62), 0.95), [1, 0, 0], 2.4, 2.4, 2.4, 10, 0), '#334155'); });
         if (p.crown > 0) [0.55, 0.72, 0.88].forEach(function (u, i) {
           sc.add('crown', 'head', coneShell(hd.point(u, 0, 0.92), [-0.15, 1, 0], 1.8, p.crown * (1 - i * 0.12), 8, 1.2, 0), '#fde047');
@@ -44,14 +48,14 @@
       }
 
       var SEAHORSE_PARAMS = [
-        { group: 'Body', key: 'segments', label: 'Segments (neck, belly and tail)', unit: '', min: 11, max: 20, step: 1, value: 15 },
-        { group: 'Body', key: 'pitch', label: 'Segment length', unit: ' mm', min: 8, max: 14, step: 0.5, value: 10 },
+        { group: 'Body', key: 'segments', label: 'Segments (neck, belly and tail)', unit: '', min: 11, max: 20, step: 1, value: 13 },
+        { group: 'Body', key: 'pitch', label: 'Segment length', unit: ' mm', min: 8, max: 14, step: 0.5, value: 9.5 },
         { group: 'Body', key: 'neckR', label: 'Neck thickness (radius)', unit: ' mm', min: 4.5, max: 8, step: 0.1, value: 5.5 },
         { group: 'Body', key: 'bellyR', label: 'Belly size (radius)', unit: ' mm', min: 6, max: 11, step: 0.5, value: 8.5 },
         { group: 'Body', key: 'tailR', label: 'Tail thickness at the tip', unit: ' mm', min: 3.7, max: 5, step: 0.1, value: 3.8 },
         { group: 'Body', key: 'bead', label: 'Bead fullness (smooth ↔ knobbly)', unit: '', min: 0, max: 0.45, step: 0.05, value: 0.22 },
-        { group: 'Pose', key: 'neckBend', label: 'Neck curve (straight ↔ arched)', unit: '°', min: 0, max: 12, step: 0.5, value: 8 },
-        { group: 'Pose', key: 'tailCurl', label: 'Tail curl (straight ↔ curled)', unit: '°', min: 0, max: 10, step: 0.5, value: 8 },
+        { group: 'Pose', key: 'neckBend', label: 'Neck curve (straight ↔ arched)', unit: '°', min: 0, max: 12, step: 0.5, value: 10 },
+        { group: 'Pose', key: 'tailCurl', label: 'Tail curl (straight ↔ curled)', unit: '°', min: 0, max: 12, step: 0.5, value: 12 },
         { group: 'Head & fin', key: 'snout', label: 'Snout length', unit: ' mm', min: 8, max: 28, step: 1, value: 16 },
         { group: 'Head & fin', key: 'headSize', label: 'Head size', unit: '×', min: 0.8, max: 1.4, step: 0.05, value: 1 },
         { group: 'Head & fin', key: 'crown', label: 'Crown spike height (0 = none)', unit: ' mm', min: 0, max: 12, step: 1, value: 7 },
@@ -71,7 +75,7 @@
         parameters: SEAHORSE_PARAMS,
         presets: makePresets(SEAHORSE_PARAMS, [
           ['Default seahorse', {}],
-          ['Curly tail', { segments: 18, tailCurl: 10, neckBend: 9 }],
+          ['Curly tail', { segments: 18, tailCurl: 12, neckBend: 11 }],
           ['Pot-bellied', { bellyR: 10.5, neckR: 6.5, tailR: 4.5, segments: 13, headSize: 1.2 }],
           ['Pygmy seahorse', { segments: 12, bellyR: 7, neckR: 4.8, snout: 10, crown: 4, ridges: 3, fin: 12 }],
           ['Straight (easy print)', { neckBend: 0, tailCurl: 0 }]

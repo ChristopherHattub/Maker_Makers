@@ -401,7 +401,7 @@
           parts.earIn.push(Hp(tube(pathIn, function (t) { return (t < 0.03 || t > 0.97 ? 0 : 1) * rb * 0.62 * (0.5 + 0.5 * Math.sqrt(Math.max(0, 1 - Math.pow(t, 2)))); }, 16, 2.2)));
           parts.eyes.push(Hp(ellip(p.eye, p.eye * 1.15, p.eye * 0.7, [sx * hr * 0.38 * p.eyeGap / 40, hy + hr * 0.12, hz + hr * 0.9])));
           parts.cheeks.push(Hp(ellip(hr * 0.2 * p.cheek / 100, hr * 0.14 * p.cheek / 100, hr * 0.11, [sx * hr * 0.55, hy - hr * 0.3, hz + hr * 0.82])));
-          parts.feet.push(ellip(bw * 0.24 * p.feet / 100, 3.2, bw * 0.45 * p.feet / 100, [sx * bw * 0.45, 2.6, bd * 0.72]));
+          parts.feet.push(ellip(bw * 0.24 * p.feet / 100, 3.2, bw * 0.45 * p.feet / 100, [sx * bw * 0.45, 3.2, bd * 0.72]));
           if (p.arms >= 1) parts.body.push(ellip(3.4, ry * 0.36, 4, [sx * bw * 0.86, cy + ry * 0.45, bd * 0.42], { rz: sx * 0.25 }));
         }
         parts.nose.push(Hp(ellip(p.nose * 1.1, p.nose * 0.85, p.nose * 0.8, [0, hy - hr * 0.1, hz + hr * 0.98])));

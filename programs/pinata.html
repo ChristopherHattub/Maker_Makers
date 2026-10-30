@@ -521,6 +521,16 @@
         pushMesh(out, mesh('body', bowlP.concat(tab), 'body'));
         pushMesh(out, mesh('lid', shiftLid(lidP.concat(loop)), 'lid'));
         pushMesh(out, mesh('fringe', fr));
+        // the shape is built around its centre: stand the body and lid on the bed, and trim any fringe tooth
+        // that would hang below it
+        var minY = Infinity;
+        out.forEach(function (m) {
+          if (m.name === 'fringe') return;
+          for (var i = 1; i < m.positions.length; i += 3) if (m.positions[i] < minY) minY = m.positions[i];
+        });
+        if (isFinite(minY)) out.forEach(function (m) {
+          for (var i = 1; i < m.positions.length; i += 3) m.positions[i] = Math.max(0, m.positions[i] - minY);
+        });
         return out;
       }
 

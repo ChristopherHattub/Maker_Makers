@@ -300,6 +300,22 @@
       };
       Scene.prototype.entries = function () {
         var self = this;
+        // centre the footprint on the bed (x and z); every shell moves together, so clearances are unchanged
+        var lo = [Infinity, Infinity], hi = [-Infinity, -Infinity], seen = [];
+        this.order.forEach(function (name) {
+          self.groups[name].forEach(function (a) {
+            if (seen.indexOf(a) >= 0) return;
+            seen.push(a);
+            for (var i = 0; i < a.length; i += 3) {
+              if (a[i] < lo[0]) lo[0] = a[i]; if (a[i] > hi[0]) hi[0] = a[i];
+              if (a[i + 2] < lo[1]) lo[1] = a[i + 2]; if (a[i + 2] > hi[1]) hi[1] = a[i + 2];
+            }
+          });
+        });
+        var cx = (lo[0] + hi[0]) / 2, cz = (lo[1] + hi[1]) / 2;
+        if (isFinite(cx) && isFinite(cz)) seen.forEach(function (a) {
+          for (var i = 0; i < a.length; i += 3) { a[i] -= cx; a[i + 2] -= cz; }
+        });
         window.MM_FLEXI_BODIES = this.bodies;
         return this.order.map(function (name) {
           var list = self.groups[name], len = 0, i;

@@ -16,6 +16,7 @@
 
   var NEUTRAL_MODEL_COLOR = '#cbd5e1'; // Parametric tab: neutral matte, no paint colors
   var CAVITY_SHADE = 0.82;             // How dark a fully shaded vertex gets (0..1)
+  var PLATE_SIZES = [184, 256, 350];   // Preview beds in mm: A1 mini, X1 / P1 / A1, large format; bigger models get a bed to fit
   var CREASE_COS = Math.cos(50 * Math.PI / 180); // Faces turning more than 50 degrees are separate parts
   var MIN_PART_TRIS = 200;             // Smaller islands merge into the neighbor they touch most
   var PAINT_MATCH_MM = 40;             // Max distance to re-attach a saved paint after a rebuild
@@ -593,19 +594,41 @@
   rim.position.set(-110, 90, -95);
   scene.add(rim);
 
-  // Build plate: 160 mm x 160 mm, the standard size of the printers on the map.
+  // Build plate: the smallest common bed the model fits on (see PLATE_SIZES), resized after every build.
+  // The mesh is a unit box scaled to size, so stages that restyle plateMesh / grid keep working.
   var plate = new T.Group();
   scene.add(plate);
-  var plateMesh = new T.Mesh(new T.BoxGeometry(160, 2.4, 160), new T.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.15 }));
+  var plateMesh = new T.Mesh(new T.BoxGeometry(1, 2.4, 1), new T.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.15 }));
   plateMesh.position.y = -1.35;
   plateMesh.receiveShadow = true;
   plate.add(plateMesh);
-  var grid = new T.GridHelper(150, 15, 0x6366f1, 0x334155);
+  var grid = new T.GridHelper(1, 1, 0x6366f1, 0x334155);
   grid.position.y = -0.08;
   plate.add(grid);
   var frontBar = new T.Mesh(new T.BoxGeometry(36, 0.6, 2.5), new T.MeshBasicMaterial({ color: 0x00e5ff }));
-  frontBar.position.set(0, 0.2, 76);
   plate.add(frontBar);
+  var plateSize = 0;
+  setPlateSize(PLATE_SIZES[0]);
+
+  function setPlateSize(mm) {
+    if (mm === plateSize) return;
+    plateSize = mm;
+    plateMesh.scale.set(mm, 1, mm);
+    var g = mm - 10, lines = new T.GridHelper(g, Math.round(g / 10), 0x6366f1, 0x334155);   // 10 mm squares
+    grid.geometry.dispose();
+    grid.geometry = lines.geometry;
+    frontBar.position.set(0, 0.2, mm / 2 - 4);
+    var half = Math.max(160, mm * 0.6);
+    key.shadow.camera.left = -half; key.shadow.camera.right = half;
+    key.shadow.camera.top = half; key.shadow.camera.bottom = -half;
+    key.shadow.camera.updateProjectionMatrix();
+  }
+  // Plate for a model whose footprint reaches `reach` mm from the centre in x or z.
+  function plateFor(reach) {
+    var need = reach * 2;
+    for (var i = 0; i < PLATE_SIZES.length; i++) if (need <= PLATE_SIZES[i]) return PLATE_SIZES[i];
+    return Math.ceil(need / 50) * 50;
+  }
 
   var modelGroup = new T.Group();
   scene.add(modelGroup);
@@ -1087,8 +1110,9 @@
       }
     });
     var size = tris ? [max[0] - min[0], max[1] - min[1], max[2] - min[2]] : [0, 0, 0];
+    if (tris) setPlateSize(plateFor(Math.max(-min[0], max[0], -min[2], max[2])));
     $('mm-stats').textContent = 'Geometry ready // ' + Math.round(tris).toLocaleString() + ' triangles';
-    $('mm-dims').textContent = size[0].toFixed(1) + ' x ' + size[2].toFixed(1) + ' x ' + size[1].toFixed(1) + ' MM';
+    $('mm-dims').textContent = size[0].toFixed(1) + ' x ' + size[2].toFixed(1) + ' x ' + size[1].toFixed(1) + ' MM // ' + plateSize + ' MM BED';
   }
 
   // Preview mesh for hover, for example a stamp under the cursor. Pass null to hide it.

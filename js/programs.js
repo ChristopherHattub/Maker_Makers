@@ -185,7 +185,7 @@ const GENERATORS = [
     category: 'FALL // FIGURES',
     thumbnailUrl: 'assets/thumbnails/scarecrow-stacker.svg',
     programUrl: 'programs/scarecrow-stacker.html',
-    description: 'A patched-shirt scarecrow on a post with straw arms, a face and a hat: pick the hat and face style, then size the shirt, post, arms and head. Arms droop so it prints without supports. Paint every part in the Color tool and export .STL.'
+    description: 'A patched-shirt scarecrow on a post with straw arms, a face and a hat: pick the hat and face style, then size the shirt, post, arms and head. Arms reach up and out so it prints without supports. Paint every part in the Color tool and export .STL.'
   },
   {
     slot: 23,
@@ -330,15 +330,6 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/pinata.svg',
     programUrl: 'programs/pinata.html',
     description: 'A hollow party pinata in two halves: choose a round, star or flower shape, add rows of tissue fringe, a hang loop and a pull tab, and pull the string to place the lid. Paint parts in the Color tool and export .STL.'
-  },
-  {
-    slot: 39,
-    title: 'Balloon Twister',
-    bundle: 'birthday',
-    category: 'BIRTHDAY // BALLOONS',
-    thumbnailUrl: 'assets/thumbnails/balloon-twister.svg',
-    programUrl: 'programs/balloon-twister.html',
-    description: 'A flat-lying balloon animal made of fat lobes pinched at twist knots: a dog, sword, flower, heart, snake or a curly chain. Set lobe length, puffiness and twists. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 40,
@@ -581,7 +572,7 @@ const GENERATORS = [
     category: 'TABLETOP // DICE',
     thumbnailUrl: 'assets/thumbnails/dice-tower.svg',
     programUrl: 'programs/dice-tower.html',
-    description: 'A tall tower with 2 to 6 angled baffle ramps and a landing tray. Set the die size, tower height, ramp steepness, wall thickness and tray length and rim. Ramps default to 45 degrees so it prints upright with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'A tall tower with 2 to 6 angled baffle ramps and a landing tray, in a classic, castle, pagoda, tavern or sci-fi theme. Set the die size, tower height, ramp steepness, wall thickness and tray length and rim. Ramps default to 45 degrees so it prints upright with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 67,
@@ -653,7 +644,7 @@ const GENERATORS = [
     category: 'TABLETOP // CHESS',
     thumbnailUrl: 'assets/thumbnails/chess-set.svg',
     programUrl: 'programs/chess-set.html',
-    description: 'Pawn, rook, knight, bishop, queen and king in a classic, modern or minimal style, all six in a row or one at a time. Set the king height, base size and facets, and add a weight pocket. Heads and crowns use 45 degree undersides so the pieces print upright with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'Pawn, rook, knight, bishop, queen and king in a classic, modern, minimal, gothic, crystal or chunky theme, all six in a row or one at a time, with a sculpted knight. Set the head size, collar rings, king top, king height, base size and facets, and add a weight pocket. Heads and crowns use 45 degree undersides so the pieces print upright with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 75,

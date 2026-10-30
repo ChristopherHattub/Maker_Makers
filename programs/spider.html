@@ -216,7 +216,9 @@
             var foot = [knee[0] + dir2[0] * reach * (1 - kneeS), tipR, knee[2] + dir2[2] * reach * (1 - kneeS)];
             var ankle = [foot[0] - dir2[0] * FOOT_RUN, tipR, foot[2] - dir2[2] * FOOT_RUN];
             var d1 = len3(sub(knee, hip)), d2 = len3(sub(ankle, knee));
-            out.push({ name: 'legs', positions: buildLeg([hip, knee, ankle, foot], p, d1 / (d1 + d2 + FOOT_RUN)) });
+            var leg = buildLeg([hip, knee, ankle, foot], p, d1 / (d1 + d2 + FOOT_RUN));
+            for (var k = 1; k < leg.length; k += 3) if (leg[k] < 0) leg[k] = 0;   // the tapered tube dips a hair below the bed; flatten it
+            out.push({ name: 'legs', positions: leg });
           });
         }
         return out;

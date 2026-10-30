@@ -320,6 +320,170 @@
         K.map(out, from, function (a, b, c) { return [x0 + b, c, a]; });
       }
 
+      // -----------------------------------------------------------------------
+      // Themes: decoration added around the plain tower. The dice path, baffles and tray stay the same.
+      // Built before the final turn: the exit window faces -z, the tray lies at z < -D / 2.
+      // -----------------------------------------------------------------------
+      var THEMES = ['Classic', 'Castle', 'Pagoda', 'Tavern', 'Sci-fi'];
+      // Default colours per theme: tower body, trim, accents.
+      var THEME_COLORS = [
+        null,
+        ['#94a3b8', '#cbd5e1', '#475569'],
+        ['#f87171', '#334155', '#fde047'],
+        ['#f1f5f9', '#b45309', '#7c2d12'],
+        ['#64748b', '#334155', '#22d3ee']
+      ];
+
+      // Outer wall faces: o on the face, n outward, u along the face (u x up = n, so placing keeps triangles outward).
+      function towerFaces(W, D) {
+        return {
+          front: { o: [0, 0, -D / 2], n: [0, 0, -1], u: [-1, 0, 0], len: W },
+          back: { o: [0, 0, D / 2], n: [0, 0, 1], u: [1, 0, 0], len: W },
+          left: { o: [-W / 2, 0, 0], n: [-1, 0, 0], u: [0, 0, 1], len: D },
+          right: { o: [W / 2, 0, 0], n: [1, 0, 0], u: [0, 0, -1], len: D }
+        };
+      }
+      // A loop drawn on a face in [u, y], extruded from z0 to z1 along the face normal (z0 < 0 sinks it into the wall).
+      function onFace(out, f, poly, z0, z1) {
+        var from = out.length;
+        K.extrude(out, poly.map(function (q) { return [q[0], -q[1]]; }), null, z0, z1);
+        K.standUp(out, from);
+        K.place(out, from, f.o, f.u, [0, 1, 0], f.n);
+      }
+      // Running-bond blocks over u0..u1, y0..y1 of a face, raised by d (bricks, stones, hull panels).
+      function courses(out, f, u0, u1, y0, y1, bh, bl, d, gap) {
+        for (var row = 0, y = y0; y + bh * 0.6 <= y1; y += bh, row++) {
+          var top = Math.min(y1, y + bh) - gap;
+          for (var u = u0 - (row % 2) * bl / 2; u < u1; u += bl) {
+            var a = Math.max(u0, u) + gap / 2, b = Math.min(u1, u + bl) - gap / 2;
+            if (b - a > 1) onFace(out, f, [[a, y], [b, y], [b, top], [a, top]], -0.4, d);
+          }
+        }
+      }
+      // Evenly spaced blocks with equal gaps, a block at each end (battlements).
+      function teeth(len, m, fn) {
+        var n = Math.max(2, Math.round((len + m) / (2 * m))), w = len / (2 * n - 1);
+        for (var i = 0; i < n; i++) fn(-len / 2 + 2 * i * w, -len / 2 + (2 * i + 1) * w);
+      }
+      // A flared skirt around the tower: 45° underside out by e, an edge, then a top that slopes back in
+      // to `topW` x `topD` (the tower outline, or the dice opening for a roof). The hole runs inside the walls.
+      function skirt(out, c, y, e, edge, topW, topD, rise, holeW, holeD) {
+        var r = Math.min(e * 0.6, 4);
+        var rs = [
+          { p: K.rrect(0, 0, c.W + 0.6, c.D + 0.6, 1), y: y },
+          { p: K.rrect(0, 0, c.W + 2 * e, c.D + 2 * e, r), y: y + e },
+          { p: K.rrect(0, 0, c.W + 2 * e, c.D + 2 * e, r), y: y + e + edge }
+        ];
+        if (rise > 0) rs.push({ p: K.rrect(0, 0, topW, topD, 1), y: y + e + edge + rise });
+        K.rings(out, rs, [K.rect(0, 0, holeW, holeD)]);
+        return y + e + edge;
+      }
+
+      function decorate(style, c) {
+        var trim = [], acc = [];
+        var F = towerFaces(c.W, c.D), winTop = c.floorT + c.winH;
+        var sides = [F.left, F.right, F.back];
+
+        if (style === 1) {
+          // Castle: stone courses, an arch over the exit, a corbelled parapet with battlements, round corner turrets
+          var bh = Math.max(4.5, c.die * 0.32), top = c.H - 6, cb = 2;
+          sides.forEach(function (f) { courses(trim, f, -f.len / 2 + 0.6, f.len / 2 - 0.6, c.floorT, top, bh, bh * 2.1, 0.8, 0.8); });
+          courses(trim, F.front, -c.W / 2 + 0.6, c.W / 2 - 0.6, winTop + 0.8, top, bh, bh * 2.1, 0.8, 0.8);
+          var ri = c.iw / 2, ro = ri + Math.max(3.5, c.die * 0.25), ns = 9;
+          for (var i = 0; i < ns; i++) {
+            var a0 = Math.PI * i / ns + 0.025, a1 = Math.PI * (i + 1) / ns - 0.025, grow = i === 4 ? 1.2 : 0;
+            onFace(trim, F.front, [[ri * Math.cos(a0), winTop + ri * Math.sin(a0)], [(ro + grow) * Math.cos(a0), winTop + (ro + grow) * Math.sin(a0)],
+              [(ro + grow) * Math.cos(a1), winTop + (ro + grow) * Math.sin(a1)], [ri * Math.cos(a1), winTop + ri * Math.sin(a1)]], -0.4, 1.4);
+          }
+          skirt(trim, c, top, cb, c.H - top - cb, c.W + 2 * cb, c.D + 2 * cb, 0, c.W - c.t, c.D - c.t);
+          var m = Math.max(3.5, c.die * 0.3);
+          // side merlons a hair shorter and shallower so no edge coincides with a front / back merlon at the corners
+          [F.front, F.back, F.left, F.right].forEach(function (f, fi) {
+            var trimD = fi < 2 ? 0 : 0.15;
+            teeth(f.len + 2 * cb - 2 * trimD, m, function (u0, u1) {
+              onFace(trim, f, [[u0, c.H - 0.5], [u1, c.H - 0.5], [u1, c.H + m * 1.1], [u0, c.H + m * 1.1]], -c.t, cb - trimD);
+            });
+          });
+          // turrets sit off the corners far enough to stay out of the dice channel and the exit
+          var R = Math.max(5, Math.min(8, c.die * 0.38)), Rc = R + 0.3;
+          var off = Math.max(0, (-c.t + Math.sqrt(2 * Rc * Rc - c.t * c.t)) / 2);
+          [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(function (s) {
+            var cx = s[0] * (c.W / 2 + off), cz = s[1] * (c.D / 2 + off), yt = c.H + 3, roof = (R + 2.4) * 1.5;
+            K.lathe(acc, [[R, 0], [R, c.H - 5], [R + 1.8, c.H - 3.2], [R + 1.8, yt], [R + 2.4, yt], [0, yt + roof]], 24, cx, cz);
+          });
+          // battlements on the tray's front rim
+          teeth(c.trayW, m, function (x0, x1) { K.box(trim, x0, c.floorT + c.rimH - 0.5, c.zt0, x1, c.floorT + c.rimH + m * 0.8, c.zt0 + c.rim); });
+        }
+
+        if (style === 2) {
+          // Pagoda: stacked flared eaves with upturned corner tips, a funnel roof, columns and a beam at the exit
+          var e = Math.max(5, Math.min(9, c.die * 0.45)), edge = 1.4, roofRise = e * 0.55;
+          var roofY = c.H - e - edge;
+          var lo = winTop + 6, hiY = roofY - e * 2.4;
+          var nT = Math.max(1, Math.min(4, Math.round((hiY - lo) / 38) + 1));
+          var tips = function (y, ee) {
+            var rr = Math.min(ee * 0.6, 4);
+            [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(function (s) {
+              var x = s[0] * (c.W / 2 + ee - rr + rr * 0.7071), z = s[1] * (c.D / 2 + ee - rr + rr * 0.7071);
+              K.lathe(acc, [[1.6, y - 0.6], [0, y + ee * 0.75]], 12, x, z);
+            });
+          };
+          for (var k = 0; k < nT; k++) {
+            var yk = nT > 1 ? lo + k * (hiY - lo) / (nT - 1) : lo;
+            if (hiY < lo) yk = lo;
+            tips(skirt(trim, c, yk, e * 0.85, edge, c.W + 1.2, c.D + 1.2, e * 0.4, c.W - c.t, c.D - c.t), e * 0.85);
+          }
+          tips(skirt(trim, c, roofY, e + 1, edge, c.iw + 1.6, c.idp + 1.6, roofRise, c.iw + 0.2, c.idp + 0.2), e + 1);
+          [-1, 1].forEach(function (sx) {
+            K.lathe(acc, [[1.7, c.floorT - 0.5], [1.7, winTop + 3]], 16, sx * (c.W / 2 - 0.5), -c.D / 2 - 1.3);
+          });
+          onFace(acc, F.front, [[-c.W / 2 - 1.2, winTop], [c.W / 2 + 1.2, winTop], [c.W / 2 + 1.2, winTop + 3], [-c.W / 2 - 1.2, winTop + 3]], -0.4, 3);
+        }
+
+        if (style === 3) {
+          // Tavern: half-timbered walls (posts, story beams, braces), a hipped roof skirt and a chimney
+          var bw = Math.max(2.2, c.die * 0.15), d = 1.2;
+          // posts, rails and braces sit at slightly different depths so their ends never share an edge
+          var beam = function (f, a, b, k) { onFace(trim, f, K.strokeQuad(a, b, bw, true), -0.4 - 0.1 * k, d - 0.15 * k); };
+          var frame = function (f, y0) {
+            var L = f.len / 2 - bw / 2, ns2 = Math.max(1, Math.round((c.H - 6 - y0) / 42));
+            var sh = (c.H - 6 - y0) / ns2;
+            [-L, 0, L].forEach(function (u) { beam(f, [u, y0], [u, c.H - 6], 0); });
+            for (var j = 0; j <= ns2; j++) beam(f, [-L, y0 + j * sh], [L, y0 + j * sh], 1);
+            for (var j2 = 0; j2 < ns2; j2++) {
+              var yb = y0 + j2 * sh, yt2 = yb + sh;
+              if (j2 % 2 === 0) { beam(f, [-L, yb], [0, yt2], 2); beam(f, [L, yb], [0, yt2], 2); }
+              else { beam(f, [0, yb], [-L, yt2], 2); beam(f, [0, yb], [L, yt2], 2); }
+            }
+          };
+          sides.forEach(function (f) { frame(f, c.floorT + bw / 2); });
+          frame(F.front, winTop + bw / 2);
+          var ee2 = Math.max(4, c.die * 0.3);
+          skirt(trim, c, c.H - 6, ee2, 1.2, c.iw + 1.6, c.idp + 1.6, ee2 * 0.8, c.iw + 0.2, c.idp + 0.2);
+          var cw = Math.max(6, c.die * 0.4), cx2 = c.W / 4;
+          K.box(acc, cx2 - cw / 2, c.H - 2.5, c.D / 2 - c.t + 0.3, cx2 + cw / 2, c.H + 12, c.D / 2 - c.t + 0.3 + cw);
+          K.box(acc, cx2 - cw / 2 - 0.8, c.H + 12, c.D / 2 - c.t - 0.5, cx2 + cw / 2 + 0.8, c.H + 14, c.D / 2 - c.t + 1.1 + cw);
+        }
+
+        if (style === 4) {
+          // Sci-fi: hull panels, light strips, vents, an armoured collar and an antenna
+          var ph = Math.max(14, c.die * 1.3);
+          sides.forEach(function (f) {
+            courses(trim, f, -f.len / 2 + 0.6, f.len / 2 - 0.6, c.floorT, c.H - 6, ph, f.len / 2, 0.8, 1.2);
+            onFace(acc, f, [[-0.9, c.floorT + 4], [0.9, c.floorT + 4], [0.9, c.H - 8], [-0.9, c.H - 8]], -0.4, 1.4);
+            for (var v = 0; v < 5; v++) {
+              var yv = c.floorT + 10 + v * 2.6;
+              onFace(trim, f, [[f.len / 4 - 5, yv], [f.len / 4 + 5, yv], [f.len / 4 + 5, yv + 1.3], [f.len / 4 - 5, yv + 1.3]], -0.4, 1.6);
+            }
+          });
+          courses(trim, F.front, -c.W / 2 + 0.6, c.W / 2 - 0.6, winTop + 4, c.H - 6, ph, c.W / 2, 0.8, 1.2);
+          onFace(acc, F.front, [[-c.W / 2 + 0.6, winTop], [c.W / 2 - 0.6, winTop], [c.W / 2 - 0.6, winTop + 2.6], [-c.W / 2 + 0.6, winTop + 2.6]], -0.4, 1.4);
+          skirt(trim, c, c.H - 6, 3, 3.5, c.iw + 3, c.idp + 3, 2, c.iw + 0.2, c.idp + 0.2);
+          K.lathe(acc, [[1.8, c.H - 2], [1.2, c.H + 16], [2, c.H + 17], [0, c.H + 19.5]], 14, c.W / 2 - c.t / 2, c.D / 2 + 1.2);
+        }
+        return { trim: trim, accent: acc };
+      }
+
       function buildTower(p) {
         var t = p.wall, die = p.dieSize;
         var iw = die * 1.75, idp = die * 2.3;
@@ -362,14 +526,22 @@
         K.box(tray, -trayW / 2, floorT * 0.5, zt0 + rim - 0.6, -trayW / 2 + rim, floorT + p.rimH, -D / 2 - 0.5);
         K.box(tray, trayW / 2 - rim, floorT * 0.5, zt0 + rim - 0.6, trayW / 2, floorT + p.rimH, -D / 2 - 0.5);
 
-        var all = [tower, baffles, tray];
+        var style = Math.round(p.style || 0);
+        var deco = decorate(style, { W: W, D: D, H: H, t: t, die: die, iw: iw, idp: idp, floorT: floorT, winH: winH,
+          trayW: trayW, rim: rim, rimH: p.rimH, zt0: zt0 });
+        var all = [tower, baffles, tray, deco.trim, deco.accent];
         var zMid = (zt0 + D / 2) / 2;
         all.forEach(function (a) { K.move(a, 0, 0, 0, -zMid); K.spinY(a, 0, Math.PI); });
-        return [
-          { name: 'tower', positions: K.f32(tower) },
-          { name: 'baffles', positions: K.f32(baffles) },
-          { name: 'tray', positions: K.f32(tray) }
+        var col = THEME_COLORS[style] || [];
+        var meshes = [
+          { name: 'tower', positions: K.f32(tower), color: col[0] },
+          { name: 'baffles', positions: K.f32(baffles), color: col[0] },
+          { name: 'tray', positions: K.f32(tray), color: col[0] }
         ];
+        // hundreds of bricks / beams: paint each theme layer as one part
+        if (deco.trim.length) meshes.push({ name: 'trim', positions: K.f32(deco.trim), color: col[1], singlePart: true });
+        if (deco.accent.length) meshes.push({ name: 'accent', positions: K.f32(deco.accent), color: col[2], singlePart: true });
+        return meshes;
       }
 
       window.MM_GENERATOR = {
@@ -387,10 +559,13 @@
           { name: 'Arcane Violet', color: '#a78bfa' },
           { name: 'Forest Green', color: '#4ade80' },
           { name: 'Shadow Black', color: '#334155' },
-          { name: 'Gold Trim', color: '#fde047' }
+          { name: 'Gold Trim', color: '#fde047' },
+          { name: 'Neon Cyan', color: '#22d3ee' }
         ],
-        partNames: { tower: 'Tower walls', baffles: 'Baffle ramps', tray: 'Landing tray' },
+        partNames: { tower: 'Tower walls', baffles: 'Baffle ramps', tray: 'Landing tray', trim: 'Theme trim', accent: 'Theme accents' },
+        openGroups: ['Style', 'Tower'],
         parameters: [
+          { group: 'Style', key: 'style', label: 'Theme', unit: '', min: 0, max: 4, step: 1, value: 0, options: THEMES },
           { group: 'Tower', key: 'dieSize', label: 'Largest die (width)', unit: ' mm', min: 12, max: 26, step: 1, value: 17 },
           { group: 'Tower', key: 'height', label: 'Tower height', unit: ' mm', min: 80, max: 200, step: 5, value: 150 },
           { group: 'Tower', key: 'baffles', label: 'Baffle ramps (as many as fit)', unit: ' ramps', min: 1, max: 6, step: 1, value: 3 },
@@ -403,7 +578,11 @@
           { label: 'Pocket tower', values: { dieSize: 14, height: 110, baffles: 3, angle: 45, wall: 2.4, trayLen: 50, rimH: 6 } },
           { label: 'Tall tower', values: { dieSize: 18, height: 190, baffles: 5, angle: 45, wall: 2.6, trayLen: 85, rimH: 9 } },
           { label: 'Big dice tower', values: { dieSize: 24, height: 190, baffles: 3, angle: 48, wall: 3, trayLen: 100, rimH: 12 } },
-          { label: 'Default tower', values: { dieSize: 17, height: 150, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } }
+          { label: 'Castle keep', values: { style: 1, dieSize: 18, height: 160, baffles: 3, angle: 45, wall: 2.6, trayLen: 70, rimH: 8 } },
+          { label: 'Pagoda', values: { style: 2, dieSize: 17, height: 170, baffles: 4, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
+          { label: 'Tavern', values: { style: 3, dieSize: 17, height: 140, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
+          { label: 'Sci-fi pylon', values: { style: 4, dieSize: 17, height: 160, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
+          { label: 'Default tower', values: { style: 0, dieSize: 17, height: 150, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } }
         ],
         build: function (p) { return buildTower(p); }
       };

@@ -1,4 +1,4 @@
-> **ABANDONED / historical.** Gemini-drawn hover frames were replaced by holograms rendered from the real 3D models (see [hologram-tiles.md](hologram-tiles.md)). Do not use this workflow for new generators. It is kept because the base tile (`assets/thumbnails/sprites/base-tile.webp`, built by `scripts/build-hover-sheets.py`) and the old frames (`?gemini` on the homepage URL) still come from it. The "42 generators" count below is out of date; the site now has 84 (see [slot-registry.md](slot-registry.md)).
+> **ABANDONED / historical.** Gemini-drawn hover frames were replaced by holograms rendered from the real 3D models (see [hologram-tiles.md](hologram-tiles.md)). Do not use this workflow for new generators. It is kept because the base tile (`assets/thumbnails/sprites/base-tile.webp`, built by `scripts/build-hover-sheets.py`) and the old frames (`?gemini` on the homepage URL) still come from it. The "42 generators" count below is out of date; the site now has 83 (see [slot-registry.md](slot-registry.md)).
 
 # Tile hover assets skill v3 (for Gemini)
 
@@ -109,7 +109,6 @@ Slot 35 | egg-basket | a woven basket with a handle holding eggs | front f0: the
 Slot 36 | cake-stacker | a tiered cake with frosting drips and a cherry | front f0: the cherry and the longest drip | back f15: the back drips
 Slot 37 | candle-number | a numeral 7 candle topper with a flame | front f0: the numeral face with the flame | back f15: the mirrored back of the numeral
 Slot 38 | pinata | a donkey-shaped pinata with a pull string | front f0: the donkey face | back f15: the tail and the pull string
-Slot 39 | balloon-twister | a twisted balloon dog | front f0: the dog face | back f15: the twisted tail
 Slot 40 | banner-letters | a row of bunting flags with letters | front f0: the lettered flags facing the viewer | back f15: the plain backs of the flags
 Slot 41 | party-popper | a party popper spinner fidget | front f0: the popper mouth | back f15: the closed tip
 Slot 42 | cupcake-maker | a cupcake with swirled frosting and a cherry | front f0: the cherry and frosting swirl | back f15: the wrapper pleats from behind
