@@ -1,0 +1,622 @@
+{
+ "ghost-builder": {
+  "colors": {
+   "body": "#f5f7ff",
+   "face": "#1b2236"
+  }
+ },
+ "pumpkin-plotter": {
+  "colors": {
+   "body": "#f28c28",
+   "top": "#f28c28",
+   "stem": "#4f8a3a"
+  }
+ },
+ "witch-hat": {
+  "colors": {
+   "brim": "#3b2a63",
+   "cone": "#5b3a9a",
+   "band": "#f2a31b"
+  }
+ },
+ "skull-sculptor": {
+  "colors": {
+   "skull": "#ece6d3",
+   "eyes": "#181a22",
+   "nose": "#181a22",
+   "mouth": "#181a22",
+   "base": "#3a3f4c",
+   "teeth": "#f7f2e2"
+  }
+ },
+ "spider": {
+  "colors": {
+   "head": "#2b2e3a",
+   "abdomen": "#4a2d6e",
+   "eyes": "#ff5252",
+   "legs": "#20222c"
+  }
+ },
+ "snowman": {
+  "colors": {
+   "bottom": "#f4f9ff",
+   "middle": "#f4f9ff",
+   "head": "#f4f9ff",
+   "hat": "#1d2230",
+   "trim": "#d33a3a",
+   "scarf": "#d33a3a",
+   "nose": "#f28c28",
+   "eyes": "#1d2230",
+   "mouth": "#1d2230",
+   "buttons": "#1d2230",
+   "arms": "#6b4423"
+  }
+ },
+ "snowflake": {
+  "colors": {
+   "arms": "#cfeaff",
+   "branches": "#cfeaff",
+   "hub": "#6bb8f5",
+   "loop": "#6bb8f5"
+  }
+ },
+ "holiday-tree": {
+  "colors": {
+   "tree": "#2e8b4e",
+   "trunk": "#7a4b26",
+   "base": "#8b2e2e",
+   "topper": "#ffd23f",
+   "ornament": "#e63946"
+  }
+ },
+ "gift-box": {
+  "colors": {
+   "box": "#d7263d",
+   "lid": "#b81d31",
+   "ribbon": "#ffd23f",
+   "bow": "#ffd23f",
+   "knot": "#f2b705"
+  }
+ },
+ "gift-box-2": {
+  "colors": {
+   "box": "#d7263d",
+   "lid": "#b81d31",
+   "ribbon": "#ffd23f",
+   "bow": "#ffd23f",
+   "knot": "#f2b705"
+  }
+ },
+ "key-clicker": {
+  "colors": {
+   "body": "#2f3a52",
+   "cap": "#eaeff7",
+   "legend": "#e4572e"
+  }
+ },
+ "name-keychain": {
+  "colors": {
+   "base": "#3b82f6",
+   "rim": "#1d4ed8",
+   "text": "#ffffff"
+  }
+ },
+ "image-clicker": {
+  "colors": {
+   "housing": "#2f3a52",
+   "button": "#e63946",
+   "hinge": "#94a3b8"
+  }
+ },
+ "pottery-wheel": {
+  "colors": {
+   "outer": "#b5651d",
+   "rim": "#8a4a14",
+   "inner": "#d98c4a"
+  }
+ },
+ "turkey-builder": {
+  "colors": {
+   "body": "#8b5a2b",
+   "head": "#a0663a",
+   "beak": "#f2b705",
+   "wattle": "#d7263d",
+   "eyes": "#111111",
+   "feathers": "#d9641e",
+   "inner": "#f2b705",
+   "base": "#6b4423"
+  }
+ },
+ "cornucopia": {
+  "colors": {
+   "horn": "#c58a3c",
+   "apples": "#d7263d",
+   "gourds": "#f28c28",
+   "grapes": "#7b3fa0",
+   "stems": "#4f7a35"
+  }
+ },
+ "leaf-press": {
+  "colors": {
+   "leaf": "#e0882a",
+   "veins": "#b8561a",
+   "stem": "#7a4b26",
+   "loop": "#7a4b26"
+  }
+ },
+ "pumpkin-pie-slice": {
+  "colors": {
+   "tin": "#b8bec9",
+   "lid": "#d1d6df",
+   "crust": "#d9a35a",
+   "cream": "#f8f1e0"
+  }
+ },
+ "acorn-pinecone-set": {
+  "colors": {
+   "nut": "#b9803f",
+   "cap": "#7a4b26",
+   "stem": "#5a3a1c",
+   "cone": "#8c5a33"
+  }
+ },
+ "scarecrow-stacker": {
+  "colors": {
+   "shirt": "#c0392b",
+   "patches": "#f2b705",
+   "post": "#7a4b26",
+   "arms": "#d9a35a",
+   "straw": "#e8c15a",
+   "head": "#f0c987",
+   "eyes": "#111111",
+   "nose": "#f28c28",
+   "mouth": "#111111",
+   "hat": "#6b4423",
+   "band": "#f2b705",
+   "base": "#7a4b26"
+  }
+ },
+ "gratitude-place-cards": {
+  "colors": {
+   "card": "#fdf3dc",
+   "border": "#d9641e",
+   "lettering": "#8a3d12",
+   "motif": "#e8872a",
+   "motifTrim": "#b8561a",
+   "stand": "#c58a3c"
+  }
+ },
+ "countdown-clock": {
+  "colors": {
+   "face": "#f5f7ff",
+   "rim": "#1d4ed8",
+   "burst": "#ffd23f",
+   "ticks": "#1d2230",
+   "numerals": "#1d2230",
+   "year": "#d7263d",
+   "hands": "#1d2230"
+  }
+ },
+ "confetti-cannon": {
+  "colors": {
+   "ribbon": "#ff5ca8",
+   "cannon": "#7b3fe4",
+   "stripes": "#ffd23f",
+   "dots": "#2ec4b6",
+   "stars": "#ffd23f",
+   "streamers": "#ff5ca8"
+  }
+ },
+ "party-hat": {
+  "colors": {
+   "hat": "#7b3fe4",
+   "brim": "#ffd23f",
+   "pom": "#ff5ca8"
+  }
+ },
+ "party-whistle": {
+  "colors": {
+   "body": "#2ec4b6",
+   "plug": "#ffd23f",
+   "lip": "#ff5ca8",
+   "bands": "#ffd23f",
+   "loop": "#ff5ca8"
+  }
+ },
+ "conversation-hearts": {
+  "colors": {
+   "candy": "#ff8fb8",
+   "text": "#b0165a"
+  }
+ },
+ "valentines-card": {
+  "colors": {
+   "card": "#ff4d6d",
+   "picture": "#fff0f3",
+   "border": "#c9184a",
+   "lettering": "#ffffff",
+   "leg": "#c9184a",
+   "hinge": "#9d0d3a"
+  }
+ },
+ "egg-decorator": {
+  "colors": {
+   "egg": "#7ed6e6",
+   "pattern": "#ff7aa8"
+  }
+ },
+ "bunny-builder": {
+  "colors": {
+   "body": "#f7f4ee",
+   "head": "#f7f4ee",
+   "ears": "#f7f4ee",
+   "earInner": "#ffb3c7",
+   "eyes": "#2a2430",
+   "nose": "#ff7aa0",
+   "cheeks": "#ffb3c7",
+   "tail": "#ffffff",
+   "feet": "#ffb3c7",
+   "extra": "#ff8a3d"
+  }
+ },
+ "chick-hatcher": {
+  "colors": {
+   "shell": "#ffe9a8",
+   "cap": "#f7f4ee",
+   "chick": "#ffd23f",
+   "beak": "#f28c28",
+   "eyes": "#111111",
+   "tuft": "#ffb703"
+  },
+  "hide": [
+   "cap"
+  ]
+ },
+ "flower-pot": {
+  "colors": {
+   "pot": "#c8643c",
+   "soil": "#5a3a22",
+   "stems": "#3f8f4a",
+   "leaves": "#4fb35a",
+   "blooms": "#ff6fa5",
+   "centers": "#ffd23f"
+  }
+ },
+ "butterfly-wings": {
+  "colors": {
+   "wings": "#ff8f3d",
+   "veins": "#7a2e14",
+   "border": "#2a1a4a",
+   "spots": "#fff3b0",
+   "body": "#2a1a4a",
+   "antennae": "#2a1a4a"
+  }
+ },
+ "egg-basket": {
+  "colors": {
+   "basket": "#c58a3c",
+   "handle": "#a56a28",
+   "eggs": "#ff8fb8",
+   "bands": "#ffd23f"
+  }
+ },
+ "cake-stacker": {
+  "colors": {
+   "plate": "#e8edf5",
+   "cake": "#f2c98a",
+   "frosting": "#ff9ec2",
+   "sprinkles": "#3b82f6",
+   "candles": "#ffd23f"
+  }
+ },
+ "candle-number": {
+  "colors": {
+   "border": "#ff5ca8",
+   "digits": "#ffd23f",
+   "beads": "#2ec4b6",
+   "flame": "#ff8a1f"
+  }
+ },
+ "pinata": {
+  "colors": {
+   "body": "#ff5ca8",
+   "lid": "#ffd23f",
+   "fringe": "#2ec4b6"
+  }
+ },
+ "banner-letters": {
+  "colors": {
+   "ribbon": "#ffd23f",
+   "flagsA": "#ff5ca8",
+   "flagsB": "#2ec4b6",
+   "letters": "#ffffff",
+   "trim": "#7b3fe4"
+  }
+ },
+ "party-popper": {
+  "colors": {
+   "popper": "#ff5ca8",
+   "cap": "#ffd23f",
+   "ring": "#2ec4b6",
+   "fins": "#7b3fe4"
+  }
+ },
+ "cupcake-maker": {
+  "colors": {
+   "liner": "#ff9ec2",
+   "cake": "#c98a52",
+   "frosting": "#ffb3d1",
+   "topper": "#d7263d",
+   "sprinkles": "#3b82f6"
+  }
+ },
+ "birthday-crown": {
+  "colors": {
+   "band": "#ffd23f",
+   "jewels": "#ff5ca8",
+   "dots": "#2ec4b6",
+   "plaque": "#7b3fe4",
+   "number": "#ffffff"
+  }
+ },
+ "gear-train": {
+  "colors": {
+   "base": "#2f3a52",
+   "gear0": "#e63946",
+   "gear1": "#3b82f6",
+   "gear2": "#ffd23f",
+   "gear3": "#2ec4b6",
+   "pins": "#cbd5e1",
+   "knob": "#ff8a1f"
+  }
+ },
+ "fidget-slider": {
+  "colors": {
+   "track": "#2f3a52",
+   "slider": "#ff5ca8"
+  }
+ },
+ "spinner-ring": {
+  "colors": {
+   "inner": "#3b82f6",
+   "outer": "#ff5ca8",
+   "text": "#ffd23f"
+  }
+ },
+ "spiral-tower": {
+  "colors": {
+   "post": "#e8edf5",
+   "tier": [
+    "#ff5ca8",
+    "#ff8a1f",
+    "#ffd23f",
+    "#4cc96a",
+    "#2ec4b6",
+    "#3b82f6",
+    "#7b3fe4",
+    "#ff5ca8"
+   ]
+  }
+ },
+ "rattle-ball": {
+  "colors": {
+   "cage": "#3b82f6",
+   "ball": "#ff5ca8",
+   "raft": "#3b82f6",
+   "pin": "#3b82f6"
+  }
+ },
+ "chain": {
+  "colors": {
+   "ring": "#cbd5e1",
+   "link": [
+    "#e63946",
+    "#3b82f6",
+    "#ffd23f",
+    "#2ec4b6",
+    "#7b3fe4",
+    "#ff8a1f"
+   ]
+  }
+ },
+ "flipper": {
+  "colors": {
+   "tetra": [
+    "#e63946",
+    "#3b82f6",
+    "#ffd23f",
+    "#2ec4b6",
+    "#7b3fe4",
+    "#ff8a1f"
+   ]
+  }
+ },
+ "pot-of-gold": {
+  "colors": {
+   "pot": "#2a2f3c",
+   "collar": "#555d70",
+   "belt": "#5a3a1c",
+   "emblem": "#4cc96a",
+   "gold": "#ffd23f",
+   "coins": "#ffc300",
+   "spill": "#ffd23f"
+  }
+ },
+ "leprechaun-hat": {
+  "colors": {
+   "hat": "#1f8a4c",
+   "band": "#1d2230",
+   "emblem": "#ffd23f"
+  }
+ },
+ "lucky-horseshoe": {
+  "colors": {
+   "shoe": "#b8bec9",
+   "clover": "#2ea44f"
+  }
+ },
+ "clover-chain": {
+  "colors": {
+   "clovers": "#2ea44f",
+   "veins": "#1b6b34",
+   "bridges": "#4cc96a",
+   "rings": "#ffd23f"
+  }
+ },
+ "firework-burst": {
+  "colors": {
+   "spokes": "#ffd23f",
+   "tips": "#ff5ca8",
+   "hub": "#ff8a1f",
+   "ring": "#3b82f6",
+   "loop": "#cbd5e1"
+  }
+ },
+ "star-spangled-star": {
+  "colors": {
+   "plate": "#1d3a8a",
+   "rim": "#d7263d",
+   "centre": "#f5f7ff",
+   "spangles": "#ffffff"
+  }
+ },
+ "geo-vase": {
+  "colors": {
+   "vase": "#2ec4b6"
+  }
+ },
+ "tealight-lantern": {
+  "colors": {
+   "base": "#7a4b26",
+   "walls": "#ffb347",
+   "top": "#7a4b26"
+  }
+ },
+ "coaster-set": {
+  "colors": {
+   "coaster": "#3b82f6",
+   "rim": "#1d4ed8",
+   "pattern": "#93c5fd",
+   "holder": "#2f3a52"
+  }
+ },
+ "photo-frame": {
+  "colors": {
+   "frame": "#7a4b26",
+   "hanger": "#cbd5e1"
+  }
+ },
+ "wall-hook-rack": {
+  "colors": {
+   "plate": "#7a4b26",
+   "pegs": "#cbd5e1",
+   "shelf": "#a56a28"
+  }
+ },
+ "shelf-bracket": {
+  "colors": {
+   "plate": "#2f3a52",
+   "web": "#3b82f6"
+  }
+ },
+ "bookend-builder": {
+  "colors": {
+   "panel": "#3b82f6",
+   "foot": "#1d4ed8"
+  }
+ },
+ "remote-caddy": {
+  "colors": {
+   "caddy": "#2f3a52",
+   "comb": "#3b82f6"
+  }
+ },
+ "tray-maker": {
+  "colors": {
+   "tray": "#2ec4b6",
+   "handles": "#1b8a80"
+  }
+ },
+ "dice-tower": {
+  "colors": {
+   "tower": "#7b3fe4",
+   "baffles": "#5b2fb0",
+   "tray": "#2f3a52"
+  }
+ },
+ "dice-vault": {
+  "colors": {
+   "vault": "#d7263d",
+   "lid": "#8f1727"
+  }
+ },
+ "custom-dice": {
+  "colors": {
+   "die": "#d7263d",
+   "numbers": "#ffffff"
+  }
+ },
+ "miniature-base": {
+  "colors": {
+   "base": "#4a4f5c",
+   "stones": "#8b93a5",
+   "rim": "#2f3a52"
+  }
+ },
+ "hex-terrain-tile": {
+  "colors": {
+   "tile": "#8a6a3c",
+   "surface": "#4fa05a",
+   "rim": "#5a4224"
+  }
+ },
+ "card-deck-box": {
+  "colors": {
+   "box": "#1d3a8a",
+   "lid": "#d7263d"
+  }
+ },
+ "game-pawn": {
+  "colors": {
+   "base": "#2f3a52",
+   "body": "#3b82f6",
+   "head": "#3b82f6"
+  }
+ },
+ "spinner-dial": {
+  "colors": {
+   "plate": "#f5f7ff",
+   "wedgesA": "#ff5ca8",
+   "wedgesB": "#3b82f6",
+   "numbers": "#1d2230",
+   "hub": "#ffd23f",
+   "arrow": "#d7263d"
+  }
+ },
+ "chess-set": {
+  "colors": {
+   "pawn": "#f2e8d0",
+   "rook": "#f2e8d0",
+   "knight": "#f2e8d0",
+   "bishop": "#f2e8d0",
+   "queen": "#d6a436",
+   "king": "#d6a436"
+  }
+ },
+ "character-standee": {
+  "colors": {
+   "plate": "#2f3a52",
+   "frame": "#ffd23f",
+   "figure": "#f5f7ff",
+   "accent": "#ff5ca8",
+   "base": "#2f3a52"
+  }
+ },
+ "text-generator": {
+  "colors": {
+   "base": "#1d3a8a",
+   "rim": "#ffd23f",
+   "text": "#ffffff"
+  }
+ }
+}

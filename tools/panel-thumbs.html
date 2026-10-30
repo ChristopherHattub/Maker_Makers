@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Panel thumbnail renderer</title>
+<style>body { background: #02050c; color: #8fe9ff; font: 12px ui-monospace, monospace; margin: 12px; } canvas { display: block; margin-top: 8px; max-width: 100%; }
+iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px; border: 0; }</style>
+</head>
+<body>
+<!--
+  Renders each generator's real model with its Color-tab part colors on a studio backdrop (640 x 480) and uploads
+  panel-<id>.png to scripts/receive-render.mjs (:5190). Then: python3 scripts/build-panel-thumbs.py <receiver out dir>
+  Open  tools/panel-thumbs.html?gen=all&save=1        every generator in js/programs.js
+        tools/panel-thumbs.html?gen=spider&save=1     one or several (comma separated thumbnail ids)
+  Params: w (640), h (480), ss (supersample, 2), port (5190). Per-generator overrides: scripts/panel-thumbs-config.json
+  (hide = part names to leave out, elev degrees, yaw degrees, fill 0..1, pan = vertical shift of the model in the frame, -0.5..0.5).
+-->
+<div id="log">loading…</div>
+<pre id="results"></pre>
+<canvas id="out"></canvas>
+<iframe id="gen"></iframe>
+<script src="../js/programs.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var W = +(q.get('w') || 640), H = +(q.get('h') || 480), SS = +(q.get('ss') || 2);
+  var SAVE = !!q.get('save');
+  var logEl = document.getElementById('log'), resEl = document.getElementById('results');
+  var frame = document.getElementById('gen');
+  var results = {};
+  window.PT_RESULTS = results;
+
+  function thumbId(g) { return g.thumbnailUrl.split('/').pop().replace(/\.\w+$/, ''); }
+
+  function loadGenerator(url) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      function finish(v, err) { if (done) return; done = true; frame.onload = null; err ? reject(err) : resolve(v); }
+      frame.onload = function () {
+        var tries = 0;
+        (function poll() {
+          var w = frame.contentWindow;
+          try {
+            if (w && w.MM_STAGE && w.MM_STAGE.getModelData) {
+              var d = w.MM_STAGE.getModelData() || [], n = 0;
+              d.forEach(function (e) { n += e.positions.length; });
+              if (n > 0) return finish(w);
+            }
+          } catch (e) { return finish(null, e); }
+          if (++tries > 120) return finish(null, new Error('no model after 12s'));
+          setTimeout(poll, 100);
+        })();
+      };
+      frame.src = url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();
+    });
+  }
+
+  var shared = null;
+  function rendererFor(T) {
+    if (!shared || shared.T !== T) {
+      var r = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      r.setSize(W * SS, H * SS, false);
+      r.setClearColor(0x000000, 0);
+      shared = { T: T, renderer: r };
+    }
+    return shared.renderer;
+  }
+
+  // The generator's own Color tab computes the per-triangle colors (part colors, cavity shading); open it and read them back.
+  function collect(win) {
+    var T = win.MM_STAGE.THREE;
+    var tab = win.document.getElementById('mm-tab-color');
+    if (tab) tab.click();
+    var meshes = [], names = win.MM_STAGE.getModelData().map(function (e) { return e.name || 'body'; });
+    win.MM_STAGE.modelGroup.children.forEach(function (m) {
+      if (m.isMesh && m.geometry && m.geometry.attributes.position && m.geometry.attributes.color) meshes.push(m);
+    });
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        var parts = meshes.map(function (m, k) {
+          m.updateMatrixWorld(true);
+          return { name: meshes.length === names.length ? names[k] : null, pos: m.geometry.attributes.position.array.slice(), col: m.geometry.attributes.color.array.slice(), mat: m.matrixWorld.clone() };
+        });
+        resolve({ T: T, parts: parts });
+      }, 400);
+    });
+  }
+
+  function backdrop(ctx, w, h) {
+    var g = ctx.createRadialGradient(w * 0.5, h * 0.4, h * 0.05, w * 0.5, h * 0.55, h * 1.0);
+    g.addColorStop(0, '#a9c4e8'); g.addColorStop(0.55, '#5d82b8'); g.addColorStop(1, '#2a4876');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    // soft floor glow under the model
+    var f = ctx.createRadialGradient(w * 0.5, h * 0.78, 4, w * 0.5, h * 0.78, w * 0.5);
+    f.addColorStop(0, 'rgba(255,255,255,0.28)'); f.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save(); ctx.translate(0, h * 0.78); ctx.scale(1, 0.3); ctx.translate(0, -h * 0.78);
+    ctx.fillStyle = f; ctx.fillRect(0, 0, w, h * 3); ctx.restore();
+    var v = ctx.createRadialGradient(w * 0.5, h * 0.5, h * 0.5, w * 0.5, h * 0.5, w * 0.8);
+    v.addColorStop(0, 'rgba(6,16,40,0)'); v.addColorStop(1, 'rgba(6,16,40,0.4)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, w, h);
+  }
+
+  // Wanted colour for a part: its exact name, else the name without a trailing number (tier3 -> tier). An array is a
+  // ramp indexed by that number.
+  function pick(colors, name) {
+    if (!colors || !name) return null;
+    var v = colors[name];
+    if (v === undefined) { var base = name.replace(/\d+$/, ''); v = colors[base]; if (Array.isArray(v)) v = v[(parseInt(name.slice(base.length), 10) || 0) % v.length]; }
+    return Array.isArray(v) ? v[0] : v || null;
+  }
+
+  function render(data, cfg) {
+    var T = data.T;
+    var pos = [], col = [];
+    var v = new T.Vector3();
+    data.parts.forEach(function (p) {
+      if (cfg.hide && p.name && cfg.hide.indexOf(p.name) >= 0) return;
+      var o = new Float32Array(p.pos.length);
+      for (var i = 0; i < p.pos.length; i += 3) {
+        v.set(p.pos[i], p.pos[i + 1], p.pos[i + 2]).applyMatrix4(p.mat);
+        o[i] = v.x; o[i + 1] = v.y; o[i + 2] = v.z;
+      }
+      var cc = p.col, hex = pick(cfg.colors, p.name);
+      if (hex) {   // keep the engine's cavity shading: scale the shade by (wanted colour / the part's brightest colour)
+        var m = [0, 0, 0], w = new T.Color(hex);
+        for (i = 0; i < cc.length; i += 3) for (var ch = 0; ch < 3; ch++) m[ch] = Math.max(m[ch], cc[i + ch]);
+        var lum = Math.max(m[0], m[1], m[2]) || 1;
+        cc = new Float32Array(p.col.length);
+        for (i = 0; i < cc.length; i += 3) { var sh = Math.max(p.col[i], p.col[i + 1], p.col[i + 2]) / lum; cc[i] = w.r * sh; cc[i + 1] = w.g * sh; cc[i + 2] = w.b * sh; }
+      }
+      pos.push(o); col.push(cc);
+    });
+    var total = 0; pos.forEach(function (a) { total += a.length; });
+    var P = new Float32Array(total), C = new Float32Array(total), at = 0;
+    pos.forEach(function (a, k) { P.set(a, at); C.set(col[k], at); at += a.length; });
+
+    var b = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 }, i;
+    for (i = 0; i < P.length; i += 3) {
+      b.x0 = Math.min(b.x0, P[i]); b.x1 = Math.max(b.x1, P[i]);
+      b.y0 = Math.min(b.y0, P[i + 1]); b.y1 = Math.max(b.y1, P[i + 1]);
+      b.z0 = Math.min(b.z0, P[i + 2]); b.z1 = Math.max(b.z1, P[i + 2]);
+    }
+    var cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, cy = (b.y0 + b.y1) / 2;
+    for (i = 0; i < P.length; i += 3) { P[i] -= cx; P[i + 1] -= cy; P[i + 2] -= cz; }
+    var hgt = b.y1 - b.y0, wid = Math.max(b.x1 - b.x0, b.z1 - b.z0);
+    var flat = hgt < 0.22 * wid;
+
+    var geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.BufferAttribute(P, 3));
+    geo.setAttribute('color', new T.BufferAttribute(C, 3));
+    geo.computeVertexNormals();
+    var mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.52, metalness: 0.02, side: T.DoubleSide });
+    var mesh = new T.Mesh(geo, mat);
+    var scene = new T.Scene();
+    scene.add(mesh);
+    scene.add(new T.HemisphereLight(0xdbe9ff, 0x3a4a6a, 0.6));
+    var key = new T.DirectionalLight(0xffffff, 0.8); key.position.set(0.8, 1.4, 1.1); scene.add(key);
+    var fill = new T.DirectionalLight(0x9fc3ff, 0.25); fill.position.set(-1.2, 0.5, 0.7); scene.add(fill);
+    var rim = new T.DirectionalLight(0xffd9a8, 0.4); rim.position.set(-0.6, 0.9, -1.3); scene.add(rim);
+
+    // Camera: three-quarter view from the front right, looking slightly down; fit the bounding sphere into the frame.
+    var elev = (cfg.elev !== undefined ? cfg.elev : (flat ? 48 : 24)) * Math.PI / 180;
+    var yaw = (cfg.yaw !== undefined ? cfg.yaw : 32) * Math.PI / 180;
+    var R = 0;
+    for (i = 0; i < P.length; i += 3) R = Math.max(R, Math.hypot(P[i], P[i + 1], P[i + 2]));
+    var fov = 30, aspect = W / H, FILL = cfg.fill || 0.7;
+    var cam = new T.PerspectiveCamera(fov, aspect, 1, R * 40);
+    var dist = R / Math.sin(fov / 2 * Math.PI / 180) * 1.05;
+    cam.position.set(Math.sin(yaw) * Math.cos(elev) * dist, Math.sin(elev) * dist, Math.cos(yaw) * Math.cos(elev) * dist);
+    cam.lookAt(0, 0, 0);
+    cam.updateMatrixWorld();
+
+    var renderer = rendererFor(T);
+    renderer.render(scene, cam);
+
+    // Tight fit by projected bounds, so tall and wide models both fill the frame the same way.
+    var out = document.getElementById('out');
+    out.width = W; out.height = H;
+    var ctx = out.getContext('2d');
+    backdrop(ctx, W, H);
+
+    var proj = new T.Vector3(), minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+    for (i = 0; i < P.length; i += 3) {
+      proj.set(P[i], P[i + 1], P[i + 2]).project(cam);
+      minx = Math.min(minx, proj.x); maxx = Math.max(maxx, proj.x); miny = Math.min(miny, proj.y); maxy = Math.max(maxy, proj.y);
+    }
+    var RW = W * SS, RH = H * SS;
+    var x0 = (minx / 2 + 0.5) * RW, x1 = (maxx / 2 + 0.5) * RW, y0 = (0.5 - maxy / 2) * RH, y1 = (0.5 - miny / 2) * RH;
+    var bw = x1 - x0, bh = y1 - y0;
+    var boxW = W * FILL, boxH = H * 0.72;
+    var sc = Math.min(boxW / bw, boxH / bh);
+    var dw = bw * sc, dh = bh * sc;
+    var dx = W / 2 - dw / 2, dy = H * 0.47 + (cfg.pan || 0) * H - dh / 2;
+
+    // contact shadow under the model
+    var foot = Math.max(dw * 0.42, W * 0.12);
+    var sh = ctx.createRadialGradient(0, 0, 1, 0, 0, foot);
+    sh.addColorStop(0, 'rgba(8,16,36,0.6)'); sh.addColorStop(1, 'rgba(8,16,36,0)');
+    ctx.save();
+    ctx.translate(W / 2, dy + dh - dh * 0.03); ctx.scale(1, 0.2);
+    ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(0, 0, foot, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(renderer.domElement, x0, y0, bw, bh, dx, dy, dw, dh);
+
+    geo.dispose(); mat.dispose();
+    return { out: out, info: { flat: flat, R: +R.toFixed(1), parts: data.parts.length } };
+  }
+
+  function upload(id, canvas) {
+    return new Promise(function (resolve) {
+      canvas.toBlob(function (blob) {
+        fetch('http://localhost:' + (q.get('port') || 5190) + '/save?name=panel-' + id + '.png', { method: 'POST', body: blob }).then(function () { resolve(true); }, function () { resolve(false); });
+      }, 'image/png');
+    });
+  }
+
+  async function main() {
+    var config = {};
+    try { config = await (await fetch('../scripts/panel-thumbs-config.json')).json(); } catch (e) {}
+    var want = q.get('gen') || 'ghost-builder';
+    var list = GENERATORS.filter(function (g) { return g.programUrl; });
+    if (want !== 'all') {
+      var ids = want.split(',');
+      list = list.filter(function (g) { return ids.some(function (w) { return thumbId(g) === w; }); });
+    }
+    var k = 0;
+    for (var g of list) {
+      var id = thumbId(g), cfg = config[id] || {};
+      k++;
+      logEl.textContent = '[' + k + '/' + list.length + '] ' + id + ' …';
+      try {
+        var win = await loadGenerator('../' + g.programUrl);
+        var data = await collect(win);
+        var r = render(data, cfg);
+        var ok = SAVE ? await upload(id, r.out) : null;
+        results[id] = { ok: ok, info: r.info };
+      } catch (e) {
+        results[id] = 'ERROR ' + e.message;
+      }
+      resEl.textContent = Object.keys(results).map(function (n) { return n + ': ' + JSON.stringify(results[n]); }).join('\n');
+    }
+    logEl.textContent = 'done: ' + list.length + ' generators';
+    window.PT_DONE = true;
+  }
+  main();
+})();
+</script>
+</body>
+</html>

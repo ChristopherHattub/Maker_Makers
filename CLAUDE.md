@@ -36,7 +36,8 @@ Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are **reserved for anima
 2. Thumbnail `assets/thumbnails/<name>.svg` from `thumbnail-template.svg`.
 3. `GENERATORS` entry in `js/programs.js` with the next free slot and a `bundle`.
 4. Hologram tile (poster + atlas) via [docs/hologram-tiles.md](docs/hologram-tiles.md).
-5. Verify live (desktop and 375x667 / 390x844), then update [docs/slot-registry.md](docs/slot-registry.md).
+5. Side-panel preview render (full colour) via [docs/homepage.md](docs/homepage.md#side-panel-previews-full-colour).
+6. Verify live (desktop and 375x667 / 390x844), then update [docs/slot-registry.md](docs/slot-registry.md).
 
 Defaults and presets should print with no supports. Say in a slider label which extremes bring supports back.
 

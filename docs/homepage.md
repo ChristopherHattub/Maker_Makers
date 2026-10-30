@@ -42,6 +42,24 @@ Everything is data in `js/programs.js`; see [generator-registry.md](generator-re
 - Styles are the "HOMEPAGE WORLD MAP" section at the end of `css/styles.css`.
 - Paint cost: the map is repainted whenever the camera settles at a new scale, so nothing on it (apart from the hologram layer) uses a blurred `box-shadow`, `backdrop-filter` or `filter` on a per-tile or per-connector basis. Tile connectors are gradients with the glow baked in, the selected-slot pulse fades a pre-drawn glow by `opacity`, the Workshop tile's glow is an SVG filter inside the drawing and only its transform animates (paused while the map is zoomed out), and the overlays on top of the map (title box, details panel, header on this screen) are near-opaque instead of blurred. Keep new map visuals to gradients, opacity and transform.
 
+## Side-panel previews (full colour)
+
+The preview in the right-hand panel (and the little group thumbnails) is `assets/thumbnails/panel/<id>.webp`, a 640 x 480
+render of the generator's real model with themed part colours on a studio backdrop. `js/worldmap.js` `panelThumbUrl()` picks it
+and falls back to the SVG thumbnail when no render exists. Re-render with the same receiver flow as the holograms:
+
+```
+node scripts/dev-server.mjs --port 5185 &
+node scripts/receive-render.mjs --out /tmp/panel &
+# open in a browser with WebGL:  http://localhost:5185/tools/panel-thumbs.html?gen=all&save=1   (or gen=<id>[,<id>])
+python3 scripts/build-panel-thumbs.py /tmp/panel
+```
+
+`scripts/panel-thumbs-config.json` (keyed by thumbnail id) sets `colors` (part name from the generator's build output to hex;
+a name without its trailing number, e.g. `tier`, matches `tier0..n`, and an array is a ramp), `hide` (parts to leave out, e.g. a
+shell that covers the subject), `elev`, `yaw`, `fill` and `pan`. Parts with no entry keep the colour the generator's Color tab
+gives them. A new generator needs a config entry with themed colours, then a render.
+
 ## Growing further
 
 Tiles are plain DOM, which is fine for hundreds of generators. If the map reaches many thousands, render only the regions near the camera (the layout data already knows every region's rectangle).

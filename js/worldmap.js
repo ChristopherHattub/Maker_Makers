@@ -180,6 +180,12 @@ function worldViewGroups() {
 // Experimental view: tiles touch edge to edge and use artwork from assets/thumbnails/pro/. To add art for a
 // generator, drop a PNG there named like its normal thumbnail (assets/thumbnails/ghost-builder.svg ->
 // assets/thumbnails/pro/ghost-builder.png). Tiles without one keep their normal thumbnail.
+// Side panel preview: a full-colour render of the generator's real model (assets/thumbnails/panel/<id>.webp, made by
+// tools/panel-thumbs.html). Falls back to the normal SVG thumbnail when there is no render yet.
+function panelThumbUrl(url) {
+  return url.replace(/^(.*\/)?([^/]+)\.\w+$/, 'assets/thumbnails/panel/$2.webp');
+}
+
 function proThumbUrl(url) {
   return url.replace(/^(.*\/)?([^/]+)\.\w+$/, 'assets/thumbnails/pro/$2.png');
 }
@@ -827,7 +833,7 @@ function worldRenderPanel() {
     const p = s.prog;
     detail = `
       <div class="panel-tile">
-        <div class="panel-art">${p.thumbnailUrl ? `<img src="${p.thumbnailUrl}" alt="">` : ''}</div>
+        <div class="panel-art">${p.thumbnailUrl ? `<img src="${panelThumbUrl(p.thumbnailUrl)}" alt="" onerror="this.onerror=null;this.src='${p.thumbnailUrl}'">` : ''}</div>
         <span class="panel-kicker">${escapeHTML(p.category || 'GENERATOR')}</span>
         <h4>${escapeHTML(p.title)}</h4>
         <p>${escapeHTML(p.description || '')}</p>
@@ -852,7 +858,7 @@ function worldRenderPanel() {
     const open = g.members.length ? 0 : s.region.w * s.region.h;
     const members = g.members.map(p => `
     <button type="button" class="panel-member" data-act="pick" data-id="${p.id}" title="${escapeHTML(p.title)}">
-      ${p.thumbnailUrl ? `<img src="${p.thumbnailUrl}" alt="">` : ''}
+      ${p.thumbnailUrl ? `<img src="${panelThumbUrl(p.thumbnailUrl)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${p.thumbnailUrl}'">` : ''}
       <span>${escapeHTML(p.title)}</span>
     </button>`).join('');
     wEl.panel.style.setProperty('--accent', g.accent);
