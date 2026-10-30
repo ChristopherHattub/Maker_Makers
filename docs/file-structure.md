@@ -52,6 +52,7 @@
 | Task | Files |
 | --- | --- |
 | Add or update a generator slot | `js/programs.js`, plus files in `programs/` and `assets/thumbnails/` (see the generator skill) |
+| Rebuild the Text Generator font data | `tools/text-fonts/build.mjs` (downloads the OFL fonts, rewrites the FONTDATA block in `programs/text-generator.html`; licences in `tools/text-fonts/licenses/`; see [text-generator.md](text-generator.md)) |
 | Re-render a hologram tile | `tools/hologram.html`, `scripts/build-holo.py`, `scripts/hologram-config.json` (see [hologram-tiles.md](hologram-tiles.md)) |
 | Change the homepage world map | `js/worldmap.js` |
 | Change the viewer or routing | `js/app.js` |

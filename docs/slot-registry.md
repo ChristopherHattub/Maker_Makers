@@ -9,7 +9,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 1-75 | Built, except **slots 14 and 39, which are unused** (gaps; the homepage only shows slots with a `programUrl`; 39 was the Balloon Twister, removed). 73 generators. |
 | 76-90 | **Reserved for animals** (the `animals` group, currently `planned`). The picks are not decided yet; do not use these slots for anything else. |
 | 91-100 | Built: the ten Flexi Creatures. |
-| 101+ | Free. Any number works. |
+| 102+ | Free. Any number works. |
 
 Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys, garden, animals, jewelry). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -100,6 +100,7 @@ Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys,
 | 98 | Flexi Shark | flexi | `flexi-shark.html` |
 | 99 | Flexi Seahorse | flexi | `flexi-seahorse.html` |
 | 100 | Flexi Caterpillar | flexi | `flexi-caterpillar.html` |
+| 101 | Text Generator | personal | `text-generator.html` |
 
 ## Groups (BUNDLES)
 
@@ -115,7 +116,7 @@ Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys,
 | stpatricks | St. Patrick's Day | 4 |
 | july4 | Fourth of July | 2 |
 | fidgets | Fidgets & Clickers | 9 |
-| personal | Personalised | 1 |
+| personal | Personalised | 2 |
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
 | organization | Organisation | 3 |

@@ -660,6 +660,7 @@ function wsAction(a) {
   else if (a === 'redo') wsRedo();
   else if (a === 'clear') { if (!WS.objs.length || confirm('Remove everything from the Workshop?')) { WS.objs.slice().forEach(wsRemove); wsSelect([]); wsCommit(); } }
   else if (a === 'back') location.hash = '';
+  else if (a === 'textgen') location.hash = '#/generator/SLOT-101';
   else if (a === 'miniclose') wsCloseMini();
   else if (a === 'snap') { WS.snap = !WS.snap; wsEl.root.querySelector('[data-a="snap"]').classList.toggle('on', WS.snap); wsAttachGizmo(); wsToast('Snap ' + (WS.snap ? 'on (5 mm, 15°)' : 'off')); }
   else if (a === 'tabtoggle') { WS.open = WS.open === 'all' ? 'strip' : 'all'; wsRenderCatalog(); }
@@ -785,7 +786,8 @@ function wsParamHTML(o) {
     ? `<textarea id="ws-text" data-p="text" rows="2" class="bp-input" style="width:100%" aria-label="Text">${escapeHTML(p.text)}</textarea>
        <label>Height <input type="number" data-p="size" min="3" max="120" value="${p.size}"> mm</label>
        <label>Thickness <input type="number" data-p="thickness" min="0.4" max="60" step="0.2" value="${p.thickness}"> mm</label>
-       <label><input type="checkbox" data-p="bold" ${p.bold ? 'checked' : ''}> Bold</label>` : '');
+       <label><input type="checkbox" data-p="bold" ${p.bold ? 'checked' : ''}> Bold</label>
+       <button class="ws-big ws-wide" data-a="textgen" title="Fonts, plaques, shadowboxes and LED letters (then Send to Workshop)"><span>🔤</span><small>Open the Text Generator</small></button>` : '');
 }
 
 function wsInspectorValues() {

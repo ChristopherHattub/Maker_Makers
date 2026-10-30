@@ -125,7 +125,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
 }
 ```
 
-- Use the next free slot; the `code` in the config (`MM-0NN`) matches the slot number. Add `bundle: '<bundle id>'` to put it in a map region (see Bundles below); without one it lands in the automatic "More" region. Record the slot in `docs/slot-registry.md`. Slots 76-90 are reserved for animals; the next free slot is 101.
+- Use the next free slot; the `code` in the config (`MM-0NN`) matches the slot number. Add `bundle: '<bundle id>'` to put it in a map region (see Bundles below); without one it lands in the automatic "More" region. Record the slot in `docs/slot-registry.md`. Slots 76-90 are reserved for animals; the next free slot is 102.
 - Titles, categories and descriptions are plain text (the homepage escapes them; keep them free of markup).
 - A slot with `programUrl` gets a homepage tile and loads in the viewer; without `thumbnailUrl` the tile shows a plus sign.
 - **Thumbnail**: see the next section. File `assets/thumbnails/<kebab-name>.svg`, same name as the page. It is shown in the homepage details panel and the Workshop's Generators set, and its basename is the hologram tile id.

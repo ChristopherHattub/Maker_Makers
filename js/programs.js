@@ -744,6 +744,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/flexi-caterpillar.svg',
     programUrl: 'programs/flexi-caterpillar.html',
     description: 'A print-in-place caterpillar: big round ball-jointed beads with little feet, a head with eyes and two antennae. Set segment count, bead size and fullness, taper, wiggle, feet, antennae and joint clearance. The easiest flexi to print, with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 101,
+    title: 'Text Generator',
+    bundle: 'personal',
+    category: 'PERSONALISED // TEXT',
+    thumbnailUrl: 'assets/thumbnails/text-generator.svg',
+    programUrl: 'programs/text-generator.html',
+    description: 'Type any text in 10 open-licence fonts and print it as a raised or engraved plaque (7 plate shapes, border, hanging hole), loose letters, a stepped shadowbox, or hollow LED channel letters. Tune size, spacing and boldness. Everything prints flat with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
