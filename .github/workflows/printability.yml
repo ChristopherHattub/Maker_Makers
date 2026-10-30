@@ -1,5 +1,8 @@
 name: Printability
 
+# No third-party or marketplace actions: this repo's Actions policy is local-only, so checkout is plain git and
+# Node comes from the runner image.
+
 # One matrix entry (job) per generator. A generator is re-checked only when its own page changes (or when it is
 # added); changes to shared code re-check all of them. See docs/printability-ci.md.
 on:
@@ -22,12 +25,12 @@ jobs:
       generators: ${{ steps.plan.outputs.generators }}
       count: ${{ steps.plan.outputs.count }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git clone --no-tags "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" .
+          git fetch -q origin "${{ github.sha }}" && git checkout -q "${{ github.sha }}"
       - id: plan
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
@@ -48,10 +51,12 @@ jobs:
         generator: ${{ fromJSON(needs.plan.outputs.generators) }}
     name: ${{ matrix.generator }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git clone --no-tags "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" .
+          git fetch -q origin "${{ github.sha }}" && git checkout -q "${{ github.sha }}"
       # three.js r128 only for the check (same version the pages load from the CDN); the site itself has no dependencies.
       - run: npm install --no-save --no-package-lock --ignore-scripts three@0.128.0
       - run: node scripts/ci/check-generator.mjs ${{ matrix.generator }}

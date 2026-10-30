@@ -1,6 +1,6 @@
 # Printability CI
 
-`.github/workflows/printability.yml` runs the printability check for every generator on GitHub Actions. Each generator is its own matrix job (a green or red tile named after the generator), so a failure points at one page.
+`.github/workflows/printability.yml` (no `uses:` actions, because this repo only allows local actions; checkout is plain git) runs the printability check for every generator on GitHub Actions. Each generator is its own matrix job (a green or red tile named after the generator), so a failure points at one page.
 
 ## What one job does
 
