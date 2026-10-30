@@ -109,6 +109,7 @@ Every generator's **defaults and presets must print with no supports, or as few 
 - Keep slopes and overhangs gentle (about 45° from vertical or less); round or chamfer the unavoidable ones. Limbs, arms and legs should lie along the bed or rise at a steep angle, never arch high over empty space.
 - Say in the `description` or a slider label which slider extremes (raised body, high arches, long overhangs) bring supports back, e.g. `Body height (low = no supports)`. There is no per-generator print-notes field.
 - Check the **lowest point stays at the bed** for defaults, presets and slider min/max (the sweep that matches the manifold check), and that nothing floats.
+- `check-mesh.mjs` also prints the shared **print check** (floating parts, overhangs over ~50°, thin walls); the same check shows as a live chip in the page. Defaults and presets should read "no supports needed". A bar tilted less than ~35° from flat, a flat bridge wider than ~2 mm, a sphere's lower cap and a part that starts in mid-air all fail it. Fix the geometry (45° chamfers, steeper bars, a snap-off pin) instead of ignoring the chip.
 
 ## Slot and thumbnail
 

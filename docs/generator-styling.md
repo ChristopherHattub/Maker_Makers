@@ -10,6 +10,7 @@ This page covers the file layout, the generator contract, the Color tool, export
 | --- | --- |
 | `programs/shared/generator.css` | Layout and styling for every generator. Uses the same colors and fonts as the site. |
 | `programs/shared/generator-core.js` | The engine: page shell, 3D viewport, Parametric and Color tabs, picking, parts, exports, standalone download. |
+| `programs/shared/print-check.js` | The printability check behind the live chip (floating parts, overhangs, thin walls). Also used by `check-mesh.mjs`. |
 | `programs/<name>.html` | One generator. It holds `window.MM_GENERATOR` (the config) and loads the two shared files. |
 
 A generator page looks like this:
@@ -172,6 +173,18 @@ The STL export applies this transform: Y-up becomes Z-up (`x, y, z` becomes `x, 
 ### Print tab
 
 The **Print** tab (engine-owned) has a single option, **Material** (PLA, PETG, ABS, ASA, TPU), which changes the finish of the realistic preview. There are no slicer settings. Exports are .STL (no color) and **.OBJ (colors)**, a zip with `name.obj` and `name.mtl`: one named material per distinct Color-tab color (`usemtl` groups) that Bambu Studio, OrcaSlicer and PrusaSlicer offer to map to filaments (Cura ignores colors). It writes no print settings. Every generator gets it from the engine. A generator may set `printSettings: { material: 'TPU' }` to change the starting material; nothing else is read.
+
+### Print check (live warning chip)
+
+Every generator page gets a small chip at the bottom left of the 3D view, run by `programs/shared/print-check.js` (loaded by the engine next to `generator-core.js`, and inlined into the standalone download). About half a second after the sliders stop moving, the finished model is voxelised the way a slicer sees it (union of all shells, nonzero winding, 0.4 mm cells) and three things are looked for:
+
+| Kind | Meaning |
+| --- | --- |
+| Floating part | A piece that starts above the bed and is not connected to anything that reaches it (prints as spaghetti). |
+| Overhang | Solid with nothing under it within about 50° from vertical (a 45° slope passes, 60° fails). Sags or strands without supports. |
+| Thin wall | Features thinner than 0.8 mm, which a 0.4 mm nozzle may skip. |
+
+The chip is green ("No supports needed"), amber (warnings only) or red ("Needs supports"). Clicking it lists the problems, and red dots in the 3D view mark where. It is an estimate from the mesh, not a guarantee, and it never blocks an export. A generator can opt out with `printCheck: false` or tune it with `printCheckOptions` (`{ minWall, cell }`). `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` runs the same check after the watertight test (`--strict` fails on errors), so use it on defaults, presets and slider extremes. The check ignores the Workshop embed.
 
 ## Standalone download
 

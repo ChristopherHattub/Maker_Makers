@@ -410,7 +410,7 @@ const GENERATORS = [
     category: 'DESK // FIDGETS',
     thumbnailUrl: 'assets/thumbnails/rattle-ball.svg',
     programUrl: 'programs/rattle-ball.html',
-    description: 'A loose ball trapped inside a lattice cage built from an octahedron, icosahedron, dodecahedron or cuboctahedron. Set cage size, bar thickness, ball size and rattle room. The diamond ball is held by a thin snap-off pin for printing. Paint parts in the Color tool and export .STL.'
+    description: 'A loose ball trapped inside a diamond-lattice lantern cage that prints with no supports. Set sides, tiers, cage size, bar thickness, ball size and rattle room. The ball stands on a short snap-off pin. The classic icosahedron, dodecahedron and other polyhedron cages are still there but need slicer supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 49,

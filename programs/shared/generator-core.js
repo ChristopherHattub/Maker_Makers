@@ -225,6 +225,10 @@
       el('div', { class: 'mm-overlay mm-overlay--tl', id: 'mm-hint', text: 'Drag or touch-swipe to orbit 3D mesh' }),
       el('div', { class: 'mm-overlay mm-overlay--tr', id: 'mm-dims', text: '' }),
       el('div', { class: 'mm-toast', id: 'mm-toast', role: 'status' }),
+      el('div', { class: 'mm-printcheck', id: 'mm-printcheck', hidden: '' }, [
+        el('div', { class: 'mm-printlist', id: 'mm-printlist', hidden: '' }),
+        el('button', { class: 'mm-printchip', type: 'button', id: 'mm-printchip', 'aria-expanded': 'false', 'aria-controls': 'mm-printlist', onclick: function () { togglePrintList(); } })
+      ]),
       el('div', { class: 'mm-view-buttons' }, [
         el('button', { class: 'mm-btn', type: 'button', text: 'Front', onclick: function () { centerCamera('front'); } }),
         el('button', { class: 'mm-btn', type: 'button', text: 'Iso', onclick: function () { centerCamera('iso'); } })
@@ -729,6 +733,81 @@
     rebuildWire();
     if (activeTab === 'print') updatePrintLook();
     postEmbedModel();
+    schedulePrintCheck();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Print check: after the sliders settle, the finished model is sliced the way a printer would (floating parts,
+  // overhangs steeper than about 50 degrees, walls thinner than a nozzle) by shared/print-check.js. The chip in the
+  // viewport says whether the model needs supports; click it for what and where. cfg.printCheck = false turns it off.
+  // ---------------------------------------------------------------------------
+  var CORE_SRC = (document.currentScript && document.currentScript.src) || '';
+  var printCheckTimer = null, printCheckSeq = 0, printCheckSlow = 0, printMarks = null, printListOpen = false, printResult = null;
+
+  function withPrintChecker(cb) {
+    if (window.MM_PRINT_CHECK) return cb(window.MM_PRINT_CHECK);
+    if (!CORE_SRC) return;
+    var s = document.createElement('script');
+    s.src = CORE_SRC.replace(/generator-core\.js(\?.*)?$/, 'print-check.js');
+    s.onload = function () { if (window.MM_PRINT_CHECK) cb(window.MM_PRINT_CHECK); };
+    document.head.appendChild(s);
+  }
+
+  function schedulePrintCheck() {
+    if (EMBED || cfg.printCheck === false) return;
+    var seq = ++printCheckSeq, box = $('mm-printcheck');
+    if (printCheckTimer) clearTimeout(printCheckTimer);
+    clearPrintMarks();
+    if (box) { box.hidden = false; $('mm-printchip').className = 'mm-printchip is-busy'; $('mm-printchip').textContent = 'Print check...'; }
+    printCheckTimer = setTimeout(function () {
+      withPrintChecker(function (PC) {
+        if (seq !== printCheckSeq) return;
+        var t0 = Date.now(), res;
+        try { res = PC.check(modelData, cfg.printCheckOptions || {}); } catch (e) { res = null; }
+        printCheckSlow = Date.now() - t0 > 1500 ? 1500 : 0; // a slow model waits longer before it is checked again
+        if (seq !== printCheckSeq) return;
+        showPrintResult(res);
+      });
+    }, 450 + printCheckSlow);
+  }
+
+  function clearPrintMarks() {
+    if (!printMarks) return;
+    scene.remove(printMarks);
+    printMarks.children.forEach(function (m) { m.geometry.dispose(); m.material.dispose(); });
+    printMarks = null;
+  }
+
+  function showPrintResult(res) {
+    var chip = $('mm-printchip'), list = $('mm-printlist'), box = $('mm-printcheck');
+    printResult = res;
+    if (!res || res.skipped) { box.hidden = true; return; }
+    var errors = res.issues.filter(function (i) { return i.severity === 'error'; }).length;
+    chip.className = 'mm-printchip ' + (errors ? 'is-bad' : res.issues.length ? 'is-warn' : 'is-ok');
+    chip.textContent = errors ? 'Needs supports (' + res.issues.length + ')' : res.issues.length ? 'Print warning (' + res.issues.length + ')' : 'No supports needed';
+    list.textContent = '';
+    if (!res.issues.length) list.appendChild(el('p', { class: 'mm-printnote', text: 'No floating parts, no overhang steeper than about 50° and no wall thinner than 0.8 mm. This is a software estimate, not a guarantee.' }));
+    res.issues.forEach(function (i) {
+      var label = i.kind === 'floating' ? 'Floating part' : i.kind === 'overhang' ? 'Overhang' : 'Thin wall';
+      list.appendChild(el('div', { class: 'mm-printissue is-' + i.severity }, [el('strong', { text: label }), el('span', { text: i.message })]));
+    });
+    if (res.issues.length) list.appendChild(el('p', { class: 'mm-printnote', text: 'Red dots in the 3D view show where. Turn on supports in your slicer, or change the settings until the check is green.' }));
+    if (res.issues.length) {
+      printMarks = new T.Group();
+      (res.spots || []).slice(0, 40).forEach(function (sp) {
+        var m = new T.Mesh(new T.SphereGeometry(Math.max(1.2, Math.min(4, Math.sqrt(sp.area) / 2.2)), 12, 8), new T.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.55, depthTest: false }));
+        m.position.set(sp.x, sp.y, sp.z);
+        m.renderOrder = 5;
+        printMarks.add(m);
+      });
+      scene.add(printMarks);
+    }
+  }
+
+  function togglePrintList() {
+    printListOpen = !printListOpen;
+    $('mm-printlist').hidden = !printListOpen;
+    $('mm-printchip').setAttribute('aria-expanded', printListOpen ? 'true' : 'false');
   }
 
   // Workshop embed (?embed=workshop): the page shows only the controls (no header, 3D view or Color / Print tabs) and sends the built model to the parent
@@ -1478,8 +1557,10 @@
     }).then(function (html) {
       return Promise.all([
         fetch(new URL('shared/generator.css', pageUrl)).then(function (r) { return r.text(); }),
-        fetch(new URL('shared/generator-core.js', pageUrl)).then(function (r) { return r.text(); })
+        fetch(new URL('shared/generator-core.js', pageUrl)).then(function (r) { return r.text(); }),
+        fetch(new URL('shared/print-check.js', pageUrl)).then(function (r) { return r.ok ? r.text() : ''; }).catch(function () { return ''; })
       ]).then(function (sources) {
+        sources[1] = sources[2] + '\n' + sources[1];
         var inlined = html
           .replace(/<link rel="stylesheet" href="shared\/generator\.css"\s*\/?>/, function () { return '<style>\n' + sources[0] + '\n</style>'; })
           .replace(/<script src="shared\/generator-core\.js"><\/script>/, function () { return '<script>\n' + sources[1] + '\n<\/script>'; });

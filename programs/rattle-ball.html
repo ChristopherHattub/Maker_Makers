@@ -238,7 +238,7 @@
       function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
       var PHI = (1 + Math.sqrt(5)) / 2;
-      var SHAPE_NAMES = ['Octahedron', 'Icosahedron', 'Dodecahedron', 'Cuboctahedron'];
+      var SHAPE_NAMES = ['Lantern (no supports)', 'Octahedron (needs supports)', 'Icosahedron (needs supports)', 'Dodecahedron (needs supports)', 'Cuboctahedron (needs supports)'];
       // esc = inradius of the largest face opening and face = distance to the nearest face plane, both per unit circumradius.
       var SHAPES = [
         { v: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], esc: 0.408, face: 0.577 },
@@ -336,8 +336,159 @@
         return list;
       }
 
-      function buildRattle(p) {
-        var D = shapeData(Math.round(p.shape)), Rc = p.size, rs = p.strut, rj = rs * 1.35, gap = p.gap;
+      // Ball profile helpers. Both ball shapes have a bottom steeper than 45 degrees from the bed, so a print
+      // that starts at the pin never has to bridge. yb is the (negative) bottom, yt the top, centre at y = 0.
+      var RB0 = 0.85; // radius of the flat tip the ball stands on (just wider than the 0.75 mm pin, so nothing bridges)
+      function ballProfile(Rb, round) {
+        if (round >= 1) {
+          var ph = 40 * PI / 180, pr = Rb * Math.cos(ph), py = -Rb * Math.sin(ph); // sphere down to 40 degrees below the equator
+          var t = (pr - RB0) / Math.sin(ph), yb = py - t * Math.cos(ph), prof = [[0, yb], [RB0, yb], [pr, py]], i;
+          for (i = 1; i <= 12; i++) { var a = -ph + (PI / 2 + ph) * i / 12; prof.push([i === 12 ? 0 : Rb * Math.cos(a), Rb * Math.sin(a)]); }
+          return { prof: prof, yb: yb, yt: Rb };
+        }
+        var hb = (Rb - RB0) * 1.15, ht = Rb - RB0; // underside about 41 degrees from vertical
+        return { prof: [[0, -hb], [RB0, -hb], [Rb, 0], [RB0, ht], [0, ht]], yb: -hb, yt: ht };
+      }
+      function ballMesh(Rb, round) { return lathe(ballProfile(Rb, round).prof, 28); }
+
+      // Distance from point q to segment ab.
+      function segDist(q, a, b) {
+        var d = sub3(b, a), L2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2], w = sub3(q, a);
+        var t = L2 ? clamp((w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / L2, 0, 1) : 0;
+        return len3(sub3(w, mul3(d, t)));
+      }
+
+      // Exact Euclidean distance transform (squared, in cells) of the seed cells, one axis at a time.
+      function edt3(seed, n) {
+        var INF = 1e12, N = n * n * n, f = new Float64Array(N), i, ax, v = new Int32Array(n), z = new Float64Array(n + 1), g = new Float64Array(n), out = new Float64Array(n);
+        for (i = 0; i < N; i++) f[i] = seed[i] ? 0 : INF;
+        var stride = [1, n, n * n];
+        for (ax = 0; ax < 3; ax++) {
+          var st = stride[ax], o1 = stride[(ax + 1) % 3], o2 = stride[(ax + 2) % 3], a, b, q, k, s2;
+          for (a = 0; a < n; a++) for (b = 0; b < n; b++) {
+            var base = a * o1 + b * o2;
+            for (q = 0; q < n; q++) g[q] = f[base + q * st];
+            k = 0; v[0] = 0; z[0] = -INF; z[1] = INF;
+            for (q = 1; q < n; q++) {
+              do {
+                s2 = ((g[q] + q * q) - (g[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+                if (s2 <= z[k]) k--; else break;
+              } while (k >= 0);
+              k++; v[k] = q; z[k] = k > 0 ? s2 : -INF; z[k + 1] = INF;
+            }
+            k = 0;
+            for (q = 0; q < n; q++) { while (z[k + 1] < q) k++; out[q] = (q - v[k]) * (q - v[k]) + g[v[k]]; }
+            for (q = 0; q < n; q++) f[base + q * st] = out[q];
+          }
+        }
+        return f;
+      }
+
+      // Largest ball radius that can still wriggle out of a cage made of bars [a, b] of radius r: the widest opening,
+      // found on a coarse grid (distance field to the bars, then the biggest ball whose centre can walk from c to the
+      // outside). The search stops at cap: a ball that big would not fit in the cage anyway.
+      function escapeRadius(bars, r, c, extent, cap) {
+        var cs = 0.8, n = Math.ceil(extent * 2 / cs) + 3, o = [c[0] - extent, c[1] - extent, c[2] - extent], N = n * n * n, seed = new Uint8Array(N), i;
+        bars.forEach(function (bar) {
+          var d = sub3(bar[1], bar[0]), L = len3(d), steps = Math.ceil(L / (cs * 0.35));
+          for (i = 0; i <= steps; i++) {
+            var t = i / steps, x = Math.round((bar[0][0] + d[0] * t - o[0]) / cs), y = Math.round((bar[0][1] + d[1] * t - o[1]) / cs), zz = Math.round((bar[0][2] + d[2] * t - o[2]) / cs);
+            if (x >= 0 && y >= 0 && zz >= 0 && x < n && y < n && zz < n) seed[(zz * n + y) * n + x] = 1;
+          }
+        });
+        var d2 = edt3(seed, n), dist = new Float32Array(N);
+        for (i = 0; i < N; i++) dist[i] = Math.sqrt(d2[i]) * cs - r;
+        var start = ((Math.round((c[2] - o[2]) / cs) * n) + Math.round((c[1] - o[1]) / cs)) * n + Math.round((c[0] - o[0]) / cs);
+        var stack = new Int32Array(N), seen = new Uint8Array(N), STEP = [-1, 1, -n, n, -n * n, n * n];
+        function gets(rad) {
+          seen.fill(0);
+          var sp = 0; stack[sp++] = start; seen[start] = 1;
+          while (sp) {
+            var cur = stack[--sp], x = cur % n, y = Math.floor(cur / n) % n, zz = Math.floor(cur / (n * n));
+            if (x === 0 || y === 0 || zz === 0 || x === n - 1 || y === n - 1 || zz === n - 1) return true;
+            for (var q = 0; q < 6; q++) { var m = cur + STEP[q]; if (!seen[m] && dist[m] > rad) { seen[m] = 1; stack[sp++] = m; } }
+          }
+          return false;
+        }
+        var lo2 = 0.5, hi2 = cap, it;
+        if (dist[start] <= lo2) return 0;
+        if (gets(hi2)) return hi2;
+        for (it = 0; it < 8; it++) { var mid = (lo2 + hi2) / 2; if (gets(mid)) lo2 = mid; else hi2 = mid; }
+        return hi2 + cs * 0.5;
+      }
+
+      // The lantern cage: rings of joints joined by zigzag bars that rise at least 50 degrees from flat, a
+      // wheel of spokes on the bed as the floor and a cone of bars as the roof. Nothing bridges and nothing
+      // overhangs more than about 40 degrees from vertical, so it prints with no supports at any setting.
+      var ELEV = 47 * PI / 180;
+      function lanternGraph(p) {
+        var N = Math.round(p.sides), T = Math.round(p.tiers), R = p.size, D = TAU / N, J = [], bars = [], k, i;
+        var rad = function (kk) { return R * (T === 1 ? 0.8 : 0.78 + 0.22 * Math.sin(PI * kk / T)); };
+        var ys = [0];
+        for (k = 0; k < T; k++) {
+          var r0 = rad(k), r1 = rad(k + 1), run = Math.sqrt(r0 * r0 + r1 * r1 - 2 * r0 * r1 * Math.cos(D / 2));
+          ys.push(ys[k] + run * Math.tan(ELEV));
+        }
+        for (k = 0; k <= T; k++) for (i = 0; i < N; i++) { var a = D * (i + 0.5 * k); J.push([rad(k) * Math.cos(a), ys[k], rad(k) * Math.sin(a)]); }
+        var id = function (kk, ii) { return kk * N + ((ii % N) + N) % N; };
+        var hubB = J.length; J.push([0, 0, 0]);
+        var roofY = ys[T] + rad(T) * Math.tan(48 * PI / 180), hubT = J.length; J.push([0, roofY, 0]);
+        var E = [];
+        for (i = 0; i < N; i++) { E.push([id(0, i), id(0, i + 1)]); E.push([id(0, i), hubB]); }   // floor wheel
+        for (k = 0; k < T; k++) for (i = 0; i < N; i++) { E.push([id(k, i), id(k + 1, i)]); E.push([id(k, i), id(k + 1, i - 1)]); }
+        for (i = 0; i < N; i++) E.push([id(T, i), hubT]);                                      // roof
+        return { J: J, E: E, N: N, T: T, hubB: hubB, hubT: hubT, ys: ys, rad: rad };
+      }
+
+      // Joint: a bicone, so its underside is two 45 degree cones instead of a round belly.
+      function joint(q, r) { return mv(lathe([[0, -r], [r, 0], [0, r]], 8), q[0], q[1], q[2]); }
+
+      function buildLantern(p, attempt) {
+        attempt = attempt || 0;
+        var G = lanternGraph(p), rs = p.strut, rj = rs * 1.35, rbar = rs * 1.25, gap = p.gap, i;
+        var lift = Math.max(rbar - 0.4, rj); // flat bars bed into the 1 mm raft, joints start on the bed
+        var J = G.J.map(function (q) { return [q[0], q[1] + lift, q[2]]; });
+        var cage = [];
+        G.E.forEach(function (e, k) {
+          // ends reach a little way into the joints, by a different amount per bar so no two end rings coincide
+          var a = J[e[0]], b = J[e[1]], u = mul3(sub3(b, a), 1 / len3(sub3(b, a)));
+          append(cage, diamondBar(sub3(a, mul3(u, 0.15 + 0.011 * k)), add3(b, mul3(u, 0.25 + 0.017 * k)), rbar));
+        });
+        J.forEach(function (q, k) { append(cage, joint(q, k === G.hubT ? rj * 1.5 : rj)); });
+        // ball stands low, on a short pin on the floor hub; it must fit clear of every bar and be wider than every opening
+        var round = p.round, pinLen = 2.2, hubTop = J[G.hubB][1] + rj;
+        var barsR = G.E.map(function (e) { return [J[e[0]], J[e[1]], rbar]; });
+        var Rb, lo, hiR = 4, it;
+        function place(R0) { var b = ballProfile(R0, round); return { prof: b, yc: hubTop + pinLen - b.yb }; }
+        function clearance(R0) {
+          var c = [0, place(R0).yc, 0], md = 1e9;
+          barsR.forEach(function (b) { md = Math.min(md, segDist(c, b[0], b[1]) - b[2]); });
+          return Math.max(3, md - gap - 0.3);
+        }
+        // the ball stands lower the smaller it is, so size, position and clearance are settled together
+        for (it = 0; it < 6; it++) hiR = clearance(hiR);
+        var cMid = [0, place(hiR).yc, 0], ext = 6;
+        J.forEach(function (q) { ext = Math.max(ext, Math.abs(q[0] - cMid[0]) + 4, Math.abs(q[1] - cMid[1]) + 4, Math.abs(q[2] - cMid[2]) + 4); });
+        lo = escapeRadius(barsR, rbar, cMid, ext, hiR + 3) + 1.5;
+        // a ball wider than every opening but still clear of the bars does not exist: grow the cage a little instead
+        if (hiR < lo + 0.2 && attempt < 3) return buildLantern(Object.assign({}, p, { size: p.size * 1.15, gap: Math.max(0.4, p.gap - 0.2) }), attempt + 1);
+        Rb = lo + (Math.max(hiR, lo) - lo) * p.ball;
+        for (it = 0; it < 4; it++) { hiR = clearance(Rb); Rb = lo + (Math.max(hiR, lo) - lo) * p.ball; }
+        var pb = place(Rb);
+        var ball = mv(ballMesh(Rb, round), 0, pb.yc, 0);
+        var out = [{ name: 'cage', positions: toF32(cage) }, { name: 'ball', positions: toF32(ball) }];
+        if (p.raft >= 1) {
+          var rr = G.rad(0) + rj + 2.5;
+          out.push({ name: 'raft', positions: toF32(cylY(rr, 0, 1.0, 48)) });
+        }
+        if (p.pin >= 1) out.push({ name: 'pin', positions: toF32(cylY(0.75, hubTop - 1.0, pb.yc + pb.prof.yb + 0.4, 10)) });
+        var res = out;
+        res.info = { ballRadius: Rb, lo: lo, hi: hiR, grown: attempt, size: p.size };
+        return res;
+      }
+
+      function buildClassic(p) {
+        var D = shapeData(Math.round(p.shape) - 1), Rc = p.size, rs = p.strut, rj = rs * 1.35, gap = p.gap;
         var V = rotateTo(D.V, D.normal).map(function (q) { return [q[0] * Rc, q[1] * Rc, q[2] * Rc]; });
         var cage = [], i;
         D.E.forEach(function (e, k) {
@@ -349,12 +500,10 @@
 
         // The ball may be as large as the clearance to the struts and the face planes allow, and must be
         // larger than the biggest opening of the cage.
-        var lo = D.esc * Rc - rs + 0.4, hi = Math.min(D.dEdge * Rc - rs - gap, D.face * Rc - 0.8);
+        var lo = D.esc * Rc - rs + 0.4, hi = Math.min(D.dEdge * Rc - rs - gap, (D.face * Rc - 0.8) / 1.2);
         var Rb = lo + (Math.max(hi, lo) - lo) * p.ball;
         var out = [{ name: 'cage', positions: toF32(cage) }];
-        var rb0 = 1.6, ball, yBallBottom;
-        if (p.round >= 1) { ball = sphere(Rb, 14, 28); yBallBottom = -Rb; }
-        else { var h = Rb - rb0; ball = lathe([[0, -h], [rb0, -h], [Rb, 0], [rb0, h], [0, h]], 28); yBallBottom = -h; }
+        var ball = ballMesh(Rb, p.round), yBallBottom = ballProfile(Rb, p.round).yb;
         out.push({ name: 'ball', positions: toF32(ball) });
 
         // Raft under the resting face and a thin pin that holds the ball for printing.
@@ -370,6 +519,8 @@
         return dropToBed(out);
       }
 
+      function buildRattle(p) { return Math.round(p.shape) === 0 ? buildLantern(p) : buildClassic(p); }
+
       window.MM_GENERATOR = {
         code: 'MM-048',
         category: 'DESK // FIDGETS',
@@ -383,20 +534,23 @@
         ],
         partNames: { cage: 'Cage', ball: 'Ball', raft: 'Raft', pin: 'Snap-off pin' },
         parameters: [
-          { group: 'Cage', key: 'shape', label: 'Cage shape', unit: '', min: 0, max: 3, step: 1, value: 1, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
-          { group: 'Cage', key: 'size', label: 'Cage size', unit: ' mm', min: 16, max: 34, step: 1, value: 24 },
+          { group: 'Cage', key: 'shape', label: 'Cage shape (only Lantern prints with no supports)', unit: '', min: 0, max: 4, step: 1, value: 0, format: function (v) { return SHAPE_NAMES[Math.round(v)]; } },
+          { group: 'Cage', key: 'sides', label: 'Lantern sides', unit: '', min: 4, max: 8, step: 1, value: 6 },
+          { group: 'Cage', key: 'tiers', label: 'Lantern tiers (rows of diamonds)', unit: '', min: 1, max: 4, step: 1, value: 2 },
+          { group: 'Cage', key: 'size', label: 'Cage size (grows a little if the ball would not fit)', unit: ' mm', min: 16, max: 34, step: 1, value: 22 },
           { group: 'Cage', key: 'strut', label: 'Bar thickness', unit: ' mm', min: 1, max: 2.4, step: 0.1, value: 1.5 },
           { group: 'Ball', key: 'ball', label: 'Ball size (small to large)', unit: '%', min: 0, max: 1, step: 0.05, value: 0.6, format: function (v) { return Math.round(v * 100) + '%'; } },
-          { group: 'Ball', key: 'round', label: 'Ball shape', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Diamond', 'Round'] },
+          { group: 'Ball', key: 'round', label: 'Ball shape (round has a 40 degree point underneath)', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Diamond', 'Round'] },
           { group: 'Ball', key: 'gap', label: 'Rattle room around ball', unit: ' mm', min: 0.4, max: 1.2, step: 0.1, value: 0.6 },
           { group: 'Print', key: 'raft', label: 'Raft under the cage', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
-          { group: 'Print', key: 'pin', label: 'Snap-off pin holding ball (round ball needs slicer supports)', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] }
+          { group: 'Print', key: 'pin', label: 'Snap-off pin holding ball (off = the ball floats and needs slicer supports)', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] }
         ],
         presets: [
-          { label: 'Default icosahedron', values: { shape: 1, size: 24, strut: 1.5, ball: 0.6, round: 0, gap: 0.6, raft: 1, pin: 1 } },
-          { label: 'Chunky octahedron', values: { shape: 0, size: 26, strut: 2, ball: 0.5, round: 0, gap: 0.7, raft: 1, pin: 1 } },
-          { label: 'Soccer-ball dodecahedron', values: { shape: 2, size: 28, strut: 1.4, ball: 0.7, round: 0, gap: 0.6, raft: 1, pin: 1 } },
-          { label: 'Cuboctahedron', values: { shape: 3, size: 24, strut: 1.6, ball: 0.55, round: 0, gap: 0.6, raft: 1, pin: 1 } }
+          { label: 'Default lantern', values: { shape: 0, sides: 6, tiers: 2, size: 22, strut: 1.5, ball: 0.6, round: 0, gap: 0.6, raft: 1, pin: 1 } },
+          { label: 'Round ball lantern', values: { shape: 0, sides: 6, tiers: 2, size: 22, strut: 1.5, ball: 0.6, round: 1, gap: 0.6, raft: 1, pin: 1 } },
+          { label: 'Tall slim lantern', values: { shape: 0, sides: 5, tiers: 3, size: 18, strut: 1.4, ball: 0.5, round: 0, gap: 0.6, raft: 1, pin: 1 } },
+          { label: 'Chunky wide lantern', values: { shape: 0, sides: 8, tiers: 2, size: 28, strut: 2, ball: 0.7, round: 0, gap: 0.8, raft: 1, pin: 1 } },
+          { label: 'Classic icosahedron (needs supports)', values: { shape: 2, size: 24, strut: 1.5, ball: 0.6, round: 0, gap: 0.6, raft: 1, pin: 1 } }
         ],
         build: function (p) { return buildRattle(p); }
       };

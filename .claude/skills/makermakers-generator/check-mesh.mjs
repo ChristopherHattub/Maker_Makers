@@ -85,4 +85,16 @@ for (const [g, list] of groups) {
   else if (!line('solid "' + g.slice(2) + '"', analyse(list))) bad = true;
 }
 console.log(bad ? 'RESULT: not watertight or has bad values. Fix before shipping.' : 'RESULT: every closed surface is watertight.');
+
+// Print check (same code as the live chip in the generator page): floating parts, overhangs over ~50 degrees, thin walls.
+// Informational by default; add --strict to fail on errors (floating parts, big overhangs).
+try {
+  const pcWin = {};
+  vm.runInNewContext(readFileSync(new URL('../../../programs/shared/print-check.js', import.meta.url), 'utf8'), { window: pcWin, Math, Date });
+  const pc = pcWin.MM_PRINT_CHECK.check(meshes);
+  if (!pc.issues.length) console.log('PRINT CHECK: no supports needed (no floating parts, no overhang over ~50 degrees, no thin walls).');
+  pc.issues.forEach((i) => console.log('PRINT CHECK ' + i.severity.toUpperCase() + ' (' + i.kind + '): ' + i.message));
+  (pc.spots || []).slice(0, 6).forEach((s) => console.log('  at x ' + s.x.toFixed(1) + ' y ' + s.y.toFixed(1) + ' z ' + s.z.toFixed(1) + ' (Y-up), ' + Math.round(s.area) + ' mm2'));
+  if (process.argv.includes('--strict') && pc.issues.some((i) => i.severity === 'error')) bad = true;
+} catch (e) { console.log('PRINT CHECK skipped: ' + e.message); }
 process.exit(bad ? 1 : 0);
