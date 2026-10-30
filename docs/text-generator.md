@@ -29,6 +29,17 @@ Ten open-licence (SIL OFL 1.1) fonts from the google/fonts repository: Archivo B
 
 ## Checks
 
-`node .claude/skills/makermakers-generator/check-mesh.mjs programs/text-generator.html` checks the defaults. The page exposes `testState` (its private text/style state) so a script can sweep every style, font, plate shape and hole position. A sweep of 1,950 combinations (3 texts) had open or non-manifold meshes only in a few combinations: Marker (shadowbox layer 2, one degenerate sliver) and Slab and Marker LED walls (one case each), plus engraved Bangers with multi-line text where lines overlap. Treat those as untested until printed. **Nothing here has been physically printed.** Raised and engraved text have no overhangs; LED letters need the open back facing up; deep shadowbox frames are tall flat-walled boxes.
+`node .claude/skills/makermakers-generator/check-mesh.mjs programs/text-generator.html` checks the defaults. The page exposes `testState` (its private text/style state) so a script can sweep every style, font, plate shape and hole position. The last sweep (1,950 combinations, 3 texts) had no open or non-manifold edges. The only findings were zero-area slivers (Marker and Bungee in the shadowbox), which slicers ignore. A manifold check does not prove a triangulation is right, so plates with many letter pockets were also sampled for coverage against the true outlines (210 engraved plates, all correct).
+
+Practical rules the generator enforces:
+
+- **Thin strokes warning:** the Text tab shows the typical thinnest stroke (10th percentile of wall-to-wall distance). Under 0.9 mm it turns amber (a 0.4 mm nozzle cannot print it). Lobster below about 16 mm and any script font below about 10 mm trigger it.
+- **LED walls** are at least 0.8 mm. A letter whose strokes are too thin or too close to hollow out (inner gaps of an m, say) is printed solid instead, so very thin fonts become mostly solid letters; pick Bungee, Sniglet, Titan One or Archivo Black for hollow letters.
+- **LED letters print face down:** the front face sits on the bed and the open back faces up for the LED strip. Default size is 30 mm, so a whole word can exceed the bed; the readout shows the size, and letters can be printed one at a time.
+- **Engraving** is limited to the plate thickness minus 0.8 mm, so there is always a floor.
+- **Shadowbox layers** step inward by an amount clamped to the stroke width, so thin fonts lose their upper layers' step rather than breaking.
+- **Heart** plates are sized to hold the text, so two lines make a large heart; one short line suits it best.
+
+**Nothing here has been physically printed.** Raised and engraved text have no overhangs, LED letters and shadowboxes are vertical walls on a flat face.
 
 Known limits: no kerning, no right-to-left or complex scripts, no stencil bridges (letters with counters such as O, A, B are raised or pocketed, never cut through).

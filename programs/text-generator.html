@@ -135,6 +135,14 @@
               if (ang < bestAng || (ang === bestAng && q[0] < pts[poly[bi]][0])) { bestAng = ang; bi = i; }
             }
           }
+          // the bridge vertex may already appear twice (earlier bridges): use the occurrence whose corner faces the hole
+          var occ = [], np2 = poly.length;
+          for (i = 0; i < np2; i++) if (poly[i] === poly[bi]) occ.push(i);
+          if (occ.length > 1) {
+            for (k = 0; k < occ.length; k++) {
+              if (inCone(pts[poly[(occ[k] + np2 - 1) % np2]], pts[poly[occ[k]]], pts[poly[(occ[k] + 1) % np2]], M)) { bi = occ[k]; break; }
+            }
+          }
           pi = poly[bi];
           var ring = [];
           for (k = 0; k <= h.length; k++) ring.push(base + (o.mi + k) % h.length);
@@ -171,6 +179,12 @@
           if (Math.abs((B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])) > 1e-9) tris.push(list[0], list[1], list[2]);
         }
         return { pts: pts, tris: tris };
+      }
+      function cross3(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+      // Is target t inside the interior wedge at corner c of a CCW polygon (prev p, next n)?
+      function inCone(p, c, n, t) {
+        if (cross3(p, c, n) >= 0) return cross3(c, n, t) >= 0 && cross3(c, t, p) >= 0;
+        return cross3(c, n, t) >= 0 || cross3(c, t, p) >= 0;
       }
       function pointInTri(ax, ay, bx, by, cx, cy, px, py) {
         var d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
@@ -227,7 +241,7 @@
       }
 
       // Largest offset that keeps strokes from folding: a ray from every vertex into the material (or out of it).
-      function probe(shape, sign) {
+      function probe(shape, sign, collect) {
         var loops = [shape.outer].concat(shape.holes), best = Infinity, li, i, n, L, p, a, b, nx, ny, mx, my, ml;
         var edges = [], lj, e;
         loops.forEach(function (Lp, idx) { for (var q = 0; q < Lp.length; q++) edges.push([Lp[q], Lp[(q + 1) % Lp.length], idx, q]); });
@@ -240,6 +254,7 @@
             mx = -e1y / l1 - e2y / l2; my = e1x / l1 + e2x / l2; ml = Math.sqrt(mx * mx + my * my);
             if (ml < 1e-6) continue;
             nx = sign * mx / ml; ny = sign * my / ml;
+            var vmin = Infinity;
             for (e = 0; e < edges.length; e++) {
               var E = edges[e];
               if (E[2] === li && (E[3] === i || E[3] === (i + n - 1) % n)) continue;
@@ -247,11 +262,22 @@
               if (Math.abs(det) < 1e-9) continue;
               var wx = E[0][0] - p[0], wy = E[0][1] - p[1];
               var t = (wx * ey - wy * ex) / det, s = (wx * ny - wy * nx) / det;
-              if (t > 1e-6 && s >= 0 && s <= 1 && t < best) best = t;
+              if (t > 1e-6 && s >= 0 && s <= 1) { if (t < best) best = t; if (t < vmin) vmin = t; }
             }
+            if (collect && isFinite(vmin)) collect.push(vmin);
           }
         }
         return best;
+      }
+      // Typical thinnest stroke of a shape: the 10th percentile of the wall-to-wall distance at its vertices (ignores sharp tips).
+      function strokeEstimate(shape) {
+        if (shape._thick === undefined) {
+          var list = [];
+          probe(shape, 1, list);
+          list.sort(function (a, b) { return a - b; });
+          shape._thick = list.length ? list[Math.floor(list.length * 0.1)] : 99;
+        }
+        return shape._thick;
       }
       function safeOffset(shape, d) {
         if (d === 0) return 0;
@@ -282,6 +308,32 @@
         var e = 1e-7;
         return ((d1 > e && d2 < -e) || (d1 < -e && d2 > e)) && ((d3 > e && d4 < -e) || (d3 < -e && d4 > e));
       }
+      // An inset of a tight curve folds into small reversed loops: cut those out, keeping the part that still has the right turning direction.
+      function fixLoop(pts, sign) {
+        var iter, n, i, j, A, B, a, b, c, d, den, t, P, aa, ab, found;
+        for (iter = 0; iter < 60; iter++) {
+          n = pts.length; found = false;
+          for (i = 0; i < n && !found; i++) {
+            a = pts[i]; b = pts[(i + 1) % n];
+            for (j = i + 2; j < n && !found; j++) {
+              if (i === 0 && j === n - 1) continue;
+              c = pts[j]; d = pts[(j + 1) % n];
+              if (!segHit(a, b, c, d)) continue;
+              den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+              if (Math.abs(den) < 1e-12) continue;
+              t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+              P = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+              A = [P].concat(pts.slice(i + 1, j + 1));
+              B = pts.slice(0, i + 1).concat([P], pts.slice(j + 1));
+              aa = area2(A) * sign; ab = area2(B) * sign;
+              pts = (ab > 0 && (aa <= 0 || ab >= aa)) ? B : A;
+              found = true;
+            }
+          }
+          if (!found) break;
+        }
+        return cleanLoop(pts);
+      }
       // Outer CCW, holes CW, holes inside the outer, nothing crossing.
       function validLoops(outer, holes) {
         if (outer.length < 3 || area2(outer) <= 1e-4) return false;
@@ -289,7 +341,45 @@
         for (i = 0; i < holes.length; i++) {
           if (holes[i].length < 3 || area2(holes[i]) >= -1e-4 || !inPoly(holes[i][0], outer)) return false;
         }
-        return loopsSimple([outer].concat(holes));
+        if (!loopsSimple([outer].concat(holes))) return false;
+        if (pinches(outer)) return false;
+        for (i = 0; i < holes.length; i++) if (pinches(holes[i]) || loopGap(outer, holes[i]) < 0.05) return false;
+        return true;
+      }
+      // A loop whose far sides touch (a stroke inset to nothing) has a vertex on a non-neighbouring edge.
+      function pinches(L) {
+        var n = L.length, i, j, p, q, r, dx, dy, t, d;
+        for (i = 0; i < n; i++) {
+          p = L[i];
+          for (j = 0; j < n; j++) {
+            if (j === i || (j + 1) % n === i) continue;
+            q = L[j]; r = L[(j + 1) % n];
+            if ((j + 1) % n === (i + n - 1) % n || j === (i + 1) % n) continue;
+            dx = r[0] - q[0]; dy = r[1] - q[1];
+            t = clamp(((p[0] - q[0]) * dx + (p[1] - q[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+            d = Math.sqrt(Math.pow(p[0] - q[0] - t * dx, 2) + Math.pow(p[1] - q[1] - t * dy, 2));
+            if (d < 0.04) return true;
+          }
+        }
+        return false;
+      }
+      // Smallest distance from the vertices of loop a to the edges of loop b (and back), so rings never pinch to a point.
+      function loopGap(a, b) {
+        var best = Infinity, pass, L, M, i, j, p, q, r, dx, dy, t, d;
+        for (pass = 0; pass < 2; pass++) {
+          L = pass ? b : a; M = pass ? a : b;
+          for (i = 0; i < L.length; i++) {
+            p = L[i];
+            for (j = 0; j < M.length; j++) {
+              q = M[j]; r = M[(j + 1) % M.length];
+              dx = r[0] - q[0]; dy = r[1] - q[1];
+              t = clamp(((p[0] - q[0]) * dx + (p[1] - q[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+              d = Math.sqrt(Math.pow(p[0] - q[0] - t * dx, 2) + Math.pow(p[1] - q[1] - t * dy, 2));
+              if (d < best) best = d;
+            }
+          }
+        }
+        return best;
       }
       // Offset a shape by d, easing back toward 0 until the result is a clean outline (returns the shape itself if none is).
       var offsetCache = {};
@@ -300,19 +390,20 @@
         var res = shape, f, dd, o, hs;
         for (f = 0; f < 4; f++) {
           dd = d * [1, 0.6, 0.35, 0.15][f];
-          o = cleanLoop(offsetLoop(shape.outer, dd));
-          hs = shape.holes.map(function (h) { return cleanLoop(offsetLoop(h, dd)); });
+          o = fixLoop(offsetLoop(shape.outer, dd), 1);
+          hs = shape.holes.map(function (h) { return fixLoop(offsetLoop(h, dd), -1); });
           if (validLoops(o, hs)) { res = makeShape(o, hs); break; }
         }
         if (k) offsetCache[k] = res;
         return res;
       }
       // A ring (wall) around a loop: offset the loop by d, keep it only if both loops are clean.
-      function ringFor(loop, isHole, d) {
+      function ringFor(loop, isHole, d, minD) {
         var f, dd, other, outer, inner;
         for (f = 0; f < 4; f++) {
           dd = d * [1, 0.7, 0.5, 0.3][f];
-          other = cleanLoop(offsetLoop(loop, dd));
+          if (minD && dd < minD) break;
+          other = fixLoop(offsetLoop(loop, dd), isHole ? -1 : 1);
           outer = isHole ? other : loop;
           inner = isHole ? loop : other;
           if (isHole) outer = outer.slice().reverse(); else inner = inner.slice().reverse();
@@ -520,14 +611,21 @@
         } else if (shape === 'arch') {
           pts = [[-a, -b], [a, -b]];
           for (i = 0; i <= 36; i++) { var an = i / 36 * Math.PI; pts.push([a * Math.cos(an), b + a * 0.55 * Math.sin(an)]); }
-        } else { // heart
-          var s = Math.max((W / 2 + pad) / 10, (H / 2 + pad) / 5, 0.9);
-          pts = [];
-          for (i = 0; i < 360; i += 3) {
-            var th = i * DEG;
-            pts.push([16 * Math.pow(Math.sin(th), 3) * s, (13 * Math.cos(th) - 5 * Math.cos(2 * th) - 2 * Math.cos(3 * th) - Math.cos(4 * th) - 3) * s]);
+        } else { // heart: grow it until the text box (plus padding) fits inside, with the text sitting in the lobes
+          var heartPts = function (sc) {
+            var out = [], q;
+            for (q = 0; q < 360; q += 3) {
+              var th = q * DEG;
+              out.push([16 * Math.pow(Math.sin(th), 3) * sc, (13 * Math.cos(th) - 5 * Math.cos(2 * th) - 2 * Math.cos(3 * th) - Math.cos(4 * th) + 1) * sc]);
+            }
+            return out.reverse();
+          };
+          var hs = 1, w2 = W / 2 + pad, h2 = H / 2 + pad;
+          for (; hs < 40; hs *= 1.02) {
+            pts = heartPts(hs);
+            if (inPoly([-w2, h2], pts) && inPoly([w2, h2], pts) && inPoly([-w2, -h2], pts) && inPoly([w2, -h2], pts) && inPoly([0, h2], pts)) break;
           }
-          pts.reverse();
+          pts = heartPts(hs);
         }
         pts = densify(pts, 3);
         if (area2(pts) < 0) pts.reverse();
@@ -551,10 +649,22 @@
       // -----------------------------------------------------------------------
       function pushMesh(list, name, arr) { if (arr.length) list.push({ name: name, positions: new Float32Array(arr) }); }
 
+      var noteEl = null;
+      function updateNote(inst) {
+        if (!noteEl) return;
+        var thin = Infinity;
+        inst.forEach(function (it) { it.gs.shapes.forEach(function (sh) { thin = Math.min(thin, strokeEstimate(sh)); }); });
+        noteEl.textContent = thin < 0.9
+          ? 'Heads up: the thinnest strokes are about ' + thin.toFixed(1) + ' mm, too fine for a 0.4 mm nozzle. Make the letters taller, raise Boldness, or pick a bolder font.'
+          : (isFinite(thin) ? 'Thinnest strokes are about ' + thin.toFixed(1) + ' mm, fine for a 0.4 mm nozzle.' : '');
+        noteEl.style.color = thin < 0.9 ? '#fdba74' : '';
+      }
+
       function build(p) {
         var mode = state.mode;
         var separate = mode === 'engraved' || mode === 'shadowbox' || mode === 'led';
         var lay = layout(p, separate), inst = lay.inst, meshes = [], i;
+        updateNote(inst);
 
         if (mode === 'loose') {
           var loose = [];
@@ -568,11 +678,11 @@
           inst.forEach(function (it) {
             it.gs.shapes.forEach(function (s) {
               extrude(face, s, it.x, it.y, 0, faceT);
-              var d = Math.min(w, Math.max(0, safeOffset(s, w)));
-              if (d < 0.25) return;
-              var rings = [ringFor(s.outer, false, d)];
-              s.holes.forEach(function (h) { rings.push(ringFor(h, true, d)); });
-              rings.forEach(function (r) { if (r) extrude(wall, r, it.x, it.y, faceT - 0.2, depth); });
+              // walls need 0.8 mm at least; a letter with strokes too thin to hollow out is printed solid
+              var rings = [ringFor(s.outer, false, w, 0.8)];
+              s.holes.forEach(function (h) { rings.push(ringFor(h, true, w, 0.8)); });
+              if (rings.indexOf(null) >= 0) extrude(wall, s, it.x, it.y, faceT - 0.2, depth);
+              else rings.forEach(function (r) { extrude(wall, r, it.x, it.y, faceT - 0.2, depth); });
             });
           });
           pushMesh(meshes, 'face', face);
@@ -644,7 +754,7 @@
         { label: 'Engraved plaque', state: { mode: 'engraved', font: 'tall', shape: 'rounded', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 18, spacing: 1.5, plateThick: 4, pad: 8, corner: 6, engraveDepth: 1.6 } },
         { label: 'Wall letters', state: { mode: 'loose', font: 'arcade', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 40, spacing: 2, plateThick: 3, raise: 3 } },
         { label: 'Shadowbox name', state: { mode: 'shadowbox', font: 'block', shape: 'rounded', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 22, spacing: 1, backThick: 2, frameWall: 3, boxDepth: 14, layers: 4, layerThick: 2, layerStep: 0.5, pad: 6 } },
-        { label: 'LED sign letters', state: { mode: 'led', font: 'arcade', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 40, spacing: 4, ledFace: 1.2, ledWall: 1.6, ledDepth: 20 } },
+        { label: 'LED sign letters', state: { mode: 'led', font: 'arcade', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 30, spacing: 4, ledFace: 1.2, ledWall: 1.6, ledDepth: 20 } },
         { label: 'Script keepsake', state: { mode: 'raised', font: 'script', shape: 'oval', hole: 'top', caps: 'typed', align: 'center' }, params: { textHeight: 16, spacing: 0, bold: 0.3, plateThick: 3, pad: 5, raise: 1.4, rimWidth: 1.2 } }
       ];
 
@@ -748,6 +858,9 @@
             container.appendChild(field('Alignment', selAlign));
             container.appendChild(field('Plate / frame shape', selShape));
             container.appendChild(field('Hanging hole', selHole));
+
+            noteEl = h('p', { class: 'mm-note' });
+            container.appendChild(noteEl);
 
             container.appendChild(h('h3', { class: 'mm-group-title' }, 'Quick looks'));
             var chips = h('div', { class: 'mm-chips' });
