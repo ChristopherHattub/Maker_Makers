@@ -1,0 +1,57 @@
+name: Printability
+
+# One matrix entry (job) per generator. A generator is re-checked only when its own page changes (or when it is
+# added); changes to shared code re-check all of them. See docs/printability-ci.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      generators:
+        description: 'all, or comma-separated names (e.g. tray-maker,snowman)'
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      generators: ${{ steps.plan.outputs.generators }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: plan
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          REQUEST: ${{ inputs.generators }}
+        run: |
+          list=$(node scripts/ci/plan.mjs "$BASE" "$REQUEST")
+          echo "generators=$list" >> "$GITHUB_OUTPUT"
+          echo "count=$(node -p 'JSON.parse(process.argv[1]).length' "$list")" >> "$GITHUB_OUTPUT"
+          echo "Checking $(node -p 'JSON.parse(process.argv[1]).length' "$list") generators" >> "$GITHUB_STEP_SUMMARY"
+
+  check:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        generator: ${{ fromJSON(needs.plan.outputs.generators) }}
+    name: ${{ matrix.generator }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # three.js r128 only for the check (same version the pages load from the CDN); the site itself has no dependencies.
+      - run: npm install --no-save --no-package-lock --ignore-scripts three@0.128.0
+      - run: node scripts/ci/check-generator.mjs ${{ matrix.generator }}

@@ -1,0 +1,1153 @@
+{
+  "acorn-pinecone-set": {
+    "defaults": [
+      "overhang"
+    ],
+    "Forest trio": [
+      "overhang"
+    ],
+    "Pair of acorns": [
+      "overhang"
+    ],
+    "Big pinecone": [
+      "overhang"
+    ],
+    "Tree ornaments": [
+      "overhang"
+    ],
+    "Default set": [
+      "overhang"
+    ]
+  },
+  "banner-letters": {
+    "Big pennants": [
+      "overhang"
+    ]
+  },
+  "bookend-builder": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Default book stack pair": [
+      "floating",
+      "overhang"
+    ],
+    "Mountain range": [
+      "overhang"
+    ],
+    "City skyline": [
+      "overhang"
+    ],
+    "Rolling waves": [
+      "overhang"
+    ],
+    "Arch window": [
+      "overhang"
+    ]
+  },
+  "bunny-builder": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic bunny": [
+      "overhang"
+    ],
+    "Floppy ears": [
+      "overhang"
+    ],
+    "Tiny and round": [
+      "overhang"
+    ],
+    "Carrot snack": [
+      "overhang"
+    ],
+    "Tall ears": [
+      "overhang"
+    ],
+    "Curious tilt": [
+      "overhang"
+    ]
+  },
+  "butterfly-wings": {
+    "defaults": [
+      "overhang"
+    ],
+    "Monarch": [
+      "overhang"
+    ],
+    "Plain wings": [
+      "overhang"
+    ],
+    "Spotty": [
+      "overhang"
+    ],
+    "Fridge magnet size": [
+      "overhang"
+    ],
+    "Big and bold": [
+      "overhang"
+    ]
+  },
+  "cake-stacker": {
+    "defaults": [
+      "overhang"
+    ],
+    "Birthday cake": [
+      "overhang"
+    ],
+    "Wedding cake": [
+      "overhang"
+    ],
+    "Tall tower": [
+      "overhang"
+    ],
+    "Mini cake": [
+      "overhang"
+    ],
+    "Drippy": [
+      "overhang"
+    ],
+    "Plain stack": [
+      "floating"
+    ]
+  },
+  "candle-number": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default number": [
+      "overhang"
+    ],
+    "Big bubble 30": [
+      "floating",
+      "overhang"
+    ],
+    "Slim 1st": [
+      "overhang"
+    ]
+  },
+  "character-standee": {
+    "defaults": [
+      "overhang"
+    ],
+    "Knight on an arch": [
+      "overhang"
+    ],
+    "Wizard shield": [
+      "overhang"
+    ],
+    "Rogue hexagon": [
+      "floating",
+      "overhang"
+    ],
+    "Default standee": [
+      "overhang"
+    ]
+  },
+  "chess-set": {
+    "Gothic set": [
+      "floating"
+    ]
+  },
+  "chick-hatcher": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Closed egg": [
+      "floating",
+      "overhang"
+    ],
+    "Peeking out": [
+      "floating",
+      "overhang"
+    ],
+    "Wide open": [
+      "floating",
+      "overhang"
+    ],
+    "Tiny egg": [
+      "floating",
+      "overhang"
+    ],
+    "Big beak chick": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "conversation-hearts": {
+    "defaults": [
+      "overhang"
+    ],
+    "Candy pair": [
+      "overhang"
+    ],
+    "Single heart": [
+      "overhang"
+    ],
+    "Big stack of three": [
+      "floating",
+      "overhang"
+    ],
+    "Key ring heart": [
+      "overhang"
+    ],
+    "Square candies": [
+      "overhang"
+    ],
+    "Round candies": [
+      "overhang"
+    ]
+  },
+  "cornucopia": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic horn": [
+      "overhang"
+    ],
+    "Big harvest": [
+      "overhang"
+    ],
+    "Tiny favor": [
+      "overhang"
+    ],
+    "Tight curl": [
+      "overhang"
+    ],
+    "Plain empty horn": [
+      "overhang"
+    ],
+    "Default cornucopia": [
+      "overhang"
+    ]
+  },
+  "cupcake-maker": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic cupcake": [
+      "overhang"
+    ],
+    "Tall swirl": [
+      "overhang"
+    ],
+    "Mini cupcake": [
+      "overhang"
+    ],
+    "Birthday candle": [
+      "overhang"
+    ],
+    "Smooth round nozzle": [
+      "overhang"
+    ],
+    "Party flag": [
+      "overhang"
+    ]
+  },
+  "custom-dice": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic d6 (pips)": [
+      "floating"
+    ],
+    "Chunky d12": [
+      "overhang"
+    ],
+    "Default d20": [
+      "overhang"
+    ]
+  },
+  "dice-tower": {
+    "defaults": [
+      "overhang"
+    ],
+    "Pocket tower": [
+      "overhang"
+    ],
+    "Tall tower": [
+      "overhang"
+    ],
+    "Big dice tower": [
+      "overhang"
+    ],
+    "Castle keep": [
+      "overhang"
+    ],
+    "Pagoda": [
+      "overhang"
+    ],
+    "Tavern": [
+      "overhang"
+    ],
+    "Sci-fi pylon": [
+      "overhang"
+    ],
+    "Default tower": [
+      "overhang"
+    ]
+  },
+  "egg-basket": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic basket": [
+      "overhang"
+    ],
+    "Wide and shallow": [
+      "overhang"
+    ],
+    "Tall tote": [
+      "overhang"
+    ],
+    "No handle bowl": [
+      "overhang"
+    ],
+    "Standing eggs": [
+      "overhang"
+    ]
+  },
+  "egg-decorator": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic egg": [
+      "overhang"
+    ],
+    "Big goose egg": [
+      "overhang"
+    ],
+    "Tiny chick egg": [
+      "overhang"
+    ],
+    "Hollow ornament": [
+      "overhang"
+    ],
+    "Round bauble": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "fidget-slider": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default slider": [
+      "overhang"
+    ],
+    "Tiny and tight": [
+      "overhang"
+    ]
+  },
+  "flexi-caterpillar": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default caterpillar": [
+      "overhang"
+    ],
+    "Long caterpillar": [
+      "overhang"
+    ],
+    "Chubby": [
+      "overhang"
+    ],
+    "Fuzzy feet": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-centipede": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default centipede": [
+      "overhang"
+    ],
+    "Stubby": [
+      "overhang"
+    ],
+    "Hairy legs": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-crocodile": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default crocodile": [
+      "overhang"
+    ],
+    "Gator": [
+      "overhang"
+    ],
+    "Gharial": [
+      "overhang"
+    ],
+    "Baby croc": [
+      "overhang"
+    ],
+    "Flat out (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-dragon": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default dragon": [
+      "overhang"
+    ],
+    "Long wyrm": [
+      "overhang"
+    ],
+    "Chunky baby dragon": [
+      "overhang"
+    ],
+    "Wyvern": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-gecko": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default gecko": [
+      "overhang"
+    ],
+    "Chunky leopard gecko": [
+      "overhang"
+    ],
+    "Long tail": [
+      "overhang"
+    ],
+    "Big-eyed tokay": [
+      "overhang"
+    ],
+    "Flat out (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-octopus": {
+    "Baby octopus": [
+      "overhang"
+    ]
+  },
+  "flexi-scorpion": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default scorpion": [
+      "overhang"
+    ],
+    "Emperor scorpion": [
+      "overhang"
+    ],
+    "Long-tail": [
+      "overhang"
+    ],
+    "Tail up (needs supports)": [
+      "overhang"
+    ],
+    "Flat out (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-seahorse": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default seahorse": [
+      "overhang"
+    ],
+    "Curly tail": [
+      "overhang"
+    ],
+    "Pot-bellied": [
+      "overhang"
+    ],
+    "Pygmy seahorse": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-shark": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default shark": [
+      "overhang"
+    ],
+    "Great white": [
+      "overhang"
+    ],
+    "Small shark": [
+      "overhang"
+    ],
+    "Baby shark": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-turtle": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default turtle": [
+      "overhang"
+    ],
+    "Tall tortoise": [
+      "overhang"
+    ],
+    "Sea turtle": [
+      "overhang"
+    ],
+    "Baby turtle": [
+      "overhang"
+    ],
+    "Straight neck (easy print)": [
+      "overhang"
+    ]
+  },
+  "flipper": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default flipper": [
+      "overhang"
+    ],
+    "Squashed pose": [
+      "overhang"
+    ],
+    "Tall pose": [
+      "overhang"
+    ],
+    "Mini": [
+      "overhang"
+    ]
+  },
+  "flower-pot": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Classic pot": [
+      "floating",
+      "overhang"
+    ],
+    "Round bowl": [
+      "overhang"
+    ],
+    "Tall planter": [
+      "floating",
+      "overhang"
+    ],
+    "Ridged pot": [
+      "floating",
+      "overhang"
+    ],
+    "Tiny desk pot": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "game-pawn": {
+    "Weighted pawn": [
+      "overhang"
+    ]
+  },
+  "gear-train": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default gear train": [
+      "overhang"
+    ],
+    "Straight line of five": [
+      "overhang"
+    ],
+    "Tiny seven": [
+      "overhang"
+    ]
+  },
+  "gift-box": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Default gift box": [
+      "floating",
+      "overhang"
+    ],
+    "Tall box": [
+      "overhang"
+    ],
+    "Flat box": [
+      "overhang"
+    ],
+    "Cube": [
+      "floating",
+      "overhang"
+    ],
+    "Wide ribbon": [
+      "overhang"
+    ],
+    "One band": [
+      "overhang"
+    ],
+    "Plain box": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "gift-box-2": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default gift box": [
+      "overhang"
+    ],
+    "Round hatbox": [
+      "overhang"
+    ],
+    "Hexagon treasure": [
+      "overhang"
+    ],
+    "Tall tower": [
+      "overhang"
+    ],
+    "Flat box": [
+      "overhang"
+    ],
+    "Pom-pom present": [
+      "overhang"
+    ],
+    "Jewelry box": [
+      "overhang"
+    ],
+    "Candy tin": [
+      "overhang"
+    ],
+    "Shoebox": [
+      "overhang"
+    ],
+    "Plain box": [
+      "overhang"
+    ],
+    "Closed (display)": [
+      "overhang"
+    ]
+  },
+  "gratitude-place-cards": {
+    "defaults": [
+      "overhang"
+    ],
+    "Turkey day": [
+      "overhang"
+    ],
+    "Pumpkin patch": [
+      "overhang"
+    ],
+    "Acorn tag": [
+      "overhang"
+    ],
+    "Gobble gobble": [
+      "overhang"
+    ],
+    "Simple name": [
+      "overhang"
+    ],
+    "Chunky letters": [
+      "overhang"
+    ]
+  },
+  "hex-terrain-tile": {
+    "Magnet tile": [
+      "overhang"
+    ]
+  },
+  "holiday-tree": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default tree": [
+      "overhang"
+    ],
+    "Slim spruce": [
+      "floating",
+      "overhang"
+    ],
+    "Fat pine": [
+      "floating",
+      "overhang"
+    ],
+    "Frosty": [
+      "overhang"
+    ],
+    "Party tree": [
+      "overhang"
+    ],
+    "Mini 3-tier": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "image-clicker": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default clicker": [
+      "overhang"
+    ],
+    "Chunky button": [
+      "overhang"
+    ],
+    "Slim pocket clicker": [
+      "overhang"
+    ],
+    "Soft long hinge": [
+      "overhang"
+    ]
+  },
+  "leaf-press": {
+    "Oak cookie stamp": [
+      "overhang"
+    ]
+  },
+  "leprechaun-hat": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default hat": [
+      "overhang"
+    ],
+    "Tall and wide": [
+      "floating",
+      "overhang"
+    ],
+    "Round buckle": [
+      "overhang"
+    ],
+    "Clover hat": [
+      "overhang"
+    ],
+    "Mini hat": [
+      "overhang"
+    ]
+  },
+  "lucky-horseshoe": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default horseshoe": [
+      "overhang"
+    ],
+    "Ornament": [
+      "overhang"
+    ],
+    "Four-leaf clover": [
+      "overhang"
+    ]
+  },
+  "miniature-base": {
+    "40 mm square, magnet": [
+      "overhang"
+    ]
+  },
+  "ornament-stacker": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Classic trio": [
+      "floating",
+      "overhang"
+    ],
+    "Tiny buddy": [
+      "floating",
+      "overhang"
+    ],
+    "Tall stack": [
+      "overhang"
+    ]
+  },
+  "party-popper": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default spinner": [
+      "overhang"
+    ],
+    "Chunky ratchet": [
+      "overhang"
+    ],
+    "Smooth tick": [
+      "overhang"
+    ],
+    "Starburst": [
+      "overhang"
+    ],
+    "Mini popper": [
+      "overhang"
+    ],
+    "Plain ring": [
+      "overhang"
+    ]
+  },
+  "party-whistle": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default whistle": [
+      "overhang"
+    ],
+    "Shrill squeaker": [
+      "overhang"
+    ],
+    "Deep hooter": [
+      "overhang"
+    ],
+    "Fat and breathy": [
+      "overhang"
+    ],
+    "Pocket whistle": [
+      "overhang"
+    ]
+  },
+  "photo-frame": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default 4x6 frame": [
+      "overhang"
+    ],
+    "Square gallery": [
+      "overhang"
+    ],
+    "Oval portrait": [
+      "overhang"
+    ],
+    "Cut corner cove": [
+      "overhang"
+    ],
+    "Slim desk frame": [
+      "overhang"
+    ]
+  },
+  "pinata": {
+    "defaults": [
+      "overhang"
+    ],
+    "Star pinata": [
+      "overhang"
+    ],
+    "Round party ball": [
+      "overhang"
+    ],
+    "Flower pinata": [
+      "overhang"
+    ],
+    "Mini candy box": [
+      "overhang"
+    ],
+    "Display (lid closed)": [
+      "overhang"
+    ],
+    "Plain bowl and lid": [
+      "overhang"
+    ]
+  },
+  "pot-of-gold": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Default pot": [
+      "floating",
+      "overhang"
+    ],
+    "Overflowing": [
+      "floating",
+      "overhang"
+    ],
+    "Small pot": [
+      "overhang"
+    ],
+    "Plain pot, no coins": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "pottery-wheel": {
+    "Thrown rings": [
+      "overhang"
+    ]
+  },
+  "pumpkin-pie-slice": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic slice": [
+      "overhang"
+    ],
+    "Big wedge": [
+      "overhang"
+    ],
+    "Skinny slice": [
+      "overhang"
+    ],
+    "Mini favor": [
+      "overhang"
+    ],
+    "Plain, no cream": [
+      "overhang"
+    ],
+    "Default pie box": [
+      "overhang"
+    ]
+  },
+  "pumpkin-plotter": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Classic pumpkin": [
+      "floating",
+      "overhang"
+    ],
+    "Tall gourd": [
+      "overhang"
+    ],
+    "Squat fairy-tale": [
+      "floating",
+      "overhang"
+    ],
+    "Warty swirl": [
+      "floating",
+      "overhang"
+    ],
+    "Hollow lantern": [
+      "overhang"
+    ],
+    "Default pumpkin": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "rattle-ball": {
+    "Classic icosahedron (needs supports)": [
+      "overhang"
+    ]
+  },
+  "scarecrow-stacker": {
+    "defaults": [
+      "overhang"
+    ],
+    "Farmer scarecrow": [
+      "overhang"
+    ],
+    "Floppy-hat scarecrow": [
+      "overhang"
+    ],
+    "Top hat gent": [
+      "overhang"
+    ],
+    "Bare head": [
+      "overhang"
+    ],
+    "Tiny desk guy": [
+      "overhang"
+    ],
+    "Default scarecrow": [
+      "overhang"
+    ]
+  },
+  "shelf-bracket": {
+    "Lattice": [
+      "overhang"
+    ]
+  },
+  "skull-sculptor": {
+    "defaults": [
+      "floating",
+      "overhang"
+    ],
+    "Classic skull": [
+      "floating",
+      "overhang"
+    ],
+    "Angry skull": [
+      "floating",
+      "overhang"
+    ],
+    "Cute skull": [
+      "floating",
+      "overhang"
+    ],
+    "Long skull": [
+      "overhang"
+    ],
+    "Wonky skull": [
+      "floating",
+      "overhang"
+    ],
+    "Default skull": [
+      "floating",
+      "overhang"
+    ]
+  },
+  "snowman": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default snowman": [
+      "overhang"
+    ],
+    "Cozy beanie": [
+      "overhang"
+    ],
+    "Santa snow": [
+      "overhang"
+    ],
+    "Chubby": [
+      "overhang"
+    ],
+    "Tall & slim": [
+      "overhang"
+    ],
+    "Plain ball": [
+      "overhang"
+    ]
+  },
+  "spider": {
+    "defaults": [
+      "overhang"
+    ],
+    "House spider": [
+      "overhang"
+    ],
+    "Tarantula": [
+      "overhang"
+    ],
+    "Daddy long legs": [
+      "overhang"
+    ],
+    "Black widow": [
+      "overhang"
+    ],
+    "Chibi spider": [
+      "overhang"
+    ],
+    "Default spider": [
+      "overhang"
+    ]
+  },
+  "spiral-tower": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default hex tower": [
+      "overhang"
+    ],
+    "Pyramid of triangles": [
+      "overhang"
+    ],
+    "Round stack": [
+      "overhang"
+    ],
+    "Tall square twist": [
+      "overhang"
+    ]
+  },
+  "tealight-lantern": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default hexagon lantern": [
+      "overhang"
+    ],
+    "Starry square": [
+      "overhang"
+    ],
+    "Leafy garden": [
+      "overhang"
+    ],
+    "Hearts and a lid": [
+      "overhang"
+    ]
+  },
+  "turkey-builder": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic tom": [
+      "overhang"
+    ],
+    "Big fan": [
+      "overhang"
+    ],
+    "Plump hen": [
+      "overhang"
+    ],
+    "Tiny desk turkey": [
+      "overhang"
+    ],
+    "Default turkey": [
+      "overhang"
+    ]
+  },
+  "wall-hook-rack": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default coat rack with shelf": [
+      "overhang"
+    ],
+    "Ball knob rack": [
+      "overhang"
+    ],
+    "Key shelf": [
+      "overhang"
+    ],
+    "Wide caps, arched shelf": [
+      "overhang"
+    ]
+  },
+  "witch-hat": {
+    "defaults": [
+      "overhang"
+    ],
+    "Classic witch": [
+      "overhang"
+    ],
+    "Tall & swoopy": [
+      "overhang"
+    ],
+    "Floppy tip": [
+      "overhang"
+    ],
+    "Wavy brim": [
+      "overhang"
+    ],
+    "Hollow lightweight": [
+      "overhang"
+    ],
+    "Default witch hat": [
+      "overhang"
+    ]
+  }
+}

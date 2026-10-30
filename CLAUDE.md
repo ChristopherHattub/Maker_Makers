@@ -9,7 +9,7 @@ npm run dev          # http://localhost:5173 with live reload (opens a browser)
 npm run serve        # same, without opening a browser
 ```
 
-Node 18+, no `npm install`. In the desktop app use the `maker-makers` entry in `.claude/launch.json` (same server, port 5173) via the preview tool, not Bash. There are no tests or linters; check by hand in the browser (see [docs/development.md](docs/development.md)). Work in a git worktree off `origin/main` when other branches are in flight; stage files by path, never `git add -A`.
+Node 18+, no `npm install`. In the desktop app use the `maker-makers` entry in `.claude/launch.json` (same server, port 5173) via the preview tool, not Bash. There are no tests or linters; check by hand in the browser (see [docs/development.md](docs/development.md)). The one automated check is the printability workflow on GitHub Actions, one job per generator ([docs/printability-ci.md](docs/printability-ci.md)); locally `npm install --no-save three@0.128.0` once, then `node scripts/ci/check-generator.mjs <name>`. Work in a git worktree off `origin/main` when other branches are in flight; stage files by path, never `git add -A`.
 
 ## Deploy
 

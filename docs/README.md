@@ -29,6 +29,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [workshop.md](workshop.md) | The Workshop 3D editor and how generators embed in it |
 | [printer-map.md](printer-map.md) | The printer radar: data, search, and how to add a printer |
 | [development.md](development.md) | Running the site locally and the live-reload dev server |
+| [printability-ci.md](printability-ci.md) | The GitHub Actions printability check: per-generator jobs, when they run, the known-errors baseline |
 | [deployment.md](deployment.md) | Publishing to GitHub Pages |
 | [contributing.md](contributing.md) | Conventions and checklists for changes |
 | [sprite-sheet-skill.md](sprite-sheet-skill.md) | Retired: how the older Gemini-drawn hover frames were made |
