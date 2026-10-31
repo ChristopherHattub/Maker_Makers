@@ -1094,6 +1094,7 @@
         window.MM_SCULPT_LAST = this;
         var h = this.h, ops = this.ops, lo = [1e9, 0, 1e9], hi = [-1e9, 0, -1e9], i, a;
         ops.forEach(function (o) { if (o.carve || o.paint || o.relief) return; for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], o.lo[c]); hi[c] = Math.max(hi[c], o.hi[c]); } });
+        if (lo[0] > hi[0]) { lo = [-2, 0, -2]; hi = [2, 2, 2]; } // every form was deleted: an empty field
         lo[1] = 0;
         var x0 = lo[0] - 2 * h, z0 = lo[2] - 2 * h, nx = Math.ceil((hi[0] - lo[0]) / h) + 5, ny = Math.ceil(hi[1] / h) + 4, nz = Math.ceil((hi[2] - lo[2]) / h) + 5, N = nx * ny * nz;
         var F = new Float32Array(N).fill(1000), L = new Uint8Array(N), idx = function (ix, iy, iz) { return (iy * nz + iz) * nx + ix; }, names = this.names, self = this;
@@ -1262,6 +1263,7 @@
       // Scene output with the sculpted entries tagged as one seamless surface.
       function finishSculpt(sc, scale, S) {
         if (scale && scale !== 1) scaleScene(sc, scale);
+        if (!sc.order.length) return [];
         var first = sc.groups[sc.order[0]][0], x0 = first[0], z0 = first[2];
         var es = finish(sc);
         if (S && S.st) { // once anything is edited the model stays where it is on the bed, so it does not jump under the cursor
