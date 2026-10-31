@@ -1163,13 +1163,7 @@ function worldDrawMinimap() {
 function bindWorldArrange() {
   wEl.sort.innerHTML = Object.entries(SORT_MODES).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
   wEl.sort.value = worldState.mode;
-  wEl.sort.addEventListener('change', () => {
-    worldState.mode = wEl.sort.value;
-    worldSave();
-    worldArrangeUI();
-    worldBuild();
-    worldHome(false);
-  });
+  wEl.sort.addEventListener('change', () => worldSortTo(wEl.sort.value));
   wEl.arrange.addEventListener('click', () => {
     worldState.arranging = !worldState.arranging;
     worldArrangeUI();
@@ -1182,6 +1176,57 @@ function bindWorldArrange() {
     worldBuild();
   });
   worldArrangeUI();
+}
+
+// Where every tile sits in the world right now, by generator id.
+function worldTilePositions() {
+  const pos = new Map();
+  worldState.regions.forEach(r => r.group.members.forEach((p, i) => pos.set(p.id, cellRect(r, i % r.w, Math.floor(i / r.w)))));
+  return pos;
+}
+
+let sortToken = 0;
+const SORT_OUT_MS = 420, SORT_MOVE_MS = 760, SORT_JITTER_MS = 140, SORT_IN_MS = 520;
+
+// Changing the sort: the holograms flicker off, the tiles glide to their new cells, then the holograms flicker back on.
+function worldSortTo(mode) {
+  const token = ++sortToken, root = wEl.root;
+  const apply = () => {
+    worldState.mode = mode;
+    worldSave();
+    worldArrangeUI();
+    worldBuild();
+    worldHome(false);
+  };
+  root.classList.remove('holo-out', 'holo-hidden', 'holo-in');
+  if (worldReducedMotion() || !wEl.tiles.length) { apply(); return; }
+  const jitter = () => wEl.canvas.querySelectorAll('.tile').forEach(t => t.style.setProperty('--fd', `${Math.round(Math.random() * 160)}ms`));
+
+  jitter();
+  root.classList.add('holo-out');
+  setTimeout(() => {
+    if (token !== sortToken) return;
+    const from = worldTilePositions();
+    root.classList.remove('holo-out');
+    root.classList.add('holo-hidden');
+    apply();
+    jitter();
+    const to = worldTilePositions();
+    wEl.tiles.forEach(tile => {
+      const a = from.get(tile.dataset.id), b = to.get(tile.dataset.id);
+      if (!a || !b || (a.x === b.x && a.y === b.y)) return;
+      tile.animate(
+        [{ transform: `translate(${a.x - b.x}px, ${a.y - b.y}px)` }, { transform: 'none' }],
+        { duration: SORT_MOVE_MS, delay: Math.random() * SORT_JITTER_MS, easing: 'cubic-bezier(0.3, 0.1, 0.2, 1)', fill: 'backwards' });
+    });
+    wEl.canvas.querySelectorAll('.region').forEach(r => r.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 450, easing: 'ease-out' }));
+    setTimeout(() => {
+      if (token !== sortToken) return;
+      root.classList.remove('holo-hidden');
+      root.classList.add('holo-in');
+      setTimeout(() => { if (token === sortToken) root.classList.remove('holo-in'); }, SORT_IN_MS + 180);
+    }, SORT_MOVE_MS + SORT_JITTER_MS + 40);
+  }, SORT_OUT_MS);
 }
 
 function worldArrangeUI() {

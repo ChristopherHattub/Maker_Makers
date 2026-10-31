@@ -13,13 +13,13 @@ The whole home screen is one big pannable, zoomable 2D map. Every group of gener
 - **Search:** the box in the top left dims every tile that does not match (title, category, description or group) and pans to the first match.
 - **Keyboard:** Tab moves between tiles and selects the focused one, Enter opens it, Esc closes the panel.
 
-Each tile shows the shared base tile with the generator's name and slot number as text. Hovering (or focusing) it pops out a spinning hologram of the generator's real 3D model; see [hologram-tiles.md](hologram-tiles.md). The large tile in the middle opens the Workshop ([workshop.md](workshop.md)). Zoomed far out, region names enlarge and tile labels hide. Reduced-motion settings turn the animations off. The site collects no data: search and camera state live only in the page, and the sort and arrangement stay in the visitor's own browser.
+Each tile shows the shared base tile with the generator's name (on a solid riveted name plate, two lines at most) and slot number as text. Hovering (or focusing) it pops out a spinning hologram of the generator's real 3D model; see [hologram-tiles.md](hologram-tiles.md). The large tile in the middle opens the Workshop ([workshop.md](workshop.md)). Zoomed far out, region names enlarge and tile labels hide. Reduced-motion settings turn the animations off. The site collects no data: search and camera state live only in the page, and the sort and arrangement stay in the visitor's own browser.
 
 ## Layout, sorting and rearranging
 
 - **Auto layout:** the map is laid out by code, not by hand. Each group's outline is sized to its tiles (a near-square block with the header on top; a part-filled last row is cut out of the outline, so there is no empty space). Groups are then packed in rings around the Workshop tile: each goes to the free spot closest to the Workshop that touches something already placed, so the map builds outward from the centre. Empty (`planned`) groups are small placeholders at the edge.
 - **Start view:** each time the page loads, the camera centres on the Workshop tile.
-- **Sort** (dropdown under the search box): groups with the biggest nearest the middle (default), groups A to Z, groups newest first, or no groups at all (one block, A to Z or newest first).
+- **Sort** (dropdown under the search box): groups with the biggest nearest the middle (default), groups A to Z, groups newest first, or no groups at all (one block, A to Z or newest first). Changing it plays a short transition (`worldSortTo`): the hologram visuals flicker off, the tiles glide to their new cells, then the holograms flicker back on. It is skipped under reduced motion.
 - **Rearrange:** press the button, then drag any tile to a new spot in its group or into another group. Taps do nothing while it is on; press Done to go back to panning. Moving a tile only moves one transform while dragging and one marker, so it stays smooth. "Reset" forgets the arrangement.
 - The sort and arrangement are saved in this browser's `localStorage` (`mm-home-layout`). Nothing is sent anywhere.
 
