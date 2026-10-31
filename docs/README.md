@@ -25,6 +25,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [spinner-ring.md](spinner-ring.md) | The Spinner Ring (slot 46): two-piece snap-fit band, 11 fonts, five relief patterns, the Print tab demo animation |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
 | [text-generator.md](text-generator.md) | The Text Generator (slot 101): packed OFL fonts, build styles, triangulation, offsets and the checks |
+| [dice-tower.md](dice-tower.md) | Dice Tower: shapes, theme sliders, tray shapes, stamps. |
 | [hologram-tiles.md](hologram-tiles.md) | Hover holograms rendered from the real models (posters, `build-holo.py`) |
 | [sprite-sheet-skill.md](sprite-sheet-skill.md) | Abandoned Gemini hover-frame workflow (historical) |
 | [homepage.md](homepage.md) | The pannable world map of grouped generator tiles and how to add to it |
