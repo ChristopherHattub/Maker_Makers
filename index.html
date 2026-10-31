@@ -76,7 +76,8 @@
           <span id="viewer-code" style="color: var(--bp-cyan); font-size: 0.75rem;">SLOT-01</span>
           <h2 id="viewer-title" style="letter-spacing: 1.5px; text-transform: uppercase;">UNASSIGNED MODULE</h2>
         </div>
-        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+        <button class="btn viewer-menu-toggle" id="viewer-menu-toggle" type="button" aria-expanded="false" aria-controls="viewer-actions" onclick="toggleViewerMenu()">&#9776; Menu</button>
+        <div class="viewer-actions" id="viewer-actions">
           <button class="btn btn-green" id="btn-save-stl" onclick="saveGeneratorStl()" disabled>
             &#128190; Save STL
           </button>
