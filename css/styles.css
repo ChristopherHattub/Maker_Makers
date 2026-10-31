@@ -970,12 +970,14 @@ body.on-splash header { backdrop-filter: none; }
   bottom: 0;
   padding: 0.25rem 0.35rem;
   background: linear-gradient(transparent, rgba(6, 21, 45, 0.92) 60%);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
+  font-weight: 700;
   line-height: 1.15;
   text-align: center;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .tile:hover .tile-card, .tile:focus-visible .tile-card, .tile.selected .tile-card {
@@ -1150,8 +1152,9 @@ body.on-splash header { backdrop-filter: none; }
   font: 600 8px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 0.04em; color: #3fe6ff;
 }
 .world.exp .tile.has-3d .tile-label {
-  display: block; left: 12%; right: 12%; bottom: 5.5%; padding: 0; background: none;
-  font: 600 9px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: #cfd8e3; text-shadow: 0 1px 2px #000;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  left: 9%; right: 9%; bottom: 5%; padding: 0; background: none; white-space: normal;
+  font: 700 12px/1.1 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000;
 }
 .world.exp .tile.has-3d:hover .tile-label, .world.exp .tile.has-3d:focus-visible .tile-label { color: #fff; }
 
