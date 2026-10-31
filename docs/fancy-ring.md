@@ -1,6 +1,6 @@
 # Fancy Ring (slot 102)
 
-An engagement ring display prop, `programs/fancy-ring.html`. It opens on the **Ring studio** tab, which shows the ring as jewellery through the engine's [showcase render](generator-styling.md#showcase-render).
+An engagement ring display prop, `programs/fancy-ring.html`, in its own white and gold theme (`body.mm-soft.regal`). It opens on the **Ring studio** tab, which shows the ring as jewellery through the engine's [showcase render](generator-styling.md#showcase-render).
 
 ## Real options
 

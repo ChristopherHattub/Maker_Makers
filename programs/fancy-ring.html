@@ -7,8 +7,33 @@
   <link rel="stylesheet" href="shared/generator.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    /* Regal theme: white and gold panels instead of the blueprint look. The 3D stage stays dark. */
+    body.mm-soft.regal {
+      --s-bg: #fffdf7; --s-panel: #fffdf7; --s-panel-a: rgba(255, 253, 247, 0.98); --s-accent: #8f6b12; --s-accent-dim: rgba(176, 137, 40, 0.55);
+      --s-text: #33290f; --s-muted: #6f5f38; --s-amber: #8f6b12; --s-green: #8f6b12; --s-edge: #c9a441;
+      --s-card: #fffaf0; --s-card-a: rgba(255, 252, 244, 0.94); --s-stage: #14151d;
+      --s-font: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+      --s-bg-img: linear-gradient(160deg, #fbf6e8, #efe3c4);
+    }
+    .regal .mm-gen-header, .regal .mm-panel, .regal .mm-viewport { border-radius: 4px; border: 1px solid #c9a441; box-shadow: 0 0 0 3px #fffdf7, 0 0 0 4px #c9a441; }
+    .regal .mm-gen-title { letter-spacing: 0.12em; color: #8f6b12; }
+    .regal .mm-chip, .regal .mm-part, .regal .mm-icon-chip, .regal .mm-preset-card, .regal .mm-slider select,
+    .regal .mm-file-field input, .regal .mm-acc, .regal .mm-canvas, .regal .mm-btn, .regal .mm-overlay { border-radius: 3px; }
+    .regal .mm-tabs { border-bottom-color: #c9a441; }
+    .regal .mm-tab[aria-selected="true"], .regal .mm-btn--solid, .regal .mm-btn--solid:hover:not(:disabled) {
+      background: linear-gradient(180deg, #a98420, #876410); color: #fffdf7;
+    }
+    .regal .mm-btn:hover:not(:disabled), .regal .mm-toggle-btn:hover, .regal .mm-preset-card:hover, .regal .mm-choice:hover { background: rgba(201, 164, 65, 0.16); }
+    .regal .mm-btn--solid:hover:not(:disabled) { background: linear-gradient(180deg, #a98420, #876410); }
+    .regal .mm-chip[aria-pressed="true"], .regal .mm-icon-chip[aria-pressed="true"], .regal .mm-swatch[aria-pressed="true"], .regal .mm-part[aria-pressed="true"],
+    .regal .mm-toggle-btn[aria-pressed="true"], .regal .mm-choice[aria-pressed="true"] { background: rgba(201, 164, 65, 0.26); border-color: #8f6b12; }
+    .regal .mm-swatch, .regal .mm-part { background: #fffaf0; }
+    .regal .mm-printchip, .regal .mm-viewport .mm-btn, .regal .mm-viewport .mm-btn:hover:not(:disabled) { background: rgba(255, 252, 244, 0.94); }
+    .regal input[type="text"] { background: #fffaf0; color: #33290f; border: 1px solid #c9a441; }
+  </style>
 </head>
-<body class="mm-gen">
+<body class="mm-gen mm-soft regal">
   <script>
     // Fancy Ring: an engagement ring display prop built from real jewellery options: cut, carat, setting, band and
     // US ring size. The Studio tab shows it as jewellery (engine showcase render). It prints as separate parts: by
