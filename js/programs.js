@@ -392,7 +392,7 @@ const GENERATORS = [
     category: 'WEARABLE // FIDGETS',
     thumbnailUrl: 'assets/thumbnails/spinner-ring.svg',
     programUrl: 'programs/spinner-ring.html',
-    description: 'A finger ring whose outer band spins around the inner band on a locked V rib, with optional raised pixel text wrapped around it. Set finger size, band width, thickness, fit gap and type your own text. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'A finger ring whose outer band spins freely around the inner band. The two bands print apart: squeeze the slit inner band shut, push it in and it clicks into place (no supports, nothing printed in place). Put raised text on the spinning band in 11 fonts, or one of five relief patterns (honeycomb, sea waves, woven ribbons, rosettes, flow maze) with their own sliders. The Print tab plays a looping demo of the snap and the spin. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 47,

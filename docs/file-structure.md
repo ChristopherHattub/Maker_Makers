@@ -24,7 +24,8 @@
 │   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
 ├── tools/
 │   ├── hologram.html        Renders a generator's real model as a 24-frame hologram atlas
-│   └── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
+│   ├── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
+│   └── ring-fonts/          Trims the Text Generator's font outlines into the Spinner Ring page (build.mjs)
 ├── scripts/
 │   ├── dev-server.mjs       Zero-dependency static server with live reload
 │   ├── receive-render.mjs   Receives the atlases tools/hologram.html uploads (default port 5190)
@@ -53,6 +54,7 @@
 | --- | --- |
 | Add or update a generator slot | `js/programs.js`, plus files in `programs/` and `assets/thumbnails/` (see the generator skill) |
 | Rebuild the Text Generator font data | `tools/text-fonts/build.mjs` (downloads the OFL fonts, rewrites the FONTDATA block in `programs/text-generator.html`; licences in `tools/text-fonts/licenses/`; see [text-generator.md](text-generator.md)) |
+| Rebuild the Spinner Ring font data | `node tools/ring-fonts/build.mjs` (copies the trimmed outlines from `programs/text-generator.html` into the FONTDATA block of `programs/spinner-ring.html`; see [spinner-ring.md](spinner-ring.md)) |
 | Re-render a hologram tile | `tools/hologram.html`, `scripts/build-holo.py`, `scripts/hologram-config.json` (see [hologram-tiles.md](hologram-tiles.md)) |
 | Change the homepage world map | `js/worldmap.js` |
 | Change the viewer or routing | `js/app.js` |

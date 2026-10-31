@@ -219,6 +219,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 
 /* ---------- Sliders ---------- */
 .mm-slider { margin-bottom: 0.95rem; }
+.mm-slider[hidden], .mm-acc[hidden] { display: none; }
 
 .mm-slider-head {
   display: flex;
@@ -794,3 +795,23 @@ body.mm-gen.mm-embed #mm-tab-print { display: none !important; }
 body.mm-gen.mm-embed { height: 100vh; overflow: hidden; }
 body.mm-gen.mm-embed .mm-main { display: block !important; margin: 0 !important; height: 100vh; }
 body.mm-gen.mm-embed .mm-panel { height: 100vh; width: 100%; max-width: none; border-width: 0; }
+
+/* ---------- Print tab demo animation caption (generator onFrame hooks, for example the Spinner Ring) ---------- */
+.mm-anim-caption {
+  position: absolute;
+  z-index: 2;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 3.4rem;
+  margin: 0 auto;
+  max-width: 34rem;
+  padding: 0.4rem 0.65rem;
+  text-align: center;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--bp-white);
+  background: rgba(6, 21, 45, 0.85);
+  border: 1px solid var(--bp-cyan-dim);
+  pointer-events: none;
+}
+.mm-anim-caption[hidden] { display: none; }

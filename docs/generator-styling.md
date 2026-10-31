@@ -58,10 +58,11 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `palette` | yes | `[{ name, color }]`. Shown as swatches in the Color tool. Eight entries lay out as two rows. |
 | `partNames` | no | Maps a mesh name to a label, for example `{ body: 'Ghost body', detail: 'Stamp' }`. |
 | `printSettings` | no | Only `material` is read (default `'PLA'`): the Print tab's starting material. |
-| `parameters` | yes | The sliders. See below. |
+| `parameters` | yes | The sliders. See below. A parameter may carry `showIf: function (params) { return ...; }`: the slider is hidden while it returns false, and an accordion group whose sliders are all hidden is hidden too (Spinner Ring: text sliders only for Text, pattern sliders only for Pattern). Hidden sliders keep their values. |
 | `presets` | no | `[{ label, values }]`. Each preset sets some parameters. |
 | `build(params, api)` | yes | Returns the mesh list. See [build()](#build-params-api). |
 | `mount(container, api)` | no | Adds generator-only controls under the sliders (for example, a stamp picker). |
+| `onStage(info)` / `onFrame()` | no | `onStage` gets `{ THREE, scene, camera, renderer, controls, container, modelGroup, ... }` once; `onFrame` runs every animation frame. The Spinner Ring uses them for its Print tab demo (it moves the meshes in `modelGroup`, never the exported geometry; the caption uses `.mm-anim-caption`). Reset anything you move when the tab is left. |
 | `onHover(hit, api)` | no | Called on pointer move with the hit under the cursor, or `null`. |
 | `onPick(hit, api)` | no | Called on a click in the Parametric tab. The hit has the same shape as for `onHover`. |
 
