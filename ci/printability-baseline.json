@@ -419,22 +419,7 @@
     ]
   },
   "flexi-fish": {
-    "defaults": [
-      "overhang"
-    ],
-    "Default fish": [
-      "overhang"
-    ],
-    "Goldfish": [
-      "overhang"
-    ],
-    "Slim trout": [
-      "overhang"
-    ],
     "Tiny fish": [
-      "overhang"
-    ],
-    "Straight (easy print)": [
       "overhang"
     ]
   },
@@ -517,6 +502,20 @@
       "overhang"
     ],
     "Baby shark": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
+  "flexi-snake": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default snake": [
+      "overhang"
+    ],
+    "Garden snake": [
       "overhang"
     ],
     "Straight (easy print)": [

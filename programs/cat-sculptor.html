@@ -870,8 +870,8 @@
       // Forms melt into each other with a smooth blend, instead of intersecting at hard seams. A final pass works up from
       // the bed, layer by layer, and removes anything that is not reachable within 45 degrees of the solid below, so the
       // surface cannot float or overhang at any slider value. Forms need support underneath, or they get trimmed away.
-      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 1; }
-      Sculpt.prototype._name = function (name, color) { if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
+      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
+      Sculpt.prototype._name = function (name, color) { if (name === null || name === undefined) return; if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
       Sculpt.prototype._op = function (o) { this.ops.push(o); return this; };
       // Ellipsoid: c centre, r [rx, ry, rz], k blend radius.
       Sculpt.prototype.ell = function (name, c, r, color, k) {
@@ -922,6 +922,7 @@
         });
         return this._op({ name: name, k: k === undefined ? 2 : k, lo: lo, hi: hi, d: function (x, y, z) {
           var rx = x - at[0], rz = z - at[2], u = rx * d[0] + rz * d[2], w = rx * sd[0] + rz * sd[2], best = 1e18, inside = false;
+          if (Math.abs(w) > t + 6) return Math.abs(w) - t / 2;
           for (var i = 0, j = n - 1; i < n; j = i++) {
             var a = poly[i], b = poly[j], ex = b[0] - a[0], ey = b[1] - a[1], fx = u - a[0], fy = y - a[1];
             var q = clamp((fx * ex + fy * ey) / ((ex * ex + ey * ey) || 1), 0, 1), gx = fx - ex * q, gy = fy - ey * q, dd = gx * gx + gy * gy;
@@ -1059,18 +1060,38 @@
             }
           }
         }
+        // Drop the first layer onto the bed, so the bottom edge has no undercut.
+        for (var fl = 1; fl < P.length; fl += 3) if (P[fl] < h) P[fl] = 0;
         // Light smoothing removes the small ripple left by the grid. The flat underside stays on the bed.
         var nv = P.length / 3, sum = new Float32Array(nv * 3), cnt = new Uint16Array(nv), pass, ii;
         function link(u, v) { sum[u * 3] += P[v * 3]; sum[u * 3 + 1] += P[v * 3 + 1]; sum[u * 3 + 2] += P[v * 3 + 2]; cnt[u]++; }
-        for (pass = 0; pass < 4; pass++) {
+        for (pass = 0; pass < 6; pass++) {
           var lam = pass % 2 ? -0.34 : 0.33; // shrink then inflate, so the volume holds
           sum.fill(0); cnt.fill(0);
           out.forEach(function (idx) { for (var e = 0; e < idx.length; e += 3) { var a0 = idx[e], b0 = idx[e + 1], c0 = idx[e + 2]; link(a0, b0); link(a0, c0); link(b0, c0); link(b0, a0); link(c0, a0); link(c0, b0); } });
           for (ii = 0; ii < nv; ii++) {
-            if (!cnt[ii] || P[ii * 3 + 1] < h * 0.2) continue;
-            for (var ax = 0; ax < 3; ax++) P[ii * 3 + ax] += lam * (sum[ii * 3 + ax] / cnt[ii] - P[ii * 3 + ax]);
-            if (P[ii * 3 + 1] < h * 0.2) P[ii * 3 + 1] = h * 0.2;
-          }
+            if (!cnt[ii]) continue;
+            var low = P[ii * 3 + 1] <= h * 1.5; // near the bed: tidy the outline, but keep the height
+            for (var ax = 0; ax < 3; ax++) if (!low || ax !== 1) P[ii * 3 + ax] += lam * (sum[ii * 3 + ax] / cnt[ii] - P[ii * 3 + ax]);
+                      }
+        }
+        // Straighten the edges between paint regions: slide each boundary vertex toward its boundary neighbours.
+        var owner = new Map(), bn = new Map();
+        function be(u, v, li) {
+          var key = u < v ? u * nv + v : v * nv + u, o = owner.get(key);
+          if (o === undefined) { owner.set(key, li); return; }
+          if (o !== li) { (bn.get(u) || bn.set(u, []).get(u)).push(v); (bn.get(v) || bn.set(v, []).get(v)).push(u); }
+        }
+        out.forEach(function (idx, li) { for (var e = 0; e < idx.length; e += 3) { be(idx[e], idx[e + 1], li); be(idx[e + 1], idx[e + 2], li); be(idx[e + 2], idx[e], li); } });
+        for (pass = 0; pass < 5; pass++) {
+          var moved = [];
+          bn.forEach(function (ns, v) {
+            if (P[v * 3 + 1] <= h * 1.5 || ns.length !== 2) return;
+            var mx = 0, my = 0, mz = 0;
+            ns.forEach(function (q) { mx += P[q * 3]; my += P[q * 3 + 1]; mz += P[q * 3 + 2]; });
+            moved.push(v, P[v * 3] + 0.35 * (mx / ns.length - P[v * 3]), P[v * 3 + 1] + 0.35 * (my / ns.length - P[v * 3 + 1]), P[v * 3 + 2] + 0.35 * (mz / ns.length - P[v * 3 + 2]));
+          });
+          for (ii = 0; ii < moved.length; ii += 4) { var vv = moved[ii]; P[vv * 3] = moved[ii + 1]; P[vv * 3 + 1] = moved[ii + 2]; P[vv * 3 + 2] = moved[ii + 3]; }
         }
         var self = this;
         out.forEach(function (idx, li) {
@@ -1090,6 +1111,15 @@
       }
       // A face detail on the sculpted surface: fired from `o` along `dir`.
       function detail(sc, S, name, o, dir, r, color, opt) { var s = S.hit(o, dir); sc.add(name, 'b', dome(s.p, s.n, r, opt), color); return s; }
+      // Points of a band running over an ellipsoid at a fixed x offset, from one side to the other (stripes, ribs, shell bands).
+      function bandOver(c, r, dx, reach, rad, sink) {
+        var out = [], n = 8;
+        for (var i = 0; i <= n; i++) {
+          var u = lerp(-reach, reach, i / n), q = 1 - (dx * dx) / (r[0] * r[0]) - u * u, top = Math.sqrt(Math.max(q, 0.01));
+          out.push([c[0] + dx, c[1] + r[1] * top - (sink || 0), c[2] + r[2] * u, rad * (1 - 0.3 * Math.abs(u))]);
+        }
+        return out;
+      }
 
       // -----------------------------------------------------------------------
       // Cat Sculptor: a sitting, loafing or curled-up cat sculpted as one seamless surface
@@ -1111,10 +1141,10 @@
           S.ell('body', [-4, 16, 0], [28 * k, 20, 17 * k], fur, 5);
           [-1, 1].forEach(function (s) { S.ell('paws', [22, 3, s * 7.5 * k], [7, 3.5, 4.6], cream, 3); });
           hx = 24; hy = 30;
-        } else { // curled up
-          S.ell('body', [-5, 13, 0], [27, 16 * k, 22 * k], fur, 5);
-          S.ell('paws', [18, 3, 15 * k], [8, 3.6, 5], cream, 3);
-          hx = 18; hy = 15;
+        } else { // curled up, chin on the bed beside the tail
+          S.ell('body', [-6, 13, -3], [27, 17 * k, 21 * k], fur, 5);
+          S.ell('paws', [17, 3, 17 * k], [8, 3.6, 5], cream, 3);
+          hx = 21; hy = 11.5 * hs;
         }
         // head: wide cheeks, a small muzzle and a chin
         S.ell('head', [hx, hy, 0], [hr * 0.95, hr * 0.86, hr * 1.1], fur, pose === 0 ? 6 : 5);
@@ -1125,21 +1155,20 @@
           var E = 13 * p.ear * hs, ez = s * hr * 0.58, ey = hy + hr * 0.42, W = 6.4 * p.ear * hs, side = s * 0.42;
           var poly = [[-W, ey], [W, ey], [W * side + E * 0.22 * s, ey + E], [W * side - E * 0.06 * s, ey + E]];
           S.plate('ears', poly, [hx - hr * 0.1, 0, ez], [0, 0, 1], 3.4, fur, 2.5, 1);
-          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.9 + E * 0.15 * s, ey + E * 0.8]], [hx + hr * 0.1 - 0.4, 0, ez], [0, 0, 1], 1.6, pink, 0.4, 0.5);
+          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.5, 0, ez], [0, 0, 1], 2, pink, 0.4, 0.6);
         });
         S.ell('muzzle', [hx + hr * 0.72, hy - hr * 0.5, 0], [hr * 0.24, hr * 0.17, hr * 0.26], cream, 2);
         // back of a tabby: stripes that are slightly proud, painted their own colour
-        var st = Math.round(p.stripes);
+        var st = Math.round(p.stripes), bc = pose === 0 ? [-7, 15, 0] : pose === 1 ? [-4, 16, 0] : [-6, 13, -3], br = pose === 0 ? [21 * k, 19, 18 * k] : pose === 1 ? [28 * k, 20, 17 * k] : [27, 17 * k, 21 * k];
         for (i = 0; i < st; i++) {
-          var u = st > 1 ? i / (st - 1) : 0.5, sx = pose === 0 ? lerp(-22, -6, u) : lerp(-26, 8, u), sy = pose === 0 ? lerp(26, 44, u) : 28;
-          if (pose === 0) S.path('stripes', [[sx + 7, sy - 8, -12 * k, 1.1], [sx + 2, sy - 1, -7 * k, 1.3], [sx - 1, sy + 2, 0, 1.4], [sx + 2, sy - 1, 7 * k, 1.3], [sx + 7, sy - 8, 12 * k, 1.1]], dark, 1.2);
-          else S.path('stripes', [[sx, 15, -15 * k, 1.1], [sx, 28 * (pose === 2 ? 0.95 : 1.2), 0, 1.4], [sx, 15, 15 * k, 1.1]], dark, 1.2);
+          var dx = st > 1 ? lerp(-br[0] * 0.62, pose === 0 ? 2 : br[0] * 0.3, i / (st - 1)) : -br[0] * 0.3;
+          S.path('stripes', bandOver(bc, br, dx, 0.72, 1.9, 0.5), dark, 1, 2);
         }
         // tail on the bed, curling round the feet
         var tl = p.tail, tc;
         if (pose === 0) tc = [[-24, 3.2, 3, 5.4], [-30, 3, 13, 5], [-25, 2.9, 25 * tl, 4.6], [-9, 2.7, 30 * tl, 4.2], [8, 2.5, 28 * tl, 3.9], [19, 2.4, 22 * tl, 3.6]];
         else if (pose === 1) tc = [[-28, 3.2, 5, 5], [-32, 3, 16, 4.6], [-20, 2.8, 24 * tl, 4.2], [-2, 2.6, 24 * tl, 3.8], [13, 2.4, 19 * tl, 3.5]];
-        else tc = [[-27, 3.2, -8, 5], [-23, 3, -26 * tl, 4.6], [-5, 2.8, -33 * tl, 4.2], [14, 2.6, -28 * tl, 3.8], [26, 2.4, -15 * tl, 3.5]];
+        else tc = [[-30, 3.2, -8, 5], [-24, 3, -27 * tl, 4.6], [-6, 2.8, -33 * tl, 4.2], [14, 2.6, -27 * tl, 3.8], [26, 2.4, -13 * tl, 3.5]];
         S.path('tail', tc, fur, 2.5);
         if (Math.round(p.collar) === 1 && pose === 0) S.path('collar', [[0, 47, 0, 0]].slice(0, 0).concat(ringPts(hx - 2, hy - hr * 0.72, 0, 9.5 * k, 11.5 * k, 1.9)), '#fb7185', 0.8, 2);
         S.run();

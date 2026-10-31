@@ -1,75 +1,93 @@
       // -----------------------------------------------------------------------
-      // Dino Builder: chunky T-rex, Stegosaurus or Triceratops
+      // Dino Builder: T-rex, Stegosaurus or Triceratops sculpted as one seamless surface
       // -----------------------------------------------------------------------
-      function diamond(w, h) { return [[-w, 0], [-w * 0.55, h * 0.8], [0, h], [w * 0.55, h * 0.8], [w, 0], [0, -h * 0.3]]; }
-
       function buildDino(p) {
-        var sc = new Scene(), sp = Math.round(p.species), i, c = p.crest, hs = p.headSize, L = p.bodyLen / 60;
-        var col = ['#86efac', '#fdba74', '#93c5fd'][sp], belly = '#fef3c7', dark = '#34d399';
-        if (sp === 0) { // T-rex: sits upright on its tail
-          bellyBall(sc, 'body', 'b', 0, 0, 22, 19, 24, col);
-          ball(sc, 'body', 'b', [4, 34, 0], 22, 15, 14.5, col, { dir: tilt(80) });
-          ball(sc, 'belly', 'b', [10, 28, 0], 18, 10, 11, belly, { dir: tilt(86) });
-          for (i = -1; i <= 1; i += 2) {
-            bellyBall(sc, 'feet', 'b', 14, i * 11, 8.5, 5.2, 5.5, dark);
-            post(sc, 'body', 'b', 8, i * 11, 6.5, 5.5, 20, col);
-            spike(sc, 'arms', 'b', [16, 34, i * 10], vnorm([0.25, -1, i * 0.2]), 2.6, 8, dark, 3);
+        var sc = new Scene(), S = new Sculpt(1.4), sp = Math.round(p.species), c = p.crest, hs = p.headSize, L = p.bodyLen / 100, i;
+        var col = ['#86efac', '#fdba74', '#93c5fd'][sp], belly = '#fef3c7', dark = ['#34d399', '#f97316', '#60a5fa'][sp], claw = '#f8fafc';
+        var eyeO, eyeZ, eyeY, nostril;
+        function claws(x, z, n) { for (var q = 0; q < n; q++) S.ell('claws', [x + 1, 2.4, z + (q - (n - 1) / 2) * 4], [3.2, 2.5, 2], claw, 0.8); }
+        function tail(x, z, r, len) { S.path('tail', [[x, r * 0.7, z, r], [x - len * 0.35, r * 0.5, z + 5, r * 0.72], [x - len * 0.7, r * 0.34, z + 3, r * 0.42], [x - len, 1.6, z - 2, 1.9]], col, 5); }
+        if (sp === 0) { // T-rex: sits back on haunches and tail
+          S.ell('body', [-6, 19, 0], [23, 21, 19], col, 5);
+          S.path('body', [[-2, 26, 0, 17], [10, 45, 0, 14.5], [21, 62, 0, 12]], col, 8);
+          S.paint('belly', [18, 34, 0], [14, 28, 13], belly);
+          [-1, 1].forEach(function (s) {
+            S.ell('body', [-9, 15, s * 15], [18, 15, 8.5], col, 4);               // thigh
+            S.ell('feet', [10, 3.6, s * 15], [14, 4.2, 7.4], dark, 2.5);
+            claws(23, s * 15, 3);
+            // little arms folded up against the chest
+            S.path('arms', [[17, 44, s * 11, 3.6], [24, 41, s * 11.5, 2.8], [29, 47, s * 10, 2.2]], dark, 2);
+          });
+          tail(-22, 0, 14, 62 * L);
+          var hr = 15 * hs, hx = 27, hy = 74;
+          S.ell('head', [hx, hy, 0], [hr * 1.15, hr * 0.78, hr * 0.8], col, 7);
+          S.ell('head', [hx + hr * 1.05, hy - hr * 0.04, 0], [hr * 0.95, hr * 0.42, hr * 0.56], col, 4);   // upper snout
+          S.ell('jaw', [hx + hr * 0.8, hy - hr * 0.58, 0], [hr * 1.05, hr * 0.26, hr * 0.5], belly, 2); // lower jaw
+          [-1, 1].forEach(function (s) {
+            S.path('head', [[hx + hr * 0.1, hy + hr * 0.72, s * hr * 0.42, 2.8], [hx + hr * 0.5, hy + hr * 0.62, s * hr * 0.38, 2]], col, 2);
+            S.path(null, [[hx + hr * 1.9, hy - hr * 0.32, s * hr * 0.42, 0.9], [hx + hr * 0.3, hy - hr * 0.3, s * hr * 0.78, 1]], null, 0).carve(0.8); // mouth line   // brow ridge
+            for (var t = 0; t < 4; t++) { var tx = hx + hr * (0.8 + t * 0.26); S.path('teeth', [[tx, hy - hr * 0.5, s * hr * 0.52, 1.5 * c], [tx, hy - hr * 0.24, s * hr * 0.5, 0.6]], claw, 0.3); }
+          });
+          eyeO = hy + hr * 0.3; eyeZ = hr * 0.5; eyeY = hx; nostril = [hy + hr * 0.12, hr * 0.2];
+        } else {
+          var bl = (sp === 1 ? 36 : 32) * L, bh = sp === 1 ? 23 : 22;
+          S.ell('body', [0, bh * 0.82, 0], [bl, bh, sp === 1 ? 17 : 19], col, 5);
+          S.paint('belly', [0, 3, 0], [bl * 0.9, 9, 19], belly);
+          [-1, 1].forEach(function (s) {
+            [[bl * 0.5, 6.4], [-bl * 0.55, 7.6]].forEach(function (q) {
+              S.path('body', [[q[0], 22, s * 14, q[1] + 2], [q[0], 9, s * 16, q[1]], [q[0] + 0.5, 3, s * 16, q[1] * 0.96]], col, 4);
+              claws(q[0] + q[1] * 0.75, s * 16, 3);
+            });
+          });
+          tail(-bl * 0.8, 0, 12, 56 * L);
+          if (sp === 1) { // Stegosaurus: low head, plates along the back, spikes on the tail
+            S.path('body', [[bl * 0.6, 8, 0, 12.5], [bl + 14, 5.4, 0, 8.4], [bl + 32, 4.2, 0, 6.5]], col, 6);
+            S.ell('head', [bl + 40, 7.2, 0], [13 * hs, 8 * hs, 8 * hs], col, 3.5);
+            eyeO = 9.5 * hs; eyeZ = 5 * hs; eyeY = bl + 42; nostril = [7 * hs, 2];
+            var n = 7;
+            for (i = 0; i < n; i++) {
+              var u = i / (n - 1), px = lerp(bl * 0.62, -bl * 0.95, u), ht = (10 + 13 * Math.sin(Math.PI * u)) * c, w = (6 + 3 * Math.sin(Math.PI * u)) * c, q = 1 - (px * px) / (bl * bl), by = bh * 0.75 + bh * Math.sqrt(Math.max(q, 0.02)) - 4;
+              S.plate('plates', [[-w, by], [w, by], [w * 0.5, by + ht * 0.62], [0, by + ht], [-w * 0.6, by + ht * 0.62]], [px, 0, i % 2 ? 2 : -2], [1, 0, 0], 3, '#fb7185', 1.5, 1);
+            }
+            [-1, 1].forEach(function (s) {
+              for (var si = 0; si < 2; si++) {
+                var sx = -bl * 0.8 - (34 + si * 14) * L;
+                S.path('spikes', [[sx, 4, s * 2, 3], [sx - 3, 4 + 8 * c, s * 7, 1.6], [sx - 5, 4 + 16 * c, s * 11, 0.5]], claw, 1);
+              }
+            });
+          } else { // Triceratops: big head, tall frill and three horns
+            var hR = 14 * hs, hX = bl + 13;
+            S.ell('head', [hX, hR * 0.72, 0], [hR * 1.3, hR * 0.85, hR * 0.95], col, 6);
+            S.ell('beak', [hX + hR * 1.32, hR * 0.5, 0], [hR * 0.5, hR * 0.5, hR * 0.46], '#fde68a', 2.5);
+            var fw = 21 * hs * (0.7 + 0.3 * c), fh = 34 * hs * (0.7 + 0.3 * c), fpoly = [[-fw * 0.7, hR * 0.6], [fw * 0.7, hR * 0.6]], fN = 12;
+            for (i = 0; i <= fN; i++) { var aa = (Math.PI * i) / fN; fpoly.push([Math.cos(aa) * fw * (1 + 0.06 * Math.cos(aa * 12)), hR * 1.1 + Math.sin(aa) * fh * 0.72 * (1 + 0.05 * Math.cos(aa * 12))]); }
+            S.plate('frill', fpoly, [hX - hR * 0.4, 0, 0], [0, 0, 1], 4, '#fb7185', 3, 1.6);
+            [-1, 1].forEach(function (s) {
+              var hb = [hX + hR * 0.42, hR * 1.2, s * hR * 0.46];
+              S.path('horns', [[hb[0], hb[1], hb[2], 3.8], [hb[0] + 6 * c, hb[1] + 9 * c, hb[2], 2.6], [hb[0] + 12 * c, hb[1] + 19 * c, hb[2], 0.6]], claw, 1.5);
+            });
+            var nb = [hX + hR * 1.15, hR * 0.95, 0];
+            S.path('horns', [[nb[0], nb[1], 0, 3], [nb[0] + 3, nb[1] + 5 * c, 0, 2], [nb[0] + 5, nb[1] + 11 * c, 0, 0.5]], claw, 1.2);
+            eyeO = hR * 1.0; eyeZ = hR * 0.56; eyeY = hX + hR * 0.5; nostril = null;
           }
-          var hr = 13 * hs, hx = 15, hy = 62;
-          bellyBall(sc, 'body', 'b', 14, 0, 17, 11.5, 36, col, { sq: 2.4 });                       // neck column, carries the head
-          ball(sc, 'head', 'h', [hx, hy, 0], hr * 1.05, hr * 0.85, hr * 0.85, col);
-          ball(sc, 'head', 'h', [hx + hr * 0.85, hy - hr * 0.25, 0], hr * 0.55, hr * 0.62, hr * 0.5, col, { dir: tilt(-12) }); // snout
-          ball(sc, 'head', 'h', [hx + hr * 0.4, hy - hr * 0.8, 0], hr * 0.85, hr * 0.8, hr * 0.55, belly, { dir: [0, 1, 0] }); // chin and throat
-          for (i = -1; i <= 1; i += 2) {
-            eyeAt(sc, 'face', 'h', [hx + hr * 0.7, hy + hr * 0.35, i * hr * 0.55], 2.3, EYE);
-            for (var tt = 0; tt < 3; tt++) spike(sc, 'teeth', 'h', [hx + hr * (0.7 + tt * 0.22), hy - hr * 0.58, i * hr * 0.38], [0.1, -1, 0], 1.1, 3 * c, '#f8fafc', 1.5, 6);
-          }
-          tubeAdd(sc, 'tail', 'b', [[-18, 8, 0], [-34 * L, 6, 6], [-56 * L, 4, 3], [-78 * L, 3, 0]], function (t) { return 9.5 - 7 * t; }, col, { ground: true, per: 8 });
-        } else if (sp === 1) { // Stegosaurus
-          var bl = 30 * L;
-          bellyBall(sc, 'body', 'b', 0, 0, bl, 17, 22, col);
-          for (i = -1; i <= 1; i += 2) {
-            post(sc, 'body', 'b', bl * 0.55, i * 14, 6.6, 5.8, 16, col); post(sc, 'body', 'b', -bl * 0.58, i * 14, 7, 6, 16, col);
-            bellyBall(sc, 'feet', 'b', bl * 0.55 + 2, i * 14, 7.4, 6, 3.4, dark); bellyBall(sc, 'feet', 'b', -bl * 0.58 + 2, i * 14, 7.8, 6, 3.4, dark);
-          }
-          bellyBall(sc, 'body', 'b', bl + 5, 0, 12, 10, 11, col);                  // neck
-          bellyBall(sc, 'head', 'h', bl + 17, 0, 8.5 * hs, 6.2 * hs, 6.6 * hs, col);
-          for (i = -1; i <= 1; i += 2) eyeAt(sc, 'face', 'h', [bl + 19, 8, i * 4.6 * hs], 1.6, EYE);
-          for (i = 0; i < 7; i++) {
-            var u = i / 6, px = lerp(bl * 0.55, -bl * 0.85, u), hh = (8 + 10 * Math.sin(Math.PI * u)) * c, ty = 22 * (1 - Math.pow(Math.abs(px) / (bl * 1.05), 2.2)) + 14;
-            sc.add('plates', 'pl' + i, plate(diamond(5.5 * (0.8 + 0.4 * c), hh), [px, Math.max(ty - hh * 0.45, 10), -1.7], 0, 1, 3.4, 0.8), '#fb7185');
-          }
-          tubeAdd(sc, 'tail', 'b', [[-bl + 4, 9, 0], [-bl - 16 * L, 5, 4], [-bl - 36 * L, 3, 2], [-bl - 52 * L, 2.5, 0]], function (t) { return 8 - 5.2 * t; }, col, { ground: true, per: 8 });
-          for (i = -1; i <= 1; i += 2) for (var sI = 0; sI < 2; sI++) spike(sc, 'spikes', 'b', [-bl - (30 + 14 * sI) * L, 4.5, i * 2], vnorm([-0.35, 1, i * 0.25]), 2.8, 13 * c, '#f1f5f9', 3);
-        } else { // Triceratops
-          var tl = 28 * L;
-          bellyBall(sc, 'body', 'b', 0, 0, tl, 19, 23, col);
-          for (i = -1; i <= 1; i += 2) {
-            post(sc, 'body', 'b', tl * 0.55, i * 15, 6.8, 6, 15, col); post(sc, 'body', 'b', -tl * 0.5, i * 15, 7, 6, 15, col);
-            bellyBall(sc, 'feet', 'b', tl * 0.55 + 2, i * 15, 7.6, 6.2, 3.4, dark); bellyBall(sc, 'feet', 'b', -tl * 0.5 + 2, i * 15, 7.8, 6.2, 3.4, dark);
-          }
-          var hr3 = 12 * hs, hx3 = tl + 6;
-          bellyBall(sc, 'head', 'h', hx3 + 4, 0, hr3 * 1.5, hr3 * 0.85, hr3 * 1.05, col);
-          bellyBall(sc, 'beak', 'h', hx3 + hr3 * 1.7, 0, hr3 * 0.6, hr3 * 0.5, hr3 * 0.55, '#fde68a');
-          // frill: a tall plate behind the head
-          var fw = 17 * hs * (0.8 + 0.4 * c), fh = 22 * hs * (0.8 + 0.4 * c), fp = [[-fw, 0], [fw, 0]];
-          for (i = 0; i <= 18; i++) { var aa = Math.PI * i / 18; fp.push([Math.cos(aa) * fw, 8 + Math.sin(aa) * fh]); }
-          sc.add('frill', 'f', plate(fp, [hx3 - hr3 * 0.3, 0, -2.5], Math.PI / 2, 5, 1, 1.2), '#fb7185');
-          for (i = -1; i <= 1; i += 2) {
-            spike(sc, 'horns', 'h', [hx3 + hr3 * 1.05, hr3 * 0.95, i * hr3 * 0.5], vnorm([0.55, 1, i * 0.12]), 2.8, 15 * c, '#f8fafc', 3);
-            eyeAt(sc, 'face', 'h', [hx3 + hr3 * 1.05, hr3 * 0.62, i * hr3 * 0.72], 1.8, EYE);
-          }
-          spike(sc, 'horns', 'h', [hx3 + hr3 * 2.0, hr3 * 0.6, 0], vnorm([0.4, 1, 0]), 2.8, 9 * c, '#f8fafc', 3);
-          tubeAdd(sc, 'tail', 'b', [[-tl + 4, 9, 0], [-tl - 16 * L, 5, -4], [-tl - 32 * L, 3, 0]], function (t) { return 8 - 5.2 * t; }, col, { ground: true, per: 8 });
         }
-        return finish(sc);
+        S.reach = 0.72;
+        S.run();
+        [-1, 1].forEach(function (s) {
+          var cx = sp === 0 ? 150 : eyeY + 90, e = S.hit([cx, eyeO, s * eyeZ], [-1, 0, 0]), R = (sp === 0 ? 3.4 : 2.7) * hs;
+          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#fef08a');
+          sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, R * 0.3)), e.n, R * 0.5, { sink: 0.6 }), '#1e293b');
+          if (nostril) { var ns = S.hit([cx, nostril[0], s * nostril[1]], [-1, 0, 0]); sc.add('pupils', 'b', dome(ns.p, ns.n, 1.1), '#1e293b'); }
+        });
+        S.addTo(sc);
+        return finishSculpt(sc);
       }
 
       var DINO_PARAMS = [
         { group: 'Dino', key: 'species', label: 'Species', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['T-rex', 'Stegosaurus', 'Triceratops'] },
-        { group: 'Dino', key: 'bodyLen', label: 'Body and tail length', unit: '%', min: 70, max: 130, step: 1, value: 100 },
-        { group: 'Dino', key: 'headSize', label: 'Head size', unit: '×', min: 0.8, max: 1.4, step: 0.05, value: 1 },
-        { group: 'Dino', key: 'crest', label: 'Teeth, plates, horns and frill size', unit: '×', min: 0.6, max: 1.5, step: 0.05, value: 1 }
+        { group: 'Dino', key: 'bodyLen', label: 'Body and tail length', unit: '%', min: 80, max: 125, step: 1, value: 100 },
+        { group: 'Dino', key: 'headSize', label: 'Head size', unit: '×', min: 0.85, max: 1.25, step: 0.05, value: 1 },
+        { group: 'Dino', key: 'crest', label: 'Teeth, plates, horns and frill size', unit: '×', min: 0.7, max: 1.35, step: 0.05, value: 1 }
       ];
 
       window.MM_GENERATOR = {
@@ -79,15 +97,15 @@
         fileName: 'Dino',
         defaultColor: '#86efac',
         palette: ANIMAL_PALETTE,
-        partNames: { body: 'Body', belly: 'Belly', feet: 'Feet', arms: 'Arms', head: 'Head', face: 'Eyes', teeth: 'Teeth', tail: 'Tail', plates: 'Back plates', spikes: 'Tail spikes', beak: 'Beak', frill: 'Frill', horns: 'Horns' },
+        partNames: { body: 'Body', belly: 'Belly', feet: 'Feet', claws: 'Claws', arms: 'Arms', head: 'Head', eyes: 'Eyes', pupils: 'Pupils', teeth: 'Teeth', tail: 'Tail', plates: 'Back plates', spikes: 'Tail spikes', beak: 'Beak', frill: 'Frill', horns: 'Horns' },
         parameters: DINO_PARAMS,
         presets: makePresets(DINO_PARAMS, [
           ['Default T-rex', {}],
           ['Big-head T-rex', { headSize: 1.2, crest: 1.2 }],
           ['Stegosaurus', { species: 1 }],
-          ['Spiky Stegosaurus', { species: 1, crest: 1.5, bodyLen: 115 }],
+          ['Spiky Stegosaurus', { species: 1, crest: 1.35, bodyLen: 115 }],
           ['Triceratops', { species: 2 }],
-          ['Baby Triceratops', { species: 2, headSize: 1.35, bodyLen: 80, crest: 0.7 }]
+          ['Baby Triceratops', { species: 2, headSize: 1.25, bodyLen: 85, crest: 0.75 }]
         ]),
         build: buildDino
       };

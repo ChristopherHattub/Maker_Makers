@@ -433,8 +433,8 @@
       // Forms melt into each other with a smooth blend, instead of intersecting at hard seams. A final pass works up from
       // the bed, layer by layer, and removes anything that is not reachable within 45 degrees of the solid below, so the
       // surface cannot float or overhang at any slider value. Forms need support underneath, or they get trimmed away.
-      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 1; }
-      Sculpt.prototype._name = function (name, color) { if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
+      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
+      Sculpt.prototype._name = function (name, color) { if (name === null || name === undefined) return; if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
       Sculpt.prototype._op = function (o) { this.ops.push(o); return this; };
       // Ellipsoid: c centre, r [rx, ry, rz], k blend radius.
       Sculpt.prototype.ell = function (name, c, r, color, k) {
@@ -485,6 +485,7 @@
         });
         return this._op({ name: name, k: k === undefined ? 2 : k, lo: lo, hi: hi, d: function (x, y, z) {
           var rx = x - at[0], rz = z - at[2], u = rx * d[0] + rz * d[2], w = rx * sd[0] + rz * sd[2], best = 1e18, inside = false;
+          if (Math.abs(w) > t + 6) return Math.abs(w) - t / 2;
           for (var i = 0, j = n - 1; i < n; j = i++) {
             var a = poly[i], b = poly[j], ex = b[0] - a[0], ey = b[1] - a[1], fx = u - a[0], fy = y - a[1];
             var q = clamp((fx * ex + fy * ey) / ((ex * ex + ey * ey) || 1), 0, 1), gx = fx - ex * q, gy = fy - ey * q, dd = gx * gx + gy * gy;
@@ -622,18 +623,38 @@
             }
           }
         }
+        // Drop the first layer onto the bed, so the bottom edge has no undercut.
+        for (var fl = 1; fl < P.length; fl += 3) if (P[fl] < h) P[fl] = 0;
         // Light smoothing removes the small ripple left by the grid. The flat underside stays on the bed.
         var nv = P.length / 3, sum = new Float32Array(nv * 3), cnt = new Uint16Array(nv), pass, ii;
         function link(u, v) { sum[u * 3] += P[v * 3]; sum[u * 3 + 1] += P[v * 3 + 1]; sum[u * 3 + 2] += P[v * 3 + 2]; cnt[u]++; }
-        for (pass = 0; pass < 4; pass++) {
+        for (pass = 0; pass < 6; pass++) {
           var lam = pass % 2 ? -0.34 : 0.33; // shrink then inflate, so the volume holds
           sum.fill(0); cnt.fill(0);
           out.forEach(function (idx) { for (var e = 0; e < idx.length; e += 3) { var a0 = idx[e], b0 = idx[e + 1], c0 = idx[e + 2]; link(a0, b0); link(a0, c0); link(b0, c0); link(b0, a0); link(c0, a0); link(c0, b0); } });
           for (ii = 0; ii < nv; ii++) {
-            if (!cnt[ii] || P[ii * 3 + 1] < h * 0.2) continue;
-            for (var ax = 0; ax < 3; ax++) P[ii * 3 + ax] += lam * (sum[ii * 3 + ax] / cnt[ii] - P[ii * 3 + ax]);
-            if (P[ii * 3 + 1] < h * 0.2) P[ii * 3 + 1] = h * 0.2;
-          }
+            if (!cnt[ii]) continue;
+            var low = P[ii * 3 + 1] <= h * 1.5; // near the bed: tidy the outline, but keep the height
+            for (var ax = 0; ax < 3; ax++) if (!low || ax !== 1) P[ii * 3 + ax] += lam * (sum[ii * 3 + ax] / cnt[ii] - P[ii * 3 + ax]);
+                      }
+        }
+        // Straighten the edges between paint regions: slide each boundary vertex toward its boundary neighbours.
+        var owner = new Map(), bn = new Map();
+        function be(u, v, li) {
+          var key = u < v ? u * nv + v : v * nv + u, o = owner.get(key);
+          if (o === undefined) { owner.set(key, li); return; }
+          if (o !== li) { (bn.get(u) || bn.set(u, []).get(u)).push(v); (bn.get(v) || bn.set(v, []).get(v)).push(u); }
+        }
+        out.forEach(function (idx, li) { for (var e = 0; e < idx.length; e += 3) { be(idx[e], idx[e + 1], li); be(idx[e + 1], idx[e + 2], li); be(idx[e + 2], idx[e], li); } });
+        for (pass = 0; pass < 5; pass++) {
+          var moved = [];
+          bn.forEach(function (ns, v) {
+            if (P[v * 3 + 1] <= h * 1.5 || ns.length !== 2) return;
+            var mx = 0, my = 0, mz = 0;
+            ns.forEach(function (q) { mx += P[q * 3]; my += P[q * 3 + 1]; mz += P[q * 3 + 2]; });
+            moved.push(v, P[v * 3] + 0.35 * (mx / ns.length - P[v * 3]), P[v * 3 + 1] + 0.35 * (my / ns.length - P[v * 3 + 1]), P[v * 3 + 2] + 0.35 * (mz / ns.length - P[v * 3 + 2]));
+          });
+          for (ii = 0; ii < moved.length; ii += 4) { var vv = moved[ii]; P[vv * 3] = moved[ii + 1]; P[vv * 3 + 1] = moved[ii + 2]; P[vv * 3 + 2] = moved[ii + 3]; }
         }
         var self = this;
         out.forEach(function (idx, li) {
@@ -653,3 +674,12 @@
       }
       // A face detail on the sculpted surface: fired from `o` along `dir`.
       function detail(sc, S, name, o, dir, r, color, opt) { var s = S.hit(o, dir); sc.add(name, 'b', dome(s.p, s.n, r, opt), color); return s; }
+      // Points of a band running over an ellipsoid at a fixed x offset, from one side to the other (stripes, ribs, shell bands).
+      function bandOver(c, r, dx, reach, rad, sink) {
+        var out = [], n = 8;
+        for (var i = 0; i <= n; i++) {
+          var u = lerp(-reach, reach, i / n), q = 1 - (dx * dx) / (r[0] * r[0]) - u * u, top = Math.sqrt(Math.max(q, 0.01));
+          out.push([c[0] + dx, c[1] + r[1] * top - (sink || 0), c[2] + r[2] * u, rad * (1 - 0.3 * Math.abs(u))]);
+        }
+        return out;
+      }

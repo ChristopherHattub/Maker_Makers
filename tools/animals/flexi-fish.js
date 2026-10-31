@@ -15,21 +15,34 @@
         }
         var Y0 = 0.85 * rj[0], jd0 = jointDims(rj[0], g), P = [];
         for (k = 1; k <= n; k++) P.push(p.pitch * lerp(1, 0.85, k / n));
-        var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 1.2, bend: p.__bend,
+        var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 1.2, bend: p.__bend, seg: 32,
           hAxis: function (j) { return 0.85 * rj[j]; } });
-        var hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], p.headLen, rj[0] * 1.05, 0.5 * rj[0], 1.25, 0);
-        sc.add('head', 'head', hd.shell, '#fdba74');
-        sc.add('head', 'head', ch.rootBall, '#fdba74');
-        [-1, 1].forEach(function (sd) {
-          sc.add('eyes', 'head', blobShell(hd.point(0.5, sd * deg(62), 0.97), [1, 0, 0], p.eye, p.eye, p.eye, 10, 0), '#1e293b');
+        // sculpted head: rounded forehead, lips and a gill ridge; it stays clear of the first joint
+        var rear = -jd0.e, hL = p.headLen * 1.35, hR = rj[0] * 1.35, Sk = new Sculpt(0.8), hc = '#fb923c', hx = rear - hL * 0.5;
+        Sk.path('head', [[rear - 0.4, Y0, 0, rj[0] * 0.98], [hx, hR * 0.72, 0, hR], [rear - hL * 0.9, hR * 0.5, 0, hR * 0.56]], hc, 3);
+        Sk.ell('lips', [rear - hL * 1.06, hR * 0.5, 0], [hR * 0.2, hR * 0.28, hR * 0.34], '#fda4af', 1);
+        Sk.path(null, [[rear - hL * 1.2, hR * 0.5, -hR * 0.26, 0.5], [rear - hL * 1.2, hR * 0.5, hR * 0.26, 0.5]], null, 0).carve(0.4);
+        [-1, 1].forEach(function (s) {
+          Sk.path('gills', [[rear - hL * 0.2, hR * 0.28, s * hR * 0.84, 0.9], [rear - hL * 0.12, hR * 0.8, s * hR * 0.92, 1.1], [rear - hL * 0.22, hR * 1.3, s * hR * 0.6, 0.9]], '#fed7aa', 1.2);
         });
+        Sk.clipX(rear - 0.1);
+        Sk.reach = 0.72;
+        Sk.run();
+        sc.add('head', 'head', ch.rootBall, hc);
+        [-1, 1].forEach(function (sd) {
+          var e = Sk.hit([hx - hL * 0.1, hR * 0.86, sd * 60], [0, 0, -sd]), R = p.eye * 1.25;
+          sc.add('eyes', 'head', dome(e.p, e.n, R, { angle: 48, seg: 22 }), '#f8fafc');
+          var rise = (R / Math.sin(deg(48))) * (1 - Math.cos(deg(48)));
+          sc.add('pupils', 'head', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, R * 0.55, { sink: 0.5 }), '#1e293b');
+        });
+        Sk.addTo(sc, 'head');
         ch.segs.forEach(function (sg) {
-          sc.add(sg.k % 2 ? 'bodyA' : 'bodyB', 'seg' + sg.k, sg.shell, sg.k % 2 ? '#fdba74' : '#fed7aa');
+          sc.add(sg.k % 2 ? 'bodyA' : 'bodyB', 'seg' + sg.k, sg.shell, sg.k % 2 ? '#fb923c' : '#fef3c7');
         });
         var di = Math.max(2, Math.round(n * 0.4)), ds = ch.segs[di - 1], dr = ds.rad(0.55), dbl = ds.sF - ds.sR, F = p.dorsal;
         if (F > 0) {
           var base = Math.max(ds.jin.Rs * 1.07 + 1, 0.72 * dr), hw = Math.min(dbl * 0.4, 6);
-          sc.add('fins', 'seg' + ds.k, uprightSlab(ds, 0.5, [[-hw, 0], [hw, 0], [hw * 0.9, F * 0.5], [-hw * 0.6, F], [-hw * 1.8, F * 0.55], [-hw * 1.2, F * 0.25]], base, 2.4), '#fb923c');
+          sc.add('fins', 'seg' + ds.k, uprightSlab(ds, 0.5, [[-hw, 0], [hw, 0], [hw * 0.92, F * 0.42], [hw * 0.5, F * 0.8], [-hw * 0.1, F], [-hw * 0.5, F * 0.74], [-hw * 1.05, F * 0.84], [-hw * 1.5, F * 0.5], [-hw * 1.85, F * 0.52], [-hw * 1.5, F * 0.2]], base, 2.4), '#fb923c');
         }
         var si = Math.max(2, Math.round(n * 0.25)), ss = ch.segs[si - 1], sr = ss.rad(0.5), sbl = ss.sF - ss.sR, root = slabRoot(ss, 2.2);
         if (p.sideFin > 0) {
@@ -41,11 +54,11 @@
         var ls = ch.segs[n - 1], F2 = p.tailFin;
         if (F2 > 0) {
           var low = ls.fr.o[1], s0 = ls.sF - 3.2;
-          var poly = [[0, -low], [F2 * 0.95, -low], [F2 * 0.78, -low * 0.3], [F2 * 0.85, F2 * 0.3], [F2 * 0.95, F2 * 0.75], [F2 * 0.45, F2 * 0.55], [0, F2 * 0.3]];
+          var poly = [[0, -low], [F2 * 0.5, -low], [F2 * 1.08, -low], [F2 * 0.86, F2 * 0.08], [F2 * 0.68, F2 * 0.22], [F2 * 0.88, F2 * 0.42], [F2 * 1.1, F2 * 0.8], [F2 * 0.62, F2 * 0.6], [F2 * 0.2, F2 * 0.42], [0, F2 * 0.26]];
           var o = vadd(ls.fr.o, vmul(ls.fr.a, s0)), a = vnorm([ls.fr.a[0], 0, ls.fr.a[2]]), sid = vnorm([ls.fr.u[0], 0, ls.fr.u[2]]);
           sc.add('fins', 'seg' + n, slab(poly, { o: [o[0] - sid[0] * 1.2, ls.fr.o[1], o[2] - sid[2] * 1.2], x: a, y: [0, 1, 0], z: sid }, 2.4, 0.6), '#fb923c');
         }
-        return sc.entries();
+        return finishSculpt(sc);
       }
 
       var FISH_PARAMS = [
@@ -70,8 +83,8 @@
         title: 'Flexi Fish',
         fileName: 'Flexi_Fish',
         defaultColor: '#fdba74',
-        palette: FLEXI_PALETTE,
-        partNames: { head: 'Head', eyes: 'Eyes', bodyA: 'Body beads', bodyB: 'Body beads, alternate', fins: 'Fins' },
+        palette: ANIMAL_PALETTE,
+        partNames: { head: 'Head', lips: 'Lips', gills: 'Gills', eyes: 'Eyes', pupils: 'Pupils', bodyA: 'Body beads', bodyB: 'Body beads, alternate', fins: 'Fins' },
         parameters: FISH_PARAMS,
         presets: makePresets(FISH_PARAMS, [
           ['Default fish', {}],

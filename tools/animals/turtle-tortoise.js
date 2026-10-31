@@ -1,45 +1,62 @@
       // -----------------------------------------------------------------------
-      // Turtle & Tortoise: a chunky shell animal, or a trinket dish with a turtle body
+      // Turtle & Tortoise: a shell with pressed-in plates over a sculpted body, or an open trinket dish in the shell
       // -----------------------------------------------------------------------
       function buildTurtle2(p) {
-        var sc = new Scene(), i, Sr = p.shellL / 2, Sw = p.shellW / 2, Sh = p.shellH, hs = p.headSize, dish = p.dish > 0;
-        var green = '#86efac', skin = '#a3e635', dark = '#4d7c0f';
-        var h = Sh / 1.35, cy = 0.35 * h, N = 3;
-        if (dish) {
-          sc.add('shell', 'sh', cupShell(0, 0, Sr, Sw, Sh * 0.8, 2.4, 2.4, 44), green);
-        } else {
-          bellyBall(sc, 'shell', 'sh', 0, 0, Sr, Sw, h, green, { sq: N, cs: 3, seg: 28, cut: 0.35 });
-          var pl = [[0, 0, 0.3]];
-          for (i = 0; i < 6; i++) pl.push([Math.cos(TAU * i / 6) * 0.58, Math.sin(TAU * i / 6) * 0.58, 0.2]);
-          if (p.plates > 0) pl.forEach(function (q) {
-            var x = q[0] * Sr, z = q[1] * Sw, rho = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x / Sr), N)), 1 / N);
-            var yy = cy + h * rho * Math.sqrt(Math.max(0, 1 - Math.pow(z / (Sw * Math.max(rho, 0.05)), 2)));
-            sc.add('plates', 'sh', blobShell([x, yy - p.plates * 0.35, z], [1, 0, 0], q[2] * Sr * 0.85, q[2] * Sw * 0.85, p.plates, 14, undefined), '#fde047');
+        var sc = new Scene(), S = new Sculpt(1.2 + p.shellL * 0.0045), Sr = p.shellL / 2, Sw = p.shellW / 2, Sh = p.shellH, hs = p.headSize, dish = p.dish > 0;
+        var shell = '#4ade80', rim = '#22c55e', skin = '#bef264', dark = '#65a30d', tort = Sh > 34;
+        // skin parts first, so the shell blends only a little over them
+        var hr = 9.5 * hs, nx = Sr + p.neck, hx = nx + hr * 0.75, hy = Math.max(hr * 0.72, 7);
+        S.path('skin', [[Sr * 0.6, 7, 0, 8], [nx, hy - 0.5, 0, 6.5]], skin, 4);
+        S.ell('head', [hx, hy, 0], [hr * 1.2, hr * 0.8, hr * 0.92], skin, 4);
+        S.ell('head', [hx + hr * 0.9, hy - hr * 0.1, 0], [hr * 0.5, hr * 0.48, hr * 0.56], skin, 2.5);
+        [-1, 1].forEach(function (s) {
+          S.path(null, [[hx + hr * 1.32, hy - hr * 0.22, s * hr * 0.2, 0.6], [hx + hr * 0.6, hy - hr * 0.3, s * hr * 0.76, 0.7]], null, 0).carve(0.6);
+          // front and back legs: tortoise stumps or turtle flippers, all lying on the bed
+          var fx = Sr * 0.58, bx = -Sr * 0.6, sz = s * Sw * 0.86;
+          if (tort) {
+            S.ell('legs', [fx, 6, sz], [9, 7, 9], skin, 3); S.ell('legs', [bx, 6, sz], [9, 7, 9], skin, 3);
+            [fx, bx].forEach(function (lx) { for (var c = -1; c <= 1; c++) S.ell('claws', [lx + 7.5, 2, sz + c * 3.6 + s * 2], [2.6, 2.2, 1.7], '#f1f5f9', 0.8); });
+          } else {
+            S.path('legs', [[fx - 2, 2.6, sz * 0.8, 6.6], [fx + 8, 2.2, sz * 1.15, 5.8], [fx + 13, 1.7, sz * 1.55, 3.4]], skin, 3);
+            S.path('legs', [[bx, 2.6, sz * 0.8, 6.2], [bx - 8, 2, sz * 1.06, 4.8], [bx - 13, 1.6, sz * 1.22, 2.6]], skin, 3);
+          }
+        });
+        S.path('tail', [[-Sr * 0.9, 3, 0, 4], [-Sr - 5 * p.tail, 2.2, 1, 2.8], [-Sr - 11 * p.tail, 1.6, 0, 1]], skin, 2);
+        // shell: rests on the bed, with a raised rim where it meets the body
+        S.ell('shell', [0, Sh * 0.34, 0], [Sr, Sh * 0.72, Sw], shell, 1.4);
+        S.ell('rim', [0, Sh * 0.16, 0], [Sr * 1.04, 3.4, Sw * 1.04], rim, 1);
+        if (p.plates > 0) { // pressed plates: hexagons on a grid, grooved down the edges
+          var cell = Sr * 0.44, depth = p.plates * 0.32;
+          S.relief([-Sr, Sh * 0.24, -Sw], [Sr, Sh * 1.12, Sw], function (x, y, z) {
+            var q = (x / cell) * 0.57735 + (z / cell) * 0.33333, r2 = (z / cell) * 0.66667, s3 = -q - r2;
+            var rq = Math.round(q), rr = Math.round(r2), rs = Math.round(s3), dq = Math.abs(rq - q), dr = Math.abs(rr - r2), ds = Math.abs(rs - s3);
+            if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs; else rs = -rq - rr;
+            var e = Math.max(Math.abs(q - rq), Math.abs(r2 - rr), Math.abs(s3 - rs)); // 0 at centre, 0.67 at corners
+            return depth * smooth((e - 0.42) / 0.14);
           });
         }
-        // head, neck, legs, tail
-        var hr = 8.5 * hs, hx = Sr + hr * 0.5 + p.neck;
-        bellyBall(sc, 'neck', 'n', Sr + p.neck * 0.5 - 1, 0, 6 + p.neck * 0.6, 6, 7.5, skin);
-        bellyBall(sc, 'head', 'n', hx, 0, hr * 1.1, hr * 0.95, hr * 0.9, skin);
-        for (i = -1; i <= 1; i += 2) {
-          eyeAt(sc, 'face', 'n', [hx + hr * 0.75, hr * 0.95 + 0.4, i * hr * 0.5], 1.7, EYE);
-          bellyBall(sc, 'legs', 'sh', Sr * 0.5, i * (Sw * 0.78), 8, 5.5, 5, skin);
-          bellyBall(sc, 'legs', 'sh', -Sr * 0.55, i * (Sw * 0.7), 8, 5.5, 5, skin);
-        }
-        tubeAdd(sc, 'tail', 'sh', [[-Sr + 3, 3, 0], [-Sr - 5, 3, 1], [-Sr - 10 * p.tail, 2.5, 0]], function (t) { return 3.4 - 1.7 * t; }, skin, { ground: true, per: 6 });
+        if (dish) S.ell(null, [0, Sh * 0.34 + Sh * 0.72 * 1.02, 0], [Sr * 0.78, Sh * 0.72, Sw * 0.78], null, 0).carve(2.4);
+        S.reach = 0.72;
+        S.run();
+        [-1, 1].forEach(function (s) {
+          var e = S.hit([hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0]), R = 2.5 * hs;
+          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#1e293b');
+          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.36), [0, R * 0.32, 0])), e.n, R * 0.25, { sink: 0.4 }), '#1e293b');
+        });
         void dark;
-        return finish(sc);
+        S.addTo(sc);
+        return finishSculpt(sc);
       }
 
       var TURTLE2_PARAMS = [
-        { group: 'Shell', key: 'dish', label: 'Open shell (trinket dish)', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Solid shell', 'Open dish'] },
-        { group: 'Shell', key: 'shellL', label: 'Shell length', unit: ' mm', min: 50, max: 100, step: 1, value: 72 },
+        { group: 'Shell', key: 'dish', label: 'Shell', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Solid shell', 'Open dish'] },
+        { group: 'Shell', key: 'shellL', label: 'Shell length', unit: ' mm', min: 50, max: 100, step: 1, value: 76 },
         { group: 'Shell', key: 'shellW', label: 'Shell width', unit: ' mm', min: 44, max: 90, step: 1, value: 62 },
-        { group: 'Shell', key: 'shellH', label: 'Shell height (tortoise ↔ sea turtle)', unit: ' mm', min: 16, max: 46, step: 1, value: 30 },
-        { group: 'Shell', key: 'plates', label: 'Shell plate height (0 = none)', unit: ' mm', min: 0, max: 5, step: 0.5, value: 2.5 },
-        { group: 'Head & tail', key: 'headSize', label: 'Head size', unit: '×', min: 0.8, max: 1.5, step: 0.05, value: 1.1 },
-        { group: 'Head & tail', key: 'neck', label: 'Neck reach', unit: ' mm', min: 0, max: 10, step: 1, value: 4 },
-        { group: 'Head & tail', key: 'tail', label: 'Tail length', unit: '×', min: 0.5, max: 2, step: 0.1, value: 1 }
+        { group: 'Shell', key: 'shellH', label: 'Shell height (flat turtle ↔ tall tortoise)', unit: ' mm', min: 18, max: 48, step: 1, value: 30 },
+        { group: 'Shell', key: 'plates', label: 'Shell plate depth (0 = smooth)', unit: ' mm', min: 0, max: 5, step: 0.5, value: 3 },
+        { group: 'Head & tail', key: 'headSize', label: 'Head size', unit: '×', min: 0.85, max: 1.4, step: 0.05, value: 1.05 },
+        { group: 'Head & tail', key: 'neck', label: 'Neck reach', unit: ' mm', min: 0, max: 12, step: 1, value: 5 },
+        { group: 'Head & tail', key: 'tail', label: 'Tail length', unit: '×', min: 0.5, max: 1.8, step: 0.1, value: 1 }
       ];
 
       window.MM_GENERATOR = {
@@ -47,17 +64,17 @@
         category: 'ANIMALS // REPTILES',
         title: 'Turtle & Tortoise',
         fileName: 'Turtle',
-        defaultColor: '#86efac',
+        defaultColor: '#4ade80',
         palette: ANIMAL_PALETTE,
-        partNames: { shell: 'Shell', plates: 'Shell plates', neck: 'Neck', head: 'Head', face: 'Eyes', legs: 'Legs', tail: 'Tail' },
+        partNames: { shell: 'Shell', rim: 'Shell rim', skin: 'Neck', head: 'Head', eyes: 'Eyes', legs: 'Legs', claws: 'Claws', tail: 'Tail' },
         parameters: TURTLE2_PARAMS,
         presets: makePresets(TURTLE2_PARAMS, [
           ['Default turtle', {}],
-          ['Tall tortoise', { shellH: 44, shellL: 62, shellW: 56, plates: 3.5, neck: 2 }],
-          ['Flat sea turtle', { shellH: 18, shellL: 88, shellW: 70, plates: 1.5, headSize: 1 }],
-          ['Baby turtle', { shellL: 56, shellW: 50, shellH: 26, headSize: 1.4, neck: 5 }],
-          ['Trinket dish', { dish: 1, shellH: 34 }],
-          ['Big trinket dish', { dish: 1, shellL: 92, shellW: 82, shellH: 36 }]
+          ['Tall tortoise', { shellH: 46, shellL: 68, shellW: 58, plates: 4, neck: 3 }],
+          ['Flat sea turtle', { shellH: 20, shellL: 88, shellW: 70, plates: 2 }],
+          ['Baby turtle', { shellL: 56, shellW: 50, shellH: 26, headSize: 1.35, neck: 6 }],
+          ['Trinket dish', { dish: 1, shellH: 36, plates: 3 }],
+          ['Big trinket dish', { dish: 1, shellL: 92, shellW: 82, shellH: 40, plates: 3 }]
         ]),
         build: buildTurtle2
       };

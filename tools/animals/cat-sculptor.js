@@ -18,10 +18,10 @@
           S.ell('body', [-4, 16, 0], [28 * k, 20, 17 * k], fur, 5);
           [-1, 1].forEach(function (s) { S.ell('paws', [22, 3, s * 7.5 * k], [7, 3.5, 4.6], cream, 3); });
           hx = 24; hy = 30;
-        } else { // curled up
-          S.ell('body', [-5, 13, 0], [27, 16 * k, 22 * k], fur, 5);
-          S.ell('paws', [18, 3, 15 * k], [8, 3.6, 5], cream, 3);
-          hx = 18; hy = 15;
+        } else { // curled up, chin on the bed beside the tail
+          S.ell('body', [-6, 13, -3], [27, 17 * k, 21 * k], fur, 5);
+          S.ell('paws', [17, 3, 17 * k], [8, 3.6, 5], cream, 3);
+          hx = 21; hy = 11.5 * hs;
         }
         // head: wide cheeks, a small muzzle and a chin
         S.ell('head', [hx, hy, 0], [hr * 0.95, hr * 0.86, hr * 1.1], fur, pose === 0 ? 6 : 5);
@@ -32,21 +32,20 @@
           var E = 13 * p.ear * hs, ez = s * hr * 0.58, ey = hy + hr * 0.42, W = 6.4 * p.ear * hs, side = s * 0.42;
           var poly = [[-W, ey], [W, ey], [W * side + E * 0.22 * s, ey + E], [W * side - E * 0.06 * s, ey + E]];
           S.plate('ears', poly, [hx - hr * 0.1, 0, ez], [0, 0, 1], 3.4, fur, 2.5, 1);
-          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.9 + E * 0.15 * s, ey + E * 0.8]], [hx + hr * 0.1 - 0.4, 0, ez], [0, 0, 1], 1.6, pink, 0.4, 0.5);
+          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.5, 0, ez], [0, 0, 1], 2, pink, 0.4, 0.6);
         });
         S.ell('muzzle', [hx + hr * 0.72, hy - hr * 0.5, 0], [hr * 0.24, hr * 0.17, hr * 0.26], cream, 2);
         // back of a tabby: stripes that are slightly proud, painted their own colour
-        var st = Math.round(p.stripes);
+        var st = Math.round(p.stripes), bc = pose === 0 ? [-7, 15, 0] : pose === 1 ? [-4, 16, 0] : [-6, 13, -3], br = pose === 0 ? [21 * k, 19, 18 * k] : pose === 1 ? [28 * k, 20, 17 * k] : [27, 17 * k, 21 * k];
         for (i = 0; i < st; i++) {
-          var u = st > 1 ? i / (st - 1) : 0.5, sx = pose === 0 ? lerp(-22, -6, u) : lerp(-26, 8, u), sy = pose === 0 ? lerp(26, 44, u) : 28;
-          if (pose === 0) S.path('stripes', [[sx + 7, sy - 8, -12 * k, 1.1], [sx + 2, sy - 1, -7 * k, 1.3], [sx - 1, sy + 2, 0, 1.4], [sx + 2, sy - 1, 7 * k, 1.3], [sx + 7, sy - 8, 12 * k, 1.1]], dark, 1.2);
-          else S.path('stripes', [[sx, 15, -15 * k, 1.1], [sx, 28 * (pose === 2 ? 0.95 : 1.2), 0, 1.4], [sx, 15, 15 * k, 1.1]], dark, 1.2);
+          var dx = st > 1 ? lerp(-br[0] * 0.62, pose === 0 ? 2 : br[0] * 0.3, i / (st - 1)) : -br[0] * 0.3;
+          S.path('stripes', bandOver(bc, br, dx, 0.72, 1.9, 0.5), dark, 1, 2);
         }
         // tail on the bed, curling round the feet
         var tl = p.tail, tc;
         if (pose === 0) tc = [[-24, 3.2, 3, 5.4], [-30, 3, 13, 5], [-25, 2.9, 25 * tl, 4.6], [-9, 2.7, 30 * tl, 4.2], [8, 2.5, 28 * tl, 3.9], [19, 2.4, 22 * tl, 3.6]];
         else if (pose === 1) tc = [[-28, 3.2, 5, 5], [-32, 3, 16, 4.6], [-20, 2.8, 24 * tl, 4.2], [-2, 2.6, 24 * tl, 3.8], [13, 2.4, 19 * tl, 3.5]];
-        else tc = [[-27, 3.2, -8, 5], [-23, 3, -26 * tl, 4.6], [-5, 2.8, -33 * tl, 4.2], [14, 2.6, -28 * tl, 3.8], [26, 2.4, -15 * tl, 3.5]];
+        else tc = [[-30, 3.2, -8, 5], [-24, 3, -27 * tl, 4.6], [-6, 2.8, -33 * tl, 4.2], [14, 2.6, -27 * tl, 3.8], [26, 2.4, -13 * tl, 3.5]];
         S.path('tail', tc, fur, 2.5);
         if (Math.round(p.collar) === 1 && pose === 0) S.path('collar', [[0, 47, 0, 0]].slice(0, 0).concat(ringPts(hx - 2, hy - hr * 0.72, 0, 9.5 * k, 11.5 * k, 1.9)), '#fb7185', 0.8, 2);
         S.run();

@@ -10,22 +10,37 @@
         }
         var Y0 = 0.85 * rj[0], jd0 = jointDims(rj[0], g), P = [];
         for (k = 1; k <= n; k++) P.push(p.pitch * lerp(1, 0.85, k / n));
-        var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 1.6, bend: p.__bend,
+        var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 1.6, bend: p.__bend, seg: 32,
           hAxis: function (j) { return 0.85 * rj[j]; } });
-        var hs = p.headSize, hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], 17 * hs, 1.25 * rj[0] * hs, 0.7 * rj[0] * hs, 1, 0);
-        sc.add('head', 'head', hd.shell, '#86efac');
-        sc.add('head', 'head', ch.rootBall, '#86efac');
+        // sculpted wedge head with brows, jaw and nostrils; it stays clear of the first joint
+        var hs = p.headSize, hR = rj[0] * 1.2 * hs, hL = 24 * hs, rear = -jd0.e, Sk = new Sculpt(0.75), hc = '#4ade80', neckR = rj[0];
+        var hx = rear - hL * 0.5;
+        Sk.path('head', [[rear - 0.4, neckR * 0.72, 0, neckR * 0.95], [hx, hR * 0.56, 0, hR * 0.9], [rear - hL * 0.9, hR * 0.32, 0, hR * 0.46]], hc, 3);
+        [-1, 1].forEach(function (s) {
+          Sk.ell('head', [hx + 2, hR * 0.56, s * hR * 0.72], [hL * 0.34, hR * 0.5, hR * 0.46], hc, 2.5);
+          Sk.path('head', [[hx + hL * 0.25, hR * 1.14, s * hR * 0.56, 1.3], [hx - hL * 0.18, hR * 1.02, s * hR * 0.5, 1]], hc, 1.2);
+          Sk.ell('head', [rear - hL * 0.88, hR * 0.56, s * hR * 0.2], [1.3, 1.1, 1.1], hc, 0.8);
+          Sk.path(null, [[rear - hL * 1.02, hR * 0.22, s * hR * 0.22, 0.55], [hx + 2, hR * 0.28, s * hR * 1.1, 0.6]], null, 0).carve(0.5);
+        });
+        Sk.clipX(rear - 0.1);
+        Sk.reach = 0.72;
+        Sk.run();
+        sc.add('head', 'head', ch.rootBall, hc);
         [-1, 1].forEach(function (sd) {
-          sc.add('eyes', 'head', blobShell(hd.point(0.5, sd * deg(58), 0.96), [1, 0, 0], 2.4, 2.4, 2.4, 10, 0), '#334155');
+          var e = Sk.hit([hx - hL * 0.14, hR * 0.86, sd * 60], [0, 0, -sd]);
+          sc.add('eyes', 'head', dome(e.p, e.n, 2.6 * hs, { angle: 46, seg: 18 }), '#fde047');
+          sc.add('pupils', 'head', dome(vadd(e.p, vmul(e.n, 0.75 * hs)), e.n, 1.1 * hs, { sink: 0.5 }), '#1e293b');
         });
-        if (p.tongue > 0) { // forked tongue lying on the bed in front of the nose
-          var T = p.tongue, nose = hd.point(0, 0, 0), w = 1.1;
-          sc.add('tongue', 'head', flatSlab([[-2, -w], [T * 0.55, -w], [T, -w * 2.8], [T * 0.62, -w * 0.5], [T * 0.62, w * 0.5], [T, w * 2.8], [T * 0.55, w], [-2, w]], [nose[0] - 1, 0, nose[2]], heading([-1, 0, 0]) + Math.PI, 1.6, 0.4), '#fda4af');
+        var nose = Sk.hit([rear - hL - 30, 2, 0], [1, 0, 0]);
+        if (p.tongue > 0) {
+          var T = p.tongue, w = 1.1;
+          sc.add('tongue', 'head', flatSlab([[-2, -w], [T * 0.55, -w], [T, -w * 2.8], [T * 0.62, -w * 0.5], [T * 0.62, w * 0.5], [T, w * 2.8], [T * 0.55, w], [-2, w]], [nose.p[0] + 0.5, 0, 0], Math.PI, 1.6, 0.4), '#fb7185');
         }
+        Sk.addTo(sc, 'head');
         ch.segs.forEach(function (sg) {
-          sc.add(sg.k % 2 ? 'bodyA' : 'bodyB', 'seg' + sg.k, sg.shell, sg.k % 2 ? '#86efac' : '#fde047');
+          sc.add(sg.k % 2 ? 'bodyA' : 'bodyB', 'seg' + sg.k, sg.shell, sg.k % 2 ? '#4ade80' : '#fde047');
         });
-        return sc.entries();
+        return finishSculpt(sc);
       }
 
       var SNAKE_PARAMS = [
@@ -46,9 +61,9 @@
         category: 'ANIMALS // FLEXI',
         title: 'Articulated Snake',
         fileName: 'Flexi_Snake',
-        defaultColor: '#86efac',
-        palette: FLEXI_PALETTE,
-        partNames: { head: 'Head', eyes: 'Eyes', tongue: 'Tongue', bodyA: 'Body beads', bodyB: 'Body beads, alternate' },
+        defaultColor: '#4ade80',
+        palette: ANIMAL_PALETTE,
+        partNames: { head: 'Head', eyes: 'Eyes', pupils: 'Pupils', tongue: 'Tongue', bodyA: 'Body beads', bodyB: 'Body beads, alternate' },
         parameters: SNAKE_PARAMS,
         presets: makePresets(SNAKE_PARAMS, [
           ['Default snake', {}],

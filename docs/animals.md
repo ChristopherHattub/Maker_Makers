@@ -12,6 +12,10 @@ Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculp
 | `tools/animals/make-thumbs.py` | Writes the fifteen `assets/thumbnails/*.svg`. |
 | `tools/animals/pc.mjs` | Print check with `--set key=value`, `--preset label` and `--only entry,entry`, to find which part causes a problem. |
 
+## Sculpted animals
+
+Dino, Dragon, Cat, Dog, Turtle and Owl (and the Snake and Fish heads) use `Sculpt` in the kit. Forms (`ell`, `path`, `plate`) melt into each other with a smooth blend; `carve` cuts grooves, `relief` presses patterns and `paint` recolours a region without changing its shape. `run()` samples them on a grid and works up from the bed, trimming anything not within 45 degrees of the solid below, so a form with nothing under it disappears rather than overhanging. `addTo()` meshes one closed surface, split into paintable entries with a shared `smoothGroup`. Eyes and noses are `dome`s placed afterward with `hit()`. These models are 45,000 to 90,000 triangles and take roughly 0.3 to 1.4 seconds to rebuild in Node, so sliders on them respond more slowly than on other generators. Features thinner than about two grid cells break up.
+
 ## Staying support-free
 
 The kit's newer shapes (`loft`, `pod`) are built from the bed upward and cannot grow outward faster than about 45 degrees (`GROW`). A form that starts on the bed or inside a shape below it always prints, at any slider value. `pod` takes an `anchor`, a point inside the shape underneath, and corbels out from it, which is how heads project over chests. The anchor must be inside the host, or its base shows as a shelf.
