@@ -1,41 +1,52 @@
       // -----------------------------------------------------------------------
       // Cat Sculptor: a sitting, loafing or curled-up cat sculpted as one seamless surface
       // -----------------------------------------------------------------------
-      function buildCat(p) {
-        var sc = new Scene(), S = new Sculpt(1.3), k = p.chunk, hs = p.headSize, pose = Math.round(p.pose), fur = '#fdba74', cream = '#fff1dc', dark = '#c2703d', pink = '#fda4af';
+      function buildCat(p, api) {
+        var sc = new Scene(), S = new Sculpt(1.3).useEdits(api, p.size / 100), k = p.chunk, hs = p.headSize, pose = Math.round(p.pose), fur = '#fdba74', cream = '#fff1dc', dark = '#c2703d', pink = '#fda4af';
         var hx, hy, hr = 13.5 * hs, sd, i;
         if (pose === 0) { // sitting
+          S.piece('torso');
           S.ell('body', [-7, 15, 0], [21 * k, 19, 18 * k], fur, 5);
           S.ell('body', [3, 35, 0], [13 * k, 20, 12.5 * k], fur, 8);
           [-1, 1].forEach(function (s) {
+            S.piece(s < 0 ? 'hindL' : 'hindR');
             S.ell('body', [-10, 13, s * 13 * k], [15, 13, 7.5], fur, 3);                        // haunch
             S.ell('paws', [7, 3.2, s * 15 * k], [10, 3.6, 5], cream, 2);                         // hind foot
+            S.piece(s < 0 ? 'frontL' : 'frontR');
             S.path('body', [[9, 34, s * 6 * k, 5.6], [13, 18, s * 6.2 * k, 4.6], [14, 5, s * 6.2 * k, 4]], fur, 2.5);
             S.ell('paws', [17, 3, s * 6.2 * k], [6.5, 3.4, 4.6], cream, 2);
           });
           hx = 7; hy = 58;
         } else if (pose === 1) { // loaf
+          S.piece('torso');
           S.ell('body', [-4, 16, 0], [28 * k, 20, 17 * k], fur, 5);
-          [-1, 1].forEach(function (s) { S.ell('paws', [22, 3, s * 7.5 * k], [7, 3.5, 4.6], cream, 3); });
+          [-1, 1].forEach(function (s) { S.piece(s < 0 ? 'frontL' : 'frontR'); S.ell('paws', [22, 3, s * 7.5 * k], [7, 3.5, 4.6], cream, 3); });
           hx = 24; hy = 30;
         } else { // curled up, chin on the bed beside the tail
+          S.piece('torso');
           S.ell('body', [-6, 13, -3], [27, 17 * k, 21 * k], fur, 5);
+          S.piece('frontR');
           S.ell('paws', [17, 3, 17 * k], [8, 3.6, 5], cream, 3);
           hx = 21; hy = 11.5 * hs;
         }
         // head: wide cheeks, a small muzzle and a chin
+        S.piece('head');
         S.ell('head', [hx, hy, 0], [hr * 0.95, hr * 0.86, hr * 1.1], fur, pose === 0 ? 6 : 5);
         [-1, 1].forEach(function (s) {
+          S.piece('head');
           S.ell('muzzle', [hx + hr * 0.78, hy - hr * 0.26, s * hr * 0.27], [hr * 0.3, hr * 0.26, hr * 0.33], cream, 2);
           S.ell('head', [hx + hr * 0.1, hy - hr * 0.2, s * hr * 0.86], [hr * 0.55, hr * 0.48, hr * 0.42], fur, 3); // cheek
           // ear: a rounded triangle facing forward, with a pink inside
+          S.piece(s < 0 ? 'earL' : 'earR', 'head');
           var E = 13 * p.ear * hs, ez = s * hr * 0.58, ey = hy + hr * 0.42, W = 6.4 * p.ear * hs, side = s * 0.42;
           var poly = [[-W, ey], [W, ey], [W * side + E * 0.22 * s, ey + E], [W * side - E * 0.06 * s, ey + E]];
           S.plate('ears', poly, [hx - hr * 0.1, 0, ez], [0, 0, 1], 3.4, fur, 2.5, 1);
           S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.2, 0, ez], [0, 0, 1], 2.8, pink, 0.5, 0.8);
         });
+        S.piece('head');
         S.ell('muzzle', [hx + hr * 0.72, hy - hr * 0.5, 0], [hr * 0.24, hr * 0.17, hr * 0.26], cream, 2);
         // back of a tabby: stripes that are slightly proud, painted their own colour
+        S.piece('stripes');
         var st = Math.round(p.stripes), bc = pose === 0 ? [-7, 15, 0] : pose === 1 ? [-4, 16, 0] : [-6, 13, -3], br = pose === 0 ? [21 * k, 19, 18 * k] : pose === 1 ? [28 * k, 20, 17 * k] : [27, 17 * k, 21 * k];
         for (i = 0; i < st; i++) {
           var dx = st > 1 ? lerp(-br[0] * 0.62, pose === 0 ? 2 : br[0] * 0.3, i / (st - 1)) : -br[0] * 0.3;
@@ -46,17 +57,25 @@
         if (pose === 0) tc = [[-24, 3.2, 3, 5.4], [-30, 3, 13, 5], [-25, 2.9, 25 * tl, 4.6], [-9, 2.7, 30 * tl, 4.2], [8, 2.5, 28 * tl, 3.9], [19, 2.4, 22 * tl, 3.6]];
         else if (pose === 1) tc = [[-28, 3.2, 5, 5], [-32, 3, 16, 4.6], [-20, 2.8, 24 * tl, 4.2], [-2, 2.6, 24 * tl, 3.8], [13, 2.4, 19 * tl, 3.5]];
         else tc = [[-30, 3.2, -8, 5], [-24, 3, -27 * tl, 4.6], [-6, 2.8, -33 * tl, 4.2], [14, 2.6, -27 * tl, 3.8], [26, 2.4, -13 * tl, 3.5]];
+        S.piece('tail');
         S.path('tail', tc, fur, 2.5);
+        S.piece('collar');
         if (Math.round(p.collar) === 1 && pose === 0) S.path('collar', [[0, 47, 0, 0]].slice(0, 0).concat(ringPts(hx - 2, hy - hr * 0.72, 0, 9.5 * k, 11.5 * k, 1.9)), '#fb7185', 0.8, 2);
+        S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head';
         S.run();
-        // mouth, nose and eyes go on the finished surface
-        var f = [hx + 60, hy - hr * 0.1, 0], dirIn = [-1, 0, 0];
-        var nose = S.hit([hx + 60, hy - hr * 0.1, 0], dirIn);
-        sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0], nose.n[1] + 0.15, 0]), 2.1 * hs, { angle: 55 }), pink);
+        // mouth, nose and eyes go on the finished surface, and follow the head when it is edited
+        if (!S.deleted('nose')) {
+          var nO = S.xf('nose', [hx + 60, hy - hr * 0.1, 0]), nose = S.hit(nO, [-1, 0, 0]), nk = S.scaleOf('nose');
+          sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0], nose.n[1] + 0.15, 0]), 2.1 * hs * nk, { angle: 55 }), pink);
+          S.addon('nose', nose.p, 2.1 * hs * nk);
+        }
         [-1, 1].forEach(function (s) {
-          var yE = hy + hr * 0.2, zE = s * hr * 0.46, e = S.hit([hx + 60, yE, zE], dirIn), R = p.eye * hs;
+          var id = s < 0 ? 'eyeL' : 'eyeR';
+          if (S.deleted(id)) return;
+          var yE = hy + hr * 0.2, zE = s * hr * 0.46, eO = S.xf(id, [hx + 60, yE, zE]), e = S.hit(eO, [-1, 0, 0]), R = p.eye * hs * S.scaleOf(id);
+          S.addon(id, e.p, R);
           if (Math.round(p.closed) === 1 || pose === 2) { // sleeping: a soft closed-eye line
-            sc.add('eyes', 'b', sweep([[e.p[0] - 0.6, yE + 0.8, zE - R, 0.75], [e.p[0] - 0.1, yE - 0.3, zE, 0.75], [e.p[0] - 0.6, yE + 0.8, zE + R, 0.75]], { seg: 8, per: 4, floor: null }), '#334155');
+            sc.add('eyes', 'b', sweep([[e.p[0] - 0.6, e.p[1] + 0.8, e.p[2] - R, 0.75], [e.p[0] - 0.1, e.p[1] - 0.3, e.p[2], 0.75], [e.p[0] - 0.6, e.p[1] + 0.8, e.p[2] + R, 0.75]], { seg: 8, per: 4, floor: null }), '#334155');
           } else {
             sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 42 }), '#bef264');
             var pu = vadd(e.p, vmul(e.n, R * 0.28));
@@ -64,7 +83,7 @@
           }
         });
         S.addTo(sc);
-        return finishSculpt(sc, p.size / 100);
+        return finishSculpt(sc, p.size / 100, S);
       }
       function ringPts(x, y, z, rx, rz, r) {
         var out = [];
@@ -100,6 +119,12 @@
           ['Sleeping curl', { pose: 2, chunk: 0.95, closed: 1, stripes: 3 }],
           ['Kitten', { size: 70, headSize: 1.25, ear: 1.3, eye: 4.8, stripes: 2 }],
           ['Plain sitter', { stripes: 0, ear: 1.2, eye: 4.2 }]
+        ]),
+        sculpt: sculptModule([
+          { id: 'head', label: 'Head' }, { id: 'torso', label: 'Body' }, { id: 'earL', label: 'Left ear' }, { id: 'earR', label: 'Right ear' },
+          { id: 'eyeL', label: 'Left eye' }, { id: 'eyeR', label: 'Right eye' }, { id: 'nose', label: 'Nose' }, { id: 'tail', label: 'Tail' },
+          { id: 'frontL', label: 'Left front leg' }, { id: 'frontR', label: 'Right front leg' }, { id: 'hindL', label: 'Left hind leg' }, { id: 'hindR', label: 'Right hind leg' },
+          { id: 'collar', label: 'Collar' }, { id: 'stripes', label: 'Stripes' }
         ]),
         build: buildCat
       };

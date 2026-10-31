@@ -413,6 +413,8 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 
 .mm-overlay--tl { top: 0.75rem; left: 0.75rem; max-width: calc(100% - 1.5rem); }
 .mm-overlay--tr { top: 0.75rem; right: 0.75rem; color: var(--bp-cyan); }
+.mm-sculpt-flag { top: 3rem; left: 50%; transform: translateX(-50%); white-space: nowrap; max-width: calc(100% - 1.5rem); border-color: #fbbf24; color: #fbbf24; text-transform: none; }
+.mm-sculpt-flag[hidden] { display: none; }
 .mm-overlay--bl { bottom: 0.75rem; left: 0.75rem; }
 
 .mm-view-buttons {
