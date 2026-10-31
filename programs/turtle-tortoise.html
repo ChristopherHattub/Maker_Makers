@@ -870,9 +870,152 @@
       // Forms melt into each other with a smooth blend, instead of intersecting at hard seams. A final pass works up from
       // the bed, layer by layer, and removes anything that is not reachable within 45 degrees of the solid below, so the
       // surface cannot float or overhang at any slider value. Forms need support underneath, or they get trimmed away.
-      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
+      function Sculpt(cell) { this.addons = []; this.parents = {}; this.outScale = 1; this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
       Sculpt.prototype._name = function (name, color) { if (name === null || name === undefined) return; if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
-      Sculpt.prototype._op = function (o) { this.ops.push(o); return this; };
+      Sculpt.prototype._op = function (o) { o.piece = this.curPiece; this.ops.push(o); return this; };
+      // ---- Sculpt tab: named pieces the user can move, stretch and delete (see the Sculpt tab in shared/generator-core.js) ----
+      // Later forms belong to this piece. parent: a piece whose edits this one also follows.
+      Sculpt.prototype.piece = function (id, parent) { this.curPiece = id; (this.parents = this.parents || {}); if (parent) this.parents[id] = parent; return this; };
+      // Reads the editor's state. scale is what finishSculpt scales the model by.
+      Sculpt.prototype.useEdits = function (api, scale) {
+        this.st = api && api.sculpt; this.outScale = scale || 1; this.addons = []; this.parents = this.parents || {};
+        if (this.st && this.st.draft) this.h *= 1.7;
+        return this;
+      };
+      Sculpt.prototype._edit = function (id) { return (this.st && this.st.edits && this.st.edits[id]) || null; };
+      Sculpt.prototype._chain = function (id) { var out = [], g = 0; while (id && g++ < 6) { var e = this._edit(id); if (e) out.push({ id: id, e: e }); id = this.parents && this.parents[id]; } return out; };
+      Sculpt.prototype.deleted = function (id) { return this._chain(id).some(function (c) { return c.e.del; }); };
+      // Maps a point of the model as first built to where the edits put it (own edit first, then each parent's).
+      Sculpt.prototype.xf = function (id, p) {
+        var self = this, q = p.slice();
+        this._chain(id).forEach(function (c) {
+          var C = self.pivots[c.id] || [0, 0, 0], s = c.e.s || [1, 1, 1], m = c.e.m || [0, 0, 0];
+          for (var i = 0; i < 3; i++) q[i] = C[i] + (q[i] - C[i]) * s[i] + m[i] / self.outScale;
+        });
+        return q;
+      };
+      // Where a detail placed by hand on the surface goes after its own edit: moved by m, with its own size factor.
+      Sculpt.prototype.ownMove = function (id, p) { var e = this._edit(id), m = e && e.m ? e.m : [0, 0, 0]; return [p[0] + m[0] / this.outScale, p[1] + m[1] / this.outScale, p[2] + m[2] / this.outScale]; };
+      Sculpt.prototype.ownScale = function (id) { var e = this._edit(id), s = e && e.s ? e.s : [1, 1, 1]; return [s[0], s[1], s[2]]; };
+      Sculpt.prototype.scaleOf = function (id) { var k = 1; this._chain(id).forEach(function (c) { var s = c.e.s || [1, 1, 1]; k *= (s[0] + s[1] + s[2]) / 3; }); return k; };
+      Sculpt.prototype._applyEdits = function () {
+        var self = this, box = {};
+        this.pivots = {}; this.boxes = {};
+        this.ops.forEach(function (o) {
+          if (!o.piece || o.relief) return;
+          var b = box[o.piece] = box[o.piece] || { lo: [1e9, 1e9, 1e9], hi: [-1e9, -1e9, -1e9] };
+          for (var c = 0; c < 3; c++) { b.lo[c] = Math.min(b.lo[c], o.lo[c]); b.hi[c] = Math.max(b.hi[c], o.hi[c]); }
+        });
+        Object.keys(box).forEach(function (id) { var b = box[id]; self.pivots[id] = [(b.lo[0] + b.hi[0]) / 2, (b.lo[1] + b.hi[1]) / 2, (b.lo[2] + b.hi[2]) / 2]; self.boxes[id] = b; });
+        this.pieceIds = Object.keys(box);
+        this.ops = this.ops.filter(function (o) { return !(o.piece && self.deleted(o.piece)); });
+        this.ops.forEach(function (o) {
+          if (!o.piece) return;
+          var ch = self._chain(o.piece);
+          if (!ch.length) return;
+          var base = o.d, kmin = 1;
+          ch.forEach(function (c) { var s = c.e.s || [1, 1, 1]; kmin *= Math.min(s[0], s[1], s[2]); });
+          var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+          [0, 1].forEach(function (a) { [0, 1].forEach(function (b) { [0, 1].forEach(function (c) {
+            var q = self.xf(o.piece, [a ? o.hi[0] : o.lo[0], b ? o.hi[1] : o.lo[1], c ? o.hi[2] : o.lo[2]]);
+            for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); }
+          }); }); });
+          o.lo = lo; o.hi = hi; o.late = true;
+          o.d = function (x, y, z) {
+            var q = [x, y, z];
+            ch.slice().reverse().forEach(function (c) { // undo the parents first, then this piece
+              var C = self.pivots[c.id] || [0, 0, 0], s = c.e.s || [1, 1, 1], m = c.e.m || [0, 0, 0];
+              for (var i = 0; i < 3; i++) q[i] = C[i] + (q[i] - C[i] - m[i] / self.outScale) / s[i];
+            });
+            return base(q[0], q[1], q[2]) * kmin;
+          };
+        });
+      };
+      // A detail added after run() (eyes, nose), so it can be picked as a piece too.
+      Sculpt.prototype.addon = function (id, p, r, box) { this.addons.push({ id: id, p: p, r: r, box: box }); };
+      // A detail placed on the finished surface by a ray: returns its hit (with k, its size factor), or null if deleted. Call after run().
+      Sculpt.prototype.face = function (id, o, dir, parent) {
+        if (parent && parent !== id) this.parents[id] = parent;
+        if (this.deleted(id)) return null;
+        this.pivots[id] = this.pivots[id] || o;
+        var h = this.hit(this.xf(id, o), dir);
+        h.k = this.scaleOf(id);
+        return h;
+      };
+      // A small detail sitting on another one (a pupil on an eye): moved only by its own edit. Returns { p, k }, or null if deleted.
+      Sculpt.prototype.sub = function (id, parent, p, r) {
+        if (parent && parent !== id) this.parents[id] = parent;
+        if (this.deleted(id)) return null;
+        var s = this.ownScale(id), k = (s[0] + s[1] + s[2]) / 3, q = this.ownMove(id, p);
+        this.addon(id, q, r * k);
+        return { p: q, k: k };
+      };
+      // A rigid closed shell (a fin, a bead, a plinth) as a piece: moved and stretched as a whole. Call after run().
+      Sculpt.prototype.shell = function (sc, id, entry, body, tris, color, parent) {
+        if (parent && parent !== id) this.parents[id] = parent;
+        if (this.deleted(id)) return;
+        var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9], i, c;
+        for (i = 0; i < tris.length; i += 3) for (c = 0; c < 3; c++) { if (tris[i + c] < lo[c]) lo[c] = tris[i + c]; if (tris[i + c] > hi[c]) hi[c] = tris[i + c]; }
+        this.pivots[id] = this.pivots[id] || [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+        if (this._chain(id).length) {
+          lo = [1e9, 1e9, 1e9]; hi = [-1e9, -1e9, -1e9];
+          for (i = 0; i < tris.length; i += 3) {
+            var q = this.xf(id, [tris[i], tris[i + 1], tris[i + 2]]);
+            for (c = 0; c < 3; c++) { tris[i + c] = q[c]; if (q[c] < lo[c]) lo[c] = q[c]; if (q[c] > hi[c]) hi[c] = q[c]; }
+          }
+        }
+        this.addon(id, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2, { lo: lo, hi: hi });
+        sc.add(entry, body, tris, color);
+      };
+      // Which piece is at a point of the finished model? Used by the Select tool.
+      Sculpt.prototype.pieceAt = function (pt) {
+        var sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, x = (pt.x + sh[0]) / k, y = pt.y / k, z = (pt.z + sh[1]) / k, best = null, bd = 1e9, i;
+        var small = this.addons.slice().sort(function (u, v) { return u.r - v.r; }); // a pupil sits inside its eye: the smaller one wins
+        for (i = 0; i < small.length; i++) {
+          var a = small[i];
+          if (a.box ? (x >= a.box.lo[0] - 0.3 && x <= a.box.hi[0] + 0.3 && y >= a.box.lo[1] - 0.3 && y <= a.box.hi[1] + 0.3 && z >= a.box.lo[2] - 0.3 && z <= a.box.hi[2] + 0.3) : Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.4) return a.id;
+        }
+        this.ops.forEach(function (o) {
+          if (!o.piece || o.carve || o.paint || o.relief) return;
+          var d = o.d(x, y, z);
+          if (d < bd) { bd = d; best = o.piece; }
+        });
+        return best;
+      };
+      // Box around a piece in the finished model, for the selection outline.
+      Sculpt.prototype.boundsOf = function (id) {
+        var self = this, sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9], any = false;
+        (this.pieceIds || []).forEach(function (pid) {
+          var isIt = pid === id;
+          if (!isIt) { var g = 0, up = self.parents && self.parents[pid]; while (up && g++ < 6) { if (up === id) isIt = true; up = self.parents[up]; } }
+          if (!isIt || self.deleted(pid)) return;
+          var b = self.boxes[pid];
+          [0, 1].forEach(function (a) { [0, 1].forEach(function (e) { [0, 1].forEach(function (c) {
+            var q = self.xf(pid, [a ? b.hi[0] : b.lo[0], e ? b.hi[1] : b.lo[1], c ? b.hi[2] : b.lo[2]]);
+            for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); }
+            any = true;
+          }); }); });
+        });
+        (this.addons || []).forEach(function (a) {
+          var g = 0, up = self.parents && self.parents[a.id], isIt = a.id === id;
+          while (!isIt && up && g++ < 6) { if (up === id) isIt = true; up = self.parents[up]; }
+          if (!isIt) return;
+          for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], a.box ? a.box.lo[i] : a.p[i] - a.r); hi[i] = Math.max(hi[i], a.box ? a.box.hi[i] : a.p[i] + a.r); }
+          any = true;
+        });
+        if (!any) return null;
+        return { lo: [lo[0] * k - sh[0], lo[1] * k, lo[2] * k - sh[1]], hi: [hi[0] * k - sh[0], hi[1] * k, hi[2] * k - sh[1]] };
+      };
+      // cfg.sculpt for a generator built with Sculpt. pieces: [{ id, label }].
+      function sculptModule(pieces) {
+        return {
+          pieces: pieces,
+          available: function () { var S = window.MM_SCULPT_LAST; return S ? pieces.filter(function (p) { return (S.pieceIds || []).indexOf(p.id) >= 0 || (S.addons || []).some(function (a) { return a.id === p.id; }) || S.deleted(p.id); }) : pieces; },
+          pieceAt: function (pt) { var S = window.MM_SCULPT_LAST; return S ? S.pieceAt(pt) : null; },
+          bounds: function (id) { var S = window.MM_SCULPT_LAST; return S ? S.boundsOf(id) : null; },
+          isUnder: function (id, parent) { var S = window.MM_SCULPT_LAST, g = 0, up = id && S && S.parents && S.parents[id]; while (up && g++ < 6) { if (up === parent) return true; up = S.parents[up]; } return false; }
+        };
+      }
       // Ellipsoid: c centre, r [rx, ry, rz], k blend radius.
       Sculpt.prototype.ell = function (name, c, r, color, k) {
         this._name(name, color); var m = Math.max(r[0], r[1], r[2]);
@@ -947,12 +1090,14 @@
       // Keeps only x <= maxX (used by flexi heads, which must stay clear of the first joint).
       Sculpt.prototype.clipX = function (maxX) { this.maxX = maxX; return this; };
       Sculpt.prototype.run = function () {
+        this._applyEdits();
+        window.MM_SCULPT_LAST = this;
         var h = this.h, ops = this.ops, lo = [1e9, 0, 1e9], hi = [-1e9, 0, -1e9], i, a;
         ops.forEach(function (o) { if (o.carve || o.paint || o.relief) return; for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], o.lo[c]); hi[c] = Math.max(hi[c], o.hi[c]); } });
         lo[1] = 0;
         var x0 = lo[0] - 2 * h, z0 = lo[2] - 2 * h, nx = Math.ceil((hi[0] - lo[0]) / h) + 5, ny = Math.ceil(hi[1] / h) + 4, nz = Math.ceil((hi[2] - lo[2]) / h) + 5, N = nx * ny * nz;
         var F = new Float32Array(N).fill(1000), L = new Uint8Array(N), idx = function (ix, iy, iz) { return (iy * nz + iz) * nx + ix; }, names = this.names, self = this;
-        ops.forEach(function (o) {
+        function raster(o) {
           var pad = (o.k || 0) + 2.2 * h, label = names.indexOf(o.name);
           var ia = Math.max(0, Math.floor((o.lo[0] - pad - x0) / h)), ib = Math.min(nx - 1, Math.ceil((o.hi[0] + pad - x0) / h));
           var ja = Math.max(0, Math.floor((o.lo[1] - pad) / h)), jb = Math.min(ny - 1, Math.ceil((o.hi[1] + pad) / h));
@@ -968,7 +1113,8 @@
             F[n] = lerp(f, d, t) - (k > 0 ? k * t * (1 - t) : 0);
             if (d < f) L[n] = label;
           }
-        });
+        }
+        ops.forEach(function (o) { if (!o.late) raster(o); });
         if (this.maxX !== undefined) for (var cy = 0; cy < ny; cy++) for (var cz = 0; cz < nz; cz++) for (var cx = 0; cx < nx; cx++) { var v = x0 + cx * h - this.maxX, m = idx(cx, cy, cz); if (v > F[m]) F[m] = v; }
         // Support pass: a layer may only hold what is within 45 degrees of the solid on the layer below.
         var D = new Float32Array(nx * nz), S2 = 1.4142 * h, A = nx * nz;
@@ -1003,6 +1149,8 @@
           for (var b6 = 0; b6 < 6; b6++) { var q6 = nb6[b6]; if (q6 >= A && q6 < N && F[q6] < 0 && !keep[q6]) { keep[q6] = 1; st[sp++] = q6; } }
         }
         for (i = A; i < N; i++) if (F[i] < 0 && !keep[i]) F[i] = 0.5;
+        // Pieces the user moved or stretched are added after the support pass, so they are not trimmed away.
+        ops.forEach(function (o) { if (o.late) raster(o); });
         // The bed: layer 0 is just outside, so the underside meshes flat.
         for (i = 0; i < A; i++) if (F[i] < 0) F[i] = 1e-4;
         for (i = 0; i < A; i++) { F[i] = F[i] < 1e-3 && F[i + A] < 0 ? 1e-4 : Math.max(F[i], 1e-4); }
@@ -1112,9 +1260,16 @@
         });
       };
       // Scene output with the sculpted entries tagged as one seamless surface.
-      function finishSculpt(sc, scale) {
+      function finishSculpt(sc, scale, S) {
         if (scale && scale !== 1) scaleScene(sc, scale);
+        var first = sc.groups[sc.order[0]][0], x0 = first[0], z0 = first[2];
         var es = finish(sc);
+        if (S && S.st) { // once anything is edited the model stays where it is on the bed, so it does not jump under the cursor
+          var shift = [x0 - first[0], z0 - first[2]], edited = Object.keys(S.st.edits).length || S.st.strokes.length;
+          if (!edited || !S.st.shift) S.st.shift = shift;
+          var ax = shift[0] - S.st.shift[0], az = shift[1] - S.st.shift[1];
+          if (ax || az) es.forEach(function (e) { for (var i = 0; i < e.positions.length; i += 3) { e.positions[i] += ax; e.positions[i + 2] += az; } });
+        }
         es.forEach(function (e) { if (sc.sculpted && sc.sculpted[e.name]) e.smoothGroup = 'sculpt'; });
         return es;
       }
@@ -1133,28 +1288,36 @@
       // -----------------------------------------------------------------------
       // Turtle & Tortoise: a shell with pressed-in plates over a sculpted body, or an open trinket dish in the shell
       // -----------------------------------------------------------------------
-      function buildTurtle2(p) {
-        var sc = new Scene(), S = new Sculpt(1.2 + p.shellL * 0.0045), Sr = p.shellL / 2, Sw = p.shellW / 2, Sh = p.shellH, hs = p.headSize, dish = p.dish > 0;
+      function buildTurtle2(p, api) {
+        var sc = new Scene(), S = new Sculpt(1.2 + p.shellL * 0.0045).useEdits(api), Sr = p.shellL / 2, Sw = p.shellW / 2, Sh = p.shellH, hs = p.headSize, dish = p.dish > 0;
         var shell = '#4ade80', rim = '#22c55e', skin = '#bef264', dark = '#65a30d', tort = Sh > 34;
         // skin parts first, so the shell blends only a little over them
         var hr = 9.5 * hs, nx = Sr + p.neck, hx = nx + hr * 0.75, hy = Math.max(hr * 0.72, 7);
+        S.piece('neck');
         S.path('skin', [[Sr * 0.6, 7, 0, 8], [nx, hy - 0.5, 0, 6.5]], skin, 4);
+        S.piece('head', 'neck');
         S.ell('head', [hx, hy, 0], [hr * 1.2, hr * 0.8, hr * 0.92], skin, 4);
         S.ell('head', [hx + hr * 0.9, hy - hr * 0.1, 0], [hr * 0.5, hr * 0.48, hr * 0.56], skin, 2.5);
         [-1, 1].forEach(function (s) {
+          S.piece('head', 'neck');
           S.path(null, [[hx + hr * 1.32, hy - hr * 0.22, s * hr * 0.2, 0.6], [hx + hr * 0.6, hy - hr * 0.3, s * hr * 0.76, 0.7]], null, 0).carve(0.6);
           // front and back legs: tortoise stumps or turtle flippers, all lying on the bed
           var fx = Sr * 0.58, bx = -Sr * 0.6, sz = s * Sw * 0.86;
           if (tort) {
-            S.ell('legs', [fx, 6, sz], [9, 7, 9], skin, 3); S.ell('legs', [bx, 6, sz], [9, 7, 9], skin, 3);
-            [fx, bx].forEach(function (lx) { for (var c = -1; c <= 1; c++) S.ell('claws', [lx + 7.5, 2, sz + c * 3.6 + s * 2], [2.6, 2.2, 1.7], '#f1f5f9', 0.8); });
+            S.piece(s < 0 ? 'frontL' : 'frontR'); S.ell('legs', [fx, 6, sz], [9, 7, 9], skin, 3);
+            S.piece(s < 0 ? 'backL' : 'backR'); S.ell('legs', [bx, 6, sz], [9, 7, 9], skin, 3);
+            [fx, bx].forEach(function (lx, li) { S.piece((li ? 'back' : 'front') + (s < 0 ? 'L' : 'R')); for (var c = -1; c <= 1; c++) S.ell('claws', [lx + 7.5, 2, sz + c * 3.6 + s * 2], [2.6, 2.2, 1.7], '#f1f5f9', 0.8); });
           } else {
+            S.piece(s < 0 ? 'frontL' : 'frontR');
             S.path('legs', [[fx - 2, 2.6, sz * 0.8, 6.6], [fx + 8, 2.2, sz * 1.15, 5.8], [fx + 13, 1.7, sz * 1.55, 3.4]], skin, 3);
+            S.piece(s < 0 ? 'backL' : 'backR');
             S.path('legs', [[bx, 2.6, sz * 0.8, 6.2], [bx - 8, 2, sz * 1.06, 4.8], [bx - 13, 1.6, sz * 1.22, 2.6]], skin, 3);
           }
         });
+        S.piece('tail');
         S.path('tail', [[-Sr * 0.9, 3, 0, 4], [-Sr - 5 * p.tail, 2.2, 1, 2.8], [-Sr - 11 * p.tail, 1.6, 0, 1]], skin, 2);
         // shell: rests on the bed, with a raised rim where it meets the body
+        S.piece('shell');
         S.ell('shell', [0, Sh * 0.34, 0], [Sr, Sh * 0.72, Sw], shell, 1.4);
         S.ell('rim', [0, Sh * 0.16, 0], [Sr * 1.04, 3.4, Sw * 1.04], rim, 1);
         if (p.plates > 0) { // pressed plates: hexagons on a grid, grooved down the edges
@@ -1171,13 +1334,16 @@
         S.reach = 0.72;
         S.run();
         [-1, 1].forEach(function (s) {
-          var e = S.hit([hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0]), R = 2.5 * hs;
+          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0], 'head');
+          if (!e) return;
+          var R = 2.5 * hs * e.k;
+          S.addon(id, e.p, R);
           sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#1e293b');
           sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.36), [0, R * 0.32, 0])), e.n, R * 0.25, { sink: 0.4 }), '#1e293b');
         });
         void dark;
         S.addTo(sc);
-        return finishSculpt(sc);
+        return finishSculpt(sc, 1, S);
       }
 
       var TURTLE2_PARAMS = [
@@ -1207,6 +1373,11 @@
           ['Baby turtle', { shellL: 56, shellW: 50, shellH: 26, headSize: 1.35, neck: 6 }],
           ['Trinket dish', { dish: 1, shellH: 36, plates: 3 }],
           ['Big trinket dish', { dish: 1, shellL: 92, shellW: 82, shellH: 40, plates: 3 }]
+        ]),
+        sculpt: sculptModule([
+          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
+          { id: 'shell', label: 'Shell', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
+          { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'backL', label: 'Left back leg', section: 'Legs' }, { id: 'backR', label: 'Right back leg', section: 'Legs' }
         ]),
         build: buildTurtle2
       };

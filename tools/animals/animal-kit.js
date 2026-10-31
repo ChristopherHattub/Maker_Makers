@@ -433,7 +433,7 @@
       // Forms melt into each other with a smooth blend, instead of intersecting at hard seams. A final pass works up from
       // the bed, layer by layer, and removes anything that is not reachable within 45 degrees of the solid below, so the
       // surface cannot float or overhang at any slider value. Forms need support underneath, or they get trimmed away.
-      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
+      function Sculpt(cell) { this.addons = []; this.parents = {}; this.outScale = 1; this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
       Sculpt.prototype._name = function (name, color) { if (name === null || name === undefined) return; if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
       Sculpt.prototype._op = function (o) { o.piece = this.curPiece; this.ops.push(o); return this; };
       // ---- Sculpt tab: named pieces the user can move, stretch and delete (see the Sculpt tab in shared/generator-core.js) ----
@@ -441,7 +441,7 @@
       Sculpt.prototype.piece = function (id, parent) { this.curPiece = id; (this.parents = this.parents || {}); if (parent) this.parents[id] = parent; return this; };
       // Reads the editor's state. scale is what finishSculpt scales the model by.
       Sculpt.prototype.useEdits = function (api, scale) {
-        this.st = api && api.sculpt; this.outScale = scale || 1; this.addons = [];
+        this.st = api && api.sculpt; this.outScale = scale || 1; this.addons = []; this.parents = this.parents || {};
         if (this.st && this.st.draft) this.h *= 1.7;
         return this;
       };
@@ -495,12 +495,49 @@
         });
       };
       // A detail added after run() (eyes, nose), so it can be picked as a piece too.
-      Sculpt.prototype.addon = function (id, p, r) { this.addons.push({ id: id, p: p, r: r }); };
+      Sculpt.prototype.addon = function (id, p, r, box) { this.addons.push({ id: id, p: p, r: r, box: box }); };
+      // A detail placed on the finished surface by a ray: returns its hit (with k, its size factor), or null if deleted. Call after run().
+      Sculpt.prototype.face = function (id, o, dir, parent) {
+        if (parent && parent !== id) this.parents[id] = parent;
+        if (this.deleted(id)) return null;
+        this.pivots[id] = this.pivots[id] || o;
+        var h = this.hit(this.xf(id, o), dir);
+        h.k = this.scaleOf(id);
+        return h;
+      };
+      // A small detail sitting on another one (a pupil on an eye): moved only by its own edit. Returns { p, k }, or null if deleted.
+      Sculpt.prototype.sub = function (id, parent, p, r) {
+        if (parent && parent !== id) this.parents[id] = parent;
+        if (this.deleted(id)) return null;
+        var s = this.ownScale(id), k = (s[0] + s[1] + s[2]) / 3, q = this.ownMove(id, p);
+        this.addon(id, q, r * k);
+        return { p: q, k: k };
+      };
+      // A rigid closed shell (a fin, a bead, a plinth) as a piece: moved and stretched as a whole. Call after run().
+      Sculpt.prototype.shell = function (sc, id, entry, body, tris, color, parent) {
+        if (parent && parent !== id) this.parents[id] = parent;
+        if (this.deleted(id)) return;
+        var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9], i, c;
+        for (i = 0; i < tris.length; i += 3) for (c = 0; c < 3; c++) { if (tris[i + c] < lo[c]) lo[c] = tris[i + c]; if (tris[i + c] > hi[c]) hi[c] = tris[i + c]; }
+        this.pivots[id] = this.pivots[id] || [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+        if (this._chain(id).length) {
+          lo = [1e9, 1e9, 1e9]; hi = [-1e9, -1e9, -1e9];
+          for (i = 0; i < tris.length; i += 3) {
+            var q = this.xf(id, [tris[i], tris[i + 1], tris[i + 2]]);
+            for (c = 0; c < 3; c++) { tris[i + c] = q[c]; if (q[c] < lo[c]) lo[c] = q[c]; if (q[c] > hi[c]) hi[c] = q[c]; }
+          }
+        }
+        this.addon(id, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2, { lo: lo, hi: hi });
+        sc.add(entry, body, tris, color);
+      };
       // Which piece is at a point of the finished model? Used by the Select tool.
       Sculpt.prototype.pieceAt = function (pt) {
         var sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, x = (pt.x + sh[0]) / k, y = pt.y / k, z = (pt.z + sh[1]) / k, best = null, bd = 1e9, i;
         var small = this.addons.slice().sort(function (u, v) { return u.r - v.r; }); // a pupil sits inside its eye: the smaller one wins
-        for (i = 0; i < small.length; i++) { var a = small[i]; if (Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.4) return a.id; }
+        for (i = 0; i < small.length; i++) {
+          var a = small[i];
+          if (a.box ? (x >= a.box.lo[0] - 0.3 && x <= a.box.hi[0] + 0.3 && y >= a.box.lo[1] - 0.3 && y <= a.box.hi[1] + 0.3 && z >= a.box.lo[2] - 0.3 && z <= a.box.hi[2] + 0.3) : Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.4) return a.id;
+        }
         this.ops.forEach(function (o) {
           if (!o.piece || o.carve || o.paint || o.relief) return;
           var d = o.d(x, y, z);
@@ -526,7 +563,7 @@
           var g = 0, up = self.parents && self.parents[a.id], isIt = a.id === id;
           while (!isIt && up && g++ < 6) { if (up === id) isIt = true; up = self.parents[up]; }
           if (!isIt) return;
-          for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], a.p[i] - a.r); hi[i] = Math.max(hi[i], a.p[i] + a.r); }
+          for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], a.box ? a.box.lo[i] : a.p[i] - a.r); hi[i] = Math.max(hi[i], a.box ? a.box.hi[i] : a.p[i] + a.r); }
           any = true;
         });
         if (!any) return null;

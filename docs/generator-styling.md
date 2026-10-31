@@ -200,7 +200,7 @@ The chip is green ("No supports needed"), amber (warnings only) or red ("Needs s
 
 ### Sculpt tab (experimental, `cfg.sculpt`)
 
-A generator that sets `cfg.sculpt` gets a **Sculpt** tab, right after Parametric, with two tools. So far only Cat Sculptor uses it.
+A generator that sets `cfg.sculpt` gets a **Sculpt** tab, right after Parametric, with two tools. All fifteen animals use it.
 
 - **Select**: click a piece (or pick it from the list), which tints it, and drag it to move it, stretch it with the three sliders, delete or restore it.
 - **Sculpt**: six brushes (Grab, Inflate, Deflate, Smooth, Flatten, Pinch) with size, strength and a left-right mirror. A warning shows beside the size slider from 20 mm and the strength slider from 60%. Strokes are stored and replayed on every rebuild, so they survive slider changes. The surface stays closed.

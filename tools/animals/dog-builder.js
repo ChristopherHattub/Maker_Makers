@@ -1,28 +1,35 @@
       // -----------------------------------------------------------------------
       // Dog Builder: a sitting dog sculpted as one seamless surface
       // -----------------------------------------------------------------------
-      function buildDog(p) {
-        var sc = new Scene(), S = new Sculpt(1.3), k = p.chunk, hs = p.headSize, fur = '#d9a066', hr = 14 * hs, ear = '#a9713f', white = '#f8fafc';
+      function buildDog(p, api) {
+        var sc = new Scene(), S = new Sculpt(1.3).useEdits(api, p.size / 100), k = p.chunk, hs = p.headSize, fur = '#d9a066', hr = 14 * hs, ear = '#a9713f', white = '#f8fafc';
+        S.piece('torso');
         S.ell('body', [-8, 15, 0], [22 * k, 19, 19 * k], fur, 5);
         S.ell('body', [2, 36, 0], [14 * k, 21, 13.5 * k], fur, 8);
         S.paint('chest', [12, 36, 0], [13, 24, 10], white);
         [-1, 1].forEach(function (s) {
+          S.piece(s < 0 ? 'hindL' : 'hindR');
           S.ell('body', [-12, 13, s * 14 * k], [15, 13, 8], fur, 3);
           S.ell('paws', [6, 3.3, s * 16 * k], [11, 3.8, 5.4], white, 2);
+          S.piece(s < 0 ? 'frontL' : 'frontR');
           S.path('body', [[9, 36, s * 6.5 * k, 6], [13, 18, s * 6.6 * k, 5], [14, 5, s * 6.6 * k, 4.4]], fur, 2.5);
           S.ell('paws', [18, 3.2, s * 6.6 * k], [7.5, 3.6, 5.2], white, 2);
         });
         var hx = 8, hy = 62;
+        S.piece('head');
         S.ell('head', [hx, hy, 0], [hr, hr * 0.92, hr * 1.02], fur, 7);
         // muzzle: length from the slider, it always rests on the chest line so it never overhangs
         var ml = hr * (0.45 + 1.0 * p.snout), my = hy - hr * 0.3, mx = hx + hr * 0.62;
+        S.piece('muzzle', 'head');
         S.path('muzzle', [[mx, my + 1, 0, hr * 0.5], [mx + ml * 0.55, my - 0.5, 0, hr * 0.44], [mx + ml, my - 1, 0, hr * 0.38]], white, 3);
         S.ell('muzzle', [mx + ml * 0.35, my - hr * 0.36, 0], [ml * 0.6 + 3, hr * 0.2, hr * 0.32], white, 2.5); // lower jaw
         S.path('mouth', [[mx + ml * 0.9, my - hr * 0.2, -hr * 0.34, 0.7], [mx + ml + hr * 0.28, my - hr * 0.2, 0, 0.8], [mx + ml * 0.9, my - hr * 0.2, hr * 0.34, 0.7]], null, 0, 3).carve(0.8);
+        S.piece('head');
         S.paint('patch', [hx + hr * 0.5, hy + hr * 0.3, hr * 0.5], [hr * 0.55, hr * 0.5, hr * 0.42], ear);
         // ears
         var style = Math.round(p.ears), E = p.earSize * hs;
         [-1, 1].forEach(function (s) {
+          S.piece(s < 0 ? 'earL' : 'earR', 'head');
           if (style === 0) { // floppy: lies against the side of the head
             S.ell('ears', [hx - hr * 0.1, hy + hr * 0.42, s * hr * 0.92], [7 * E, 6 * E, 3.4], ear, 1.5);
             S.ell('ears', [hx - hr * 0.1, hy - hr * 0.1, s * hr * 1.0], [8 * E, 11 * E, 3.2], ear, 1.5);
@@ -35,24 +42,29 @@
         });
         // collar with a round tag, tail rising from the rump
         if (Math.round(p.collar) === 1) {
+          S.piece('collar');
           var ring = [];
           for (var i = 0; i <= 28; i++) { var a = (i / 28) * TAU; ring.push([hx - 3 + Math.cos(a) * 11.5 * k, hy - hr * 0.86 - Math.cos(a) * 3, Math.sin(a) * 11.5 * k, 1.9]); }
           S.path('collar', ring, '#60a5fa', 0.8, 2);
           S.ell('tag', [hx - 3 + 13 * k, hy - hr * 0.86 - 7, 0], [1.6, 3.6, 3.6], '#fde047', 0.8);
         }
         var tl = p.tail;
+        S.piece('tail');
         S.path('tail', [[-27, 8, 0, 5], [-33, 16 * tl, 0, 4.2], [-37, 27 * tl, 0, 3.4], [-34, 37 * tl, 0, 2.2]], fur, 3);
         S.reach = 0.72;
         S.run();
-        var nose = S.hit([hx + 80, my + hr * 0.12, 0], [-1, 0, 0]);
-        sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0] + 0.3, nose.n[1] + 0.25, 0]), hr * 0.21, { angle: 55 }), '#1e293b');
+        var nose = S.face('nose', [hx + 80, my + hr * 0.12, 0], [-1, 0, 0], 'muzzle');
+        if (nose) { sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0] + 0.3, nose.n[1] + 0.25, 0]), hr * 0.21 * nose.k, { angle: 55 }), '#1e293b'); S.addon('nose', nose.p, hr * 0.21 * nose.k); }
         [-1, 1].forEach(function (s) {
-          var e = S.hit([hx + 80, hy + hr * 0.22, s * hr * 0.42], [-1, 0, 0]), R = p.eye * hs;
+          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 80, hy + hr * 0.22, s * hr * 0.42], [-1, 0, 0], 'head');
+          if (!e) return;
+          var R = p.eye * hs * e.k;
+          S.addon(id, e.p, R);
           sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#3f2a1d');
           sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.36), [0, R * 0.32, s * -R * 0.2])), e.n, R * 0.28, { sink: 0.5 }), '#3f2a1d');
         });
         S.addTo(sc);
-        return finishSculpt(sc, p.size / 100);
+        return finishSculpt(sc, p.size / 100, S);
       }
 
       var DOG_PARAMS = [
@@ -82,6 +94,11 @@
           ['Corgi', { snout: 0.4, ears: 1, earSize: 1.25, chunk: 1.15, tail: 0.6 }],
           ['Husky', { snout: 0.45, ears: 1, earSize: 1, tail: 1.2 }],
           ['Puppy', { size: 70, headSize: 1.25, earSize: 1.3, eye: 4.4, snout: 0.15 }]
+        ]),
+        sculpt: sculptModule([
+          { id: 'head', label: 'Head', section: 'Head' }, { id: 'muzzle', label: 'Muzzle', section: 'Head', parent: 'head' }, { id: 'nose', label: 'Nose', section: 'Head', parent: 'muzzle' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
+          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'collar', label: 'Collar', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
+          { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),
         build: buildDog
       };

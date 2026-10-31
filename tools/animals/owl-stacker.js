@@ -1,10 +1,11 @@
       // -----------------------------------------------------------------------
       // Owl Stacker: one owl, or a totem of up to three, sculpted as one seamless surface with scalloped feathers
       // -----------------------------------------------------------------------
-      function buildOwl(p) {
-        var sc = new Scene(), S = new Sculpt(1.2 + 0.25 * (Math.round(p.owls) - 1)), n = Math.round(p.owls), R0 = 25 * p.plump, H0 = 52, brown = '#a97c50', wing = '#7c5a38', cream = '#fbeed5', disc = '#e7cda2', y = 0, faces = [], u, i;
+      function buildOwl(p, api) {
+        var sc = new Scene(), S = new Sculpt(1.2 + 0.25 * (Math.round(p.owls) - 1)).useEdits(api, p.size), n = Math.round(p.owls), R0 = 25 * p.plump, H0 = 52, brown = '#a97c50', wing = '#7c5a38', cream = '#fbeed5', disc = '#e7cda2', y = 0, faces = [], u, i;
         for (u = 0; u < n; u++) {
           var k = 1 - 0.13 * u, R = R0 * k, h = H0 * k, y0 = u === 0 ? 0 : y - h * 0.16, mid = y0 + h * 0.5;
+          S.piece('owl' + u);
           S.ell('body', [0, mid, 0], [R, h * 0.56, R * 0.96], brown, u === 0 ? 4 : 2.5);
           S.paint('belly', [R * 0.72, y0 + h * 0.34, 0], [R * 0.62, h * 0.36, R * 0.72], cream);
           [-1, 1].forEach(function (s) {
@@ -14,7 +15,9 @@
             S.paint('face', [ex, ey, ez], [R * 0.36, R * 0.42, R * 0.42], disc);
             if (p.wings > 0) {
               var W = p.wings;
+              S.piece(u === 0 ? (s < 0 ? 'wingL' : 'wingR') : 'owl' + u);
               S.ell('wings', [-R * 0.1, y0 + h * 0.5, s * R * 0.86], [R * 0.56, h * 0.32, R * 0.15 + 2.4 * W], wing, 1.2);
+              S.piece('owl' + u);
               for (i = 0; i < 3; i++) S.path(null, [[-R * 0.55 + i * R * 0.34, y0 + h * 0.2, s * R * 1.06, 0.7], [-R * 0.3 + i * R * 0.34, y0 + h * 0.42, s * R * 1.12, 0.8]], null, 0, 3).carve(0.7);
             }
           });
@@ -33,27 +36,33 @@
         }
         var t = faces[faces.length - 1];
         if (p.tufts > 0) [-1, 1].forEach(function (s) {
+          S.piece(s < 0 ? 'tuftL' : 'tuftR', 'owl' + (n - 1));
           var ty = t.y0 + t.h * 0.86, tz = s * t.R * 0.6, T = 15 * p.tufts * t.k;
           S.path('tufts', [[-t.R * 0.05, ty - 3, tz, 5 * t.k], [-t.R * 0.1, ty + T * 0.5, tz + s * T * 0.12, 3.3 * t.k], [-t.R * 0.14, ty + T, tz + s * T * 0.22, 0.6]], wing, 2);
         });
         [-1, 1].forEach(function (s) {
+          S.piece(s < 0 ? 'footL' : 'footR');
           S.ell('feet', [R0 * 0.8, 2.8, s * R0 * 0.42], [8, 3.2, 6], '#fbbf24', 2);
           for (var c = -1; c <= 1; c++) S.ell('feet', [R0 * 0.8 + 7, 2, s * R0 * 0.42 + c * 3.4], [3.6, 2.2, 1.9], '#f59e0b', 0.8);
         });
         S.run();
-        faces.forEach(function (f) {
-          var R = f.R;
+        faces.forEach(function (f, fi) {
+          var R = f.R, own = 'owl' + fi, one = fi === 0 ? '' : fi + 1;
           [-1, 1].forEach(function (s) {
-            var e = S.hit([R * 4, f.y, s * R * 0.42], [-1, 0, 0]), er = R * 0.24 * p.eye;
+            var id = (s < 0 ? 'eyeL' : 'eyeR') + one, e = S.face(id, [R * 4, f.y, s * R * 0.42], [-1, 0, 0], own);
+            if (!e) return;
+            var er = R * 0.24 * p.eye * e.k;
+            S.addon(id, e.p, er);
             sc.add('eyes', 'b', dome(e.p, e.n, er, { angle: 48, seg: 28 }), '#fbbf24');
             var rise = (er / Math.sin(deg(48))) * (1 - Math.cos(deg(48)));
-            sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, er * p.pupil, { sink: 0.8 }), '#1e293b');
+            var pu = S.sub((s < 0 ? 'pupilL' : 'pupilR') + one, id, vadd(e.p, vmul(e.n, rise * 0.7)), er * p.pupil);
+            if (pu) sc.add('pupils', 'b', dome(pu.p, e.n, er * p.pupil * pu.k, { sink: 0.8 }), '#1e293b');
           });
-          var bk = S.hit([R * 4, f.y - R * 0.3, 0], [-1, 0, 0]);
-          sc.add('beak', 'b', dome(bk.p, vnorm([bk.n[0], bk.n[1] + 0.2, 0]), R * 0.15, { angle: 62, seg: 14 }), '#f59e0b');
+          var bid = 'beak' + one, bk = S.face(bid, [R * 4, f.y - R * 0.3, 0], [-1, 0, 0], own);
+          if (bk) { sc.add('beak', 'b', dome(bk.p, vnorm([bk.n[0], bk.n[1] + 0.2, 0]), R * 0.15 * bk.k, { angle: 62, seg: 14 }), '#f59e0b'); S.addon(bid, bk.p, R * 0.15 * bk.k); }
         });
         S.addTo(sc);
-        return finishSculpt(sc, p.size);
+        return finishSculpt(sc, p.size, S);
       }
       var OWL_PARAMS = [
         { group: 'Owl', key: 'owls', label: 'Owls in the stack', unit: '', min: 1, max: 3, step: 1, value: 1, slider: true },
@@ -79,6 +88,12 @@
           ['Owl pair', { owls: 2 }],
           ['Owl totem', { owls: 3 }],
           ['Wide-eyed owlet', { plump: 1.15, pupil: 0.7, eye: 1.2, wings: 0.7, tufts: 0.5, size: 0.75, feathers: 2 }]
+        ]),
+        sculpt: sculptModule([
+          { id: 'owl0', label: 'Owl', section: 'Bottom owl' }, { id: 'eyeL', label: 'Left eye', section: 'Bottom owl' }, { id: 'pupilL', label: 'Left pupil', section: 'Bottom owl', parent: 'eyeL' }, { id: 'eyeR', label: 'Right eye', section: 'Bottom owl' }, { id: 'pupilR', label: 'Right pupil', section: 'Bottom owl', parent: 'eyeR' }, { id: 'beak', label: 'Beak', section: 'Bottom owl' }, { id: 'wingL', label: 'Left wing', section: 'Bottom owl' }, { id: 'wingR', label: 'Right wing', section: 'Bottom owl' }, { id: 'footL', label: 'Left foot', section: 'Bottom owl' }, { id: 'footR', label: 'Right foot', section: 'Bottom owl' },
+          { id: 'owl1', label: 'Owl', section: 'Middle owl' }, { id: 'eyeL2', label: 'Left eye', section: 'Middle owl' }, { id: 'pupilL2', label: 'Left pupil', section: 'Middle owl', parent: 'eyeL2' }, { id: 'eyeR2', label: 'Right eye', section: 'Middle owl' }, { id: 'pupilR2', label: 'Right pupil', section: 'Middle owl', parent: 'eyeR2' }, { id: 'beak2', label: 'Beak', section: 'Middle owl' },
+          { id: 'owl2', label: 'Owl', section: 'Top owl' }, { id: 'eyeL3', label: 'Left eye', section: 'Top owl' }, { id: 'pupilL3', label: 'Left pupil', section: 'Top owl', parent: 'eyeL3' }, { id: 'eyeR3', label: 'Right eye', section: 'Top owl' }, { id: 'pupilR3', label: 'Right pupil', section: 'Top owl', parent: 'eyeR3' }, { id: 'beak3', label: 'Beak', section: 'Top owl' },
+          { id: 'tuftL', label: 'Left tuft', section: 'Tufts' }, { id: 'tuftR', label: 'Right tuft', section: 'Tufts' }
         ]),
         build: buildOwl
       };
