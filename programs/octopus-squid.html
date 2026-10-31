@@ -866,49 +866,319 @@
         });
       }
 
+      // ---- Sculpt: blended implicit forms, meshed as one seamless closed surface ----
+      // Forms melt into each other with a smooth blend, instead of intersecting at hard seams. A final pass works up from
+      // the bed, layer by layer, and removes anything that is not reachable within 45 degrees of the solid below, so the
+      // surface cannot float or overhang at any slider value. Forms need support underneath, or they get trimmed away.
+      function Sculpt(cell) { this.h = cell || 1.2; this.ops = []; this.names = []; this.colors = {}; this.reach = 0.82; }
+      Sculpt.prototype._name = function (name, color) { if (name === null || name === undefined) return; if (this.names.indexOf(name) < 0) this.names.push(name); if (color) this.colors[name] = color; };
+      Sculpt.prototype._op = function (o) { this.ops.push(o); return this; };
+      // Ellipsoid: c centre, r [rx, ry, rz], k blend radius.
+      Sculpt.prototype.ell = function (name, c, r, color, k) {
+        this._name(name, color); var m = Math.max(r[0], r[1], r[2]);
+        return this._op({ name: name, k: k === undefined ? 4 : k, lo: [c[0] - r[0], c[1] - r[1], c[2] - r[2]], hi: [c[0] + r[0], c[1] + r[1], c[2] + r[2]], d: function (x, y, z) {
+          var a = (x - c[0]) / r[0], b = (y - c[1]) / r[1], e = (z - c[2]) / r[2], k0 = Math.sqrt(a * a + b * b + e * e);
+          if (k0 < 1e-4) return -Math.min(r[0], r[1], r[2]);
+          var a2 = a / r[0], b2 = b / r[1], e2 = e / r[2], k1 = Math.sqrt(a2 * a2 + b2 * b2 + e2 * e2);
+          return Math.max(k0 * (k0 - 1) / k1, -m);
+        } });
+      };
+      // Tapered limb through points [[x, y, z, r], ...], smoothed through the points.
+      Sculpt.prototype.path = function (name, pts, color, k, per) {
+        this._name(name, color);
+        var P = [], i, j, n = per === undefined ? 6 : per;
+        function cr(a, b, c, d, t) { return 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t); }
+        if (pts.length === 2) P = pts; else {
+          for (i = 0; i < pts.length - 1; i++) {
+            var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+            for (j = 0; j < n; j++) { var t = j / n; P.push([cr(p0[0], p1[0], p2[0], p3[0], t), cr(p0[1], p1[1], p2[1], p3[1], t), cr(p0[2], p1[2], p2[2], p3[2], t), Math.max(lerp(p1[3], p2[3], t), 0.2)]); }
+          }
+          P.push(pts[pts.length - 1]);
+        }
+        var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+        P.forEach(function (q) { for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], q[c] - q[3]); hi[c] = Math.max(hi[c], q[c] + q[3]); } });
+        return this._op({ name: name, k: k === undefined ? 4 : k, lo: lo, hi: hi, d: function (x, y, z) {
+          var best = 1e9;
+          for (var s = 0; s < P.length - 1; s++) {
+            var a = P[s], b = P[s + 1], bx = b[0] - a[0], by = b[1] - a[1], bz = b[2] - a[2], px = x - a[0], py = y - a[1], pz = z - a[2];
+            var t = clamp((px * bx + py * by + pz * bz) / ((bx * bx + by * by + bz * bz) || 1), 0, 1), ex = px - bx * t, ey = py - by * t, ez = pz - bz * t;
+            var v = Math.sqrt(ex * ex + ey * ey + ez * ez) - (a[3] + (b[3] - a[3]) * t);
+            if (v < best) best = v;
+          }
+          return best;
+        } });
+      };
+      // Flat rounded plate in a vertical plane: poly [[s, y], ...], s along dir (a horizontal vector) from `at`, y is world height.
+      Sculpt.prototype.plate = function (name, poly, at, dir, t, color, k, round) {
+        this._name(name, color);
+        var d = vnorm(dir), sd = [-d[2], 0, d[0]], n = poly.length, rd = round === undefined ? Math.min(1, t * 0.4) : round, ht = t / 2 - rd;
+        var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+        poly.forEach(function (q) {
+          [-t, t].forEach(function (w) {
+            var x = at[0] + d[0] * q[0] + sd[0] * w / 2, z = at[2] + d[2] * q[0] + sd[2] * w / 2;
+            lo[0] = Math.min(lo[0], x); hi[0] = Math.max(hi[0], x); lo[2] = Math.min(lo[2], z); hi[2] = Math.max(hi[2], z);
+          });
+          lo[1] = Math.min(lo[1], q[1]); hi[1] = Math.max(hi[1], q[1]);
+        });
+        return this._op({ name: name, k: k === undefined ? 2 : k, lo: lo, hi: hi, d: function (x, y, z) {
+          var rx = x - at[0], rz = z - at[2], u = rx * d[0] + rz * d[2], w = rx * sd[0] + rz * sd[2], best = 1e18, inside = false;
+          if (Math.abs(w) > t + 6) return Math.abs(w) - t / 2;
+          for (var i = 0, j = n - 1; i < n; j = i++) {
+            var a = poly[i], b = poly[j], ex = b[0] - a[0], ey = b[1] - a[1], fx = u - a[0], fy = y - a[1];
+            var q = clamp((fx * ex + fy * ey) / ((ex * ex + ey * ey) || 1), 0, 1), gx = fx - ex * q, gy = fy - ey * q, dd = gx * gx + gy * gy;
+            if (dd < best) best = dd;
+            if ((a[1] > y) !== (b[1] > y) && u < a[0] + ((y - a[1]) * (b[0] - a[0])) / (b[1] - a[1])) inside = !inside;
+          }
+          var s2 = Math.sqrt(best) * (inside ? -1 : 1) + rd, w2 = Math.abs(w) - ht;
+          return Math.min(Math.max(s2, w2), 0) + Math.hypot(Math.max(s2, 0), Math.max(w2, 0)) - rd;
+        } });
+      };
+      // Carves a form (an ell / path / plate result pushed last) out of everything so far.
+      Sculpt.prototype.carve = function (k) { var o = this.ops[this.ops.length - 1]; o.carve = true; if (k !== undefined) o.k = k; return this; };
+      // Recolours the surface inside an ellipsoid, without changing its shape (bellies, patches, masks).
+      Sculpt.prototype.paint = function (name, c, r, color) {
+        this._name(name, color);
+        return this._op({ name: name, paint: true, lo: [c[0] - r[0], c[1] - r[1], c[2] - r[2]], hi: [c[0] + r[0], c[1] + r[1], c[2] + r[2]], k: 0, d: function (x, y, z) {
+          var a = (x - c[0]) / r[0], b = (y - c[1]) / r[1], e = (z - c[2]) / r[2]; return a * a + b * b + e * e - 1;
+        } });
+      };
+      // Moves the surface in a box by fn(x, y, z) mm (positive = inward): grooves, scales, shell plates.
+      Sculpt.prototype.relief = function (lo, hi, fn) { return this._op({ relief: true, lo: lo, hi: hi, k: 0, d: fn, name: this.names[0] }); };
+      // Keeps only x <= maxX (used by flexi heads, which must stay clear of the first joint).
+      Sculpt.prototype.clipX = function (maxX) { this.maxX = maxX; return this; };
+      Sculpt.prototype.run = function () {
+        var h = this.h, ops = this.ops, lo = [1e9, 0, 1e9], hi = [-1e9, 0, -1e9], i, a;
+        ops.forEach(function (o) { if (o.carve || o.paint || o.relief) return; for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], o.lo[c]); hi[c] = Math.max(hi[c], o.hi[c]); } });
+        lo[1] = 0;
+        var x0 = lo[0] - 2 * h, z0 = lo[2] - 2 * h, nx = Math.ceil((hi[0] - lo[0]) / h) + 5, ny = Math.ceil(hi[1] / h) + 4, nz = Math.ceil((hi[2] - lo[2]) / h) + 5, N = nx * ny * nz;
+        var F = new Float32Array(N).fill(1000), L = new Uint8Array(N), idx = function (ix, iy, iz) { return (iy * nz + iz) * nx + ix; }, names = this.names, self = this;
+        ops.forEach(function (o) {
+          var pad = (o.k || 0) + 2.2 * h, label = names.indexOf(o.name);
+          var ia = Math.max(0, Math.floor((o.lo[0] - pad - x0) / h)), ib = Math.min(nx - 1, Math.ceil((o.hi[0] + pad - x0) / h));
+          var ja = Math.max(0, Math.floor((o.lo[1] - pad) / h)), jb = Math.min(ny - 1, Math.ceil((o.hi[1] + pad) / h));
+          var ka = Math.max(0, Math.floor((o.lo[2] - pad - z0) / h)), kb = Math.min(nz - 1, Math.ceil((o.hi[2] + pad - z0) / h));
+          for (var iy = ja; iy <= jb; iy++) for (var iz = ka; iz <= kb; iz++) for (var ix = ia; ix <= ib; ix++) {
+            var n = idx(ix, iy, iz), d = o.d(x0 + ix * h, iy * h, z0 + iz * h), f = F[n];
+            if (o.relief) { F[n] = f + d; continue; }
+            if (o.paint) { if (d < 0) L[n] = label; continue; }
+            var k = o.k;
+            if (o.carve) { var q = -d, w = k > 0 ? clamp(0.5 + 0.5 * (f - q) / k, 0, 1) : (f > q ? 1 : 0); F[n] = lerp(q, f, w) + (k > 0 ? k * w * (1 - w) : 0); continue; }
+            if (d - k > f) continue;
+            var t = k > 0 ? clamp(0.5 + 0.5 * (f - d) / k, 0, 1) : (d < f ? 1 : 0);
+            F[n] = lerp(f, d, t) - (k > 0 ? k * t * (1 - t) : 0);
+            if (d < f) L[n] = label;
+          }
+        });
+        if (this.maxX !== undefined) for (var cy = 0; cy < ny; cy++) for (var cz = 0; cz < nz; cz++) for (var cx = 0; cx < nx; cx++) { var v = x0 + cx * h - this.maxX, m = idx(cx, cy, cz); if (v > F[m]) F[m] = v; }
+        // Support pass: a layer may only hold what is within 45 degrees of the solid on the layer below.
+        var D = new Float32Array(nx * nz), S2 = 1.4142 * h, A = nx * nz;
+        for (var ly = 1; ly < ny; ly++) {
+          var base = (ly - 1) * A, ib2;
+          for (ib2 = 0; ib2 < A; ib2++) { var fb = F[base + ib2]; D[ib2] = fb < 0 ? fb : 1e6; }
+          // seed outside cells beside the solid with their true sub-cell distance, then spread
+          for (var pz = 0; pz < nz; pz++) for (var px = 0; px < nx; px++) {
+            var c0 = pz * nx + px; if (D[c0] < 0) continue;
+            var fv = F[base + c0];
+            if ((px > 0 && D[c0 - 1] < 0) || (px < nx - 1 && D[c0 + 1] < 0) || (pz > 0 && D[c0 - nx] < 0) || (pz < nz - 1 && D[c0 + nx] < 0)) D[c0] = Math.min(fv, h);
+          }
+          for (pz = 0; pz < nz; pz++) for (px = 0; px < nx; px++) {
+            c0 = pz * nx + px; if (D[c0] <= 0) continue; var b0 = D[c0];
+            if (px > 0) b0 = Math.min(b0, D[c0 - 1] + h); if (pz > 0) { b0 = Math.min(b0, D[c0 - nx] + h); if (px > 0) b0 = Math.min(b0, D[c0 - nx - 1] + S2); if (px < nx - 1) b0 = Math.min(b0, D[c0 - nx + 1] + S2); }
+            D[c0] = b0;
+          }
+          for (pz = nz - 1; pz >= 0; pz--) for (px = nx - 1; px >= 0; px--) {
+            c0 = pz * nx + px; if (D[c0] <= 0) continue; b0 = D[c0];
+            if (px < nx - 1) b0 = Math.min(b0, D[c0 + 1] + h); if (pz < nz - 1) { b0 = Math.min(b0, D[c0 + nx] + h); if (px < nx - 1) b0 = Math.min(b0, D[c0 + nx + 1] + S2); if (px > 0) b0 = Math.min(b0, D[c0 + nx - 1] + S2); }
+            D[c0] = b0;
+          }
+          var top = ly * A;
+          for (ib2 = 0; ib2 < A; ib2++) { var allow = D[ib2] - h * self.reach * 0.92; if (allow > F[top + ib2]) F[top + ib2] = allow; }
+        }
+        // Drop specks: keep only solid connected to the bed through cell faces.
+        var keep = new Uint8Array(N), st = new Int32Array(N), sp = 0, cc;
+        for (i = A; i < 2 * A; i++) if (F[i] < 0) { keep[i] = 1; st[sp++] = i; }
+        while (sp) {
+          cc = st[--sp];
+          var nb6 = [cc - 1, cc + 1, cc - nx, cc + nx, cc - A, cc + A];
+          for (var b6 = 0; b6 < 6; b6++) { var q6 = nb6[b6]; if (q6 >= A && q6 < N && F[q6] < 0 && !keep[q6]) { keep[q6] = 1; st[sp++] = q6; } }
+        }
+        for (i = A; i < N; i++) if (F[i] < 0 && !keep[i]) F[i] = 0.5;
+        // The bed: layer 0 is just outside, so the underside meshes flat.
+        for (i = 0; i < A; i++) if (F[i] < 0) F[i] = 1e-4;
+        for (i = 0; i < A; i++) { F[i] = F[i] < 1e-3 && F[i + A] < 0 ? 1e-4 : Math.max(F[i], 1e-4); }
+        this.F = F; this.L = L; this.grid = { nx: nx, ny: ny, nz: nz, x0: x0, z0: z0, h: h };
+        return this;
+      };
+      Sculpt.prototype.field = function (x, y, z) {
+        var g = this.grid, h = g.h, fx = (x - g.x0) / h, fy = y / h, fz = (z - g.z0) / h;
+        var ix = clamp(Math.floor(fx), 0, g.nx - 2), iy = clamp(Math.floor(fy), 0, g.ny - 2), iz = clamp(Math.floor(fz), 0, g.nz - 2), tx = fx - ix, ty = fy - iy, tz = fz - iz, F = this.F;
+        function v(a, b, c) { return F[((iy + b) * g.nz + iz + c) * g.nx + ix + a]; }
+        return lerp(lerp(lerp(v(0, 0, 0), v(1, 0, 0), tx), lerp(v(0, 0, 1), v(1, 0, 1), tx), tz), lerp(lerp(v(0, 1, 0), v(1, 1, 0), tx), lerp(v(0, 1, 1), v(1, 1, 1), tx), tz), ty);
+      };
+      // First point on the surface along a ray, with its outward normal. Call after run().
+      Sculpt.prototype.hit = function (o, dir) {
+        var d = vnorm(dir), s = 0, st = this.h * 0.25, p = o, prev = this.field(o[0], o[1], o[2]);
+        for (var i = 0; i < 800; i++) {
+          s += st; p = vadd(o, vmul(d, s));
+          var f = this.field(p[0], p[1], p[2]);
+          if (f < 0 && prev >= 0) { p = vadd(o, vmul(d, s - st * (f / (f - prev)))); break; }
+          prev = f;
+        }
+        var e = this.h, self = this;
+        function g(a, b, c) { return self.field(p[0] + a, p[1] + b, p[2] + c); }
+        return { p: p, n: vnorm([g(e, 0, 0) - g(-e, 0, 0), g(0, e, 0) - g(0, -e, 0), g(0, 0, e) - g(0, 0, -e)]) };
+      };
+      // Meshes the field and adds it to a Scene as one smoothGroup split into paintable entries. Marching tetrahedra: always closed and manifold.
+      Sculpt.prototype.addTo = function (sc, body) {
+        var g = this.grid, F = this.F, L = this.L, nx = g.nx, ny = g.ny, nz = g.nz, h = g.h, x0 = g.x0, z0 = g.z0, names = this.names, A = nx * nz;
+        var TET = [[0, 1, 3, 7], [0, 3, 2, 7], [0, 2, 6, 7], [0, 6, 4, 7], [0, 4, 5, 7], [0, 5, 1, 7]];
+        var cor = [0, 1, nz * 0 + nx, nx + 1, A, A + 1, A + nx, A + nx + 1]; // x bit 1, z bit 2, y bit 4
+        var verts = new Map(), P = [], out = names.map(function () { return []; });
+        function vert(a, b) {
+          var key = a < b ? a * N2 + b : b * N2 + a, got = verts.get(key);
+          if (got !== undefined) return got;
+          var fa = F[a], fb = F[b], t = clamp(fa / (fa - fb), 0.02, 0.98);
+          function xyz(n) { var iy = Math.floor(n / A), r = n - iy * A, iz = Math.floor(r / nx); return [x0 + (r - iz * nx) * h, iy * h, z0 + iz * h]; }
+          var pa = xyz(a), pb = xyz(b), id = P.length / 3;
+          P.push(lerp(pa[0], pb[0], t), lerp(pa[1], pb[1], t), lerp(pa[2], pb[2], t));
+          verts.set(key, id);
+          return id;
+        }
+        var N2 = nx * ny * nz;
+        function tri(a, b, c, lab, nIn) { // winding so the normal points from solid toward empty; nIn = a node inside
+          var ax = P[a * 3], ay = P[a * 3 + 1], az = P[a * 3 + 2], ux = P[b * 3] - ax, uy = P[b * 3 + 1] - ay, uz = P[b * 3 + 2] - az, vx = P[c * 3] - ax, vy = P[c * 3 + 1] - ay, vz = P[c * 3 + 2] - az;
+          var cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+          var iy = Math.floor(nIn / A), r = nIn - iy * A, iz = Math.floor(r / nx), ix = r - iz * nx;
+          var dot = cx * (x0 + ix * h - ax) + cy * (iy * h - ay) + cz * (z0 + iz * h - az);
+          out[lab].push(a, dot > 0 ? c : b, dot > 0 ? b : c);
+        }
+        for (var iy = 0; iy < ny - 1; iy++) for (var iz = 0; iz < nz - 1; iz++) for (var ix = 0; ix < nx - 1; ix++) {
+          var n0 = (iy * nz + iz) * nx + ix, any = 0;
+          for (var c = 0; c < 8; c++) if (F[n0 + cor[c]] < 0) any++;
+          if (any === 0 || any === 8) continue;
+          for (var t = 0; t < 6; t++) {
+            var T = TET[t], ins = [], ous = [];
+            for (var q = 0; q < 4; q++) { var nn = n0 + cor[T[q]]; (F[nn] < 0 ? ins : ous).push(nn); }
+            if (!ins.length || !ous.length) continue;
+            var lab = L[ins[0]];
+            if (ins.length === 1) tri(vert(ins[0], ous[0]), vert(ins[0], ous[1]), vert(ins[0], ous[2]), lab, ins[0]);
+            else if (ins.length === 3) tri(vert(ous[0], ins[0]), vert(ous[0], ins[1]), vert(ous[0], ins[2]), lab, ins[0]);
+            else {
+              var a = vert(ins[0], ous[0]), b = vert(ins[0], ous[1]), cc = vert(ins[1], ous[1]), d = vert(ins[1], ous[0]);
+              tri(a, b, cc, lab, ins[0]); tri(a, cc, d, lab, ins[0]);
+            }
+          }
+        }
+        // Drop the first layer onto the bed, so the bottom edge has no undercut.
+        for (var fl = 1; fl < P.length; fl += 3) if (P[fl] < h) P[fl] = 0;
+        // Light smoothing removes the small ripple left by the grid. The flat underside stays on the bed.
+        var nv = P.length / 3, sum = new Float32Array(nv * 3), cnt = new Uint16Array(nv), pass, ii;
+        function link(u, v) { sum[u * 3] += P[v * 3]; sum[u * 3 + 1] += P[v * 3 + 1]; sum[u * 3 + 2] += P[v * 3 + 2]; cnt[u]++; }
+        for (pass = 0; pass < 6; pass++) {
+          var lam = pass % 2 ? -0.34 : 0.33; // shrink then inflate, so the volume holds
+          sum.fill(0); cnt.fill(0);
+          out.forEach(function (idx) { for (var e = 0; e < idx.length; e += 3) { var a0 = idx[e], b0 = idx[e + 1], c0 = idx[e + 2]; link(a0, b0); link(a0, c0); link(b0, c0); link(b0, a0); link(c0, a0); link(c0, b0); } });
+          for (ii = 0; ii < nv; ii++) {
+            if (!cnt[ii]) continue;
+            var low = P[ii * 3 + 1] <= h * 1.5; // near the bed: tidy the outline, but keep the height
+            for (var ax = 0; ax < 3; ax++) if (!low || ax !== 1) P[ii * 3 + ax] += lam * (sum[ii * 3 + ax] / cnt[ii] - P[ii * 3 + ax]);
+                      }
+        }
+        // Straighten the edges between paint regions: slide each boundary vertex toward its boundary neighbours.
+        var owner = new Map(), bn = new Map();
+        function be(u, v, li) {
+          var key = u < v ? u * nv + v : v * nv + u, o = owner.get(key);
+          if (o === undefined) { owner.set(key, li); return; }
+          if (o !== li) { (bn.get(u) || bn.set(u, []).get(u)).push(v); (bn.get(v) || bn.set(v, []).get(v)).push(u); }
+        }
+        out.forEach(function (idx, li) { for (var e = 0; e < idx.length; e += 3) { be(idx[e], idx[e + 1], li); be(idx[e + 1], idx[e + 2], li); be(idx[e + 2], idx[e], li); } });
+        for (pass = 0; pass < 5; pass++) {
+          var moved = [];
+          bn.forEach(function (ns, v) {
+            if (P[v * 3 + 1] <= h * 1.5 || ns.length !== 2) return;
+            var mx = 0, my = 0, mz = 0;
+            ns.forEach(function (q) { mx += P[q * 3]; my += P[q * 3 + 1]; mz += P[q * 3 + 2]; });
+            moved.push(v, P[v * 3] + 0.35 * (mx / ns.length - P[v * 3]), P[v * 3 + 1] + 0.35 * (my / ns.length - P[v * 3 + 1]), P[v * 3 + 2] + 0.35 * (mz / ns.length - P[v * 3 + 2]));
+          });
+          for (ii = 0; ii < moved.length; ii += 4) { var vv = moved[ii]; P[vv * 3] = moved[ii + 1]; P[vv * 3 + 1] = moved[ii + 2]; P[vv * 3 + 2] = moved[ii + 3]; }
+        }
+        var self = this;
+        out.forEach(function (idx, li) {
+          if (!idx.length) return;
+          var arr = new Float32Array(idx.length * 3);
+          for (var i = 0; i < idx.length; i++) { arr[i * 3] = P[idx[i] * 3]; arr[i * 3 + 1] = P[idx[i] * 3 + 1]; arr[i * 3 + 2] = P[idx[i] * 3 + 2]; }
+          sc.add(names[li], body || 'b', arr, self.colors[names[li]]);
+          (sc.sculpted = sc.sculpted || {})[names[li]] = true;
+        });
+      };
+      // Scene output with the sculpted entries tagged as one seamless surface.
+      function finishSculpt(sc, scale) {
+        if (scale && scale !== 1) scaleScene(sc, scale);
+        var es = finish(sc);
+        es.forEach(function (e) { if (sc.sculpted && sc.sculpted[e.name]) e.smoothGroup = 'sculpt'; });
+        return es;
+      }
+      // A face detail on the sculpted surface: fired from `o` along `dir`.
+      function detail(sc, S, name, o, dir, r, color, opt) { var s = S.hit(o, dir); sc.add(name, 'b', dome(s.p, s.n, r, opt), color); return s; }
+      // Points of a band running over an ellipsoid at a fixed x offset, from one side to the other (stripes, ribs, shell bands).
+      function bandOver(c, r, dx, reach, rad, sink) {
+        var out = [], n = 8;
+        for (var i = 0; i <= n; i++) {
+          var u = lerp(-reach, reach, i / n), q = 1 - (dx * dx) / (r[0] * r[0]) - u * u, top = Math.sqrt(Math.max(q, 0.01));
+          out.push([c[0] + dx, c[1] + r[1] * top - (sink || 0), c[2] + r[2] * u, rad * (1 - 0.3 * Math.abs(u))]);
+        }
+        return out;
+      }
+
       // -----------------------------------------------------------------------
-      // Octopus & Squid: a mantle dome with curling tentacles lying on the bed
+      // Octopus & Squid: a soft sculpted mantle, with tentacles and suckers that curl flat on the bed
       // -----------------------------------------------------------------------
       function buildOcto(p) {
-        var sc = new Scene(), sq = Math.round(p.kind) === 1, n = Math.round(p.arms), i, pink = sq ? '#fda4af' : '#c084fc', pale = sq ? '#fecdd3' : '#e9d5ff';
-        var R = 17 * p.size, hr = R;
+        var sc = new Scene(), S = new Sculpt(1.25 + 0.2 * p.size * (p.length - 1)), sq = Math.round(p.kind) === 1, n = Math.round(p.arms), i, k;
+        var pink = sq ? '#fda4af' : '#c084fc', pale = sq ? '#ffe4e6' : '#f3e8ff', deep = sq ? '#fb7185' : '#a855f7', R = 17 * p.size, eyeY, eyeZ, eyeX;
         if (!sq) {
-          bellyBall(sc, 'head', 'h', 0, 0, R, R * 0.95, R * 1.5, pink, { sq: 2.4, cs: 2.4, cut: 0.4, seg: 30 });
-          for (i = -1; i <= 1; i += 2) {
-            eyeAt(sc, 'eyes', 'h', [R * 0.78, R * 0.95, i * R * 0.5], 3.4, '#f8fafc');
-            eyeAt(sc, 'pupils', 'h', [R * 0.78 + 2.6, R * 0.95, i * R * 0.5], 1.9, EYE);
-          }
-        } else { // squid: a long mantle lying back, short head and fins
-          bellyBall(sc, 'head', 'h', -R * 0.9, 0, R * 1.9, R * 0.8, R * 0.8, pink, { sq: 2.4, cs: 2.4, cut: 0.4, seg: 30 });
-          bellyBall(sc, 'head', 'h', R * 0.85, 0, R * 0.85, R * 0.75, R * 0.7, pink, { sq: 2.6, cs: 2.6, cut: 0.4 });
-          for (i = -1; i <= 1; i += 2) {
-            eyeAt(sc, 'eyes', 'h', [R * 1.1, R * 0.62, i * R * 0.55], 3, '#f8fafc');
-            eyeAt(sc, 'pupils', 'h', [R * 1.1 + 2.3, R * 0.62, i * R * 0.55], 1.7, EYE);
-          }
-          sc.add('fins', 'h', plate([[R * 0.5, 0], [-R * 0.95, 0], [-R * 0.75, R * 0.8], [-R * 0.2, R * 1.5], [R * 0.2, R * 0.9]], [-R * 1.7, 7, -1.5], 0, 3, 1, 0.9), pale);
+          S.ell('head', [0, R * 0.7, 0], [R * 1.08, R * 0.8, R * 1.08], pink, 5);    // skirt where the arms start
+          S.ell('head', [-R * 0.16, R * 1.75, 0], [R * 1.02, R * 1.3, R * 0.98], pink, 7); // mantle
+          eyeY = R * 1.16; eyeZ = R * 0.56; eyeX = 0;
+          S.path(null, [[R * 1.18, R * 0.78, -R * 0.2, 0.9], [R * 1.28, R * 0.7, 0, 1], [R * 1.18, R * 0.78, R * 0.2, 0.9]], null, 0, 3).carve(0.8);
+          for (i = 0; i < 6; i++) { var a0 = 2 + i * 0.75, y0 = R * (1.5 + (i % 3) * 0.55); S.paint('spots', [-R * 0.16 + Math.cos(a0) * R, y0, Math.sin(a0) * R], [R * 0.27, R * 0.27, R * 0.27], deep); }
+        } else {
+          S.path('head', [[-R * 2.7, R * 0.42, 0, R * 0.36], [-R * 1.4, R * 0.72, 0, R * 0.86], [-R * 0.2, R * 0.74, 0, R * 0.92], [R * 0.7, R * 0.6, 0, R * 0.72]], pink, 3);
+          S.ell('head', [R * 1.1, R * 0.62, 0], [R * 0.72, R * 0.66, R * 0.78], pink, 3);
+          [-1, 1].forEach(function (s) { S.ell('fins', [-R * 2.3, 1.7, s * R * 0.66], [R * 0.82, 1.9, R * 0.86], pale, 1.5); });
+          eyeY = R * 0.8; eyeZ = R * 0.5; eyeX = R * 1.1;
+          for (i = 0; i < 5; i++) S.paint('spots', [-R * (0.4 + i * 0.42), R * 1.5, (i % 2 ? 1 : -1) * R * 0.3], [R * 0.17, R * 0.3, R * 0.17], deep);
         }
-        // tentacles: tubes lying on the bed that sweep out and curl at the tip
+        var r0 = (sq ? 4.8 : 6.6) * Math.sqrt(p.size), ox = sq ? R * 1.5 : 0, base = sq ? R * 0.55 : R * 0.84, len = p.length * R;
         for (i = 0; i < n; i++) {
-          var base, a, len = p.length * R, cu = p.curl;
-          if (!sq) a = TAU * (i + 0.5) / n; else a = lerp(-Math.PI * 0.62, Math.PI * 0.62, n > 1 ? i / (n - 1) : 0.5);
-          var dx = Math.cos(a), dz = Math.sin(a), ox = sq ? R * 1.45 : 0, r0 = sq ? R * 0.5 : R * 0.8;
-          var sgn = (i % 2 ? -1 : 1) * cu;
-          var pts = [], k;
-          for (k = 0; k <= 5; k++) {
-            var u = k / 5, ang = a + sgn * 1.6 * u * u, rad = r0 + len * u * (sq ? 0.8 : 1);
-            if (sq && u > 0.01) { ang = a * (1 - 0.25 * u) + sgn * 0.5 * u * u; }
-            pts.push([ox + Math.cos(ang) * rad, 3, Math.sin(ang) * rad]);
+          var a = sq ? lerp(-Math.PI * 0.55, Math.PI * 0.55, n > 1 ? i / (n - 1) : 0.5) : TAU * (i + 0.5) / n, sgn = (i % 2 ? -1 : 1) * p.curl, pts = [];
+          for (k = 0; k <= 7; k++) {
+            var u = k / 7, ang = sq ? a * (1 - 0.25 * u) + sgn * 0.5 * u * u : a + sgn * 1.0 * Math.pow(u, 2), rad = base + len * (sq ? 0.8 : 1) * Math.pow(u, 0.9), r = r0 * (1 - 0.66 * u);
+            pts.push([ox + Math.cos(ang) * rad, r * 0.62, Math.sin(ang) * rad, r]);
           }
-          tubeAdd(sc, 'arms', 'a' + i, pts, function (t) { return (sq ? 4.4 : 5.6) * (1 - 0.72 * t) + 0.8; }, i % 2 ? pale : pink, { ground: true, per: 8 });
+          S.path('arms', pts, pink, 2.5, 4);
+          for (k = 1; k < 7; k++) { // suckers along the top of each arm
+            var q = pts[k], sr = q[3] * 0.56;
+            S.ell('suckers', [q[0], q[1] + q[3] * 0.84, q[2]], [sr, sr * 0.62, sr], pale, 0.7);
+          }
         }
-        return finish(sc);
+        S.reach = 0.72;
+        S.run();
+        [-1, 1].forEach(function (s) {
+          var e = S.hit([eyeX + R * 5, eyeY, s * eyeZ], [-1, 0, 0]), er = R * 0.3;
+          sc.add('eyes', 'b', dome(e.p, e.n, er, { angle: 48, seg: 26 }), '#f8fafc');
+          var rise = (er / Math.sin(deg(48))) * (1 - Math.cos(deg(48)));
+          sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, er * 0.56, { sink: 0.7 }), '#1e293b');
+        });
+        S.addTo(sc);
+        return finishSculpt(sc);
       }
 
       var OCTO_PARAMS = [
         { group: 'Creature', key: 'kind', label: 'Kind', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Octopus', 'Squid'] },
         { group: 'Creature', key: 'size', label: 'Body size', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 },
-        { group: 'Tentacles', key: 'arms', label: 'Tentacles', unit: '', min: 4, max: 10, step: 1, value: 8 },
-        { group: 'Tentacles', key: 'length', label: 'Tentacle length', unit: '×', min: 1.2, max: 3, step: 0.1, value: 2 },
+        { group: 'Tentacles', key: 'arms', label: 'Tentacles', unit: '', min: 4, max: 10, step: 1, value: 8, slider: true },
+        { group: 'Tentacles', key: 'length', label: 'Tentacle length', unit: '×', min: 1.2, max: 3, step: 0.1, value: 1.7 },
         { group: 'Tentacles', key: 'curl', label: 'Curl (straight ↔ curly)', unit: '×', min: 0, max: 1.5, step: 0.05, value: 0.8 }
       ];
 
@@ -919,7 +1189,7 @@
         fileName: 'Octopus',
         defaultColor: '#c084fc',
         palette: ANIMAL_PALETTE,
-        partNames: { head: 'Body', eyes: 'Eyes', pupils: 'Pupils', arms: 'Tentacles', fins: 'Fins' },
+        partNames: { head: 'Body', spots: 'Spots', eyes: 'Eyes', pupils: 'Pupils', arms: 'Tentacles', suckers: 'Suckers', fins: 'Fins' },
         parameters: OCTO_PARAMS,
         presets: makePresets(OCTO_PARAMS, [
           ['Default octopus', {}],

@@ -1,61 +1,97 @@
       // -----------------------------------------------------------------------
-      // Mushroom Critters: a mushroom gnome, a frog or a snail
+      // Mushroom Critters: a mushroom gnome, a frog or a snail, each sculpted as one seamless surface
       // -----------------------------------------------------------------------
       function buildCritter(p) {
-        var sc = new Scene(), sp = Math.round(p.species), i, s = p.size;
-        if (sp === 0) { // mushroom gnome: stem body, bell cap, beard and nose
-          var Rs = 11 * s, Hs = 30 * s, cap = 24 * p.cap, capH = 30 * p.capTall;
-          bellyBall(sc, 'stem', 'b', 0, 0, Rs, Rs, Hs / 1.4, '#fef3c7', { sq: 2.4, cs: 2.4, cut: 0.4, seg: 28 });
-          // cap: a bell whose underside rises at 55 degrees from the stem, then a dome
-          var fr = frame([0, 0, 0], [0, 1, 0], [0, 0, 1]), y0 = Hs * 0.62, prof = [[0, y0 + capH * 1.0]];
-          var rim = cap, ry = y0 + (rim - Rs * 0.8) * 1.2;
-          for (i = 1; i <= 8; i++) { var t = (Math.PI / 2) * (i / 8); prof.push([rim * Math.sin(t), ry + (capH - (ry - y0)) * Math.cos(t) * 0.92 + 0.0]); }
-          prof.push([rim, ry], [Rs * 0.8, y0 + 1], [0, y0 + 1]);
-          sc.add('cap', 'c', lathe(fr, prof, 34, {}), '#fb7185');
-          for (i = 0; i < 6; i++) { // spots on the cap
-            var ang = TAU * i / 6 + 0.3, rr = rim * 0.62, yy = ry + (capH - (ry - y0)) * Math.cos(Math.asin(Math.min(0.95, rr / rim))) * 0.92;
-            ball(sc, 'spots', 'c', [Math.cos(ang) * rr, yy + 0.2, Math.sin(ang) * rr], 3.2, 3.2, 1.8, '#fff7ed');
-          }
-          for (var e = -1; e <= 1; e += 2) eyeAt(sc, 'face', 'b', [Rs * 0.78, Hs * 0.5, e * Rs * 0.38], 1.8, EYE);
-          ball(sc, 'face', 'b', [Rs * 0.95, Hs * 0.4, 0], 3, 2.8, 2.8, '#fda4af');
-          bellyBall(sc, 'beard', 'b', Rs * 0.2, 0, Rs * 0.8, Rs * 0.92, Hs * 0.22, '#f1f5f9', { cut: 0.4 });
-          for (e = -1; e <= 1; e += 2) bellyBall(sc, 'feet', 'b', Rs * 0.5, e * Rs * 0.5, 5, 3.6, 3, '#92400e');
-        } else if (sp === 1) { // frog
-          var W = 22 * s;
-          bellyBall(sc, 'body', 'b', 0, 0, W, W * 0.85, W * 0.85, '#86efac', { sq: 2.6, cs: 2.6, cut: 0.4 });
-          bellyBall(sc, 'belly', 'b', W * 0.45, 0, W * 0.55, W * 0.6, W * 0.45, '#ecfccb', { cut: 0.4 });
-          for (i = -1; i <= 1; i += 2) {
-            bellyBall(sc, 'legs', 'b', -W * 0.45, i * W * 0.85, W * 0.62, W * 0.3, W * 0.32, '#4ade80', { yaw: i * 0.25 });
-            bellyBall(sc, 'legs', 'b', W * 0.62, i * W * 0.58, W * 0.34, W * 0.2, W * 0.2, '#4ade80');
-            ball(sc, 'eyes', 'b', [W * 0.55, W * 1.0 * 1.0 - 4, i * W * 0.42], 5.2 * s, 5.2 * s, 5.2 * s, '#86efac');
-            eyeAt(sc, 'pupils', 'b', [W * 0.55 + 3.6 * s, W * 1.0 - 3.6, i * W * 0.42], 2.4 * s, EYE);
-            ball(sc, 'cheeks', 'b', [W * 0.78, W * 0.55, i * W * 0.55], 2.6, 2.6, 1.8, '#fda4af');
-          }
-        } else { // snail
-          var Sb = 8 * s;
-          tubeAdd(sc, 'body', 'b', [[-34 * s, 3, 0], [-20 * s, 3.5, 0], [0, 4.4, 0], [14 * s, 5, 0]], function (t) { return 3.4 + 2.4 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.1)) * s - 1.6 * t * 0 + 1; }, '#fde68a', { ground: true, per: 8 });
-          tubeAdd(sc, 'body', 'b', [[14 * s, 5.4, 0], [20 * s, 12, 0], [22 * s, 20, 0], [22.5 * s, 26, 0]], function (t) { return 5 - 1.2 * t; }, '#fde68a', { per: 8 });
-          ball(sc, 'body', 'b', [24 * s, 28, 0], 6, 5.4, 5.4, '#fde68a');
-          for (i = -1; i <= 1; i += 2) {
-            spike(sc, 'stalks', 'b', [24 * s, 31.5, i * 2.4], vnorm([0.15, 1, i * 0.45]), 1.1, 11, '#fde68a', 3);
-            eyeAt(sc, 'face', 'b', [24 * s + 2, 29, i * 4.6], 1.5, EYE);
-          }
-          var Rr = 17 * s;
-          bellyBall(sc, 'shell', 's', -6 * s, 0, Rr, 9 * s, Rr * 1.1, '#fdba74', { sq: 2.2, cs: 2.2, cut: 0.4, seg: 30 });
-          for (i = -1; i <= 1; i += 2) {
-            var sp2 = [], k;
-            for (k = 0; k <= 40; k++) { var u = k / 40, ang2 = u * TAU * 2.1 + 0.4, rad = (2 + 12 * u) * s; var px = -6 * s + Math.cos(ang2) * rad * 1.0, py = Rr * 1.1 * 0.62 + Math.sin(ang2) * rad * 1.05; sp2.push([px, py, i * (9 * s * Math.sqrt(Math.max(0.05, 1 - Math.pow((px + 6 * s) / Rr, 2) - Math.pow((py - Rr * 1.1 * 0.62) / (Rr * 1.1), 2))) - 0.6)]); }
-            sc.add('swirl', 's', tube(sp2, function () { return 1.5; }, 8, {}), '#f97316');
-          }
+        var sc = new Scene(), sp = Math.round(p.species), S = new Sculpt(1.2), i, sz = p.size;
+        function eyes(x, y, z, r, white) {
+          [-1, 1].forEach(function (s) {
+            var e = S.hit([x + 200, y, s * z], [-1, 0, 0]);
+            sc.add('eyes', 'b', dome(e.p, e.n, r, { angle: 48 }), white ? '#f8fafc' : '#1e293b');
+            var rise = (r / Math.sin(deg(48))) * (1 - Math.cos(deg(48)));
+            if (white) sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, r * 0.56, { sink: 0.6 }), '#1e293b');
+            else sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, r * 0.36), [0, r * 0.3, 0])), e.n, r * 0.26, { sink: 0.4 }), '#1e293b');
+          });
         }
-        return finish(sc);
+        S.reach = 0.72;
+        if (sp === 0) { // mushroom gnome: stem body with a face, gilled cap, beard and boots
+          var Rs = 15 * sz, Hs = 40 * sz, cap = 27 * sz * p.cap, capH = 24 * sz * p.capTall, cy = Hs * 1.22 + (cap - 27 * sz) * 0.7, stem = '#fef3c7', red = '#fb7185';
+          S.ell('stem', [0, Hs * 0.42, 0], [Rs, Hs * 0.55, Rs], stem, 4);
+          S.path('stem', [[0, Hs * 0.6, 0, Rs * 0.84], [0, cy, 0, Rs * 0.7]], stem, 5);
+          // cap: its underside is trimmed into a 45 degree cone; radial gills are pressed into it
+          S.ell('cap', [0, cy + capH * 0.16, 0], [cap * 1.02, capH * 0.84, cap * 1.02], red, 3);
+          S.paint('gills', [0, cy - cap * 0.62, 0], [cap * 1.5, cap * 0.76, cap * 1.5], '#fcd9b6');
+          S.relief([-cap * 1.1, cy - cap, -cap * 1.1], [cap * 1.1, cy + capH * 0.1, cap * 1.1], function (x, y, z) { return Math.hypot(x, z) < Rs * 0.92 ? 0 : 0.8 * Math.pow(Math.abs(Math.sin(Math.atan2(z, x) * 16)), 3); });
+          for (i = 0; i < 9; i++) { // spots
+            var a = i * 2.4, rr = i === 0 ? 0 : cap * (i < 4 ? 0.46 : 0.8), t2 = rr / (cap * 1.02), yy = cy + capH * 0.16 + capH * 0.84 * Math.sqrt(Math.max(1 - t2 * t2, 0.03)), sr = (i % 3 === 0 ? 5.4 : 3.8) * sz;
+            S.ell('spots', [Math.cos(a) * rr, yy - 0.4, Math.sin(a) * rr], [sr, Math.max(1.7, 2 * sz), sr], '#fff7ed', 1);
+          }
+          [-1, 1].forEach(function (s) {
+            S.ell('feet', [Rs * 0.62, 3.5 * sz, s * Rs * 0.55], [9.5 * sz, 4 * sz, 6.5 * sz], '#92400e', 1.5);
+            S.path('stem', [[Rs * 0.2, Hs * 0.5, s * Rs * 0.86, 3.3 * sz], [Rs * 0.62, Hs * 0.32, s * Rs * 0.96, 2.8 * sz], [Rs * 0.95, Hs * 0.34, s * Rs * 0.74, 2.4 * sz]], stem, 2);
+          });
+          S.path('beard', [[Rs * 0.76, Hs * 0.42, -Rs * 0.52, 3.6 * sz], [Rs * 0.96, Hs * 0.34, 0, 5 * sz], [Rs * 0.76, Hs * 0.42, Rs * 0.52, 3.6 * sz]], '#f8fafc', 2.2);
+          S.ell('beard', [Rs * 0.9, Hs * 0.16, 0], [Rs * 0.28, Hs * 0.17, Rs * 0.5], '#f8fafc', 2.5);
+          S.ell('nose', [Rs * 1.02, Hs * 0.56, 0], [4 * sz, 3.6 * sz, 3.8 * sz], '#fda4af', 1.2);
+          S.run();
+          eyes(0, Hs * 0.68, Rs * 0.38, 2.9 * sz, false);
+        } else if (sp === 1) { // frog: wide smile, folded legs and bulging eyes
+          var W = 24 * sz, g1 = '#86efac', g2 = '#4ade80';
+          S.ell('body', [0, W * 0.42, 0], [W * 1.12, W * 0.66, W * 0.96], g1, 3);
+          S.ell('body', [W * 0.42, W * 0.74, 0], [W * 0.66, W * 0.42, W * 0.76], g1, 6);
+          S.paint('belly', [W * 0.9, W * 0.26, 0], [W * 0.5, W * 0.36, W * 0.76], '#ecfccb');
+          [-1, 1].forEach(function (s) {
+            var zE = s * W * 0.42, yE = W * 1.12;
+            S.ell('body', [W * 0.56, yE, zE], [W * 0.22, W * 0.24, W * 0.23], g1, 2);
+            S.ell('legs', [-W * 0.54, W * 0.34, s * W * 0.82], [W * 0.56, W * 0.34, W * 0.27], g2, 2.5);
+            S.path('legs', [[-W * 0.2, W * 0.15, s * W * 1.02, W * 0.15], [W * 0.34, W * 0.1, s * W * 1.04, W * 0.11]], g2, 1.5);
+            S.path('legs', [[W * 0.66, W * 0.46, s * W * 0.7, W * 0.19], [W * 0.86, W * 0.24, s * W * 0.74, W * 0.16], [W * 0.92, W * 0.1, s * W * 0.74, W * 0.15]], g2, 2);
+            for (var c = -1; c <= 1; c++) {
+              S.ell('toes', [W * 1.04 + (1 - Math.abs(c)) * 2, 1.9, s * W * 0.72 + c * W * 0.15], [W * 0.15, 2.3, W * 0.11], g2, 1.4);
+              S.ell('toes', [W * 0.46 + (1 - Math.abs(c)) * 2, 1.9, s * W * 1.04 + c * W * 0.15], [W * 0.15, 2.3, W * 0.11], g2, 1.4);
+            }
+            S.paint('cheeks', [W * 0.9, W * 0.9, s * W * 0.62], [W * 0.2, W * 0.13, W * 0.17], '#fda4af');
+          });
+          S.run();
+          var mp = [];
+          for (i = 0; i <= 12; i++) { var az = lerp(-0.74, 0.74, i / 12), mh = S.hit([W * 3, W * 0.8 - W * 0.09 * (1 - az * az / 0.55), az * W], [-1, 0, 0]); mp.push(mh.p.concat([0.95])); }
+          sc.add('mouth', 'b', sweep(mp, { seg: 8, per: 2, floor: 0 }), '#1e293b');
+          [-1, 1].forEach(function (s) {
+            var e = S.hit([W * 3, W * 1.16, s * W * 0.42], [-1, 0, 0]), r = W * 0.17;
+            sc.add('eyes', 'b', dome(e.p, e.n, r, { angle: 50 }), '#fde047');
+            var rise = (r / Math.sin(deg(50))) * (1 - Math.cos(deg(50)));
+            sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, r * 0.58, { sink: 0.6 }), '#1e293b');
+          });
+        } else { // snail: a foot on the bed, raised neck and a spiral shell
+          var Rr = 21 * sz, sx = -7 * sz, sy = Rr * 0.98, skin = '#fde68a';
+          S.path('body', [[-40 * sz, 1.8, 0, 2.6], [-20 * sz, 3.4, 0, 6], [6 * sz, 4.2, 0, 7.4], [18 * sz, 4.6, 0, 7]], skin, 3);
+          S.path('body', [[15 * sz, 6, 0, 7], [23 * sz, 16 * sz, 0, 6.2], [26 * sz, 28 * sz, 0, 5.6]], skin, 3);
+          S.ell('body', [28 * sz, 33 * sz, 0], [8 * sz, 7 * sz, 7 * sz], skin, 3);
+          S.ell('shell', [sx, sy, 0], [Rr, Rr, 11.5 * sz], '#fdba74', 1.5);
+          S.relief([sx - Rr, sy - Rr, -13 * sz], [sx + Rr, sy + Rr, 13 * sz], function (x, y) {
+            var dx = x - sx, dy = y - sy, r = Math.hypot(dx, dy), turns = r / (Rr * 0.34) - Math.atan2(dy, dx) / TAU, f = turns - Math.floor(turns);
+            return r < 1.5 ? 0 : 1.15 * smooth(1 - Math.abs(f - 0.5) / 0.17);
+          });
+          S.paint('swirl', [sx, sy, 0], [Rr * 0.34, Rr * 0.34, 14 * sz], '#f97316');
+          [-1, 1].forEach(function (s) {
+            var tb = [29 * sz, 38 * sz, s * 3 * sz], tt = [32 * sz, 50 * sz, s * 8 * sz];
+            S.path('stalks', [tb.concat([2.2]), tt.concat([1.6])], skin, 1.4);
+            S.ell('stalks', [tt[0], tt[1] + 1, tt[2]], [3, 3, 3], skin, 1);
+          });
+          S.run();
+          [-1, 1].forEach(function (s) {
+            var e = S.hit([200, 50 * sz + 1.4, s * 8 * sz], [-1, 0, 0]);
+            sc.add('eyes', 'b', dome(e.p, e.n, 1.7, { angle: 52, sink: 0.8 }), '#1e293b');
+          });
+        }
+        S.addTo(sc);
+        return finishSculpt(sc);
       }
 
       var CRIT_PARAMS = [
         { group: 'Critter', key: 'species', label: 'Critter', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Mushroom gnome', 'Frog', 'Snail'] },
-        { group: 'Critter', key: 'size', label: 'Overall size', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 },
-        { group: 'Mushroom gnome', key: 'cap', label: 'Cap width', unit: '×', min: 0.8, max: 1.4, step: 0.05, value: 1 },
-        { group: 'Mushroom gnome', key: 'capTall', label: 'Cap height', unit: '×', min: 0.6, max: 1.4, step: 0.05, value: 1 }
+        { group: 'Critter', key: 'size', label: 'Overall size', unit: '×', min: 0.8, max: 1.4, step: 0.05, value: 1 },
+        { group: 'Mushroom gnome', key: 'cap', label: 'Cap width', unit: '×', min: 0.8, max: 1.3, step: 0.05, value: 1 },
+        { group: 'Mushroom gnome', key: 'capTall', label: 'Cap height', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 }
       ];
 
       window.MM_GENERATOR = {
@@ -65,11 +101,11 @@
         fileName: 'Critter',
         defaultColor: '#fb7185',
         palette: ANIMAL_PALETTE,
-        partNames: { stem: 'Stem body', cap: 'Mushroom cap', spots: 'Cap spots', face: 'Face', beard: 'Beard', feet: 'Feet', body: 'Body', belly: 'Belly', legs: 'Legs', eyes: 'Eyes', pupils: 'Pupils', cheeks: 'Cheeks', stalks: 'Eye stalks', shell: 'Shell', swirl: 'Shell swirl' },
+        partNames: { stem: 'Stem body', cap: 'Mushroom cap', gills: 'Gills', spots: 'Cap spots', nose: 'Nose', mouth: 'Mouth', beard: 'Beard', feet: 'Boots', body: 'Body', belly: 'Belly', cheeks: 'Cheeks', legs: 'Legs', toes: 'Toes', eyes: 'Eyes', pupils: 'Pupils', shell: 'Shell', swirl: 'Shell centre', stalks: 'Eye stalks' },
         parameters: CRIT_PARAMS,
         presets: makePresets(CRIT_PARAMS, [
           ['Default mushroom gnome', {}],
-          ['Tiny toadstool', { size: 0.75, cap: 1.25, capTall: 0.8 }],
+          ['Tiny toadstool', { size: 0.8, cap: 1.25, capTall: 0.8 }],
           ['Frog', { species: 1 }],
           ['Big frog', { species: 1, size: 1.3 }],
           ['Snail', { species: 2 }],

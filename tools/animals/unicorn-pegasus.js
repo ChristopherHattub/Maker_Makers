@@ -3,63 +3,73 @@
       // Horn, ears and mane locks rise upward, the tail flows along the bed and the wings fold up in leaning plates.
       // -----------------------------------------------------------------------
       function buildUnicorn(p) {
-        var sc = new Scene(), kind = Math.round(p.kind), coat = '#f1f5f9', mane = '#d8b4fe', hoof = '#fde047', B = p.bulk, N = p.neck, hs = p.head;
+        var sc = new Scene(), S = new Sculpt(1.6), kind = Math.round(p.kind), coat = '#f8fafc', mane = '#d8b4fe', mane2 = '#f9a8d4', hoof = '#fde047', B = p.bulk, N = p.neck, hs = p.head, i;
         var hasHorn = kind === 0 || kind === 2, hasWings = kind === 1 || kind === 2;
-        var body = pod([0, 22 * B, 0], 34 * B, 23 * B, 17 * B, { flare: 0.7, rings: 34 });
-        sc.add('body', 'b', body.tris, coat);
-        [-1, 1].forEach(function (sd) {
-          sc.add('body', 'b', pod([-19 * B, 17 * B, sd * 11 * B], 16 * B, 17 * B, 9 * B, { flare: 0.75, rings: 20, seg: 30 }).tris, coat); // haunch
-          var fz = sd * 13 * B, fx = 22 * B; // folded foreleg, flat on the bed
-          sc.add('legs', 'b', sweep([[fx - 8, 0, fz, 6.5], [fx + 8, 0, fz + sd * 2, 5.6], [fx + 22, 0, fz + sd * 1, 4.8]], { bed: true, seg: 16, per: 5 }), coat);
-          sc.add('hooves', 'b', sweep([[fx + 21, 0, fz + sd * 1, 4.9], [fx + 28, 0, fz + sd * 0.5, 4.6]], { bed: true, seg: 14, per: 3 }), hoof);
-          var rear = sd * 21 * B; // tucked hind leg
-          sc.add('legs', 'b', sweep([[-30 * B, 0, rear * 0.8, 5.4], [-6 * B, 0, rear, 5], [8 * B, 0, rear, 4.4]], { bed: true, seg: 14, per: 5 }), coat);
-          sc.add('hooves', 'b', sweep([[8 * B, 0, rear, 4.5], [14 * B, 0, rear, 4.2]], { bed: true, seg: 14, per: 3 }), hoof);
+        S.ell('body', [0, 21 * B, 0], [34 * B, 22 * B, 17.5 * B], coat, 5);
+        [-1, 1].forEach(function (s) {
+          S.ell('body', [-20 * B, 17 * B, s * 11 * B], [17 * B, 17 * B, 9.5 * B], coat, 4);  // haunch
+          var fz = s * 13 * B, fx = 19 * B;
+          // foreleg folded on the bed, ending in a hoof pointing back along the body
+          S.path('legs', [[fx, 13, s * 13 * B, 7.4], [fx + 14, 4.4, fz + s * 2, 6.2], [fx + 25, 3.6, fz + s * 1, 5.2]], coat, 3);
+          S.ell('hooves', [fx + 30, 3.6, fz + s * 0.5], [5.8, 4, 5], hoof, 1);
+          var rz = s * 21 * B; // tucked hind leg
+          S.path('legs', [[-26 * B, 4, rz * 0.82, 6], [-6 * B, 3.4, rz, 5.2], [9 * B, 3, rz, 4.4]], coat, 2.5);
+          S.ell('hooves', [13 * B, 3, rz], [5.2, 3.6, 4.6], hoof, 1);
         });
-        // neck climbs from the chest
-        var nb = [11 * B, 15 * B, 0], nt = [20 * B + 15 * N, 26 * B + 32 * N, 0];
-        var neckRings = [];
-        for (var q = 0; q <= 16; q++) { var nu = q / 16; neckRings.push({ y: lerp(nb[1], nt[1] + 3, nu), cx: lerp(nb[0], nt[0], nu), cz: 0, rx: lerp(13 * B, 8.5, nu), rz: lerp(10 * B, 7, nu) }); }
-        sc.add('neck', 'b', loft(neckRings, 28).tris, coat);
-        // head
-        var hy = nt[1] + 8 * hs, hx = nt[0] + 9 * hs;
-        // one long head form: the growth limit turns its underside into the jaw line
-        var head = pod([hx + 2 * hs, hy, 0], 18 * hs, 11 * hs, 9.5 * hs, { anchor: [lerp(nb[0], nt[0], 1 - 24 / (nt[1] - nb[1])), nt[1] - 24, 0], anchorR: 5, seg: 44, rings: 36, pow: 2.7 });
-        sc.add('head', 'b', head.tris, coat);
-        [-1, 1].forEach(function (sd) { var ns = head.surf(sd * 12, hy + 1 * hs); sc.add('nostrils', 'b', dome(ns.p, ns.n, 1.6 * hs), '#fda4af'); });
-        [-1, 1].forEach(function (sd) {
-          var e = head.surf(sd * 62, hy + 3.5 * hs);
-          sc.add('eyes', 'b', dome(e.p, e.n, 2.5 * hs), '#1e293b');
-          var ear = [hx - 8 * hs, hy + 7 * hs, sd * 4.5 * hs];
-          sc.add('ears', 'b', horn(ear, [ear[0] - 1, ear[1] + 10 * hs, ear[2] + sd * 2], 2.8 * hs, { flatStart: true, seg: 12 }), coat);
+        // neck, arched, climbing from the chest
+        var nb = [13 * B, 20 * B, 0], nt = [24 * B + 13 * N, 26 * B + 32 * N, 0], nm = [lerp(nb[0], nt[0], 0.46), lerp(nb[1], nt[1], 0.54), 0];
+        S.path('body', [nb.concat([14 * B]), nm.concat([10.5]), nt.concat([8.2])], coat, 7);
+        // head: skull, tapering nose and soft muzzle
+        var hy = nt[1] + 7 * hs, hx = nt[0] + 7 * hs;
+        S.ell('head', [hx, hy, 0], [13 * hs, 10.5 * hs, 9.2 * hs], coat, 5);
+        S.path('head', [[hx + 4 * hs, hy - 0.5 * hs, 0, 8.2 * hs], [hx + 16 * hs, hy - 3.5 * hs, 0, 6.3 * hs]], coat, 3);
+        S.ell('muzzle', [hx + 19 * hs, hy - 4.5 * hs, 0], [6.8 * hs, 6 * hs, 6.8 * hs], '#fbcfe8', 1.6);
+        [-1, 1].forEach(function (s) {
+          var ear = [hx - 7 * hs, hy + 6.5 * hs, s * 5 * hs];
+          S.path('ears', [ear.concat([3.4 * hs]), [ear[0] - 0.6, ear[1] + 6 * hs, ear[2] + s * 1.4, 2.5 * hs], [ear[0] - 0.8, ear[1] + 11.5 * hs, ear[2] + s * 2, 0.7]], coat, 1.2);
         });
-        if (hasHorn) {
-          var hb = [hx + 1 * hs, hy + 7.5 * hs, 0], hl = p.horn;
-          sc.add('horn', 'b', horn(hb, [hb[0] + hl * 0.48, hb[1] + hl, 0], 3.2 * hs, { flatStart: true, seg: 16 }), '#fde047');
-          for (var w = 1; w <= 3; w++) { // spiral bands on the horn
-            var tw = w / 4.4, by = hb[1] + hl * tw, bx = hb[0] + hl * 0.48 * tw, br = (3.2 * hs) * (1 - tw * 0.85);
-            sc.add('horn', 'b', pod([bx, by, 0], br + 0.6, 1.1, br + 0.6, { anchor: [bx, by - 1.2, 0], anchorR: br, rings: 6, seg: 16 }).tris, '#fde047');
-          }
+        if (hasHorn) { // spiral horn: bands pressed around a tapering cone
+          var hb = [hx + 3 * hs, hy + 7.5 * hs, 0], hl = p.horn, ht = [hb[0] + hl * 0.46, hb[1] + hl, 0], hd = vnorm(vsub(ht, hb));
+          S.path('horn', [hb.concat([3.6 * hs]), ht.concat([0.7])], '#fde047', 0.8);
+          S.relief([Math.min(hb[0], ht[0]) - 5, hb[1] + 1, -5], [Math.max(hb[0], ht[0]) + 5, ht[1] + 2, 5], function (x, y, z) {
+            var q = vsub([x, y, z], hb), along = vdot(q, hd), rad = vsub(q, vmul(hd, along));
+            return Math.hypot(rad[0], rad[1], rad[2]) > 6 ? 0 : 0.55 * Math.pow(Math.abs(Math.sin(along * 0.62 + Math.atan2(z, rad[0] * hd[1] - rad[1] * hd[0]))), 3);
+          });
         }
-        // mane: locks that climb up and back from the neck ridge, each one starting inside the neck
+        // mane: flowing locks along the back of the neck, in two colours
         var locks = Math.round(p.mane);
-        for (var i = 0; i < locks; i++) {
-          var t = (i + 0.5) / locks, cx = lerp(20 * B, nt[0], t) - lerp(10, 5, t), cy = lerp(26 * B, nt[1], t) + 7, L = p.lock * lerp(1.15, 0.8, t), off = i % 2 ? 2.2 : -2.2;
-          sc.add('mane', 'b', horn([cx + 5, cy - 3, off], [cx - L * 0.6, cy + L, off * 1.7], 4, { flatStart: true, seg: 12 }), mane);
+        for (i = 0; i < locks; i++) {
+          var t = (i + 0.5) / locks, cx = lerp(nb[0] + 1, nt[0], t) - lerp(12, 6.5, t), cy = lerp(nb[1] + 15, nt[1] + 5, t), L = p.lock * lerp(1.15, 0.85, t), off = i % 2 ? 2.8 : -2.8;
+          S.path(i % 2 ? 'mane' : 'mane 2', [[cx + 5, cy - 3, off, 4.4], [cx - L * 0.36, cy + L * 0.56, off * 1.5, 3.4], [cx - L * 0.5, cy + L * 1.08, off * 1.7, 0.9]], i % 2 ? mane : mane2, 1.5);
         }
-        sc.add('mane', 'b', horn([hx - 6 * hs, hy + 7 * hs, 0], [hx + 3 * hs, hy + 18 * hs, 0], 3.4, { flatStart: true, seg: 12 }), mane); // forelock
-        // tail flows along the bed
-        var tl = p.tail, sg = [-34 * B, 0, 0];
-        sc.add('tail', 'b', sweep([[sg[0] + 7, 0, 0, 6], [sg[0] - tl * 0.35, 0, tl * 0.22, 8], [sg[0] - tl * 0.72, 0, tl * 0.2, 7.2], [sg[0] - tl, 0, -tl * 0.12, 2.8]], { bed: true, seg: 18, per: 7 }), mane);
-        // wings: leaning plates, the lower edge climbs at 50 degrees from the shoulder
-        if (hasWings) [-1, 1].forEach(function (sd) {
-          var S = p.wing, y0 = 28 * B, a = deg(24), d = [-Math.cos(a), 0, sd * Math.sin(a)], root = [11 * B, 0, sd * 8 * B];
-          var fw = [[-4, y0], [S * 0.7, y0 + S * 0.84], [S * 0.86, y0 + S * 1.12], [S * 0.74, y0 + S * 1.2], [S * 0.72, y0 + S * 1.38], [S * 0.54, y0 + S * 1.42], [S * 0.5, y0 + S * 1.62], [S * 0.3, y0 + S * 1.58], [S * 0.22, y0 + S * 1.72], [0, y0 + S * 1.42], [-4, y0 + S * 0.8]];
-          sc.add('wings', 'b', vslab(fw, root, d, 3.2, 0.8), '#bae6fd');
+        S.path('mane 2', [[hx - 6 * hs, hy + 8 * hs, 0, 3.8], [hx + 1 * hs, hy + 13 * hs, s0(1), 2.8], [hx + 5 * hs, hy + 19 * hs, 0, 0.8]], mane2, 1.2); // forelock
+        // tail: three strands flowing along the bed
+        var tl = p.tail, sg = -32 * B;
+        [[-8, mane], [0, mane2], [8, mane]].forEach(function (st, si) {
+          S.path(si === 1 ? 'mane 2' : 'tail', [[sg + 8, 5, st[0] * 0.3, 6.4], [sg - tl * 0.35, 3.4, st[0] + tl * 0.2, 5.4], [sg - tl * 0.72, 2.8, st[0] * 1.4 + tl * 0.22, 4.4], [sg - tl, 1.4, st[0] * 1.8 - tl * 0.1, 1.6]], st[1], 1.4);
         });
-        scaleScene(sc, p.size);
-        return finish(sc);
+        // wings: fan plates with stepped feather tips, ribbed down the feathers
+        if (hasWings) [-1, 1].forEach(function (s) {
+          var W = p.wing, y0 = 30 * B, a = deg(26), d = [-Math.cos(a), 0, s * Math.sin(a)], root = [9 * B, 0, s * 10 * B];
+          var fw = [[-4, y0], [W * 0.84, y0 + W * 0.98], [W * 1.02, y0 + W * 1.28], [W * 0.84, y0 + W * 1.26], [W * 0.88, y0 + W * 1.56], [W * 0.66, y0 + W * 1.48], [W * 0.66, y0 + W * 1.8], [W * 0.42, y0 + W * 1.64], [W * 0.36, y0 + W * 1.94], [W * 0.1, y0 + W * 1.56], [-4, y0 + W * 0.9]];
+          S.plate('wings', fw, root, d, 3.4, '#bae6fd', 1.8, 1.2);
+          [[0.92, 1.22], [0.78, 1.5], [0.58, 1.72], [0.32, 1.84]].forEach(function (e) {
+            S.path('feathers', [[root[0] + d[0] * 2, y0 + W * 0.28, root[2] + d[2] * 2, 2.2], [root[0] + d[0] * W * e[0], y0 + W * e[1], root[2] + d[2] * W * e[0], 1.5]], '#e0f2fe', 0.8);
+          });
+        });
+        S.reach = 0.72;
+        S.run();
+        [-1, 1].forEach(function (s) {
+          var e = S.hit([hx + 2 * hs, hy + 3 * hs, s * 60], [0, 0, -s]), R = 3.3 * hs;
+          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 46, seg: 24 }), '#312e81');
+          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.34), [0.8, R * 0.34, 0])), e.n, R * 0.28, { sink: 0.4 }), '#312e81');
+          var ns = S.hit([hx + 80, hy - 3 * hs, s * 3.2 * hs], [-1, 0, 0]);
+          sc.add('nostrils', 'b', dome(ns.p, ns.n, 1.3 * hs), '#f472b6');
+        });
+        S.addTo(sc);
+        return finishSculpt(sc, p.size);
       }
+      function s0(v) { return v; }
       var UNICORN_PARAMS = [
         { group: 'Creature', key: 'kind', label: 'Type', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Unicorn', 'Pegasus', 'Winged unicorn', 'Pony'] },
         { group: 'Creature', key: 'size', label: 'Overall size', unit: '×', min: 0.6, max: 1.4, step: 0.05, value: 1 },
@@ -79,7 +89,7 @@
         fileName: 'Unicorn',
         defaultColor: '#f1f5f9',
         palette: ANIMAL_PALETTE,
-        partNames: { body: 'Body', legs: 'Legs', hooves: 'Hooves', neck: 'Neck', head: 'Head', nostrils: 'Nostrils', eyes: 'Eyes', ears: 'Ears', horn: 'Horn', mane: 'Mane', tail: 'Tail', wings: 'Wings' },
+        partNames: { 'mane 2': 'Mane, second colour', feathers: 'Feathers', muzzle: 'Muzzle', body: 'Body', legs: 'Legs', hooves: 'Hooves', neck: 'Neck', head: 'Head', nostrils: 'Nostrils', eyes: 'Eyes', ears: 'Ears', horn: 'Horn', mane: 'Mane', tail: 'Tail', wings: 'Wings' },
         parameters: UNICORN_PARAMS,
         presets: makePresets(UNICORN_PARAMS, [
           ['Default unicorn', {}],
