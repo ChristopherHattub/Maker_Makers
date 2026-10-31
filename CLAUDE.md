@@ -59,7 +59,8 @@ JS: single quotes, semicolons, 2-space indent, `var`/function style inside gener
 
 ## Known untested / open items
 
-- **No generator has been physically printed yet.** Printability is checked only by `check-mesh.mjs` (watertight, manifold) and, for flexi creatures, `check-flexi.mjs` (joint clearance). Treat supports-free claims and flexi clearances as unproven until real prints.
+- **Dice Tower** (slot 66): a small round castle printed and worked (2026-10-31), the first print reported as a success. Its other themes, tray shapes and stamps are unprinted. [docs/dice-tower.md](docs/dice-tower.md).
+- **Most generators have not been physically printed.** Printability is checked only by `check-mesh.mjs` (watertight, manifold) and, for flexi creatures, `check-flexi.mjs` (joint clearance). Treat supports-free claims and flexi clearances as unproven until real prints.
 - **Pumpkin Plotter** (slot 2) had a reported test error; details were not recorded. `check-mesh.mjs` on the defaults currently passes (combined surface watertight), so re-test its Carve tab and presets before trusting it.
 - **Rattle Ball Cage** (slot 48): Chris's first print (icosahedron, round ball) failed: sagging struts, a flat top bridge, and the round ball's underside started in mid-air. The default is now the support-free Lantern cage (bars at least 47° from flat, ball on a stout 6 mm pedestal with a 1.7 mm snap-off neck, 41° ball underside). Print 1 of it: cage printed well, but the ball (first version on a 1.5 mm pin) collapsed halfway; the pedestal is the fix and is unprinted. It passes the print check and a mesh trap test, but has not been physically printed yet. The classic polyhedra are kept and labelled "needs supports".
 - **Infinity Cube** was dropped from the plan and has no slot; do not look for it.
