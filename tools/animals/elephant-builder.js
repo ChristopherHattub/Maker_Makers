@@ -1,45 +1,60 @@
       // -----------------------------------------------------------------------
-      // Elephant Builder: a chunky elephant with ears, tusks and a trunk up or down
+      // Elephant Builder: body on the bed with stout legs standing proud, the head corbelled out over the chest,
+      // the trunk resting on the bed or raised, tusks rising forward and ears leaning back. No supports at any setting.
       // -----------------------------------------------------------------------
       function buildElephant(p) {
-        var sc = new Scene(), i, grey = '#cbd5e1', dk = '#94a3b8', S = p.size;
-        bellyBall(sc, 'body', 'b', 0, 0, 30, 20, 32, grey, { sq: 2.8, cs: 2.6, cut: 0.4, seg: 30 });
-        for (i = -1; i <= 1; i += 2) {
-          post(sc, 'legs', 'b', 18, i * 14, 8.4, 8, 22, grey);
-          post(sc, 'legs', 'b', -20, i * 14, 8.4, 8, 22, grey);
-          for (var t = 0; t < 3; t++) { eyeAt(sc, 'toes', 'b', [25.2, 1.5, i * (14 - 3 + t * 3)], 1.0, '#f1f5f9'); }
+        var sc = new Scene(), grey = '#cbd5e1', dk = '#94a3b8', lr = p.legs, B = p.bulk, hs = p.head, E = p.ears, sd;
+        var body = pod([0, 25 * B, 0], 31 * B, 27 * B, 20 * B, { flare: 0.6 });
+        sc.add('body', 'b', body.tris, grey);
+        var lz = 13.5 * B + 3;
+        [[19 * B], [-20 * B]].forEach(function (q) {
+          [-1, 1].forEach(function (s) {
+            post(sc, 'legs', 'b', q[0], s * lz, lr * 1.08, lr, 24 * B, grey);
+            for (var t = -1; t <= 1; t++) {
+              var a = deg(t * 32);
+              if (q[0] > 0) sc.add('toes', 'b', pod([q[0] + Math.cos(a) * lr * 0.86, 1.4, s * lz + Math.sin(a) * lr * 0.86], 2.1, 2.2, 2.1, { rings: 8, seg: 14 }).tris, '#f8fafc');
+            }
+          });
+        });
+        var hr = 17 * hs, hx = 27 * B + hr * 0.25, hy = 40 * B + hr * 0.55;
+        var head = pod([hx, hy, 0], hr * 1.02, hr, hr * 0.92, { anchor: [hx - hr * 0.95, 8, 0], anchorR: 8 });
+        sc.add('head', 'b', head.tris, grey);
+        // jaw: extra mass under the face that carries the tusks and the trunk root
+        sc.add('head', 'b', pod([hx + hr * 0.32, hy - hr * 0.22, 0], hr * 0.66, hr * 0.62, hr * 0.74, { anchor: [hx - hr * 0.7, 6, 0], anchorR: 9 }).tris, grey);
+        [-1, 1].forEach(function (s) {
+          var eye = head.surf(s * 58, hy + hr * 0.2);
+          sc.add('eyes', 'b', dome(eye.p, eye.n, 2.5), '#1e293b');
+          // ear: a fan in a plane that leans out from the head. Its lower edge rises at 50 degrees from the root.
+          var root = [hx - hr * 0.1, 0, s * (hr * 0.62)], d = [-Math.cos(deg(28)), 0, s * Math.sin(deg(28))], y0 = hy - hr * 0.18;
+          var L = 24 * E, ear = [[-3, y0], [L * 0.62, y0 + L * 0.74], [L, y0 + L * 1.05], [L * 0.98, y0 + L * 1.42], [L * 0.62, y0 + L * 1.62], [L * 0.18, y0 + L * 1.42], [-3, y0 + L * 0.95]];
+          sc.add('ears', 'b', vslab(ear, root, d, 3.2, 0.8), dk);
+          if (p.tusk > 0) {
+            var tb = [hx + hr * 0.5, hy - hr * 0.12, s * hr * 0.34], tl = 15 * p.tusk;
+            sc.add('tusks', 'b', horn(tb, [tb[0] + tl * 0.62, tb[1] + tl, tb[2] + s * tl * 0.1], 2.9, { bendX: tl * 0.14, flatStart: true }), '#fffbeb');
+          }
+        });
+        var tr = 6.2 * p.trunkW, fx = hx + hr * 0.82, fy = hy - hr * 0.22;
+        if (Math.round(p.trunk) === 1) {
+          sc.add('trunk', 'b', sweep([[fx - 8, fy + 5, 0, tr], [fx + 2, fy + hr * 0.5, 0, tr * 0.86], [fx + 8, fy + hr * 0.95, 0, tr * 0.68], [fx + 7, fy + hr * 1.7, 0, tr * 0.54], [fx + 1, fy + hr * 2.35, 0, tr * 0.5]], { seg: 20, per: 6, rise: true }), grey);
+        } else {
+          var foot = fx + Math.min(fy * 0.2, 9);
+          sc.add('trunk', 'b', sweep([[fx - 3, fy + 2, 0, tr * 0.86], [fx + 1, fy * 0.72, 0, tr * 0.82], [lerp(fx, foot, 0.6), fy * 0.4, 0, tr * 0.78], [foot, tr * 2.4, 0, tr * 0.74], [foot, tr * 1.2, 0, tr * 0.74], [foot, 0, 0, tr * 0.74]], { seg: 20, per: 7, flatEnd: true }), grey);
         }
-        // head on a tall chest column
-        var hr = 15 * p.head, hx = 34, hy = 54;
-        bellyBall(sc, 'body', 'b', 24, 0, 15, 17, 36, grey, { sq: 2.4, cs: 2.4, cut: 0.4 });
-        ball(sc, 'head', 'h', [hx, hy, 0], hr, hr * 0.92, hr * 0.98, grey);
-        ball(sc, 'head', 'h', [hx + hr * 0.55, hy - hr * 0.75, 0], hr * 0.7, hr * 0.62, hr * 0.7, grey, { dir: [0, 1, 0] });
-        for (i = -1; i <= 1; i += 2) {
-          eyeAt(sc, 'face', 'h', [hx + hr * 0.82, hy + hr * 0.2, i * hr * 0.5], 1.9, EYE);
-          // ears: big kite plates
-          var E = p.ears;
-          sc.add('ears', 'h', plate([[0, 8 * E], [-11 * E, 14 * E], [-20 * E, 6 * E], [-17 * E, -12 * E], [-6 * E, -26 * E], [4 * E, -8 * E]], [hx - hr * 0.1, hy + hr * 0.1, i * (hr * 0.9 - 1.6)], 0, i > 0 ? 1 : -1, 3, 0.8), dk);
-          // tusks hang forward and down from the cheeks
-          if (p.tusk > 0) spike(sc, 'tusks', 'h', [hx + hr * 0.6, hy - hr * 0.5, i * hr * 0.45], vnorm([0.6, -1, i * 0.2]), 2.6, 15 * p.tusk, '#fffbeb', 4);
-        }
-        // trunk
-        var up = Math.round(p.trunk) === 1, tc;
-        if (!up) tc = [[hx + hr * 0.85, hy - hr * 0.3, 0], [hx + hr * 1.0, hy - hr * 1.0, 0], [hx + hr * 1.1, 12, 0], [hx + hr * 1.5, 3, 0]];
-        else tc = [[hx + hr * 0.85, hy - hr * 0.2, 0], [hx + hr * 1.2, hy + hr * 0.55, 0], [hx + hr * 1.3, hy + hr * 1.5, 0], [hx + hr * 0.95, hy + hr * 2.2, 0]];
-        tubeAdd(sc, 'trunk', 'h', tc, function (t) { return 5.8 - 2.4 * t; }, grey, { per: 8, ground: false });
-        tubeAdd(sc, 'tail', 'b', [[-30, 18, 0], [-36, 12, 0], [-38, 3, 0]], function (t) { return 2.2 - 0.6 * t; }, dk, {});
-        scaleScene(sc, S);
+        var ty = 34 * B;
+        sc.add('tail', 'b', sweep([[-28 * B, ty, 0, 2.6], [-33 * B, ty * 0.62, 0, 2.2], [-35 * B, ty * 0.28, 0, 1.9], [-35 * B, 3, 0, 2.2], [-35 * B, 0, 0, 2.4]], { seg: 12, per: 5, flatEnd: true }), dk);
+        scaleScene(sc, p.size);
         return finish(sc);
       }
-
       var ELE_PARAMS = [
-        { group: 'Elephant', key: 'size', label: 'Overall size', unit: '×', min: 0.6, max: 1.3, step: 0.05, value: 1 },
-        { group: 'Elephant', key: 'trunk', label: 'Trunk', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Trunk down', 'Trunk up'] },
-        { group: 'Elephant', key: 'head', label: 'Head size', unit: '×', min: 0.8, max: 1.3, step: 0.05, value: 1 },
-        { group: 'Elephant', key: 'ears', label: 'Ear size', unit: '×', min: 0.6, max: 1.3, step: 0.05, value: 1 },
-        { group: 'Elephant', key: 'tusk', label: 'Tusk length (0 = none)', unit: '×', min: 0, max: 1.5, step: 0.05, value: 0.8 }
+        { group: 'Elephant', key: 'size', label: 'Overall size', unit: '×', min: 0.6, max: 1.4, step: 0.05, value: 1 },
+        { group: 'Elephant', key: 'bulk', label: 'Body (compact ↔ huge)', unit: '×', min: 0.8, max: 1.15, step: 0.05, value: 1 },
+        { group: 'Elephant', key: 'legs', label: 'Leg thickness', unit: ' mm', min: 7, max: 11, step: 0.5, value: 8.5 },
+        { group: 'Head', key: 'head', label: 'Head size', unit: '×', min: 0.9, max: 1.3, step: 0.05, value: 1 },
+        { group: 'Head', key: 'ears', label: 'Ear size', unit: '×', min: 0.6, max: 1.25, step: 0.05, value: 1 },
+        { group: 'Head', key: 'tusk', label: 'Tusk length (0 = none)', unit: '×', min: 0, max: 1.5, step: 0.05, value: 0.9 },
+        { group: 'Trunk', key: 'trunk', label: 'Trunk', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Resting on the bed', 'Raised'] },
+        { group: 'Trunk', key: 'trunkW', label: 'Trunk thickness', unit: '×', min: 0.8, max: 1.3, step: 0.05, value: 1 }
       ];
-
       window.MM_GENERATOR = {
         code: 'MM-088',
         category: 'ANIMALS // WILDLIFE',
@@ -47,13 +62,13 @@
         fileName: 'Elephant',
         defaultColor: '#cbd5e1',
         palette: ANIMAL_PALETTE,
-        partNames: { body: 'Body', legs: 'Legs', toes: 'Toenails', head: 'Head', face: 'Eyes', ears: 'Ears', tusks: 'Tusks', trunk: 'Trunk', tail: 'Tail' },
+        partNames: { body: 'Body', legs: 'Legs', toes: 'Toenails', head: 'Head', eyes: 'Eyes', ears: 'Ears', tusks: 'Tusks', trunk: 'Trunk', tail: 'Tail' },
         parameters: ELE_PARAMS,
         presets: makePresets(ELE_PARAMS, [
           ['Default elephant', {}],
           ['Happy trunk-up', { trunk: 1 }],
-          ['Baby elephant', { size: 0.7, head: 1.25, ears: 1.2, tusk: 0 }],
-          ['Big tusker', { size: 1.2, tusk: 1.4, ears: 1.1 }]
+          ['Baby elephant', { size: 0.7, head: 1.3, ears: 1.2, tusk: 0, bulk: 0.9 }],
+          ['Big tusker', { size: 1.25, tusk: 1.5, ears: 1.15, bulk: 1.15, legs: 10 }]
         ]),
         build: buildElephant
       };

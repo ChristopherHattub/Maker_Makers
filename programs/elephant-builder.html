@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-088 Elephant Builder // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Elephant Builder: built from the shared animal kit (tools/animals/animal-kit.js on top of tools/flexi/flexi-lib.js)
+    // and tools/animals/elephant-builder.js. Rebuild with node tools/animals/build.mjs.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // =======================================================================
+      // Flexi kit (shared by every flexi creature; source: tools/flexi/flexi-lib.js)
+      // Print-in-place ball joints: each segment is one closed lathe shell with a ball on its
+      // front and a socket on its rear. The socket cavity is a sphere larger than the ball by
+      // the clearance gap, and its opening is narrower than the ball, so a segment cannot come out.
+      // =======================================================================
+      var TAU = Math.PI * 2;
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vlen(a) { return Math.sqrt(vdot(a, a)); }
+      function vnorm(a) { var l = vlen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+      function vrot(v, axis, ang) {
+        var k = vnorm(axis), c = Math.cos(ang), s = Math.sin(ang), kv = vcross(k, v), d = vdot(k, v) * (1 - c);
+        return [v[0] * c + kv[0] * s + k[0] * d, v[1] * c + kv[1] * s + k[1] * d, v[2] * c + kv[2] * s + k[2] * d];
+      }
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function smooth(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+
+      // Frame: o origin, a axis, u sideways, v up (the lathe's radial directions).
+      function frame(o, a, up) {
+        a = vnorm(a);
+        up = up || [0, 1, 0];
+        if (Math.abs(vdot(a, up)) > 0.98) up = [0, 0, 1];
+        var u = vnorm(vcross(up, a));
+        return { o: o, a: a, u: u, v: vcross(a, u) };
+      }
+
+      // Expands an indexed surface and makes sure the winding faces outward (positive volume).
+      function expandTris(pos, idx) {
+        var out = new Float32Array(idx.length * 3), vol = 0, i, k;
+        for (i = 0; i < idx.length; i++) for (k = 0; k < 3; k++) out[i * 3 + k] = pos[idx[i] * 3 + k];
+        for (i = 0; i < out.length; i += 9) {
+          vol += out[i] * (out[i + 4] * out[i + 8] - out[i + 5] * out[i + 7]) -
+            out[i + 1] * (out[i + 3] * out[i + 8] - out[i + 5] * out[i + 6]) +
+            out[i + 2] * (out[i + 3] * out[i + 7] - out[i + 4] * out[i + 6]);
+        }
+        if (vol < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (k = 0; k < 3; k++) { var t = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = t; }
+          }
+        }
+        return out;
+      }
+
+      // Lathe about frame.a. prof = [[r, s], ...] from a pole (r = 0) to a pole. ax/ay stretch the cross-section.
+      // opt.floor clamps every vertex to the bed plane y = floor (flat belly, no overhang under the model).
+      function lathe(fr, prof, seg, opt) {
+        opt = opt || {};
+        var ax = opt.ax || 1, ay = opt.ay || 1, floor = opt.floor;
+        var rings = prof.length - 2, vc = 2 + rings * seg, pos = new Float32Array(vc * 3), i, j;
+        function put(n, pr, th) {
+          var lx = pr[0] * ax * Math.cos(th), ly = pr[0] * ay * Math.sin(th), s = pr[1];
+          var x = fr.o[0] + fr.a[0] * s + fr.u[0] * lx + fr.v[0] * ly;
+          var y = fr.o[1] + fr.a[1] * s + fr.u[1] * lx + fr.v[1] * ly;
+          var z = fr.o[2] + fr.a[2] * s + fr.u[2] * lx + fr.v[2] * ly;
+          if (floor !== undefined && y < floor) y = floor;
+          pos[n * 3] = x; pos[n * 3 + 1] = y; pos[n * 3 + 2] = z;
+        }
+        put(0, prof[0], 0);
+        for (i = 0; i < rings; i++) for (j = 0; j < seg; j++) put(1 + i * seg + j, prof[i + 1], (j / seg) * TAU);
+        put(vc - 1, prof[prof.length - 1], 0);
+        var idx = [], top = vc - 1;
+        function rs(r) { return 1 + r * seg; }
+        for (j = 0; j < seg; j++) idx.push(0, rs(0) + ((j + 1) % seg), rs(0) + j);
+        for (i = 0; i < rings - 1; i++) {
+          for (j = 0; j < seg; j++) {
+            var nj = (j + 1) % seg;
+            idx.push(rs(i) + j, rs(i) + nj, rs(i + 1) + nj, rs(i) + j, rs(i + 1) + nj, rs(i + 1) + j);
+          }
+        }
+        for (j = 0; j < seg; j++) idx.push(rs(rings - 1) + j, rs(rings - 1) + ((j + 1) % seg), top);
+        return expandTris(pos, idx);
+      }
+
+      // Pole-to-pole profile of a body of revolution: radius fn over 0..1 (zero at both ends gives round ends).
+      function revProfile(s0, s1, rfn, n) {
+        var p = [[0, s0]];
+        for (var i = 1; i < n; i++) { var u = i / n; p.push([Math.max(rfn(u), 0.05), lerp(s0, s1, u)]); }
+        p.push([0, s1]);
+        return p;
+      }
+      function ellipseProfile(a, b, n) { // semi-axis a along the axis, b across
+        var p = [[0, -a]];
+        for (var i = 1; i < n; i++) { var t = (i / n) * Math.PI; p.push([b * Math.sin(t), -a * Math.cos(t)]); }
+        p.push([0, a]);
+        return p;
+      }
+      function sphereShell(c, r, seg, floor) {
+        return lathe(frame(c, [1, 0, 0], [0, 1, 0]), ellipseProfile(r, r, 7), seg || 12, { floor: floor });
+      }
+      function coneShell(base, dir, baseR, h, seg, sink, floor) {
+        var fr = frame(base, dir, [0, 1, 0]);
+        return lathe(fr, [[0, h], [baseR * 0.55, h * 0.45], [baseR, 0], [baseR, -sink], [0, -sink]], seg || 8, { floor: floor });
+      }
+
+      // ---- Flat slabs (wings, fins, feet, plates): extruded outline with a chamfered top edge ----
+      function earClip(poly) {
+        var n = poly.length, ids = [], out = [], i;
+        for (i = 0; i < n; i++) ids.push(i);
+        function area2(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+        var guard = 0;
+        while (ids.length > 3 && guard++ < 5000) {
+          var cut = false;
+          for (i = 0; i < ids.length; i++) {
+            var i0 = ids[(i + ids.length - 1) % ids.length], i1 = ids[i], i2 = ids[(i + 1) % ids.length];
+            var a = poly[i0], b = poly[i1], c = poly[i2];
+            if (area2(a, b, c) <= 1e-9) continue;
+            var inside = false;
+            for (var k = 0; k < ids.length; k++) {
+              var q = ids[k];
+              if (q === i0 || q === i1 || q === i2) continue;
+              var p = poly[q];
+              if (area2(a, b, p) >= -1e-9 && area2(b, c, p) >= -1e-9 && area2(c, a, p) >= -1e-9) { inside = true; break; }
+            }
+            if (inside) continue;
+            out.push(i0, i1, i2);
+            ids.splice(i, 1);
+            cut = true;
+            break;
+          }
+          if (!cut) break;
+        }
+        if (ids.length === 3) out.push(ids[0], ids[1], ids[2]);
+        return out;
+      }
+      function polyArea(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s / 2;
+      }
+      // poly: [[x, y], ...] outline. basis {o, x, y, z}: the outline lies in x/y and is raised thickness t along z.
+      function slab(poly, basis, t, ch) {
+        if (polyArea(poly) < 0) poly = poly.slice().reverse();
+        var n = poly.length, cx = 0, cy = 0, i;
+        for (i = 0; i < n; i++) { cx += poly[i][0]; cy += poly[i][1]; }
+        cx /= n; cy /= n;
+        var rad = 0;
+        for (i = 0; i < n; i++) rad += Math.hypot(poly[i][0] - cx, poly[i][1] - cy);
+        rad /= n;
+        ch = Math.min(ch === undefined ? 0.6 : ch, t * 0.45);
+        var k = 1 - ch / Math.max(rad, 1);
+        var layers = [[0, 1], [t - ch, 1], [t, k]], pos = [];
+        layers.forEach(function (L) {
+          for (var q = 0; q < n; q++) {
+            var x = cx + (poly[q][0] - cx) * L[1], y = cy + (poly[q][1] - cy) * L[1], z = L[0];
+            pos.push(basis.o[0] + basis.x[0] * x + basis.y[0] * y + basis.z[0] * z,
+              basis.o[1] + basis.x[1] * x + basis.y[1] * y + basis.z[1] * z,
+              basis.o[2] + basis.x[2] * x + basis.y[2] * y + basis.z[2] * z);
+          }
+        });
+        var tri = earClip(poly), idx = [], j;
+        for (j = 0; j < tri.length; j += 3) idx.push(2 * n + tri[j], 2 * n + tri[j + 1], 2 * n + tri[j + 2]);
+        for (j = 0; j < tri.length; j += 3) idx.push(tri[j + 2], tri[j + 1], tri[j]);
+        for (var L2 = 0; L2 < 2; L2++) {
+          for (j = 0; j < n; j++) {
+            var nj = (j + 1) % n, a0 = L2 * n + j, a1 = L2 * n + nj, b0 = (L2 + 1) * n + j, b1 = (L2 + 1) * n + nj;
+            idx.push(a0, a1, b1, a0, b1, b0);
+          }
+        }
+        return expandTris(new Float32Array(pos), idx);
+      }
+      // Slab lying flat on the bed: outline in the x/z ground plane, sitting on y = 0, rotated by yaw about the point at, pointing along heading.
+      function flatSlab(poly, at, heading, t, ch) {
+        var x = [Math.cos(heading), 0, -Math.sin(heading)], z = [Math.sin(heading), 0, Math.cos(heading)];
+        // local x along heading, local y to the left of it; extrusion goes up (+y)
+        return slab(poly, { o: at, x: x, y: [z[0], 0, z[2]], z: [0, 1, 0] }, t, ch);
+      }
+
+      // ---- Ball joint dimensions for a joint whose end faces have radius rJ and clearance g ----
+      function jointDims(rJ, g) {
+        var R = Math.max(1.25 + g, 0.47 * rJ);
+        var nR = Math.max(0.75, 0.22 * R);
+        var ao = Math.max(nR + g + 0.25, 0.8 * R);
+        ao = Math.min(ao, R - 0.15);
+        nR = Math.min(nR, ao - g - 0.15);
+        var Rs = R + g + 0.06; // printed sphere facets sit a little inside the true sphere, so the cavity is a touch generous
+        var d = Math.sqrt(Rs * Rs - ao * ao);
+        var lam = Math.max(1.6, 0.35 * rJ);
+        var e = Math.max(d + lam, Math.sqrt(R * R - nR * nR) + 0.7);
+        return { R: R, n: nR, Rs: Rs, ao: ao, d: d, e: e, rJ: rJ, g: g };
+      }
+
+      // Ball and neck on a host body (neck runs ov mm into the host, which must be solid there).
+      // c = ball centre, back = unit vector from the ball toward the host.
+      function ballUnit(c, back, jd, ov, up, floor) {
+        var fr = frame(c, vmul(back, -1), up);
+        var aEnd = Math.PI - Math.asin(jd.n / jd.R), prof = [[0, jd.R]], i;
+        for (i = 1; i <= 7; i++) { var a = (aEnd * i) / 7; prof.push([jd.R * Math.sin(a), jd.R * Math.cos(a)]); }
+        prof.push([jd.n, -(jd.e + ov)], [0, -(jd.e + ov)]);
+        return lathe(fr, prof, 16, { floor: floor });
+      }
+
+      // ---- Chain of socketed segments ----
+      // o.J0 first ball centre, o.dir start direction, o.P pitch per segment (socket centre to ball centre),
+      // o.rj joint end radii (length P.length + 1), o.yaw / o.pitch per joint (radians), o.g clearance,
+      // o.bulge bead fullness, o.tip length of the closing cap on the last segment, o.hAxis(k) axis height at joint k.
+      function chain(o) {
+        var g = o.g, seg = o.seg || 20, floor = o.floor === undefined ? 0 : o.floor, up = o.up || [0, 1, 0];
+        var n = o.P.length, jd = [], k;
+        for (k = 0; k < n; k++) jd.push(jointDims(o.rj[k], g));
+        var J = [o.J0.slice()], segs = [], dir = vnorm(o.dir);
+        for (k = 1; k <= n; k++) {
+          var yaw = (o.yaw ? o.yaw[k - 1] || 0 : 0) + (o.bend || 0);
+          if (yaw) dir = vrot(dir, up, yaw);
+          var pk = o.pitch ? o.pitch[k - 1] || 0 : 0;
+          if (pk) dir = vrot(dir, vcross(dir, up), pk);
+          var jin = jd[k - 1], jout = k < n ? jd[k] : null;
+          var eOut = jout ? jout.e : 0;
+          var P = Math.max(o.P[k - 1], eOut - jin.d + 3.2, eOut + jin.Rs * 1.08 + 1.5); // body must close over the whole cavity
+          if (o.hAxis && pk) { // a lifted section must still never dip below the height its joints need
+            var need = (o.hAxis(k) - J[k - 1][1]) / P;
+            if (dir[1] < need) {
+              var hd0 = vnorm([dir[0], 0, dir[2]]), c0 = Math.cos(Math.asin(clamp(need, -0.35, 0.9)));
+              dir = vnorm([hd0[0] * c0, clamp(need, -0.35, 0.9), hd0[2] * c0]);
+            }
+          }
+          if (o.hAxis && !pk) {
+            var hd = vnorm([dir[0], 0, dir[2]]), dy = o.hAxis(k) - J[k - 1][1], sn = clamp(dy / P, -0.35, 0.35);
+            dir = vnorm([hd[0] * Math.cos(Math.asin(sn)), sn, hd[2] * Math.cos(Math.asin(sn))]);
+          }
+          var C = J[k - 1], fr = frame(C, dir, up);
+          var sR = -jin.d, sF = P - eOut;
+          var rr = o.rj[k - 1], rf = o.rj[k], bl = typeof o.bulge === 'function' ? o.bulge(k) : (o.bulge === undefined ? 0.25 : o.bulge);
+          var radFn = (function (rr, rf, bl) {
+            return function (u) { return lerp(rr, rf, smooth(u)) * (1 + bl * Math.pow(Math.sin(Math.PI * u), 1.3)); };
+          })(rr, rf, bl);
+          var prof = [], i, ch = Math.min(0.7, 0.18 * Math.min(rr, rf));
+          if (jout) {
+            prof.push([0, P + jout.R]);
+            var aEnd = Math.PI - Math.asin(jout.n / jout.R);
+            for (i = 1; i <= 7; i++) { var a = (aEnd * i) / 7; prof.push([jout.R * Math.sin(a), P + jout.R * Math.cos(a)]); }
+            prof.push([jout.n, sF], [rf - ch * 2, sF]);
+          } else {
+            var tip = o.tip === undefined ? rf * 1.4 : o.tip;
+            prof.push([0, sF + tip]);
+            for (i = 1; i <= 6; i++) { var t = (Math.PI / 2) * (i / 7); prof.push([rf * Math.sin(t), sF + tip * Math.cos(t)]); }
+            prof.push([rf, sF]);
+          }
+          var nb = 14;
+          for (i = 0; i <= nb; i++) {
+            var uu = 1 - i / nb, s = lerp(sR + ch, sF - (jout ? ch : 0), uu);
+            if (!jout && i === 0) continue;
+            prof.push([radFn(uu), s]);
+          }
+          prof.push([rr - ch * 2, sR]);
+          // socket cavity, circumscribed so the facets never come inside the true sphere
+          var bo = Math.acos(-jin.d / jin.Rs), M = 5, dB = bo / M, Rc = jin.Rs / Math.cos(dB / 2), az = 1 / Math.cos(Math.PI / seg);
+          prof.push([jin.ao, sR]);
+          for (i = 1; i < M; i++) { var b = bo - dB * i; prof.push([Rc * Math.sin(b) * az, Rc * Math.cos(b)]); }
+          prof.push([0, Rc]);
+          var shell = lathe(fr, prof, seg, { floor: floor });
+          segs.push({ k: k, fr: fr, P: P, sR: sR, sF: sF, rad: radFn, rr: rr, rf: rf, jin: jin, jout: jout, shell: shell, dir: dir.slice(), C: C.slice() });
+          J.push(vadd(C, vmul(dir, P)));
+        }
+        var jd0 = o.rootExtra ? { R: jd[0].R, n: jd[0].n, e: jd[0].e + o.rootExtra } : jd[0];
+        var rootBall = ballUnit(J[0], vmul(vnorm(o.dir), -1), jd0, o.ov || 2.5, up, floor);
+        var res = { segs: segs, J: J, jd: jd, rootBall: rootBall };
+        window.MM_FLEXI_CHAINS = (window.MM_FLEXI_CHAINS || []).concat([res]);
+        return res;
+      }
+      // Point on a segment body: axial fraction u (0 = rear face, 1 = front face), angle th (0 = up, +pi/2 = sideways), radius factor kk.
+      function onSeg(sg, u, th, kk) {
+        var s = lerp(sg.sR, sg.sF, u), r = sg.rad(u) * (kk === undefined ? 1 : kk), f = sg.fr;
+        return [f.o[0] + f.a[0] * s + (f.v[0] * Math.cos(th) + f.u[0] * Math.sin(th)) * r,
+          f.o[1] + f.a[1] * s + (f.v[1] * Math.cos(th) + f.u[1] * Math.sin(th)) * r,
+          f.o[2] + f.a[2] * s + (f.v[2] * Math.cos(th) + f.u[2] * Math.sin(th)) * r];
+      }
+      function outward(sg, th) { var f = sg.fr; return vnorm(vadd(vmul(f.v, Math.cos(th)), vmul(f.u, Math.sin(th)))); }
+      function axisAt(sg, u) { return vadd(sg.fr.o, vmul(sg.fr.a, lerp(sg.sR, sg.sF, u))); }
+
+      // ---- Scene: shells grouped by paintable entry and by rigid body (bodies are what must stay apart) ----
+      function Scene() { this.groups = {}; this.order = []; this.bodies = {}; this.colors = {}; }
+      Scene.prototype.add = function (entry, body, tris, color) {
+        if (!this.groups[entry]) { this.groups[entry] = []; this.order.push(entry); }
+        if (color) this.colors[entry] = color;
+        this.groups[entry].push(tris);
+        (this.bodies[body] = this.bodies[body] || []).push(tris);
+      };
+      Scene.prototype.entries = function () {
+        var self = this;
+        // centre the footprint on the bed (x and z); every shell moves together, so clearances are unchanged
+        var lo = [Infinity, Infinity], hi = [-Infinity, -Infinity], seen = [];
+        this.order.forEach(function (name) {
+          self.groups[name].forEach(function (a) {
+            if (seen.indexOf(a) >= 0) return;
+            seen.push(a);
+            for (var i = 0; i < a.length; i += 3) {
+              if (a[i] < lo[0]) lo[0] = a[i]; if (a[i] > hi[0]) hi[0] = a[i];
+              if (a[i + 2] < lo[1]) lo[1] = a[i + 2]; if (a[i + 2] > hi[1]) hi[1] = a[i + 2];
+            }
+          });
+        });
+        var cx = (lo[0] + hi[0]) / 2, cz = (lo[1] + hi[1]) / 2;
+        if (isFinite(cx) && isFinite(cz)) seen.forEach(function (a) {
+          for (var i = 0; i < a.length; i += 3) { a[i] -= cx; a[i + 2] -= cz; }
+        });
+        window.MM_FLEXI_BODIES = this.bodies;
+        return this.order.map(function (name) {
+          var list = self.groups[name], len = 0, i;
+          list.forEach(function (a) { len += a.length; });
+          var all = new Float32Array(len), at = 0;
+          list.forEach(function (a) { all.set(a, at); at += a.length; });
+          var e = { name: name, positions: all, singlePart: true };
+          if (self.colors[name]) e.color = self.colors[name];
+          return e;
+        });
+      };
+
+      // Standard clearance and segment parameters shared by every flexi generator
+      function gapParam(group) {
+        return { group: group || 'Print-in-place', key: 'gap', label: 'Joint clearance (loose ↔ tight)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: 0.45 };
+      }
+      // Evenly tapering joint radii: front radius rA at joint 0, tail radius rB at the last joint.
+      function taperRadii(n, rA, rB, minR) {
+        var r = [];
+        for (var i = 0; i <= n; i++) r.push(Math.max(minR || 3.7, lerp(rA, rB, Math.pow(i / n, 0.85))));
+        return r;
+      }
+
+      var FLEXI_PALETTE = [
+        { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+        { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+        { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Phantom Ice', color: '#93c5fd' },
+        { name: 'Sunny Yellow', color: '#fde047' }, { name: 'Shadow Black', color: '#334155' }
+      ];
+      function deg(a) { return (a * Math.PI) / 180; }
+      // Fills in every parameter default so a preset only lists what it changes.
+      function makePresets(params, list) {
+        var base = {};
+        params.forEach(function (q) { base[q.key] = q.value; });
+        return list.map(function (item) {
+          var values = {};
+          Object.keys(base).forEach(function (k) { values[k] = base[k]; });
+          Object.keys(item[1]).forEach(function (k) { values[k] = item[1][k]; });
+          return { label: item[0], values: values };
+        });
+      }
+
+      // ---- Placement helpers ----
+      function heading(v) { return Math.atan2(-v[2], v[0]); }         // ground-plane heading of a vector
+      function hdir(h) { return [Math.cos(h), 0, -Math.sin(h)]; }     // unit vector for a heading
+      // Ellipsoid with semi-axes a (along dir), w (sideways) and h (up), centred on c.
+      function blobShell(c, dir, a, w, h, seg, floor) {
+        return lathe(frame(c, dir, [0, 1, 0]), ellipseProfile(a, w, 8), seg || 14, { ay: h / w, floor: floor });
+      }
+      // Point on the ground plane just at the flank of a chain segment (side = +1 or -1), at the height a limb leaves it.
+      function flank(sg, side, yLimb, u, inset) {
+        var mid = axisAt(sg, u === undefined ? 0.5 : u), r = sg.rad(u === undefined ? 0.5 : u), dy = mid[1] - yLimb;
+        var w = Math.sqrt(Math.max(r * r - dy * dy, 1)) - (inset || 0);
+        var side3 = vnorm([sg.fr.u[0], 0, sg.fr.u[2]]);
+        return [mid[0] + side3[0] * side * w, 0, mid[2] + side3[2] * side * w];
+      }
+      // A short chain that hangs off a host body (legs, arms, flippers). Its ball sits on the host, so the host
+      // must be solid around `attach` (a ground-plane point on the flank). Straight at rest so it prints flat.
+      // o: sc, host (rigid body id), id, entry, color, attach, head (heading in radians), n, rj0, rj1, pitch, g,
+      //    yaw (array, small), bend, tip, foot (outline fn(len) or null), footEntry, footColor
+      function limb(sc, o) {
+        var rj = taperRadii(o.n, o.rj0, o.rj1, 3.7), dir = hdir(o.head), jd0 = jointDims(rj[0], o.g), P = [], k;
+        for (k = 0; k < o.n; k++) P.push(o.pitch);
+        var extra = o.lean ? rj[0] * Math.tan(Math.min(Math.abs(o.lean), 1.2)) + 0.6 : 0.4; // keeps the first segment's rim off a slanted flank
+        var J0 = [o.attach[0] + dir[0] * (jd0.e + extra), 0.85 * rj[0], o.attach[2] + dir[2] * (jd0.e + extra)];
+        var ch = chain({ J0: J0, dir: dir, P: P, rj: rj, yaw: o.yaw, g: o.g, bulge: o.bulge === undefined ? 0.18 : o.bulge, tip: o.tip, bend: o.bend,
+          ov: 3.2, seg: 16, rootExtra: extra, hAxis: function (j) { return 0.85 * rj[j]; } });
+        sc.add(o.hostEntry || o.entry, o.host, ch.rootBall, o.hostColor || o.color);
+        ch.segs.forEach(function (sg) { sc.add(o.entry, o.id + sg.k, sg.shell, o.color); });
+        if (o.foot) {
+          var last = ch.segs[o.n - 1], at = axisAt(last, 0.75);
+          sc.add(o.footEntry || o.entry, o.id + o.n, flatSlab(o.foot, [at[0], 0, at[2]], heading(last.fr.a), 2.2, 0.5), o.footColor || o.color);
+        }
+        return ch;
+      }
+      // Fan of toes for a foot: root at the origin, toes pointing along +x. len = toe length, count = toes.
+      function footPoly(len, count, spread) {
+        var r0 = len * 0.38, rh = r0 * 0.7, pts = [[-3, -rh], [0, -rh]], i;
+        var wa = count > 1 ? (spread / (count - 1)) * 0.42 : spread * 0.5;
+        for (i = 0; i < count; i++) {
+          var a = count > 1 ? lerp(-spread, spread, i / (count - 1)) : 0;
+          pts.push([Math.cos(a - wa) * r0, Math.sin(a - wa) * r0], [Math.cos(a) * len, Math.sin(a) * len], [Math.cos(a + wa) * r0, Math.sin(a + wa) * r0]);
+        }
+        pts.push([0, rh], [-3, rh]);
+        return pts;
+      }
+      function wiggle(n, amp, waves, phase) { // per-joint yaw (radians) for an S-curve
+        var y = [];
+        for (var k = 1; k <= n; k++) y.push(deg(amp) * Math.sin(TAU * waves * ((k - 0.5) / n) + (phase || 0)));
+        return y;
+      }
+      // Ground-plane outline helper: mirror an outline across the heading axis
+      function mirrorPoly(poly, sd) { return poly.map(function (q) { return [q[0], q[1] * sd]; }); }
+
+      // Head: a lathe from the nose (u = 0) back to the neck face (u = 1) with its own shape; point(u, th, k) finds spots on it.
+      function headShell(J0, dir, jd0, rRear, L, Wh, Wsn, ay, floor) {
+        var sRear = -jd0.e, sNose = sRear - L, fr = frame(J0, dir, [0, 1, 0]);
+        function R(u) {
+          var rnd = u < 0.14 ? Math.sqrt(1 - Math.pow(1 - u / 0.14, 2)) : 1;
+          return Math.max(lerp(Wsn, Wh, smooth((u - 0.3) / 0.45)) * (1 - 0.14 * smooth((u - 0.82) / 0.18)) * rnd, 0.3);
+        }
+        var prof = [[0, sNose]], i;
+        for (i = 1; i <= 16; i++) { var u = i / 17; prof.push([R(u), lerp(sNose, sRear, u)]); }
+        prof.push([rRear, sRear], [0, sRear]);
+        return {
+          shell: lathe(fr, prof, 24, { ay: ay, floor: floor }), fr: fr, R: R, sNose: sNose, sRear: sRear,
+          point: function (u, th, kk) {
+            var s = lerp(sNose, sRear, u), r = R(u) * (kk || 1);
+            return [fr.o[0] + fr.a[0] * s + fr.u[0] * Math.sin(th) * r, fr.o[1] + fr.a[1] * s + Math.cos(th) * r * ay, fr.o[2] + fr.a[2] * s + fr.u[2] * Math.sin(th) * r];
+          }
+        };
+      }
+
+      // Lateral distance at which a flat slab (height t) may start so it stays clear of a segment's socket cavity.
+      function slabRoot(sg, t) {
+        var Y = sg.fr.o[1], Rc = sg.jin.Rs * 1.07 + 0.8, dy = Math.max(Y - t, 0);
+        return Math.max(1, Math.sqrt(Math.max(Rc * Rc - dy * dy, 0)));
+      }
+
+      // =======================================================================
+      // Animal kit (shared by the animal generators; source: tools/animals/animal-kit.js)
+      // Animals are built from overlapping closed shells (ellipsoids, swept tubes, cones, slabs, rounded
+      // legs). Slicers union the overlaps. Everything faces +x, stands on y = 0, and body masses sit on a
+      // flat belly or on legs so the defaults print without supports. Uses the lathe/frame helpers of
+      // tools/flexi/flexi-lib.js, which is concatenated in front of this file.
+      // =======================================================================
+      var ANIMAL_PALETTE = [
+        { name: 'Bone White', color: '#f1f5f9' }, { name: 'Peach Fuzz', color: '#fdba74' },
+        { name: 'Cocoa Brown', color: '#a16a4a' }, { name: 'Glow Mint', color: '#a7f3d0' },
+        { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Phantom Ice', color: '#93c5fd' },
+        { name: 'Sunny Yellow', color: '#fde047' }, { name: 'Shadow Black', color: '#334155' }
+      ];
+
+      // Ellipsoid: semi-axes a (along dir), w (sideways), h (up). Centre c. cut > 0 flattens it on the bed.
+      function ball(sc, entry, body, c, a, w, h, color, opt) {
+        opt = opt || {};
+        var dir = opt.dir || [1, 0, 0];
+        sc.add(entry, body, blobShell(c, dir, a, w, h, opt.seg || 18, opt.floor), color);
+      }
+      // Flat-bellied ellipsoid on the bed: semi-axes a (along heading `yaw`, radians about up), w (sideways), h (up).
+      // The lowest 45% is replaced by a flat base (centre 0.55 h above the bed), so the lower flank is never
+      // flatter than about 55 degrees and the body prints on its belly without supports.
+      function dRing(pos, c, lat, w, h, cy, seg, cs) {
+        var base = pos.length / 3, j, th, m = cs || 2, e = 2 / m, sn = h > 0 ? Math.pow(cy / h, m / 2) : 2, phi;
+        var full = sn >= 0.995;
+        phi = full ? 0 : Math.asin(sn);
+        for (j = 0; j < seg; j++) {
+          th = full ? (j / seg) * TAU : -phi + (j / (seg - 1)) * (Math.PI + 2 * phi);
+          var cc = Math.cos(th), ss = Math.sin(th);
+          var cx = (cc < 0 ? -1 : 1) * Math.pow(Math.abs(cc), e), sy = (ss < 0 ? -1 : 1) * Math.pow(Math.abs(ss), e);
+          var y = full ? c[1] + h * sy : Math.max(0, c[1] + h * sy);
+          pos.push(c[0] + lat[0] * w * cx, y, c[2] + lat[2] * w * cx);
+        }
+        return base;
+      }
+      function bellyShell(x, z, a, w, h, yaw, seg, cutFrac, sqz, cs) {
+        seg = seg || 20;
+        var cy = h * (cutFrac === undefined ? 0.55 : cutFrac), R = 36, pos = [], idx = [], i, j, ex = 2 / (sqz || 4);
+        var dir = [Math.cos(yaw || 0), 0, -Math.sin(yaw || 0)], lat = [Math.sin(yaw || 0), 0, Math.cos(yaw || 0)];
+        pos.push(x - dir[0] * a, cy, z - dir[2] * a);
+        var rings = [];
+        for (i = 1; i < R; i++) {
+          var t = (Math.PI * i) / R, ct = Math.cos(t), rho = Math.pow(Math.sin(t), ex), s = -a * (ct < 0 ? -1 : 1) * Math.pow(Math.abs(ct), ex);
+          rings.push(dRing(pos, [x + dir[0] * s, cy, z + dir[2] * s], lat, w * rho, h * rho, cy, seg, cs));
+        }
+        pos.push(x + dir[0] * a, cy, z + dir[2] * a);
+        var top = pos.length / 3 - 1;
+        for (j = 0; j < seg; j++) idx.push(0, rings[0] + (j + 1) % seg, rings[0] + j);
+        for (i = 0; i < rings.length - 1; i++) {
+          for (j = 0; j < seg; j++) {
+            var nj = (j + 1) % seg;
+            idx.push(rings[i] + j, rings[i] + nj, rings[i + 1] + nj, rings[i] + j, rings[i + 1] + nj, rings[i + 1] + j);
+          }
+        }
+        var lr = rings[rings.length - 1];
+        for (j = 0; j < seg; j++) idx.push(lr + j, lr + (j + 1) % seg, top);
+        return expandTris(new Float32Array(pos), idx);
+      }
+      function bellyBall(sc, entry, body, x, z, a, w, h, color, opt) {
+        opt = opt || {};
+        sc.add(entry, body, bellyShell(x, z, a, w, h, opt.yaw, opt.seg, opt.cut, opt.sq, opt.cs), color);
+      }
+      // Rounded upright cylinder standing on the bed (legs, feet, posts). r0 at the bed, r1 at the top.
+      function post(sc, entry, body, x, z, r0, r1, h, color, y0) {
+        var base = y0 === undefined ? 0 : y0;
+        var fr = frame([x, base, z], [0, 1, 0], [0, 0, 1]);
+        var rr = Math.min(r0, h * 0.4), prof = [[0, 0], [r0 * 0.75, 0], [r0, rr * 0.55]];
+        prof.push([lerp(r0, r1, 0.5), h * 0.5], [r1, h - r1 * 0.35], [r1 * 0.78, h - r1 * 0.04], [0, h]);
+        sc.add(entry, body, lathe(fr, prof, 16, {}), color);
+      }
+      // Cone (horn, ear, beak, tooth): base centre, direction, base radius, height. Embedded sink mm into the host.
+      function spike(sc, entry, body, base, dir, r, h, color, sink, seg) {
+        var fr = frame(base, dir, [0, 1, 0]), s = sink === undefined ? 1.5 : sink, dn = vnorm(dir);
+        if (dn[1] > 0.05) s = Math.min(s, Math.max(0.5, (base[1] - 0.3) / dn[1])); // never dip below the bed
+        sc.add(entry, body, lathe(fr, [[0, h], [r * 0.5, h * 0.55], [r * 0.92, h * 0.12], [r, 0], [r, -s], [0, -s]], seg || 12, {}), color);
+      }
+      // Catmull-Rom sample of control points [[x,y,z],...]; per = samples per span.
+      function spline(pts, per) {
+        var out = [], n = pts.length, i, j, k;
+        for (i = 0; i < n - 1; i++) {
+          var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, n - 1)];
+          for (j = 0; j < per; j++) {
+            var t = j / per, t2 = t * t, t3 = t2 * t, q = [];
+            for (k = 0; k < 3; k++) q.push(0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3));
+            out.push(q);
+          }
+        }
+        out.push(pts[n - 1].slice());
+        return out;
+      }
+      // Tube swept along path (dense points) with radius fn(t), t = 0..1, round ends. floor clamps to the bed.
+      function tube(path, radfn, seg, opt) {
+        opt = opt || {};
+        seg = seg || 12;
+        var n = path.length, rings = [], i, j, T = [], N, B, tg;
+        for (i = 0; i < n; i++) {
+          var a = path[Math.max(i - 1, 0)], b = path[Math.min(i + 1, n - 1)];
+          T.push(vnorm(vsub(b, a)));
+        }
+        N = vcross(T[0], [0, 1, 0]);
+        if (vlen(N) < 0.1) N = vcross(T[0], [0, 0, 1]);
+        N = vnorm(N);
+        var pos = [], idx = [];
+        function ring(c, r, nrm, bin, tgv) {
+          if (opt.ground) { var lt = vnorm([tgv[2], 0, -tgv[0]]); return dRing(pos, c, lt, r, r, c[1], seg); }
+          var base = pos.length / 3;
+          for (j = 0; j < seg; j++) {
+            var th = (j / seg) * TAU, cs = Math.cos(th) * r, sn = Math.sin(th) * r;
+            var y = c[1] + nrm[1] * cs + bin[1] * sn * (opt.ay || 1);
+            if (opt.floor !== undefined && y < opt.floor) y = opt.floor;
+            pos.push(c[0] + nrm[0] * cs + bin[0] * sn, y, c[2] + nrm[2] * cs + bin[2] * sn);
+          }
+          return base;
+        }
+        var capN = 3, ringBase = [];
+        function pole(c) { pos.push(c[0], c[1], c[2]); return pos.length / 3 - 1; }
+        var r0 = radfn(0), r1 = radfn(1), startPole, endPole, frames = [];
+        for (i = 0; i < n; i++) {
+          tg = T[i];
+          N = vnorm(vsub(N, vmul(tg, vdot(N, tg))));
+          B = vcross(tg, N);
+          frames.push([N, B]);
+        }
+        // start cap
+        var seq = [];
+        startPole = pole(vsub(path[0], vmul(T[0], r0)));
+        for (i = 1; i <= capN; i++) {
+          var al = (Math.PI / 2) * (1 - i / (capN + 1));
+          seq.push(ring(vsub(path[0], vmul(T[0], r0 * Math.sin(al))), r0 * Math.cos(al), frames[0][0], frames[0][1], T[0]));
+        }
+        for (i = 0; i < n; i++) seq.push(ring(path[i], radfn(i / (n - 1)), frames[i][0], frames[i][1], T[i]));
+        for (i = 1; i <= capN; i++) {
+          var al2 = (Math.PI / 2) * (i / (capN + 1));
+          seq.push(ring(vadd(path[n - 1], vmul(T[n - 1], r1 * Math.sin(al2))), r1 * Math.cos(al2), frames[n - 1][0], frames[n - 1][1], T[n - 1]));
+        }
+        endPole = pole(vadd(path[n - 1], vmul(T[n - 1], r1)));
+        for (j = 0; j < seg; j++) idx.push(startPole, seq[0] + (j + 1) % seg, seq[0] + j);
+        for (i = 0; i < seq.length - 1; i++) {
+          for (j = 0; j < seg; j++) {
+            var nj = (j + 1) % seg;
+            idx.push(seq[i] + j, seq[i] + nj, seq[i + 1] + nj, seq[i] + j, seq[i + 1] + nj, seq[i + 1] + j);
+          }
+        }
+        var last = seq[seq.length - 1];
+        for (j = 0; j < seg; j++) idx.push(last + j, last + (j + 1) % seg, endPole);
+        return expandTris(new Float32Array(pos), idx);
+      }
+      function tubeAdd(sc, entry, body, ctrl, radfn, color, opt) {
+        opt = opt || {};
+        var path = spline(ctrl, opt.per || 6);
+        if (opt.ground) path.forEach(function (q, i) { q[1] = 0.55 * radfn(i / (path.length - 1)); });
+        sc.add(entry, body, tube(path, radfn, opt.seg || 14, opt), color);
+      }
+      // Upright flat slab (ear, wing, fin, plate) in the vertical plane through `at` heading `hd` (radians in x/z).
+      // poly is [[along, up], ...] relative to at; thickness t extrudes sideways by `side` (+1/-1) from z-offset zOff.
+      function plate(poly, at, hd, t, side, ch) {
+        var along = [Math.cos(hd), 0, -Math.sin(hd)], sideV = [Math.sin(hd), 0, Math.cos(hd)];
+        var basis = { o: [at[0], at[1], at[2]], x: along, y: [0, 1, 0], z: vmul(sideV, side) };
+        return slab(poly, basis, t, ch);
+      }
+      // Hollow cup/dome: a closed lathe with an outer wall and an inner cavity. prof is outer [[r,s],...] from the top pole
+      // (s increases downward is NOT required; give pole -> rim). The inner wall is the outer offset by `wall` mm.
+      function hollowLathe(fr, outerProf, innerProf, seg, opt) {
+        var prof = outerProf.concat(innerProf);
+        return lathe(fr, prof, seg, opt || {});
+      }
+      // Eye: a dark ball on the face with a tiny white glint, both separate entries by the caller.
+      function eyeAt(sc, entry, body, c, r, color, dir) {
+        sc.add(entry, body, blobShell(c, dir || [1, 0, 0], r, r, r, 10, undefined), color);
+      }
+      // Mirrors z of a point
+      function mz(p, s) { return [p[0], p[1], p[2] * s]; }
+
+      // Lifts the model to the bed (lowest point y = 0) and centres it, then returns the entries.
+      function finish(sc) {
+        var minY = Infinity, seen = [];
+        sc.order.forEach(function (name) {
+          sc.groups[name].forEach(function (a) {
+            if (seen.indexOf(a) >= 0) return;
+            seen.push(a);
+            for (var i = 1; i < a.length; i += 3) if (a[i] < minY) minY = a[i];
+          });
+        });
+        if (isFinite(minY) && minY > 1e-6) seen.forEach(function (a) { for (var i = 1; i < a.length; i += 3) a[i] -= minY; });
+        else if (minY < -1e-6) seen.forEach(function (a) { for (var i = 1; i < a.length; i += 3) if (a[i] < 0) a[i] = 0; }); // a few embedded tips dip under the bed: flatten them
+        return sc.entries();
+      }
+
+      // Generic four-legged body used by the cat, dog, elephant and unicorn: returns anchor points for details.
+      // o: bodyL, bodyW, bodyH (ellipsoid semi-axes), legH, legR, headR, headL, neck (rise), x of head etc.
+      function quadruped(sc, o, col) {
+        var bx = 0, by = o.legH + o.bodyH * 0.55;
+        ball(sc, 'body', 'b', [bx, by, 0], o.bodyL, o.bodyW, o.bodyH, col.body);
+        var lx = o.bodyL * 0.58, lz = o.bodyW * 0.62;
+        [[lx, 1], [lx, -1], [-lx, 1], [-lx, -1]].forEach(function (q, i) {
+          post(sc, 'legs', 'b', q[0], q[1] * lz, o.legR, o.legR * 0.92, o.legH + o.bodyH * 0.55, col.legs || col.body);
+        });
+        return { by: by, lx: lx, lz: lz };
+      }
+
+      // Scales every shell of the scene about the origin (all shells move together, so the bed height stays 0).
+      function scaleScene(sc, s) {
+        var seen = [];
+        sc.order.forEach(function (name) {
+          sc.groups[name].forEach(function (a) {
+            if (seen.indexOf(a) >= 0) return;
+            seen.push(a);
+            for (var i = 0; i < a.length; i++) a[i] *= s;
+          });
+        });
+      }
+      function tilt(deg0) { return [Math.cos(deg(deg0)), Math.sin(deg(deg0)), 0]; }
+      var EYE = '#1e293b';
+
+      // Open dish (trinket tray) with the oval footprint a x w, rim height H, wall thickness wall, floor thickness fl.
+      // Printed upright: the outside leans out at 60 degrees or more, the inside opens upward, so no supports.
+      function cupShell(x, z, a, w, H, wall, fl, seg) {
+        var o = [[0, 0], [a * 0.74, 0], [a * 0.84, H * 0.28], [a * 0.93, H * 0.58], [a * 0.985, H * 0.82], [a, H]];
+        var inn = [[a - wall, H], [a * 0.93 - wall, H * 0.6], [a * 0.78 - wall * 0.6, fl + (H - fl) * 0.25], [a * 0.5, fl], [0, fl]];
+        var fr = frame([x, 0, z], [0, 1, 0], [0, 0, 1]);
+        return lathe(fr, o.concat(inn), seg || 40, { ay: w / a });
+      }
+
+      // ---- Self-limiting shapes: built bottom to top and never growing outward faster than about 45 degrees (Y up, faces +x) ----
+      var GROW = 0.9; // largest outward step per mm of height
+
+      // Closed loft from horizontal rings, bottom to top: [{ y, cx, cz, rx, rz }]. Flat bottom, pole on top.
+      // o.pow squares the section off (2 = ellipse), o.mod(thDeg, t) multiplies the radius, o.yaw turns the section, o.free skips the growth limit.
+      function loft(rings, seg, o) {
+        o = o || {};
+        seg = seg || 40;
+        var pow = o.pow || 2, n = rings.length, V = [], i, j, cy = Math.cos(o.yaw || 0), sy = Math.sin(o.yaw || 0);
+        for (i = 0; i < n; i++) {
+          var r = rings[i], row = [], ti = i / (n - 1);
+          for (j = 0; j < seg; j++) {
+            var th = (j / seg) * TAU, c = Math.cos(th), s = Math.sin(th);
+            var q = Math.pow(Math.pow(Math.abs(c), pow) + Math.pow(Math.abs(s), pow), -1 / pow);
+            var m = o.mod ? o.mod((th * 180) / Math.PI, ti) : 1;
+            var lx = r.rx * c * q * m, lz = r.rz * s * q * m;
+            row.push([r.cx + lx * cy - lz * sy, r.y, r.cz + lx * sy + lz * cy]);
+          }
+          V.push(row);
+        }
+        if (!o.free) {
+          for (i = 1; i < n; i++) {
+            var lim = GROW * (V[i][0][1] - V[i - 1][0][1]), px = 0, pz = 0;
+            for (j = 0; j < seg; j++) { px += V[i - 1][j][0]; pz += V[i - 1][j][2]; }
+            px /= seg; pz /= seg;
+            for (j = 0; j < seg; j++) {
+              var a = V[i - 1][j], b = V[i][j], nx = a[0] - px, nz = a[2] - pz, nl = Math.hypot(nx, nz) || 1;
+              nx /= nl; nz /= nl;
+              var out = (b[0] - a[0]) * nx + (b[2] - a[2]) * nz;
+              var dx = b[0] - a[0], dz = b[2] - a[2], dl = Math.hypot(dx, dz);
+              if (out > 0 && dl > lim) { b[0] = a[0] + (dx * lim) / dl; b[2] = a[2] + (dz * lim) / dl; }
+            }
+          }
+        }
+        var pos = [], idx = [], top = V[n - 1], tx = 0, tz = 0, tn = rings[n - 1].y, bx = 0, bz = 0;
+        for (j = 0; j < seg; j++) { tx += top[j][0]; tz += top[j][2]; bx += V[0][j][0]; bz += V[0][j][2]; }
+        pos.push(bx / seg, V[0][0][1], bz / seg);
+        for (i = 0; i < n; i++) for (j = 0; j < seg; j++) pos.push(V[i][j][0], V[i][j][1], V[i][j][2]);
+        pos.push(tx / seg, tn + (o.poleLift === undefined ? 0.05 : o.poleLift), tz / seg);
+        var last = 1 + n * seg;
+        function at(a, b) { return 1 + a * seg + b; }
+        for (j = 0; j < seg; j++) idx.push(0, at(0, (j + 1) % seg), at(0, j));
+        for (i = 0; i < n - 1; i++) for (j = 0; j < seg; j++) {
+          var nj = (j + 1) % seg;
+          idx.push(at(i, j), at(i, nj), at(i + 1, nj), at(i, j), at(i + 1, nj), at(i + 1, j));
+        }
+        for (j = 0; j < seg; j++) idx.push(at(n - 1, j), at(n - 1, (j + 1) % seg), last);
+        return { tris: expandTris(new Float32Array(pos), idx), V: V, seg: seg, surf: function (thDeg, y) { return loftSurf(V, seg, thDeg, y); } };
+      }
+      // Point and outward normal on a loft, at an angle (0 = +x, 90 = +z) and a height.
+      function loftSurf(V, seg, thDeg, y) {
+        var n = V.length, i = 0;
+        while (i < n - 2 && V[i + 1][0][1] < y) i++;
+        var ta = clamp((y - V[i][0][1]) / ((V[i + 1][0][1] - V[i][0][1]) || 1), 0, 1);
+        var f = ((((thDeg % 360) + 360) % 360) / 360) * seg, j0 = Math.floor(f) % seg, j1 = (j0 + 1) % seg, tb = f - Math.floor(f);
+        function P(ii, jj) { return V[ii][(jj + seg) % seg]; }
+        function mix(a, b, t) { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+        var p = mix(mix(P(i, j0), P(i, j1), tb), mix(P(i + 1, j0), P(i + 1, j1), tb), ta);
+        var cx = 0, cz = 0, q;
+        for (q = 0; q < seg; q++) { cx += V[i][q][0]; cz += V[i][q][2]; }
+        cx /= seg; cz /= seg;
+        var du = vsub(P(i, j0 + 1), P(i, j0 - 1)), dv = vsub(P(i + 1, j0), P(i, j0)), nrm = vnorm(vcross(du, dv));
+        if (nrm[0] * (p[0] - cx) + nrm[2] * (p[2] - cz) < 0) nrm = vmul(nrm, -1);
+        return { p: p, n: nrm };
+      }
+
+      // Rounded form: a dome of semi-axes rx, ry, rz around c. Below the middle it narrows to the bed, or to o.anchor
+      // ([x, y, z], a point inside the shape underneath, with o.anchorR its radius there), by no more than the growth limit.
+      function pod(c, rx, ry, rz, o) {
+        o = o || {};
+        var y1 = c[1] + ry, anchor = o.anchor, y0 = anchor ? anchor[1] : Math.max(0, c[1] - ry), ar = o.anchorR === undefined ? 1.5 : o.anchorR;
+        var N = o.rings || 30, rings = [], flare = o.flare === undefined ? 0 : o.flare;
+        for (var i = 0; i <= N; i++) {
+          var y = lerp(y0, y1, Math.pow(i / N, 0.9)), t = clamp((y - c[1]) / ry, -1, 1), k = Math.sqrt(Math.max(1 - t * t, 0.0004));
+          if (i === N) k = 0.02;
+          var w = anchor ? smooth(clamp((y - y0) / Math.max(c[1] - y0, 0.01), 0, 1)) : 1;
+          var cx = anchor ? lerp(anchor[0], c[0], w) : c[0], cz = anchor ? lerp(anchor[2], c[2], w) : c[2];
+          var sq = y < c[1] && flare ? lerp(1, k, 1 - flare) : k;
+          var rr = { y: y, cx: cx, cz: cz, rx: rx * sq, rz: rz * sq };
+          if (anchor && i === 0) { rr.rx = ar; rr.rz = ar; }
+          else if (!anchor && i === 0 && y0 <= 0.001) { rr.rx = rx * Math.max(sq, 0.2); rr.rz = rz * Math.max(sq, 0.2); }
+          rings.push(rr);
+        }
+        return loft(rings, o.seg || 44, { pow: o.pow, mod: o.mod, yaw: o.yaw });
+      }
+
+      // Tube along a smooth path. pts [[x, y, z, r], ...]; ends close with a round tip unless o.flatStart.
+      // o.bed keeps it lying on the bed: the axis follows 0.65 x radius, so the flat underside meets the sides at 45 degrees.
+      // o.rise forces each step to climb at least as fast as it travels, so a free-standing limb never overhangs.
+      function sweep(pts, o) {
+        o = o || {};
+        var seg = o.seg || 20, per = o.per || 7, S = [], i, k;
+        function cr(a, b, c, d, t) { return 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t); }
+        for (i = 0; i < pts.length - 1; i++) {
+          var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+          for (k = 0; k < per; k++) {
+            var t = k / per;
+            S.push([cr(p0[0], p1[0], p2[0], p3[0], t), cr(p0[1], p1[1], p2[1], p3[1], t), cr(p0[2], p1[2], p2[2], p3[2], t), Math.max(lerp(p1[3], p2[3], t), 0.4)]);
+          }
+        }
+        S.push(pts[pts.length - 1].slice());
+        if (o.rise) {
+          for (i = 1; i < S.length; i++) {
+            var hh = Math.hypot(S[i][0] - S[i - 1][0], S[i][2] - S[i - 1][2]);
+            if (S[i][1] < S[i - 1][1] + hh * 1.08) S[i][1] = S[i - 1][1] + hh * 1.08;
+          }
+        }
+        function tip(sample, dirSign, cap) { // round end: extra samples past the end, shrinking
+          var a = sample, r = a[3], d = cap.d, out = [];
+          for (var q = 1; q <= 4; q++) {
+            var ang = (q / 5) * (Math.PI / 2), sc = Math.cos(ang);
+            out.push([a[0] + d[0] * dirSign * r * Math.sin(ang), a[1] + d[1] * dirSign * r * Math.sin(ang), a[2] + d[2] * dirSign * r * Math.sin(ang), Math.max(r * sc, 0.25)]);
+          }
+          return out;
+        }
+        var dEnd = vnorm(vsub(S[S.length - 1], S[S.length - 2])), dStart = vnorm(vsub(S[1], S[0]));
+        var endCaps = o.flatEnd ? [] : tip(S[S.length - 1], 1, { d: dEnd });
+        var startCaps = o.flatStart ? [] : tip(S[0], -1, { d: dStart }).reverse();
+        var all = startCaps.concat(S, endCaps);
+        var floor = o.floor === undefined ? 0 : o.floor;
+        if (o.bed) all = all.map(function (a) { return [a[0], 0.65 * a[3], a[2], a[3]]; });
+        var up = [0, 1, 0], pos = [], idx = [];
+        pos.push(0, 0, 0);
+        var prevU = null;
+        for (i = 0; i < all.length; i++) {
+          var a0 = all[Math.max(i - 1, 0)], a1 = all[Math.min(i + 1, all.length - 1)], dirv = vnorm(vsub(a1, a0));
+          var u = prevU ? vnorm(vsub(prevU, vmul(dirv, vdot(prevU, dirv)))) : vnorm(vcross(Math.abs(dirv[1]) > 0.95 ? [1, 0, 0] : up, dirv));
+          prevU = u;
+          var v = vcross(dirv, u);
+          for (k = 0; k < seg; k++) {
+            var th = (k / seg) * TAU, rr = all[i][3];
+            var x = all[i][0] + (u[0] * Math.cos(th) + v[0] * Math.sin(th)) * rr, y = all[i][1] + (u[1] * Math.cos(th) + v[1] * Math.sin(th)) * rr, z = all[i][2] + (u[2] * Math.cos(th) + v[2] * Math.sin(th)) * rr;
+            if (floor !== null && y < floor) y = floor;
+            pos.push(x, y, z);
+          }
+        }
+        var n = all.length, f = all[0], l = all[n - 1];
+        pos[0] = f[0]; pos[1] = Math.max(f[1], floor === null ? -1e9 : floor); pos[2] = f[2];
+        pos.push(l[0], Math.max(l[1], floor === null ? -1e9 : floor), l[2]);
+        function at(a, b) { return 1 + a * seg + b; }
+        for (k = 0; k < seg; k++) idx.push(0, at(0, (k + 1) % seg), at(0, k));
+        for (i = 0; i < n - 1; i++) for (k = 0; k < seg; k++) {
+          var nk = (k + 1) % seg;
+          idx.push(at(i, k), at(i, nk), at(i + 1, nk), at(i, k), at(i + 1, nk), at(i + 1, k));
+        }
+        var lastV = 1 + n * seg;
+        for (k = 0; k < seg; k++) idx.push(at(n - 1, k), at(n - 1, (k + 1) % seg), lastV);
+        return expandTris(new Float32Array(pos), idx);
+      }
+      // Tapered spike or horn from a point inside the host up to a tip. It is pushed up if it would lean too far.
+      function horn(base, tip, r0, o) {
+        o = o || {};
+        var mid = [lerp(base[0], tip[0], 0.55) + (o.bendX || 0), lerp(base[1], tip[1], 0.55), lerp(base[2], tip[2], 0.55) + (o.bendZ || 0), r0 * 0.68];
+        return sweep([[base[0], base[1], base[2], r0], mid, [tip[0], tip[1], tip[2], Math.max(r0 * 0.16, 0.5)]], { rise: true, seg: o.seg || 14, per: 5, flatStart: o.flatStart });
+      }
+      // Shallow dome stuck on a surface: it meets the surface at 45 degrees, so even on a vertical face its lower edge prints.
+      function dome(p, n, baseR, o) {
+        o = o || {};
+        var ang = deg(o.angle || 45), R = baseR / Math.sin(ang), h = R * (1 - Math.cos(ang)), sink = o.sink === undefined ? Math.max(1.2, baseR * 0.5) : o.sink;
+        var prof = [[0, h]], i;
+        for (i = 1; i <= 6; i++) { var a = (i / 6) * ang; prof.push([R * Math.sin(a), h - R + R * Math.cos(a)]); }
+        prof.push([baseR, -sink], [0, -sink]);
+        return lathe(frame(p, n, [0, 1, 0]), prof, o.seg || 20);
+      }
+      // Thin raised line on a loft (mouth, wing edge, shell scute): [[thDeg, y], ...] on the surface, meeting it at 45 degrees.
+      function ridge(host, marks, w, o) {
+        o = o || {};
+        var R = w / 1.41, sunk = R * 0.71, pts = marks.map(function (m) { var s = host.surf(m[0], m[1]); return vsub(s.p, vmul(s.n, sunk)).concat([R * (m[2] === undefined ? 1 : m[2])]); });
+        return sweep(pts, { seg: o.seg || 10, per: o.per || 4, floor: 0 });
+      }
+      // Flat plate standing in a vertical plane. poly [[s, y], ...]: s runs along the heading dir (a [x, 0, z] vector), y is world height.
+      function vslab(poly, at, dir, t, ch) {
+        var d = vnorm(dir), side = [-d[2], 0, d[0]];
+        return slab(poly, { o: [at[0] - side[0] * t / 2, at[1] || 0, at[2] - side[2] * t / 2], x: d, y: [0, 1, 0], z: side }, t, ch === undefined ? 0.5 : ch);
+      }
+      // Closed block whose top is a height field over a disc or rounded square: top(x, z) is the top height, it starts at y0.
+      function reliefDisc(R, y0, top, nr, nt, shape) {
+        var pos = [], idx = [], i, j;
+        function edge(th) { if (!shape) return R; var c = Math.abs(Math.cos(th)), s = Math.abs(Math.sin(th)); return R / Math.pow(Math.pow(c, shape) + Math.pow(s, shape), 1 / shape); }
+        pos.push(0, y0, 0);
+        for (j = 0; j < nt; j++) { var a = (j / nt) * TAU; pos.push(Math.cos(a) * edge(a), y0, Math.sin(a) * edge(a)); }
+        for (i = nr; i >= 1; i--) for (j = 0; j < nt; j++) {
+          var th = (j / nt) * TAU, rr = (i / nr) * edge(th), x = Math.cos(th) * rr, z = Math.sin(th) * rr;
+          pos.push(x, top(x, z), z);
+        }
+        pos.push(0, top(0, 0), 0);
+        function at(a, b) { return 1 + a * nt + b; }
+        var rows = nr + 1;
+        for (j = 0; j < nt; j++) idx.push(0, at(0, j), at(0, (j + 1) % nt));
+        for (i = 0; i < rows - 1; i++) for (j = 0; j < nt; j++) {
+          var nj = (j + 1) % nt;
+          idx.push(at(i, j), at(i + 1, j), at(i + 1, nj), at(i, j), at(i + 1, nj), at(i, nj));
+        }
+        var last = 1 + rows * nt;
+        for (j = 0; j < nt; j++) idx.push(at(rows - 1, j), last, at(rows - 1, (j + 1) % nt));
+        return expandTris(new Float32Array(pos), idx);
+      }
+      function eyePair(sc, host, th, y, r, o) { // white eyes with dark pupils, on both sides of the +x face
+        o = o || {};
+        [-1, 1].forEach(function (sd) {
+          var s = host.surf(sd * th, y);
+          sc.add('eyes', 'b', dome(s.p, s.n, r, { angle: 50 }), o.white || '#f8fafc');
+          var R = r / Math.sin(deg(50)), h = R * (1 - Math.cos(deg(50))), ahead = vadd(s.p, vmul(s.n, h * 0.8));
+          sc.add('pupils', 'b', dome(vadd(ahead, vmul(s.n, -0.2)), s.n, r * (o.pupil || 0.55), { sink: 0.8 }), o.dark || '#1e293b');
+        });
+      }
+
+      // -----------------------------------------------------------------------
+      // Elephant Builder: body on the bed with stout legs standing proud, the head corbelled out over the chest,
+      // the trunk resting on the bed or raised, tusks rising forward and ears leaning back. No supports at any setting.
+      // -----------------------------------------------------------------------
+      function buildElephant(p) {
+        var sc = new Scene(), grey = '#cbd5e1', dk = '#94a3b8', lr = p.legs, B = p.bulk, hs = p.head, E = p.ears, sd;
+        var body = pod([0, 25 * B, 0], 31 * B, 27 * B, 20 * B, { flare: 0.6 });
+        sc.add('body', 'b', body.tris, grey);
+        var lz = 13.5 * B + 3;
+        [[19 * B], [-20 * B]].forEach(function (q) {
+          [-1, 1].forEach(function (s) {
+            post(sc, 'legs', 'b', q[0], s * lz, lr * 1.08, lr, 24 * B, grey);
+            for (var t = -1; t <= 1; t++) {
+              var a = deg(t * 32);
+              if (q[0] > 0) sc.add('toes', 'b', pod([q[0] + Math.cos(a) * lr * 0.86, 1.4, s * lz + Math.sin(a) * lr * 0.86], 2.1, 2.2, 2.1, { rings: 8, seg: 14 }).tris, '#f8fafc');
+            }
+          });
+        });
+        var hr = 17 * hs, hx = 27 * B + hr * 0.25, hy = 40 * B + hr * 0.55;
+        var head = pod([hx, hy, 0], hr * 1.02, hr, hr * 0.92, { anchor: [hx - hr * 0.95, 8, 0], anchorR: 8 });
+        sc.add('head', 'b', head.tris, grey);
+        // jaw: extra mass under the face that carries the tusks and the trunk root
+        sc.add('head', 'b', pod([hx + hr * 0.32, hy - hr * 0.22, 0], hr * 0.66, hr * 0.62, hr * 0.74, { anchor: [hx - hr * 0.7, 6, 0], anchorR: 9 }).tris, grey);
+        [-1, 1].forEach(function (s) {
+          var eye = head.surf(s * 58, hy + hr * 0.2);
+          sc.add('eyes', 'b', dome(eye.p, eye.n, 2.5), '#1e293b');
+          // ear: a fan in a plane that leans out from the head. Its lower edge rises at 50 degrees from the root.
+          var root = [hx - hr * 0.1, 0, s * (hr * 0.62)], d = [-Math.cos(deg(28)), 0, s * Math.sin(deg(28))], y0 = hy - hr * 0.18;
+          var L = 24 * E, ear = [[-3, y0], [L * 0.62, y0 + L * 0.74], [L, y0 + L * 1.05], [L * 0.98, y0 + L * 1.42], [L * 0.62, y0 + L * 1.62], [L * 0.18, y0 + L * 1.42], [-3, y0 + L * 0.95]];
+          sc.add('ears', 'b', vslab(ear, root, d, 3.2, 0.8), dk);
+          if (p.tusk > 0) {
+            var tb = [hx + hr * 0.5, hy - hr * 0.12, s * hr * 0.34], tl = 15 * p.tusk;
+            sc.add('tusks', 'b', horn(tb, [tb[0] + tl * 0.62, tb[1] + tl, tb[2] + s * tl * 0.1], 2.9, { bendX: tl * 0.14, flatStart: true }), '#fffbeb');
+          }
+        });
+        var tr = 6.2 * p.trunkW, fx = hx + hr * 0.82, fy = hy - hr * 0.22;
+        if (Math.round(p.trunk) === 1) {
+          sc.add('trunk', 'b', sweep([[fx - 8, fy + 5, 0, tr], [fx + 2, fy + hr * 0.5, 0, tr * 0.86], [fx + 8, fy + hr * 0.95, 0, tr * 0.68], [fx + 7, fy + hr * 1.7, 0, tr * 0.54], [fx + 1, fy + hr * 2.35, 0, tr * 0.5]], { seg: 20, per: 6, rise: true }), grey);
+        } else {
+          var foot = fx + Math.min(fy * 0.2, 9);
+          sc.add('trunk', 'b', sweep([[fx - 3, fy + 2, 0, tr * 0.86], [fx + 1, fy * 0.72, 0, tr * 0.82], [lerp(fx, foot, 0.6), fy * 0.4, 0, tr * 0.78], [foot, tr * 2.4, 0, tr * 0.74], [foot, tr * 1.2, 0, tr * 0.74], [foot, 0, 0, tr * 0.74]], { seg: 20, per: 7, flatEnd: true }), grey);
+        }
+        var ty = 34 * B;
+        sc.add('tail', 'b', sweep([[-28 * B, ty, 0, 2.6], [-33 * B, ty * 0.62, 0, 2.2], [-35 * B, ty * 0.28, 0, 1.9], [-35 * B, 3, 0, 2.2], [-35 * B, 0, 0, 2.4]], { seg: 12, per: 5, flatEnd: true }), dk);
+        scaleScene(sc, p.size);
+        return finish(sc);
+      }
+      var ELE_PARAMS = [
+        { group: 'Elephant', key: 'size', label: 'Overall size', unit: '×', min: 0.6, max: 1.4, step: 0.05, value: 1 },
+        { group: 'Elephant', key: 'bulk', label: 'Body (compact ↔ huge)', unit: '×', min: 0.8, max: 1.15, step: 0.05, value: 1 },
+        { group: 'Elephant', key: 'legs', label: 'Leg thickness', unit: ' mm', min: 7, max: 11, step: 0.5, value: 8.5 },
+        { group: 'Head', key: 'head', label: 'Head size', unit: '×', min: 0.9, max: 1.3, step: 0.05, value: 1 },
+        { group: 'Head', key: 'ears', label: 'Ear size', unit: '×', min: 0.6, max: 1.25, step: 0.05, value: 1 },
+        { group: 'Head', key: 'tusk', label: 'Tusk length (0 = none)', unit: '×', min: 0, max: 1.5, step: 0.05, value: 0.9 },
+        { group: 'Trunk', key: 'trunk', label: 'Trunk', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Resting on the bed', 'Raised'] },
+        { group: 'Trunk', key: 'trunkW', label: 'Trunk thickness', unit: '×', min: 0.8, max: 1.3, step: 0.05, value: 1 }
+      ];
+      window.MM_GENERATOR = {
+        code: 'MM-088',
+        category: 'ANIMALS // WILDLIFE',
+        title: 'Elephant Builder',
+        fileName: 'Elephant',
+        defaultColor: '#cbd5e1',
+        palette: ANIMAL_PALETTE,
+        partNames: { body: 'Body', legs: 'Legs', toes: 'Toenails', head: 'Head', eyes: 'Eyes', ears: 'Ears', tusks: 'Tusks', trunk: 'Trunk', tail: 'Tail' },
+        parameters: ELE_PARAMS,
+        presets: makePresets(ELE_PARAMS, [
+          ['Default elephant', {}],
+          ['Happy trunk-up', { trunk: 1 }],
+          ['Baby elephant', { size: 0.7, head: 1.3, ears: 1.2, tusk: 0, bulk: 0.9 }],
+          ['Big tusker', { size: 1.25, tusk: 1.5, ears: 1.15, bulk: 1.15, legs: 10 }]
+        ]),
+        build: buildElephant
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
