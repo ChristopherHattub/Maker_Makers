@@ -57,6 +57,9 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `defaultColor` | no | Paint color used for parts with no paint. Defaults to the first palette entry. |
 | `palette` | yes | `[{ name, color }]`. Shown as swatches in the Color tool. Eight entries lay out as two rows. |
 | `partNames` | no | Maps a mesh name to a label, for example `{ body: 'Ghost body', detail: 'Stamp' }`. |
+| `printMeshes(params, api, built)` | no | Returns the meshes that are really printed, when they differ from the display pose (see [Display pose and print plate](#display-pose-and-print-plate)). |
+| `showcase` | no | Jewellery render for one tab (see [Showcase render](#showcase-render)). |
+| `minFrame` | no | Smallest model size in mm the camera frames (default 120). Set it for small models. |
 | `printSettings` | no | Only `material` is read (default `'PLA'`): the Print tab's starting material. |
 | `parameters` | yes | The sliders. See below. A parameter may carry `showIf: function (params) { return ...; }`: the slider is hidden while it returns false, and an accordion group whose sliders are all hidden is hidden too. Hidden sliders keep their values. |
 | `presets` | no | `[{ label, values }]`. Each preset sets some parameters. |
@@ -173,6 +176,14 @@ The STL export applies this transform: Y-up becomes Z-up (`x, y, z` becomes `x, 
 ### Print tab
 
 The **Print** tab (engine-owned) has a single option, **Material** (PLA, PETG, ABS, ASA, TPU), which changes the finish of the realistic preview. There are no slicer settings. Exports are .STL (no color) and **.OBJ (colors)**, a zip with `name.obj` and `name.mtl`: one named material per distinct Color-tab color (`usemtl` groups) that Bambu Studio, OrcaSlicer and PrusaSlicer offer to map to filaments (Cura ignores colors). It writes no print settings. Every generator gets it from the engine. A generator may set `printSettings: { material: 'TPU' }` to change the starting material; nothing else is read.
+
+### Display pose and print plate
+
+Some models look right in one pose and print in another. Fancy Ring shows the ring upright with the stone set, but prints two ring halves and a loose stone. `cfg.printMeshes` returns those print meshes (`[{ name, positions }]`, closed shells, on y = 0). When it is set, Export .STL, Export .OBJ, the print check and the Print tab use them; the other tabs and the Workshop keep the `build()` meshes. Colors follow the mesh name: each print mesh takes the color of the first part with the same name. `check-mesh.mjs` also tests these meshes for watertightness.
+
+### Showcase render
+
+`cfg.showcase = { tab, materials, look(params) }` shows the model as jewellery while `tab` is open: polished metal, faceted stones (a shader that reflects off virtual pavilion facets, with colored fire) on a dark stage with a slow turntable. `materials` maps a mesh name to `'metal'` or `'gem'`. `look` returns `{ metal: '#hex', roughness, gem: '#hex' }`. `api.setSpin(on)` starts or stops the turntable. It is a preview only; exports never change, and the page's own panels keep the site style. Set `tabsFirst: true` to open the page on that tab.
 
 ### Print check (live warning chip)
 

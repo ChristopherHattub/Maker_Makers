@@ -722,6 +722,7 @@
     applyShowIf();
     var output = cfg.build(params, api) || [];
     modelData = output;
+    printCache = null;
 
     modelMeshes.forEach(function (m) { modelGroup.remove(m); m.geometry.dispose(); });
     var normalsFor = groupedNormals(output);
@@ -731,7 +732,7 @@
       geometry.setAttribute('normal', new T.BufferAttribute(normalsFor[entryIndex], 3));
       geometry.setAttribute('color', new T.BufferAttribute(new Float32Array(entry.positions.length), 3));
       geometry.computeBoundingSphere();
-      var mesh = new T.Mesh(geometry, currentModelMaterial());
+      var mesh = new T.Mesh(geometry, currentModelMaterial(entry.name || 'body'));
       mesh.name = entry.name || 'body';
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -746,6 +747,7 @@
     updateStats();
     rebuildWire();
     if (activeTab === 'print') updatePrintLook();
+    updateShowcase();
     postEmbedModel();
     schedulePrintCheck();
   }
@@ -777,7 +779,7 @@
       withPrintChecker(function (PC) {
         if (seq !== printCheckSeq) return;
         var t0 = Date.now(), res;
-        try { res = PC.check(modelData, cfg.printCheckOptions || {}); } catch (e) { res = null; }
+        try { res = PC.check(printEntries(), cfg.printCheckOptions || {}); } catch (e) { res = null; }
         printCheckSlow = Date.now() - t0 > 1500 ? 1500 : 0; // a slow model waits longer before it is checked again
         if (seq !== printCheckSeq) return;
         showPrintResult(res);
@@ -814,6 +816,7 @@
         m.renderOrder = 5;
         printMarks.add(m);
       });
+      printMarks.visible = !cfg.printMeshes || activeTab === 'print';   // the marks are in print-plate coordinates
       scene.add(printMarks);
     }
   }
@@ -855,8 +858,175 @@
     return activeTab === 'color' || activeTab === 'print' ? 'solid' : viewMode;
   }
 
-  function currentModelMaterial() {
+  function currentModelMaterial(name) {
+    if (showcaseOn()) return showcaseMaterial(name);
     return activeTab === 'print' ? printMaterial : modelMaterial;
+  }
+
+  // cfg.printMeshes(params, api, built) returns the meshes that are really printed when they differ from the display
+  // pose (a ring shown assembled, printed as parts on the plate). Exports, the print check and the Print tab use them.
+  var printCache = null, printView = null, printViewFor = null;
+  function printEntries() {
+    if (!cfg.printMeshes) return modelData;
+    if (!printCache) printCache = cfg.printMeshes(params, api, modelData);
+    return printCache;
+  }
+
+  function colorForKind(kind) {
+    ensureParts();
+    var found = parts.filter(function (p) { return p.kind === kind; })[0];
+    return (found && (found.color || found.def)) || DEFAULT_COLOR;
+  }
+
+  function updatePrintView() {
+    if (!cfg.printMeshes) return;
+    var on = activeTab === 'print';
+    modelGroup.visible = !on;
+    if (printView && (!on || printViewFor !== printEntries())) {
+      scene.remove(printView);
+      printView.children.forEach(function (m) { m.geometry.dispose(); });
+      printView = null;
+    }
+    if (printMarks) printMarks.visible = on;
+    if (!on) { updateStats(); return; }
+    if (!printView) {
+      printViewFor = printEntries();
+      printView = new T.Group();
+      var normals = groupedNormals(printViewFor), min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+      printViewFor.forEach(function (entry, i) {
+        var g = new T.BufferGeometry(), n = entry.positions.length, colors = new Float32Array(n), c = new T.Color(colorForKind(entry.name));
+        for (var v = 0; v < n; v += 3) {
+          colors[v] = c.r; colors[v + 1] = c.g; colors[v + 2] = c.b;
+          for (var k = 0; k < 3; k++) { min[k] = Math.min(min[k], entry.positions[v + k]); max[k] = Math.max(max[k], entry.positions[v + k]); }
+        }
+        g.setAttribute('position', new T.BufferAttribute(entry.positions, 3));
+        g.setAttribute('normal', new T.BufferAttribute(normals[i], 3));
+        g.setAttribute('color', new T.BufferAttribute(colors, 3));
+        var mesh = new T.Mesh(g, printMaterial);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        printView.add(mesh);
+      });
+      scene.add(printView);
+      setPlateSize(plateFor(Math.max(-min[0], max[0], -min[2], max[2])));
+      $('mm-stats').textContent = 'Geometry ready // ' + Math.round(printViewFor.reduce(function (n, e) { return n + e.positions.length / 9; }, 0)).toLocaleString() + ' triangles';
+      $('mm-dims').textContent = (max[0] - min[0]).toFixed(1) + ' x ' + (max[2] - min[2]).toFixed(1) + ' x ' + (max[1] - min[1]).toFixed(1) + ' MM // ' + plateSize + ' MM BED';
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Showcase render (cfg.showcase = { tab, materials: { meshName: 'metal' | 'gem' }, look(params) }): while that tab is
+  // open the model is shown as jewellery, with polished metal, faceted stones and a slow turntable on a dark stage.
+  // Preview only: exports never change. look() returns { metal: '#hex', roughness, gem: '#hex' }.
+  // ---------------------------------------------------------------------------
+  var jewel = null, showcaseSpin = true;
+  function showcaseOn() { return !!cfg.showcase && !EMBED && activeTab === cfg.showcase.tab; }
+
+  function makeJewelEnv() {
+    var room = new T.Scene();
+    room.background = new T.Color(0x0e0e0e);
+    function panel(w, h, d, x, y, z, level) {
+      var m = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshBasicMaterial({ color: new T.Color(level, level, level) }));
+      m.position.set(x, y, z);
+      room.add(m);
+    }
+    panel(60, 2, 60, 0, 48, 0, 7);
+    panel(2, 60, 14, 48, 10, 18, 7);
+    panel(2, 60, 14, -48, 10, -18, 6);
+    panel(10, 60, 2, -22, 10, 48, 5);
+    panel(10, 60, 2, 26, 10, -48, 5);
+    panel(70, 1, 70, 0, -40, 0, 0.35);
+    var pm = new T.PMREMGenerator(renderer);
+    var tex = pm.fromScene(room, 0.012).texture;
+    pm.dispose();
+    return tex;
+  }
+
+  function ensureJewel() {
+    if (jewel) return jewel;
+    var cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 512;
+    var g2 = cv.getContext('2d'), grad = g2.createRadialGradient(256, 200, 20, 256, 256, 400);
+    grad.addColorStop(0, '#2c2f3c');
+    grad.addColorStop(0.55, '#14151d');
+    grad.addColorStop(1, '#06070b');
+    g2.fillStyle = grad;
+    g2.fillRect(0, 0, 512, 512);
+    var pedestal = new T.Mesh(new T.CylinderGeometry(1, 1, 1, 96), new T.MeshStandardMaterial({ color: 0x101118, roughness: 0.42, metalness: 0 }));
+    pedestal.receiveShadow = true;
+    pedestal.visible = false;
+    scene.add(pedestal);
+    var env = makeJewelEnv();
+    pedestal.material.envMap = env;
+    pedestal.material.envMapIntensity = 0.35;
+    jewel = {
+      background: new T.CanvasTexture(cv),
+      pedestal: pedestal,
+      metal: new T.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.12, envMap: env, envMapIntensity: 1.25 }),
+      gem: new T.ShaderMaterial({
+        extensions: { derivatives: true },
+        uniforms: { uTint: { value: new T.Color(0xffffff) } },
+        vertexShader: 'varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: [
+          'uniform vec3 uTint; varying vec3 vW;',
+          'float lights(vec3 d) {',   // a studio of strip lights: high contrast is what makes a stone sparkle
+          '  float a = atan(d.z, d.x), e = asin(clamp(d.y, -1.0, 1.0));',
+          '  float strips = smoothstep(0.45, 0.95, sin(a * 9.0 + e * 5.0)) * smoothstep(-0.5, 0.5, d.y);',
+          '  float bars = smoothstep(0.72, 0.98, sin(e * 13.0 + a * 2.0));',
+          '  return 0.14 + 1.9 * strips + 0.8 * bars + 1.7 * smoothstep(0.6, 0.95, d.y);',
+          '}',
+          'vec3 pavilion(vec3 d, float side) {',   // reflect off the nearest of 16 pavilion facets
+          '  float step_ = 6.2831853 / 16.0;',
+          '  float c = (floor(atan(d.z, d.x) / step_) + 0.5) * step_;',
+          '  vec3 n = normalize(vec3(cos(c) * 0.66, side, sin(c) * 0.66));',
+          '  return reflect(d, n);',
+          '}',
+          'float trace(vec3 v, vec3 n, float ior) {',
+          '  vec3 t = refract(-v, n, 1.0 / ior);',
+          '  t = pavilion(t, -0.75);',
+          '  t = pavilion(t, -0.75);',
+          '  return lights(normalize(t));',
+          '}',
+          'void main() {',
+          '  vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));',   // flat per facet, whatever the vertex normals say
+          '  vec3 v = normalize(cameraPosition - vW);',
+          '  if (dot(n, v) < 0.0) n = -n;',
+          '  float f = 0.17 + 0.83 * pow(1.0 - max(dot(n, v), 0.0), 5.0);',
+          '  vec3 inside = vec3(trace(v, n, 2.38), trace(v, n, 2.42), trace(v, n, 2.47));',
+          '  vec3 col = uTint * inside + vec3(lights(reflect(-v, n))) * f;',
+          '  gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);',
+          '}'
+        ].join('\n')
+      })
+    };
+    return jewel;
+  }
+
+  function showcaseMaterial(name) {
+    var j = ensureJewel();
+    return (cfg.showcase.materials || {})[name] === 'gem' ? j.gem : j.metal;
+  }
+
+  function updateShowcase() {
+    if (!cfg.showcase || EMBED) return;
+    var on = showcaseOn();
+    if (!on && !jewel) return;
+    var j = ensureJewel();
+    if (on) {
+      var look = cfg.showcase.look(params) || {};
+      j.metal.color.set(look.metal || '#ffffff');
+      j.metal.roughness = look.roughness === undefined ? 0.16 : look.roughness;
+      j.gem.uniforms.uTint.value.set(look.gem || '#ffffff');
+      var box = new T.Box3().setFromObject(modelGroup), size = box.isEmpty() ? 60 : box.getSize(new T.Vector3()).length();
+      j.pedestal.scale.set(size * 1.1, 2, size * 1.1);
+      j.pedestal.position.y = -1;
+      scene.background = j.background;
+      hemi.intensity = 0.3; key.intensity = 0.9; rim.intensity = 0;
+    }
+    j.pedestal.visible = on;
+    plate.visible = !on;
+    controls.autoRotate = on && showcaseSpin;
+    controls.autoRotateSpeed = 1.1;
   }
 
   // Apply the Print tab's settings to the realistic render: material finish, layer lines, lighting.
@@ -879,17 +1049,18 @@
     key.intensity = on ? 0.85 : 0.85;
     rim.intensity = on ? 0.3 : 0.42;
     if (!cfg.customStage) {
-      scene.background.set(on ? 0x161d2c : 0x0b1120);
+      scene.background = new T.Color(on ? 0x161d2c : 0x0b1120);
       plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
       plateMesh.material.roughness = on ? 0.55 : 0.85;
       grid.visible = !on;
     }
     if (on) $('mm-hint').textContent = 'Realistic preview: ' + printSettings.material;
+    updatePrintView();
+    updateShowcase();
   }
 
   function applyModelMaterial() {
-    var m = currentModelMaterial();
-    modelMeshes.forEach(function (mesh) { mesh.material = m; });
+    modelMeshes.forEach(function (mesh) { mesh.material = currentModelMaterial(mesh.name); });
   }
 
   function rebuildWire() {
@@ -1224,9 +1395,9 @@
   }
 
   function centerCamera(mode) {
-    var box = new T.Box3().setFromObject(modelGroup);
+    var box = new T.Box3().setFromObject(printView && printView.visible && activeTab === 'print' ? printView : modelGroup);
     var center = box.isEmpty() ? new T.Vector3(0, cfg.targetHeight || 40, 0) : box.getCenter(new T.Vector3());
-    var size = box.isEmpty() ? 120 : Math.max(box.getSize(new T.Vector3()).length(), 120);
+    var size = box.isEmpty() ? 120 : Math.max(box.getSize(new T.Vector3()).length(), cfg.minFrame || 120);
     var w = container.clientWidth || 600;
     var h = container.clientHeight || 480;
     var narrow = w / h < 1 ? 1 / Math.max(0.55, w / h) : 1;
@@ -1318,6 +1489,7 @@
   }
 
   function setTab(tab) {
+    var wasPrint = activeTab === 'print';
     activeTab = tab;
     var isColor = tab === 'color';
     dom.tabModel.setAttribute('aria-selected', String(tab === 'model'));
@@ -1344,6 +1516,7 @@
     refreshColors();
     renderPartList();
     rebuildWire();
+    if (cfg.printMeshes && (tab === 'print' || wasPrint)) centerCamera('iso');
   }
 
   var toastTimer = null;
@@ -1359,7 +1532,7 @@
   function collectTriangles() {
     ensureParts();
     var triangles = [];
-    modelData.forEach(function (entry) {
+    printEntries().forEach(function (entry) {
       var p = entry.positions;
       for (var i = 0; i < p.length; i += 3) {
         // Y-up (three.js) -> Z-up (printer): (x, y, z) -> (x, -z, y)
@@ -1405,7 +1578,7 @@
     ensureParts();
     // Same Y-up -> Z-up mapping and bed offset as the STL export.
     var minY = Infinity;
-    modelData.forEach(function (entry) {
+    printEntries().forEach(function (entry) {
       var p = entry.positions;
       for (var i = 1; i < p.length; i += 3) if (p[i] < minY) minY = p[i];
     });
@@ -1417,7 +1590,7 @@
     var tris = [];
     var vertexOffset = 0;
 
-    modelData.forEach(function (entry, meshIndex) {
+    printEntries().forEach(function (entry, meshIndex) {
       var p = entry.positions;
       var triCount = p.length / 9;
       var localVerts = {};
@@ -1434,8 +1607,8 @@
 
       for (var t = 0; t < triCount; t++) {
         var b = t * 9;
-        var part = parts[globalPartIndex(meshIndex, t)];
-        var color = (part.color || part.def || DEFAULT_COLOR).toUpperCase();
+        var part = cfg.printMeshes ? null : parts[globalPartIndex(meshIndex, t)];
+        var color = (part ? part.color || part.def || DEFAULT_COLOR : colorForKind(entry.name)).toUpperCase();
         if (colorIndex[color] === undefined) {
           colorIndex[color] = colorList.length;
           colorList.push(color);
@@ -1595,6 +1768,7 @@
     setParams: setParams,
     rebuild: scheduleRebuild,
     setPreview: setPreview,
+    setSpin: function (on) { showcaseSpin = !!on; updateShowcase(); },
     toast: toast,
     centerCamera: centerCamera,
     // Moves the Parametric controls (presets, groups, View) out of the hidden Parametric tab, for a generator tab's own menu.

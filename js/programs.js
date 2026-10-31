@@ -753,6 +753,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/text-generator.svg',
     programUrl: 'programs/text-generator.html',
     description: 'Type any text in 10 open-licence fonts and print it as a raised or engraved plaque (7 plate shapes, border, hanging hole), loose letters, a stepped shadowbox, or hollow LED channel letters. Tune size, spacing and boldness. Everything prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 102,
+    title: 'Fancy Ring',
+    bundle: 'jewelry',
+    category: 'JEWELLERY // RINGS',
+    thumbnailUrl: 'assets/thumbnails/fancy-ring.svg',
+    programUrl: 'programs/fancy-ring.html',
+    description: 'Design an engagement ring display prop in a jewellery-style studio: six real cuts with a carat slider, prong, bezel, halo and three stone settings, plain, tapered or split shank bands, US ring sizes, metal looks and an engraving inside the band. Prints as two glue-together halves plus the stone, with no supports on the default settings. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -819,7 +828,7 @@ const BUNDLES = [
     generators: ['SLOT-91', 'SLOT-92', 'SLOT-93', 'SLOT-94', 'SLOT-95', 'SLOT-96', 'SLOT-97', 'SLOT-98', 'SLOT-99', 'SLOT-100'] },
   { id: 'animals', name: 'Animals & Creatures', accent: '#ffb86b', at: [4, 9], size: [4, 2], planned: true,
     description: 'Pets, wildlife and fantasy beasts.' },
-  { id: 'jewelry', name: 'Jewellery & Wearables', accent: '#f08cff', at: [8, 9], size: [4, 2], planned: true,
+  { id: 'jewelry', name: 'Jewellery & Wearables', accent: '#f08cff', at: [8, 9], size: [4, 2],
     description: 'Rings, pendants and charms.' },
   { id: 'tabletop', name: 'Tabletop & Gaming', accent: '#8f9bff', at: [12, 9], size: [4, 2],
     description: 'Minis, terrain, dice and tokens.' }

@@ -21,6 +21,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, the Color tool, exports, and the visual rules |
 | [flexi-creatures.md](flexi-creatures.md) | The ten print-in-place flexi animals (slots 91-100): ball-joint kit, clearance rules and the check script |
 | [workshop.md](workshop.md) | The Workshop 3D editor and the `?embed=workshop` generator hook |
+| [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
 | [text-generator.md](text-generator.md) | The Text Generator (slot 101): packed OFL fonts, build styles, triangulation, offsets and the checks |
 | [dice-tower.md](dice-tower.md) | Dice Tower: shapes, theme sliders, tray shapes, stamps. |
 | [hologram-tiles.md](hologram-tiles.md) | Hover holograms rendered from the real models (posters, `build-holo.py`) |

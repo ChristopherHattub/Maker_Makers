@@ -9,9 +9,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 1-75 | Built, except **slots 14 and 39, which are unused** (gaps; the homepage only shows slots with a `programUrl`; 39 was the Balloon Twister, removed). 73 generators. |
 | 76-90 | **Reserved for animals** (the `animals` group, currently `planned`). The picks are not decided yet; do not use these slots for anything else. |
 | 91-100 | Built: the ten Flexi Creatures. |
-| 102+ | Free. Any number works. |
+| 102 | Built: Fancy Ring. |
+| 103+ | Free. Any number works. |
 
-Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys, garden, animals, jewelry). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 84 generators in 21 groups (3 groups are `planned` and empty: toys, garden, animals). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -101,6 +102,7 @@ Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys,
 | 99 | Flexi Seahorse | flexi | `flexi-seahorse.html` |
 | 100 | Flexi Caterpillar | flexi | `flexi-caterpillar.html` |
 | 101 | Text Generator | personal | `text-generator.html` |
+| 102 | Fancy Ring | jewelry | `fancy-ring.html` |
 
 ## Groups (BUNDLES)
 
@@ -124,7 +126,7 @@ Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys,
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
 | animals | Animals & Creatures | planned (empty) |
-| jewelry | Jewellery & Wearables | planned (empty) |
+| jewelry | Jewellery & Wearables | 1 |
 | tabletop | Tabletop & Gaming | 10 |
 A generator in no group lands in an automatic "More" region, so a missing `bundle` is visible on the map.
 

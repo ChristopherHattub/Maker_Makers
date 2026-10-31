@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-102 Fancy Ring // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    /* Regal theme: white and gold panels instead of the blueprint look. The 3D stage stays dark. */
+    body.mm-soft.regal {
+      --s-bg: #fffdf7; --s-panel: #fffdf7; --s-panel-a: rgba(255, 253, 247, 0.98); --s-accent: #8f6b12; --s-accent-dim: rgba(176, 137, 40, 0.55);
+      --s-text: #33290f; --s-muted: #6f5f38; --s-amber: #8f6b12; --s-green: #8f6b12; --s-edge: #c9a441;
+      --s-card: #fffaf0; --s-card-a: rgba(255, 252, 244, 0.94); --s-stage: #14151d;
+      --s-font: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+      --s-bg-img: linear-gradient(160deg, #fbf6e8, #efe3c4);
+    }
+    .regal .mm-gen-header, .regal .mm-panel, .regal .mm-viewport { border-radius: 4px; border: 1px solid #c9a441; box-shadow: 0 0 0 3px #fffdf7, 0 0 0 4px #c9a441; }
+    .regal .mm-gen-title { letter-spacing: 0.12em; color: #8f6b12; }
+    .regal .mm-chip, .regal .mm-part, .regal .mm-icon-chip, .regal .mm-preset-card, .regal .mm-slider select,
+    .regal .mm-file-field input, .regal .mm-acc, .regal .mm-canvas, .regal .mm-btn, .regal .mm-overlay { border-radius: 3px; }
+    .regal .mm-tabs { border-bottom-color: #c9a441; }
+    .regal .mm-tab[aria-selected="true"], .regal .mm-btn--solid, .regal .mm-btn--solid:hover:not(:disabled) {
+      background: linear-gradient(180deg, #a98420, #876410); color: #fffdf7;
+    }
+    .regal .mm-btn:hover:not(:disabled), .regal .mm-toggle-btn:hover, .regal .mm-preset-card:hover, .regal .mm-choice:hover { background: rgba(201, 164, 65, 0.16); }
+    .regal .mm-btn--solid:hover:not(:disabled) { background: linear-gradient(180deg, #a98420, #876410); }
+    .regal .mm-chip[aria-pressed="true"], .regal .mm-icon-chip[aria-pressed="true"], .regal .mm-swatch[aria-pressed="true"], .regal .mm-part[aria-pressed="true"],
+    .regal .mm-toggle-btn[aria-pressed="true"], .regal .mm-choice[aria-pressed="true"] { background: rgba(201, 164, 65, 0.26); border-color: #8f6b12; }
+    .regal .mm-swatch, .regal .mm-part { background: #fffaf0; }
+    .regal .mm-printchip, .regal .mm-viewport .mm-btn, .regal .mm-viewport .mm-btn:hover:not(:disabled) { background: rgba(255, 252, 244, 0.94); }
+    .regal input[type="text"] { background: #fffaf0; color: #33290f; border: 1px solid #c9a441; }
+  </style>
+</head>
+<body class="mm-gen mm-soft regal">
+  <script>
+    // Fancy Ring: an engagement ring display prop built from real jewellery options: cut, carat, setting, band and
+    // US ring size. The Studio tab shows it as jewellery (engine showcase render). It prints as separate parts: by
+    // default two ring halves that glue together around the stone, so nothing needs supports. All sizes in the
+    // design are real-world millimetres; the display scale enlarges everything so the small parts can be printed.
+    (function () {
+      'use strict';
+
+      var PI = Math.PI, TAU = PI * 2;
+      var CUTS = ['Round', 'Oval', 'Princess', 'Emerald', 'Pear', 'Cushion'];
+      // ct = k * length * width * depth, the usual jeweller's estimate; ratio = length / width; depth as a share of width.
+      var CUT_DATA = [
+        { k: 0.0061, ratio: 1, depth: 0.61 },
+        { k: 0.0062, ratio: 1.35, depth: 0.6 },
+        { k: 0.0083, ratio: 1, depth: 0.7 },
+        { k: 0.0080, ratio: 1.4, depth: 0.65 },
+        { k: 0.0059, ratio: 1.5, depth: 0.6 },
+        { k: 0.0080, ratio: 1.1, depth: 0.65 }
+      ];
+      var SETTINGS = ['4 prong', '6 prong', 'Bezel', 'Halo', 'Three stone'];
+      var METALS = [
+        { name: 'Yellow gold', color: '#f2c14e', roughness: 0.1 },
+        { name: 'Rose gold', color: '#e8a58a', roughness: 0.11 },
+        { name: 'White gold', color: '#e4e4dc', roughness: 0.1 },
+        { name: 'Platinum', color: '#d3d6da', roughness: 0.14 }
+      ];
+      var STONES = [
+        { name: 'Diamond', look: '#ffffff', color: '#eef6ff' },
+        { name: 'Sapphire', look: '#3f6dff', color: '#1f4fd0' },
+        { name: 'Ruby', look: '#ff3550', color: '#c5152f' },
+        { name: 'Emerald', look: '#2ee08a', color: '#0f8f55' },
+        { name: 'Morganite', look: '#ffb3c2', color: '#f4a9b8' }
+      ];
+
+      // Stone width and length in mm from carats.
+      function stoneSize(cut, ct) {
+        var d = CUT_DATA[cut], w = Math.cbrt(ct / (d.k * d.ratio * d.depth));
+        return { w: w, l: w * d.ratio };
+      }
+      function ringDiameter(size) { return 11.63 + 0.8128 * size; }   // US scale, inside diameter in mm
+
+      // -----------------------------------------------------------------------
+      // Mesh helpers: a mesh is a flat array, 9 numbers per triangle; a shell is one closed mesh.
+      // -----------------------------------------------------------------------
+      function tri(m, a, b, c) { m.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      // Triangle wound outward from `o` (for star-shaped solids such as stones).
+      function triOut(m, a, b, c, o) {
+        var ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+        var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        if (nx * (a[0] - o[0]) + ny * (a[1] - o[1]) + nz * (a[2] - o[2]) >= 0) tri(m, a, b, c); else tri(m, a, c, b);
+      }
+      // Stacked rings with the same point count, closed at both ends. Rings run so that the outside is on the
+      // right-hand winding of (ring i, ring i + 1).
+      function loft(rings, closedLoop) {
+        var m = [], n = rings[0].length, i, j;
+        function avg(r) {
+          var c = [0, 0, 0];
+          r.forEach(function (p) { c[0] += p[0] / n; c[1] += p[1] / n; c[2] += p[2] / n; });
+          return c;
+        }
+        var count = closedLoop ? rings.length : rings.length - 1;
+        for (i = 0; i < count; i++) {
+          var a = rings[i], b = rings[(i + 1) % rings.length];
+          for (j = 0; j < n; j++) {
+            var k = (j + 1) % n;
+            tri(m, a[j], b[j], b[k]);
+            tri(m, a[j], b[k], a[k]);
+          }
+        }
+        if (!closedLoop) {
+          var c0 = avg(rings[0]), c1 = avg(rings[rings.length - 1]), first = rings[0], last = rings[rings.length - 1];
+          for (j = 0; j < n; j++) {
+            tri(m, c0, first[j], first[(j + 1) % n]);
+            tri(m, c1, last[(j + 1) % n], last[j]);
+          }
+        }
+        return m;
+      }
+      // Round tube along a path with a radius per point. Rounded by the radii given.
+      function tube(path, radii, sides) {
+        var rings = [], prevU = null;
+        path.forEach(function (p, i) {
+          var a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)];
+          var t = norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+          var u = prevU ? prevU : (Math.abs(t[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0]);
+          var d = u[0] * t[0] + u[1] * t[1] + u[2] * t[2];
+          u = norm([u[0] - d * t[0], u[1] - d * t[1], u[2] - d * t[2]]);
+          prevU = u;
+          var v = [t[1] * u[2] - t[2] * u[1], t[2] * u[0] - t[0] * u[2], t[0] * u[1] - t[1] * u[0]], ring = [];
+          for (var s = 0; s < sides; s++) {
+            var ang = s / sides * TAU, c = Math.cos(ang) * radii[i], si = Math.sin(ang) * radii[i];
+            ring.push([p[0] + u[0] * c + v[0] * si, p[1] + u[1] * c + v[1] * si, p[2] + u[2] * c + v[2] * si]);
+          }
+          rings.push(ring);
+        });
+        return orient(loft(rings));
+      }
+      function norm(v) { var l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
+      function signedVolume(m) {
+        var vol = 0;
+        for (var i = 0; i < m.length; i += 9) {
+          vol += m[i] * (m[i + 4] * m[i + 8] - m[i + 5] * m[i + 7]) - m[i + 1] * (m[i + 3] * m[i + 8] - m[i + 5] * m[i + 6]) + m[i + 2] * (m[i + 3] * m[i + 7] - m[i + 4] * m[i + 6]);
+        }
+        return vol;
+      }
+      // Turn a closed shell the right way out.
+      function orient(m) {
+        if (signedVolume(m) >= 0) return m;
+        for (var i = 0; i < m.length; i += 9) for (var q = 0; q < 3; q++) { var t = m[i + 3 + q]; m[i + 3 + q] = m[i + 6 + q]; m[i + 6 + q] = t; }
+        return m;
+      }
+      function mapShell(m, f) {
+        var out = new Array(m.length);
+        for (var i = 0; i < m.length; i += 3) {
+          var p = f(m[i], m[i + 1], m[i + 2]);
+          out[i] = p[0]; out[i + 1] = p[1]; out[i + 2] = p[2];
+        }
+        return out;
+      }
+      function flatten(shells) {
+        var total = 0, off = 0;
+        shells.forEach(function (s) { total += s.length; });
+        var out = new Float32Array(total);
+        shells.forEach(function (s) { out.set(s, off); off += s.length; });
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // Stone outlines: a point on the girdle for a polar angle, in mm. Long axis along z (along the finger).
+      // -----------------------------------------------------------------------
+      function outline(cut, size, a) {
+        var c = Math.cos(a), s = Math.sin(a), w = size.w / 2, l = size.l / 2, r, ca, sa;
+        if (cut === 2 || cut === 3 || cut === 5) {
+          // Princess: a square. Emerald: a rectangle with cut corners. Cushion: a pillow. Worked in unit-square space.
+          ca = Math.abs(c) * w; sa = Math.abs(s) * l;
+          var dx = ca / w, dz = sa / l;   // direction in unit-square space
+          var dl = Math.sqrt(dx * dx + dz * dz) || 1;
+          dx /= dl; dz /= dl;
+          if (cut === 2) r = 1 / Math.max(dx, dz);
+          else if (cut === 3) r = 1 / Math.max(dx, dz, (dx + dz) / 1.5);
+          else r = Math.pow(Math.pow(dx, 3.4) + Math.pow(dz, 3.4), -1 / 3.4);
+          return [(c >= 0 ? 1 : -1) * dx * r * w, (s >= 0 ? 1 : -1) * dz * r * l];
+        }
+        if (cut === 4) {
+          // Pear: a half circle with straight flanks to a tip at +z, 1.5 times as long as wide, centred on its length.
+          var tip = 2, rad = 1;
+          r = 1;
+          if (s > 0.5) {
+            // Ray from the circle centre against the flank line from (0.866, 0.5) to (0, tip).
+            var ax = Math.abs(c), lineA = (tip - 0.5) / 0.866;   // z = tip - lineA * x
+            r = tip / (s + lineA * ax);
+          }
+          r *= rad;
+          return [c * r * w, (s * r - 0.5) * w];
+        }
+        return [c * w, s * l];
+      }
+
+      // -----------------------------------------------------------------------
+      // A stone, in its own frame: the girdle's lower edge at y = 0, the table up. The culet is cut flat
+      // so that the stone prints on it, table up, with no supports (and the flat is hidden in the setting).
+      // -----------------------------------------------------------------------
+      var CULET = 0.42;
+      function pavilionDepth(cut, size) {
+        // 45 degrees at the widest reach of the outline, close to a real pavilion and steep enough to print. A square
+        // stone's sides then come out steeper, so the roof of its pocket needs small supports.
+        var reach = 0;
+        for (var i = 0; i < 32; i++) { var o = outline(cut, size, i / 32 * TAU); reach = Math.max(reach, Math.hypot(o[0], o[1])); }
+        return reach * (1 - CULET);
+      }
+      function point(cut, size, a, f, y) { var p = outline(cut, size, a); return [p[0] * f, y, p[1] * f]; }
+
+      function stoneShell(cut, size) {
+        var m = [], crown = size.w * 0.17, gird = size.w * 0.025, pav = pavilionDepth(cut, size), o = [0, crown * 0.2, 0];
+        var i, k, top = gird + crown;
+        if (cut === 3) {
+          // Emerald: step cut, long flat rings.
+          var angles = [], n = 8, sz = size;
+          var corner = Math.atan2(sz.l * 0.83, sz.w), corner2 = Math.atan2(sz.l, sz.w * 0.5 / 0.75);
+          angles = [corner, corner2, PI - corner2, PI - corner, PI + corner, PI + corner2, TAU - corner2, TAU - corner];
+          var levels = [[1, gird], [0.87, gird + crown * 0.42], [0.74, gird + crown * 0.76], [0.62, top]];
+          var below = [[1, 0], [0.8, -pav * 0.34], [0.6, -pav * 0.68], [CULET, -pav]];
+          var ringAt = function (lv) { return angles.map(function (a) { return point(cut, size, a, lv[0], lv[1]); }); };
+          var rings = [ringAt(below[3]), ringAt(below[2]), ringAt(below[1]), ringAt(below[0]), ringAt(levels[0]), ringAt(levels[1]), ringAt(levels[2]), ringAt(levels[3])];
+          for (i = 0; i < rings.length - 1; i++) {
+            for (k = 0; k < n; k++) {
+              triOut(m, rings[i][k], rings[i][(k + 1) % n], rings[i + 1][(k + 1) % n], o);
+              triOut(m, rings[i][k], rings[i + 1][(k + 1) % n], rings[i + 1][k], o);
+            }
+          }
+          var cTop = [0, top, 0], cBot = [0, -pav, 0];
+          for (k = 0; k < n; k++) {
+            triOut(m, rings[7][k], rings[7][(k + 1) % n], cTop, o);
+            triOut(m, rings[0][k], rings[0][(k + 1) % n], cBot, o);
+          }
+          return orient(m);
+        }
+        // Brilliant layout: table, 8 stars, 8 kites, 16 upper girdle, then 16 lower girdle and 8 mains down to the flat.
+        var G = [], B = [], T = [], S = [], M = [], C = [];
+        for (i = 0; i < 32; i++) {
+          G.push(point(cut, size, i / 32 * TAU, 1, gird));
+          B.push(point(cut, size, i / 32 * TAU, 1, 0));
+        }
+        for (k = 0; k < 8; k++) {
+          T.push(point(cut, size, k / 8 * TAU, 0.56, top));
+          S.push(point(cut, size, (k + 0.5) / 8 * TAU, 0.76, gird + crown * 0.56));
+          M.push(point(cut, size, k / 8 * TAU, 0.72, -pav * 0.48));
+          C.push(point(cut, size, k / 8 * TAU, CULET, -pav));
+        }
+        var cT = [0, top, 0], cC = [0, -pav, 0];
+        for (i = 0; i < 32; i++) {
+          triOut(m, G[i], B[i], B[(i + 1) % 32], o);
+          triOut(m, G[i], B[(i + 1) % 32], G[(i + 1) % 32], o);
+        }
+        for (k = 0; k < 8; k++) {
+          var k1 = (k + 1) % 8, kp = (k + 7) % 8, g = k * 4;
+          triOut(m, cT, T[k], T[k1], o);
+          triOut(m, T[k], S[k], T[k1], o);
+          triOut(m, T[k], G[g], S[k], o);
+          triOut(m, T[k], S[kp], G[g], o);
+          for (i = 0; i < 4; i++) triOut(m, S[k], G[(g + i) % 32], G[(g + i + 1) % 32], o);
+          // Below the girdle.
+          triOut(m, M[k], B[g], B[(g + 1) % 32], o);
+          triOut(m, M[k], B[(g + 1) % 32], B[(g + 2) % 32], o);
+          triOut(m, M[k1], B[(g + 2) % 32], B[(g + 3) % 32], o);
+          triOut(m, M[k1], B[(g + 3) % 32], B[(g + 4) % 32], o);
+          triOut(m, M[k], B[(g + 2) % 32], M[k1], o);
+          triOut(m, M[k], M[k1], C[k], o);
+          triOut(m, C[k], M[k1], C[k1], o);
+          triOut(m, cC, C[k], C[k1], o);
+        }
+        return orient(m);
+      }
+
+      // -----------------------------------------------------------------------
+      // The head: a tapered cup that holds a stone. Frame: seat plane at y = 0, the cup going down to y = -height.
+      // -----------------------------------------------------------------------
+      function headShells(cut, size, kind, opts) {
+        var shells = [], N = 64, angles = [], i;
+        for (i = 0; i < N; i++) angles.push(i / N * TAU);
+        var pav = pavilionDepth(cut, size), big = Math.max(size.w, size.l) / 2, gap = opts.gap;
+        var scaleBy = function (mm) { return 1 + mm / big; };
+        var rim = kind === 'bezel' ? 0.75 + opts.prong * 0.75 : kind === 'halo' ? 1.45 + opts.prong * 0.5 : 0.55;
+        var outer = scaleBy(rim + gap), seat = scaleBy(gap);
+        var height = opts.height, baseF = Math.max(0.2, opts.base / big);
+        var at = function (f, y) { return angles.map(function (a) { return point(cut, size, a, f, y); }); };
+        var lip = kind === 'bezel' ? size.w * 0.05 : 0;
+        var rings = [at(baseF, -height), at(baseF + (outer - baseF) * 0.55, -height * 0.45), at(outer, -0.2 + lip), at(outer, lip)];
+        // A bezel's lip flares a little outward, so its inside never prints as a flat roof.
+        if (lip) rings.push(at(scaleBy(gap + lip * 0.9), lip));
+        rings.push(at(seat, 0), at(CULET + (seat - CULET) * 0.5, -(pav + gap) * 0.5), at(CULET * 1.02, -(pav + gap)));
+        shells.push(orient(loft(rings)));
+
+        if (kind !== 'bezel') {
+          var pa = opts.prongAngles, r = opts.prong, crown = size.w * 0.17, gird = size.w * 0.025;
+          pa.forEach(function (a) {
+            var bottom = point(cut, size, a, baseF * 1.1, -height + 0.1);
+            var mid = point(cut, size, a, baseF + (outer - baseF) * 0.62, -height * 0.4);
+            var girdle = point(cut, size, a, scaleBy(gap + r * 0.55), gird + 0.02);
+            // Prong tips stick out sideways on the print plate, so their length is capped in printed millimetres.
+            var rise = Math.min(crown * 0.62, 0.8 * 2 / opts.scale);
+            var over = point(cut, size, a, scaleBy(r * 0.1), gird + rise);
+            var tip = point(cut, size, a, scaleBy(-r * 0.1), gird + rise * 1.2);
+            shells.push(tube([bottom, mid, girdle, over, tip], [r * 1.05, r, r * 0.9, r * 0.85, r * 0.42], 8));
+          });
+        }
+        return { shells: shells, height: height };
+      }
+
+      // Small stones around a halo, fused to the metal: low cones so they print clean.
+      function haloStones(cut, size, opts) {
+        var shells = [], big = Math.max(size.w, size.l) / 2, f = 1 + (opts.gap + 0.1 + (1.45 + opts.prong * 0.5) * 0.55) / big, bead = 0.72;
+        var a = 0, target = bead * 1.92, guard = 0, prev = point(cut, size, 0, f, 0), list = [prev];
+        var total = 0;
+        for (var i = 1; i <= 360; i++) {
+          var p = point(cut, size, i / 360 * TAU, f, 0);
+          total += Math.hypot(p[0] - prev[0], p[2] - prev[2]);
+          prev = p;
+        }
+        var count = Math.max(10, Math.floor(total / target));
+        count -= count % 2;
+        var step = total / count, walked = 0, next = 0;
+        prev = point(cut, size, 0, f, 0);
+        list = [];
+        for (i = 0; i <= 720 && list.length < count; i++) {
+          p = point(cut, size, i / 720 * TAU, f, 0);
+          if (walked >= next) { list.push(p); next += step; }
+          walked += Math.hypot(p[0] - prev[0], p[2] - prev[2]);
+          prev = p;
+        }
+        list.forEach(function (c, index) {
+          var rings = [], twist = index * 0.37;   // neighbours that touch never share a corner, so each stays its own shell
+          [[bead, -0.25], [bead, 0.08], [bead * 0.52, bead * 0.72]].forEach(function (lv) {
+            var ring = [];
+            for (var s = 0; s < 8; s++) ring.push([c[0] + Math.cos(s / 8 * TAU + twist) * lv[0], lv[1], c[2] + Math.sin(s / 8 * TAU + twist) * lv[0]]);
+            rings.push(ring);
+          });
+          shells.push(orient(loft(rings)));
+        });
+        return shells;
+      }
+
+      // -----------------------------------------------------------------------
+      // Single-stroke engraving font: polylines in a 0..1 box, wider glyphs use x up to 0.8.
+      // -----------------------------------------------------------------------
+      var FONT = {
+        A: [[[0, 0], [0.35, 1], [0.7, 0]], [[0.13, 0.36], [0.57, 0.36]]], B: [[[0, 0], [0, 1], [0.45, 1], [0.58, 0.87], [0.58, 0.66], [0.45, 0.53], [0, 0.53]], [[0.45, 0.53], [0.62, 0.4], [0.62, 0.14], [0.47, 0], [0, 0]]],
+        C: [[[0.62, 0.82], [0.46, 1], [0.2, 1], [0, 0.78], [0, 0.22], [0.2, 0], [0.46, 0], [0.62, 0.18]]], D: [[[0, 0], [0, 1], [0.36, 1], [0.62, 0.74], [0.62, 0.26], [0.36, 0], [0, 0]]],
+        E: [[[0.58, 1], [0, 1], [0, 0], [0.58, 0]], [[0, 0.52], [0.46, 0.52]]], F: [[[0.58, 1], [0, 1], [0, 0]], [[0, 0.52], [0.46, 0.52]]],
+        G: [[[0.62, 0.82], [0.46, 1], [0.2, 1], [0, 0.78], [0, 0.22], [0.2, 0], [0.46, 0], [0.64, 0.18], [0.64, 0.46], [0.36, 0.46]]], H: [[[0, 0], [0, 1]], [[0.62, 0], [0.62, 1]], [[0, 0.52], [0.62, 0.52]]],
+        I: [[[0.1, 0], [0.1, 1]]], J: [[[0.5, 1], [0.5, 0.2], [0.34, 0], [0.14, 0], [0, 0.18]]], K: [[[0, 0], [0, 1]], [[0.6, 1], [0, 0.42]], [[0.2, 0.6], [0.62, 0]]],
+        L: [[[0, 1], [0, 0], [0.54, 0]]], M: [[[0, 0], [0, 1], [0.38, 0.3], [0.76, 1], [0.76, 0]]], N: [[[0, 0], [0, 1], [0.64, 0], [0.64, 1]]],
+        O: [[[0.2, 1], [0.48, 1], [0.68, 0.78], [0.68, 0.22], [0.48, 0], [0.2, 0], [0, 0.22], [0, 0.78], [0.2, 1]]], P: [[[0, 0], [0, 1], [0.44, 1], [0.6, 0.84], [0.6, 0.58], [0.44, 0.42], [0, 0.42]]],
+        Q: [[[0.2, 1], [0.48, 1], [0.68, 0.78], [0.68, 0.22], [0.48, 0], [0.2, 0], [0, 0.22], [0, 0.78], [0.2, 1]], [[0.42, 0.24], [0.72, -0.04]]], R: [[[0, 0], [0, 1], [0.44, 1], [0.6, 0.84], [0.6, 0.6], [0.44, 0.44], [0, 0.44]], [[0.3, 0.44], [0.62, 0]]],
+        S: [[[0.6, 0.84], [0.44, 1], [0.16, 1], [0, 0.84], [0, 0.66], [0.16, 0.52], [0.44, 0.48], [0.6, 0.34], [0.6, 0.16], [0.44, 0], [0.16, 0], [0, 0.16]]], T: [[[0, 1], [0.64, 1]], [[0.32, 1], [0.32, 0]]],
+        U: [[[0, 1], [0, 0.2], [0.18, 0], [0.44, 0], [0.62, 0.2], [0.62, 1]]], V: [[[0, 1], [0.33, 0], [0.66, 1]]], W: [[[0, 1], [0.2, 0], [0.4, 0.68], [0.6, 0], [0.8, 1]]],
+        X: [[[0, 0], [0.62, 1]], [[0, 1], [0.62, 0]]], Y: [[[0, 1], [0.32, 0.48], [0.64, 1]], [[0.32, 0.48], [0.32, 0]]], Z: [[[0, 1], [0.6, 1], [0, 0], [0.6, 0]]],
+        0: [[[0.18, 1], [0.42, 1], [0.6, 0.78], [0.6, 0.22], [0.42, 0], [0.18, 0], [0, 0.22], [0, 0.78], [0.18, 1]]], 1: [[[0.06, 0.8], [0.26, 1], [0.26, 0]]], 2: [[[0, 0.82], [0.16, 1], [0.42, 1], [0.58, 0.84], [0.58, 0.62], [0, 0], [0.6, 0]]],
+        3: [[[0, 0.86], [0.16, 1], [0.42, 1], [0.58, 0.84], [0.58, 0.66], [0.42, 0.52], [0.2, 0.52]], [[0.42, 0.52], [0.6, 0.38], [0.6, 0.16], [0.42, 0], [0.16, 0], [0, 0.14]]], 4: [[[0.46, 0], [0.46, 1], [0, 0.32], [0.62, 0.32]]], 5: [[[0.56, 1], [0.08, 1], [0.04, 0.56], [0.42, 0.58], [0.6, 0.42], [0.6, 0.16], [0.42, 0], [0.14, 0], [0, 0.14]]],
+        6: [[[0.54, 0.92], [0.4, 1], [0.2, 1], [0, 0.76], [0, 0.2], [0.18, 0], [0.42, 0], [0.6, 0.18], [0.6, 0.38], [0.42, 0.56], [0.18, 0.56], [0, 0.38]]], 7: [[[0, 1], [0.6, 1], [0.2, 0]]], 8: [[[0.3, 0.54], [0.08, 0.68], [0.08, 0.86], [0.22, 1], [0.4, 1], [0.54, 0.86], [0.54, 0.68], [0.3, 0.54], [0, 0.36], [0, 0.16], [0.16, 0], [0.44, 0], [0.6, 0.16], [0.6, 0.36], [0.3, 0.54]]], 9: [[[0.06, 0.08], [0.2, 0], [0.4, 0], [0.6, 0.24], [0.6, 0.8], [0.42, 1], [0.18, 1], [0, 0.82], [0, 0.62], [0.18, 0.44], [0.42, 0.44], [0.6, 0.62]]],
+        '&': [[[0.66, 0], [0.12, 0.72], [0.14, 0.9], [0.28, 1], [0.42, 0.9], [0.42, 0.74], [0, 0.34], [0, 0.14], [0.14, 0], [0.34, 0], [0.66, 0.4]]],
+        '.': [[[0.04, 0], [0.08, 0.03]]], ',': [[[0.1, 0.05], [0.02, -0.14]]], '-': [[[0.04, 0.45], [0.42, 0.45]]], "'": [[[0.06, 1], [0.06, 0.72]]],
+        '+': [[[0.28, 0.2], [0.28, 0.72]], [[0.02, 0.46], [0.54, 0.46]]]
+      };
+      FONT['♥'] = [[[0.36, 0], [0, 0.48], [0, 0.78], [0.16, 0.94], [0.36, 0.74], [0.56, 0.94], [0.72, 0.78], [0.72, 0.48], [0.36, 0]]];
+      // Line segments of a text, in a box of height 1 starting at x = 0.
+      function textSegments(text) {
+        var segs = [], x = 0, up = String(text || '').toUpperCase();
+        for (var i = 0; i < up.length; i++) {
+          var ch = up[i], g = FONT[ch];
+          if (ch === ' ' || !g) { x += 0.5; continue; }
+          var maxX = 0;
+          for (var s = 0; s < g.length; s++) {
+            for (var p = 0; p < g[s].length; p++) {
+              maxX = Math.max(maxX, g[s][p][0]);
+              if (p) segs.push([x + g[s][p - 1][0], g[s][p - 1][1], x + g[s][p][0], g[s][p][1]]);
+            }
+          }
+          x += maxX + 0.28;
+        }
+        return { segs: segs, width: Math.max(0, x - 0.28) };
+      }
+      // Distance from point (px, py) to the nearest stroke.
+      function strokeDistance(segs, px, py) {
+        var best = 9;
+        for (var i = 0; i < segs.length; i++) {
+          var s = segs[i], vx = s[2] - s[0], vy = s[3] - s[1], wx = px - s[0], wy = py - s[1];
+          if (Math.abs(wx) > 1.2 && Math.abs(px - s[2]) > 1.2) continue;
+          var t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / ((vx * vx + vy * vy) || 1e-9)));
+          var dx = wx - t * vx, dy = wy - t * vy, d = dx * dx + dy * dy;
+          if (d < best) best = d;
+        }
+        return Math.sqrt(best);
+      }
+
+      // -----------------------------------------------------------------------
+      // The band. A row is an angle around the finger (0 = under the stone). `spec(angle)` gives the band's width,
+      // thickness and axial offset there. Inner radius ri is fixed by the ring size.
+      // -----------------------------------------------------------------------
+      function profilePoints(profile, inCount, outCount) {
+        // Returns [u (-1..1 across the band), side (0 inner, 1 outer), radial 0..1 across the thickness].
+        var pts = [], i, u;
+        for (i = 0; i <= inCount; i++) {
+          u = -1 + 2 * i / inCount;
+          var comfort = profile === 2 ? 0.2 * (1 - u * u) : 0;
+          // A soft edge: the inner face rolls toward the outer one.
+          pts.push({ u: u, side: 0, rad: (1 - Math.pow(1 - Math.abs(u), 0) * 0) * 0 + Math.pow(Math.abs(u), 6) * 0.14 - comfort });
+        }
+        for (i = 1; i < outCount; i++) {
+          u = 1 - 2 * i / outCount;
+          var a = Math.abs(u), h;
+          if (profile === 0) h = 1 - Math.pow(a, 12) * 0.2;              // flat, softened edge
+          else if (profile === 1) h = 0.5 + 0.5 * Math.sqrt(1 - a * a);  // domed
+          else if (profile === 2) h = 0.5 + 0.5 * Math.sqrt(1 - a * a);  // comfort fit: domed with an inner curve
+          else h = 0.34 + 0.66 * (1 - a);                                // knife edge
+          pts.push({ u: u, side: 1, rad: h });
+        }
+        return pts;
+      }
+
+      function bandShell(rows, closed, spec, ri, profile, engrave) {
+        var inCount = engrave ? 34 : 10, outCount = 16;
+        var prof = profilePoints(profile, inCount, outCount), rings = [];
+        rows.forEach(function (ang) {
+          var sp = spec(ang), ring = [], cos = Math.cos(ang), sin = Math.sin(ang);
+          prof.forEach(function (pt) {
+            var r = ri + pt.rad * sp.thick, z = sp.offset + pt.u * sp.width / 2;
+            if (engrave && pt.side === 0) r += engrave(ang, z);
+            ring.push([sin * r, cos * r, z]);
+          });
+          rings.push(ring);
+        });
+        return orient(loft(rings, closed));
+      }
+
+      // Angles from a to b with a finer run (for engraving) when the range covers it.
+      function rowList(a, b, count, fineFrom, fineTo, fineCount) {
+        var rows = [], i;
+        if (fineCount) {
+          var before = Math.max(2, Math.ceil((fineFrom - a) / (b - a) * count));
+          var after = Math.max(2, Math.ceil((b - fineTo) / (b - a) * count));
+          for (i = 0; i < before; i++) rows.push(a + (fineFrom - a) * i / before);
+          for (i = 0; i < fineCount; i++) rows.push(fineFrom + (fineTo - fineFrom) * i / fineCount);
+          for (i = 0; i <= after; i++) rows.push(fineTo + (b - fineTo) * i / after);
+        } else {
+          for (i = 0; i <= count; i++) rows.push(a + (b - a) * i / count);
+        }
+        return rows;
+      }
+
+      // -----------------------------------------------------------------------
+      // Cutting a closed shell at a plane z = cut, keeping z >= cut, and capping the cut (with holes).
+      // -----------------------------------------------------------------------
+      function keyOf(p) { return p[0].toFixed(5) + ',' + p[1].toFixed(5); }
+      function triangulate(loop, out, cut) {
+        // Ear clipping of one simple polygon. Points are [x, y]; the polygon winds clockwise seen from +z (faces -z).
+        var pts = loop.slice(), guard = 0, n;
+        var area2 = function (a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); };
+        while (pts.length > 3 && guard++ < 200000) {
+          n = pts.length;
+          var clipped = false;
+          for (var i = 0; i < n; i++) {
+            var a = pts[(i + n - 1) % n], b = pts[i], c = pts[(i + 1) % n], ar = area2(a, b, c);
+            if (ar > -1e-10) continue;    // reflex or flat
+            var inside = false;
+            for (var k = 0; k < n && !inside; k++) {
+              var q = pts[k];
+              if (q === a || q === b || q === c || keyOf(q) === keyOf(a) || keyOf(q) === keyOf(b) || keyOf(q) === keyOf(c)) continue;
+              if (area2(a, b, q) < 1e-10 && area2(b, c, q) < 1e-10 && area2(c, a, q) < 1e-10) inside = true;
+            }
+            if (inside) continue;
+            out.push(a[0], a[1], cut, b[0], b[1], cut, c[0], c[1], cut);
+            pts.splice(i, 1);
+            clipped = true;
+            break;
+          }
+          if (!clipped) {
+            // Only flat points are left: remove one by attaching it to its neighbours, keeping the mesh closed.
+            for (i = 0; i < pts.length; i++) {
+              var a2 = pts[(i + pts.length - 1) % pts.length], b2 = pts[i], c2 = pts[(i + 1) % pts.length];
+              if (Math.abs(area2(a2, b2, c2)) <= 1e-10) {
+                out.push(a2[0], a2[1], cut, b2[0], b2[1], cut, c2[0], c2[1], cut);
+                pts.splice(i, 1);
+                clipped = true;
+                break;
+              }
+            }
+            if (!clipped) break;
+          }
+        }
+        if (pts.length === 3) out.push(pts[0][0], pts[0][1], cut, pts[1][0], pts[1][1], cut, pts[2][0], pts[2][1], cut);
+      }
+      function clipShell(m, cut) {
+        var out = [], nextOf = {}, ptOf = {};
+        var cross = function (a, b) {
+          // Ordered ends so both triangles on an edge compute exactly the same point.
+          var flip = a[0] > b[0] || (a[0] === b[0] && (a[1] > b[1] || (a[1] === b[1] && a[2] > b[2])));
+          var p = flip ? b : a, q = flip ? a : b, t = (cut - p[2]) / (q[2] - p[2]);
+          return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, cut];
+        };
+        var seg = function (from, to) {
+          var kf = keyOf(from), kt = keyOf(to);
+          if (kf === kt) return;
+          ptOf[kf] = [from[0], from[1]];
+          ptOf[kt] = [to[0], to[1]];
+          (nextOf[kf] = nextOf[kf] || []).push(kt);
+        };
+        for (var i = 0; i < m.length; i += 9) {
+          var v = [[m[i], m[i + 1], m[i + 2]], [m[i + 3], m[i + 4], m[i + 5]], [m[i + 6], m[i + 7], m[i + 8]]];
+          var above = [v[0][2] >= cut, v[1][2] >= cut, v[2][2] >= cut], count = above[0] + above[1] + above[2];
+          if (count === 3) { for (var q = 0; q < 9; q++) out.push(m[i + q]); continue; }
+          if (count === 0) continue;
+          var s = 0;
+          while (count === 1 ? !above[s] : above[s]) s++;   // s = the odd corner
+          var a = v[s], b = v[(s + 1) % 3], c = v[(s + 2) % 3], ab = cross(a, b), ca = cross(c, a);
+          if (count === 1) {
+            tri(out, a, ab, ca);
+            seg(ca, ab);
+          } else {
+            tri(out, ab, b, c);
+            tri(out, ab, c, ca);
+            seg(ab, ca);
+          }
+        }
+        // Chain the segments into loops.
+        var loops = [];
+        Object.keys(nextOf).forEach(function (start) {
+          while (nextOf[start] && nextOf[start].length) {
+            var loop = [], k = start, guard = 0;
+            do {
+              loop.push(ptOf[k]);
+              var nx = nextOf[k] && nextOf[k].pop();
+              if (nx === undefined) break;
+              k = nx;
+            } while (k !== start && guard++ < 100000);
+            if (loop.length >= 3) loops.push(loop);
+          }
+        });
+        var area = function (l) { var s = 0; for (var i = 0; i < l.length; i++) { var a = l[i], b = l[(i + 1) % l.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
+        var outers = loops.filter(function (l) { return area(l) < 0; }), holes = loops.filter(function (l) { return area(l) > 0; });
+        // Holes join their outer loop along the shortest link, which turns each into one simple polygon.
+        holes.forEach(function (h) {
+          var best = null;
+          outers.forEach(function (o, oi) {
+            for (var i = 0; i < o.length; i += Math.max(1, Math.floor(o.length / 90))) for (var j = 0; j < h.length; j += Math.max(1, Math.floor(h.length / 90))) {
+              var d = Math.hypot(o[i][0] - h[j][0], o[i][1] - h[j][1]);
+              if (!best || d < best.d) best = { d: d, oi: oi, i: i, j: j };
+            }
+          });
+          if (!best) return;
+          var o = outers[best.oi], merged = o.slice(0, best.i + 1);
+          for (var k = 0; k <= h.length; k++) merged.push(h[(best.j + k) % h.length]);
+          merged = merged.concat(o.slice(best.i));
+          outers[best.oi] = merged;
+        });
+        outers.forEach(function (l) { triangulate(l, out, cut); });
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // What the last build made, in real-world mm with the ring's centre at the origin. printMeshes lays it out.
+      // -----------------------------------------------------------------------
+      var last = null;
+      var engraving = 'FOREVER ♥';
+      var specNode = null;
+      var cutNow = 0;
+
+      function buildRing(p) {
+        var cut = Math.round(p.cut), set = Math.round(p.setting), scale = p.scale;
+        cutNow = cut;
+        var size = stoneSize(cut, p.carat), gap = 0.15 / scale;
+        var ri = ringDiameter(p.ringSize) / 2, thick = p.bandThick, width = p.bandWidth, profile = Math.round(p.profile), style = Math.round(p.bandStyle);
+        var ro = ri + thick, pav = pavilionDepth(cut, size), big = Math.max(size.w, size.l) / 2;
+
+        // Band, with an optional engraving on the inside at the back of the ring.
+        var segsInfo = textSegments(engraving), engrave = null, fineFrom = 0, fineTo = 0, fineCount = 0;
+        var backWidth = width;
+        var specAt = function (ang) {
+          var d = Math.abs(((ang + PI) % TAU + TAU) % TAU - PI);    // 0 at the stone, PI at the back
+          var w = style === 1 ? width * (0.62 + 0.38 * d / PI) * 1.18 : width;
+          return { width: w, thick: thick, offset: 0 };
+        };
+        if (segsInfo.segs.length) {
+          var textH = Math.min(backWidth, specAt(PI).width) * 0.52, grooveW = 0.1, depth = Math.min(thick * 0.3, 0.2);
+          var tw = segsInfo.width * textH, arc = Math.min((tw + 1) / ri, PI * 1.1);
+          var k = tw + 1 > ri * PI * 1.1 ? (ri * PI * 1.1 - 1) / tw : 1;
+          fineFrom = PI - arc / 2;
+          fineTo = PI + arc / 2;
+          fineCount = Math.min(460, Math.max(60, Math.round(arc * ri / 0.075)));
+          engrave = function (ang, z) {
+            if (ang <= fineFrom || ang >= fineTo) return 0;
+            // Reads upright from the front of the ring, looking down at the inside of the back.
+            var sx = (PI - ang) * ri / (textH * k) + segsInfo.width / 2, sy = -z / (textH * k) + 0.5;
+            if (sx < -0.5 || sx > segsInfo.width + 0.5 || sy < -0.5 || sy > 1.5) return 0;
+            var dist = strokeDistance(segsInfo.segs, sx, sy) * textH * k, f = 1 - dist / grooveW;
+            return f > 0 ? depth * f : 0;
+          };
+        }
+        var band = [];
+        var base = 180;
+        if (style === 2) {
+          // Split shank: the band divides into two strands that open toward the stone.
+          var openAt = PI * 0.3, mainFrom = openAt, mainTo = TAU - openAt;
+          band.push(bandShell(rowList(mainFrom, mainTo, base, fineFrom, fineTo, fineCount), false, specAt, ri, profile, engrave));
+          [-1, 1].forEach(function (sd) {
+            var rows = rowList(-openAt - 0.08, openAt + 0.08, 80);
+            var strand = function (ang) {
+              var d = Math.abs(((ang + PI) % TAU + TAU) % TAU - PI), t = Math.max(0, Math.min(1, 1 - d / openAt)), ease = t * t * (3 - 2 * t);
+              return { width: width * 0.56, thick: thick, offset: sd * (width * 0.22 + ease * (Math.min(big * 0.72, width * 1.05))) };
+            };
+            band.push(bandShell(rows, false, strand, ri, Math.min(profile, 1)));
+          });
+        } else {
+          var rows = rowList(0, TAU, base, fineFrom, fineTo, fineCount);
+          rows.pop();
+          band.push(bandShell(rows, true, specAt, ri, profile, engrave));
+        }
+
+        // The stones and heads.
+        var head = [], gems = [], melee = [];
+        var kind = set === 2 ? 'bezel' : set === 3 ? 'halo' : 'prong';
+        var prongR = p.prong;
+        var prongList = function (ct, c) {
+          if (ct === 6) return [30, 90, 150, 210, 270, 330].map(function (d) { return d / 180 * PI; });
+          if (c === 4) return [90, 200, 340, 270].map(function (d) { return d / 180 * PI; });
+          if (c === 3) { var corner = Math.atan2(size.l * 0.92, size.w * 0.86); return [corner, PI - corner, PI + corner, TAU - corner]; }
+          return [45, 135, 225, 315].map(function (d) { return d / 180 * PI; });
+        };
+        var place = function (shell, ang, radial) {
+          var c = Math.cos(ang), s = Math.sin(ang);
+          return mapShell(shell, function (x, y, z) { var yy = y + radial; return [x * c + yy * s, -x * s + yy * c, z]; });
+        };
+        var addStone = function (cutId, sz, ang, seatR, height, base, prongs, sideKind) {
+          var res = headShells(cutId, sz, sideKind, { prong: prongR, gap: gap, height: height, base: base, prongAngles: prongs, scale: scale });
+          res.shells.forEach(function (sh) { head.push(place(sh, ang, seatR)); });
+          gems.push({ shell: place(stoneShell(cutId, sz), ang, seatR), raw: stoneShell(cutId, sz), depth: pavilionDepth(cutId, sz), w: sz.w, l: sz.l });
+        };
+        // The cup must reach down into the band and stay deeper than the stone's pavilion.
+        var height = Math.max(pav + 0.9, big * 0.9);
+        var seatR = ro - 0.35 + height;
+        var prongs = prongList(set === 1 ? 6 : 4, cut);
+        var baseW = Math.max(width * 0.42, big * 0.32);
+        addStone(cut, size, 0, seatR, height, baseW, prongs, kind);
+        if (kind === 'halo') {
+          // The head's wider rim carries the small stones.
+          haloStones(cut, size, { prong: prongR, gap: gap }).forEach(function (sh) { melee.push(place(sh, 0, seatR)); });
+        }
+        if (kind === 'prong' && set === 4) {
+          var sideSize = { w: size.w * 0.62, l: size.l * 0.62 }, sideBig = Math.max(sideSize.w, sideSize.l) / 2;
+          var sidePav = pavilionDepth(cut, sideSize), sideH = Math.max(sidePav + 0.7, sideBig * 0.85);
+          // Stones touch at the girdle: the angle comes from half widths at the seat radius.
+          var sideSeat = ro - 0.35 + sideH;
+          var phi = Math.atan2(size.w / 2 + sideSize.w / 2 + prongR * 1.2 + 0.2, (seatR + sideSeat) / 2);
+          [-1, 1].forEach(function (sd) {
+            addStone(cut, sideSize, sd * phi, sideSeat, sideH, Math.max(width * 0.36, sideBig * 0.32), prongList(4, cut), 'prong');
+          });
+        }
+
+        last = { band: band, head: head, melee: melee, gems: gems, ro: ro, ri: ri, seatR: seatR, scale: scale, printAs: Math.round(p.printAs), width: width, stone: p.stone };
+        return last;
+      }
+
+      function scaled(shell, s, lift) {
+        return mapShell(shell, function (x, y, z) { return [x * s, y * s + lift, z * s]; });
+      }
+
+      function updateSpec(p) {
+        if (!specNode) return;
+        var size = stoneSize(Math.round(p.cut), p.carat), roundish = Math.abs(size.w - size.l) < 0.01;
+        specNode.textContent = p.carat.toFixed(2) + ' ct ' + CUTS[Math.round(p.cut)].toLowerCase() + ' ' + STONES[Math.round(p.stone)].name.toLowerCase() + ', ' +
+          (roundish ? size.w.toFixed(1) + ' mm' : size.l.toFixed(1) + ' x ' + size.w.toFixed(1) + ' mm') +
+          ' // ' + SETTINGS[Math.round(p.setting)].toLowerCase() + ' in ' + METALS[Math.round(p.metal)].name.toLowerCase() +
+          ' // US size ' + p.ringSize + ' (' + ringDiameter(p.ringSize).toFixed(1) + ' mm inside)' +
+          (p.scale !== 1 ? ' // printed at ' + p.scale + 'x' : '') +
+          (Math.round(p.cut) === 2 ? ' // a princess stone needs small supports inside its cup' : '');
+      }
+
+      // Small line pictures for the pickers.
+      function icon(body) {
+        return '<svg viewBox="0 0 40 40" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round">' + body + '</g></svg>';
+      }
+      var CUT_ICONS = [
+        '<circle cx="20" cy="20" r="14"/><path d="M20 6 26 14 34 20 26 26 20 34 14 26 6 20 14 14Z"/>',
+        '<ellipse cx="20" cy="20" rx="11" ry="15"/><path d="M20 5 25 14 31 20 25 26 20 35 15 26 9 20 15 14Z"/>',
+        '<rect x="7" y="7" width="26" height="26"/><path d="M7 7 20 20 33 7M7 33 20 20 33 33"/>',
+        '<path d="M14 5H26L32 11V29L26 35H14L8 29V11Z"/><path d="M16 11H24L27 14V26L24 29H16L13 26V14Z"/>',
+        '<path d="M20 4C24 11 31 17 31 25A11 11 0 0 1 9 25C9 17 16 11 20 4Z"/><path d="M20 12 25 24 20 32 15 24Z"/>',
+        '<rect x="7" y="8" width="26" height="24" rx="8"/><path d="M20 8 28 20 20 32 12 20Z"/>'
+      ];
+      var SET_ICONS = [
+        '<path d="M8 32A13 6 0 0 1 32 32"/><path d="M12 20H28L20 30Z"/><path d="M12 20V15M28 20V15M16 20V14M24 20V14"/>',
+        '<path d="M8 32A13 6 0 0 1 32 32"/><path d="M12 20H28L20 30Z"/><path d="M12 20V15M28 20V15M20 20V12M15 20V13M25 20V13"/>',
+        '<path d="M8 32A13 6 0 0 1 32 32"/><path d="M11 13H29V20L24 28H16L11 20Z"/>',
+        '<circle cx="20" cy="18" r="6"/><circle cx="20" cy="18" r="12" stroke-dasharray="2 3"/><path d="M8 34A13 5 0 0 1 32 34"/>',
+        '<path d="M7 33A14 6 0 0 1 33 33"/><path d="M14 16H26L20 27Z"/><path d="M5 22H13L9 28ZM27 22H35L31 28Z"/>'
+      ];
+
+      var DEFAULTS = { cut: 0, carat: 1, stone: 0, setting: 1, metal: 0, ringSize: 7, bandStyle: 0, profile: 1, bandWidth: 2.2, bandThick: 1.7, prong: 0.5, scale: 2, printAs: 0 };
+      var SIGNATURES = [
+        { label: 'Classic solitaire', values: { cut: 0, carat: 1, stone: 0, setting: 1, metal: 0, bandStyle: 0, profile: 1, bandWidth: 2.2 }, art: '<path d="M8 32A13 6 0 0 1 32 32"/><circle cx="20" cy="14" r="7"/>' },
+        { label: 'Vintage halo', values: { cut: 5, carat: 1.25, stone: 0, setting: 3, metal: 1, bandStyle: 1, profile: 2, bandWidth: 2.2 }, art: '<rect x="13" y="7" width="14" height="14" rx="4"/><rect x="9" y="3" width="22" height="22" rx="7" stroke-dasharray="2 3"/><path d="M8 34A13 6 0 0 1 32 34"/>' },
+        { label: 'Three stone', values: { cut: 1, carat: 1, stone: 0, setting: 4, metal: 3, bandStyle: 0, profile: 1, bandWidth: 2.4 }, art: '<ellipse cx="20" cy="13" rx="5" ry="7"/><ellipse cx="9" cy="17" rx="3" ry="4"/><ellipse cx="31" cy="17" rx="3" ry="4"/><path d="M8 34A13 6 0 0 1 32 34"/>' },
+        { label: 'Modern bezel', values: { cut: 0, carat: 0.75, stone: 0, setting: 2, metal: 2, bandStyle: 0, profile: 0, bandWidth: 3 }, art: '<circle cx="20" cy="13" r="9"/><circle cx="20" cy="13" r="5"/><path d="M8 34A13 6 0 0 1 32 34"/>' },
+        { label: 'Emerald statement', values: { cut: 3, carat: 2, stone: 3, setting: 0, metal: 3, bandStyle: 1, profile: 1, bandWidth: 2.4 }, art: '<path d="M15 4H25L29 8V20L25 24H15L11 20V8Z"/><path d="M8 34A13 6 0 0 1 32 34"/>' },
+        { label: 'Pear romance', values: { cut: 4, carat: 1.25, stone: 4, setting: 3, metal: 1, bandStyle: 0, profile: 1, bandWidth: 2 }, art: '<path d="M20 3C23 8 28 12 28 17A8 8 0 0 1 12 17C12 12 17 8 20 3Z"/><path d="M8 34A13 6 0 0 1 32 34"/>' }
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-102',
+        category: 'JEWELLERY // RINGS',
+        title: 'Fancy Ring',
+        fileName: 'FancyRing',
+        minFrame: 70,
+        tabsFirst: true,
+        openGroups: ['Fine tuning'],
+        palette: [
+          { name: 'Yellow Gold', color: '#d9a93a' },
+          { name: 'Rose Gold', color: '#d48d74' },
+          { name: 'Silver Grey', color: '#b9bec5' },
+          { name: 'Pearl White', color: '#f4f4ef' },
+          { name: 'Diamond Clear', color: '#dbeeff' },
+          { name: 'Sapphire Blue', color: '#1f4fd0' },
+          { name: 'Ruby Red', color: '#c5152f' },
+          { name: 'Emerald Green', color: '#0f8f55' }
+        ],
+        defaultColor: '#d9a93a',
+        partNames: { band: 'Band', head: 'Setting', melee: 'Small stones', gem: 'Stone' },
+        showcase: {
+          tab: 'studio',
+          materials: { band: 'metal', head: 'metal', melee: 'gem', gem: 'gem' },
+          look: function (p) {
+            var m = METALS[Math.round(p.metal)];
+            return { metal: m.color, roughness: m.roughness, gem: STONES[Math.round(p.stone)].look };
+          }
+        },
+        tabs: [{
+          id: 'studio',
+          label: 'Ring studio',
+          hint: 'Drag to look around the ring',
+          mount: function (box, api) {
+            specNode = document.createElement('p');
+            specNode.className = 'mm-note';
+            box.appendChild(specNode);
+            var cards = document.createElement('div');
+            cards.className = 'mm-preset-cards';
+            SIGNATURES.forEach(function (sig) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'mm-preset-card mm-preset-card--lines';
+              b.innerHTML = icon(sig.art) + '<span>' + sig.label + '</span>';
+              b.addEventListener('click', function () { api.setParams(sig.values); api.toast(sig.label); });
+              cards.appendChild(b);
+            });
+            box.appendChild(cards);
+            var spin = document.createElement('button');
+            spin.type = 'button';
+            spin.className = 'mm-btn mm-btn--block';
+            spin.textContent = 'Pause turntable';
+            var spinning = true;
+            spin.addEventListener('click', function () {
+              spinning = !spinning;
+              api.setSpin(spinning);
+              spin.textContent = spinning ? 'Pause turntable' : 'Start turntable';
+            });
+            box.appendChild(spin);
+            updateSpec(api.params);
+          }
+        }],
+        mount: function (box, api) {
+          var note = document.createElement('p');
+          note.className = 'mm-note';
+          note.textContent = 'Cut into the inside of the band at the back of the ring. Letters, numbers, & and the heart. Leave empty for none.';
+          var label = document.createElement('label');
+          label.className = 'mm-group-title';
+          label.textContent = 'Engraving';
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.maxLength = 24;
+          input.value = engraving;
+          input.setAttribute('aria-label', 'Engraving text');
+          input.addEventListener('input', function () { engraving = input.value; api.rebuild(); });
+          var heart = document.createElement('button');
+          heart.type = 'button';
+          heart.className = 'mm-chip';
+          heart.textContent = 'Add ♥';
+          heart.addEventListener('click', function () {
+            if (input.value.length < 24) { input.value += '♥'; engraving = input.value; api.rebuild(); }
+          });
+          box.appendChild(label);
+          box.appendChild(input);
+          box.appendChild(heart);
+          box.appendChild(note);
+        },
+        extrasTitle: 'Engraving',
+        embedState: {
+          get: function () { return { engraving: engraving }; },
+          set: function (v) { if (v && typeof v.engraving === 'string') engraving = v.engraving; }
+        },
+        parameters: [
+          { tab: 'studio', group: 'Stone', key: 'cut', label: 'Cut', min: 0, max: 5, step: 1, value: 0,
+            choices: CUTS.map(function (n, i) { return { label: n, svg: icon(CUT_ICONS[i]) }; }) },
+          { tab: 'studio', group: 'Stone', key: 'carat', label: 'Carat weight (over 2 ct may need supports)', unit: ' ct', min: 0.25, max: 3, step: 0.05, value: 1,
+            format: function (v) { var size = stoneSize(cutNow, v); return v.toFixed(2) + ' ct / ' + size.w.toFixed(1) + ' mm wide'; } },
+          { tab: 'studio', group: 'Stone', key: 'stone', label: 'Stone', min: 0, max: 4, step: 1, value: 0,
+            format: function (v) { return STONES[v].name; } },
+          { tab: 'studio', group: 'Setting', key: 'setting', label: 'Setting', min: 0, max: 4, step: 1, value: 1,
+            choices: SETTINGS.map(function (n, i) { return { label: n, svg: icon(SET_ICONS[i]) }; }) },
+          { tab: 'studio', group: 'Metal and band', key: 'metal', label: 'Metal look', min: 0, max: 3, step: 1, value: 0,
+            format: function (v) { return METALS[v].name; } },
+          { tab: 'studio', group: 'Metal and band', key: 'bandStyle', label: 'Band style', min: 0, max: 2, step: 1, value: 0,
+            format: function (v) { return ['Plain', 'Tapered', 'Split shank (needs supports)'][v]; } },
+          { tab: 'studio', group: 'Metal and band', key: 'ringSize', label: 'US ring size', min: 3, max: 13, step: 0.25, value: 7,
+            format: function (v) { return 'US ' + v + ' / ' + ringDiameter(v).toFixed(1) + ' mm'; } },
+
+          { group: 'Fine tuning', key: 'bandWidth', label: 'Band width', unit: ' mm', min: 1.6, max: 5, step: 0.1, value: 2.2 },
+          { group: 'Fine tuning', key: 'bandThick', label: 'Band thickness', unit: ' mm', min: 1.3, max: 2.6, step: 0.1, value: 1.7 },
+          { group: 'Fine tuning', key: 'profile', label: 'Band profile', min: 0, max: 3, step: 1, value: 1,
+            format: function (v) { return ['Flat', 'Domed', 'Comfort fit', 'Knife edge'][v]; } },
+          { group: 'Fine tuning', key: 'prong', label: 'Prong radius', unit: ' mm', min: 0.4, max: 0.8, step: 0.05, value: 0.5 },
+          { group: 'Printing', key: 'scale', label: 'Display scale (1x = real size, resin only)', min: 1, max: 4, step: 0.5, value: 2,
+            format: function (v) { return v + ' x'; } },
+          { group: 'Printing', key: 'printAs', label: 'Ring prints as', min: 0, max: 1, step: 1, value: 0,
+            options: ['Two halves', 'Whole (supports)'] }
+        ],
+        presets: SIGNATURES.map(function (sig) {
+          var v = {};
+          Object.keys(DEFAULTS).forEach(function (k) { v[k] = DEFAULTS[k]; });
+          Object.keys(sig.values).forEach(function (k) { v[k] = sig.values[k]; });
+          return { label: sig.label, values: v };
+        }),
+
+        // Display pose: the ring upright, stone on top. The real print layout is in printMeshes below.
+        build: function (p) {
+          var r = buildRing(p), s = p.scale, lift = r.ro * s;
+          updateSpec(p);
+          var metal = METALS[Math.round(p.metal)], stone = STONES[Math.round(p.stone)];
+          var paint = { '#f2c14e': '#d9a93a', '#e8a58a': '#d48d74', '#e4e4dc': '#b9bec5', '#d3d6da': '#b9bec5' }[metal.color];
+          var entries = [
+            { name: 'band', positions: flatten(r.band.map(function (m) { return scaled(m, s, lift); })), color: paint },
+            { name: 'head', positions: flatten(r.head.map(function (m) { return scaled(m, s, lift); })), color: paint },
+            { name: 'gem', positions: flatten(r.gems.map(function (g) { return scaled(g.shell, s, lift); })), color: stone.color }
+          ];
+          if (r.melee.length) entries.push({ name: 'melee', positions: flatten(r.melee.map(function (m) { return scaled(m, s, lift); })), color: stone.color });
+          return entries;
+        },
+
+        // The print plate: the ring (two halves with the cut face down, or whole and flat) and each stone, table up.
+        printMeshes: function () {
+          var r = last, s = r.scale, out = [], CUT = 0.0137;
+          var groups = { band: r.band, head: r.head, melee: r.melee };
+          var halves = r.printAs === 0;
+          var half = r.ro * s + 3, topReach = (r.seatR + 3) * s;
+          Object.keys(groups).forEach(function (name) {
+            if (!groups[name].length) return;
+            var shells = [];
+            groups[name].forEach(function (m0) {
+              var m = mapShell(m0, function (x, y, z) { return [x * s, y * s, z * s]; });
+              if (halves) {
+                // One half: keep z above the cut, then lay it on the cut face. The other half is its mirror image's partner.
+                var a = clipShell(m, CUT), b = clipShell(mapShell(m, function (x, y, z) { return [-x, y, -z]; }), CUT);
+                shells.push(mapShell(a, function (x, y, z) { return [x - half, z - CUT, -y + topReach / 2 - r.ro * s / 2]; }));
+                shells.push(mapShell(b, function (x, y, z) { return [x + half, z - CUT, -y + topReach / 2 - r.ro * s / 2]; }));
+              } else {
+                shells.push(mapShell(m, function (x, y, z) { return [x - half * 0.2, z + r.width * s, -y + topReach / 2 - r.ro * s / 2]; }));
+              }
+            });
+            out.push({ name: name, positions: flatten(shells) });
+          });
+          // Stones in a line in front of the ring, resting on their flat culets.
+          var gemShells = [], x = -(r.gems.length - 1) * 0.5 * (r.gems[0].w * s + 4);
+          var frontZ = (r.ro * s + topReach) / 2 + Math.max.apply(null, r.gems.map(function (g) { return g.l; })) * s / 2 + 4;
+          r.gems.forEach(function (g) {
+            gemShells.push(mapShell(g.raw, function (px, py, pz) { return [px * s + x, (py + g.depth) * s, pz * s + frontZ]; }));
+            x += g.w * s + 4;
+          });
+          out.push({ name: 'gem', positions: flatten(gemShells) });
+          return out;
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

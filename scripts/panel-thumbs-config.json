@@ -618,5 +618,13 @@
    "rim": "#ffd23f",
    "text": "#ffffff"
   }
+ },
+ "fancy-ring": {
+  "colors": {
+   "band": "#d9a93a",
+   "head": "#d9a93a",
+   "melee": "#eef6ff",
+   "gem": "#dbeeff"
+  }
  }
 }
