@@ -130,7 +130,13 @@ function runVariant(presetLabel, out) {
   // Informational by default; --strict fails on errors (floating parts, big overhangs).
   if (!pcCheck) { out('PRINT CHECK skipped: could not load print-check.js'); return res; }
   try {
-    const pc = pcCheck(meshes);
+    // A generator shown in one pose and printed in another (cfg.printMeshes) is checked as it is really printed.
+    let printed = meshes;
+    if (typeof cfg.printMeshes === 'function') {
+      printed = cfg.printMeshes(meshes.params || {}, {}, meshes);
+      printed.forEach((e, i) => { const r = analyse([e]); if (r.open || r.nonManifold || r.nan) { res.meshOk = false; out('PRINT MESH "' + e.name + '" #' + i + ': open ' + r.open + ', non-manifold ' + r.nonManifold + ', volume ' + r.volume.toFixed(0)); } });
+    }
+    const pc = pcCheck(printed);
     if (!pc.issues.length) out('PRINT CHECK: no supports needed (no floating parts, no overhang over ~50 degrees, no thin walls).');
     pc.issues.forEach((i) => { out('PRINT CHECK ' + i.severity.toUpperCase() + ' (' + i.kind + '): ' + i.message); res.print.push({ kind: i.kind, severity: i.severity, message: i.message }); });
     (pc.spots || []).slice(0, 6).forEach((s) => out('  at x ' + s.x.toFixed(1) + ' y ' + s.y.toFixed(1) + ' z ' + s.z.toFixed(1) + ' (Y-up), ' + Math.round(s.area) + ' mm2'));

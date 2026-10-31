@@ -909,6 +909,7 @@
       });
       scene.add(printView);
       setPlateSize(plateFor(Math.max(-min[0], max[0], -min[2], max[2])));
+      $('mm-stats').textContent = 'Geometry ready // ' + Math.round(printViewFor.reduce(function (n, e) { return n + e.positions.length / 9; }, 0)).toLocaleString() + ' triangles';
       $('mm-dims').textContent = (max[0] - min[0]).toFixed(1) + ' x ' + (max[2] - min[2]).toFixed(1) + ' x ' + (max[1] - min[1]).toFixed(1) + ' MM // ' + plateSize + ' MM BED';
     }
   }
@@ -923,7 +924,7 @@
 
   function makeJewelEnv() {
     var room = new T.Scene();
-    room.background = new T.Color(0x0a0c12);
+    room.background = new T.Color(0x0e0e0e);
     function panel(w, h, d, x, y, z, level) {
       var m = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshBasicMaterial({ color: new T.Color(level, level, level) }));
       m.position.set(x, y, z);
@@ -951,7 +952,7 @@
     grad.addColorStop(1, '#06070b');
     g2.fillStyle = grad;
     g2.fillRect(0, 0, 512, 512);
-    var pedestal = new T.Mesh(new T.CylinderGeometry(1, 1, 1, 96), new T.MeshStandardMaterial({ color: 0x15161d, roughness: 0.32, metalness: 0.4 }));
+    var pedestal = new T.Mesh(new T.CylinderGeometry(1, 1, 1, 96), new T.MeshStandardMaterial({ color: 0x101118, roughness: 0.42, metalness: 0 }));
     pedestal.receiveShadow = true;
     pedestal.visible = false;
     scene.add(pedestal);
@@ -961,7 +962,7 @@
     jewel = {
       background: new T.CanvasTexture(cv),
       pedestal: pedestal,
-      metal: new T.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.16, envMap: env, envMapIntensity: 1.15 }),
+      metal: new T.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.12, envMap: env, envMapIntensity: 1.25 }),
       gem: new T.ShaderMaterial({
         extensions: { derivatives: true },
         uniforms: { uTint: { value: new T.Color(0xffffff) } },
@@ -972,7 +973,7 @@
           '  float a = atan(d.z, d.x), e = asin(clamp(d.y, -1.0, 1.0));',
           '  float strips = smoothstep(0.45, 0.95, sin(a * 9.0 + e * 5.0)) * smoothstep(-0.5, 0.5, d.y);',
           '  float bars = smoothstep(0.72, 0.98, sin(e * 13.0 + a * 2.0));',
-          '  return 0.05 + 1.9 * strips + 0.8 * bars + 1.7 * smoothstep(0.6, 0.95, d.y);',
+          '  return 0.14 + 1.9 * strips + 0.8 * bars + 1.7 * smoothstep(0.6, 0.95, d.y);',
           '}',
           'vec3 pavilion(vec3 d, float side) {',   // reflect off the nearest of 16 pavilion facets
           '  float step_ = 6.2831853 / 16.0;',
@@ -1020,11 +1021,7 @@
       j.pedestal.scale.set(size * 1.1, 2, size * 1.1);
       j.pedestal.position.y = -1;
       scene.background = j.background;
-      hemi.intensity = 0.3; key.intensity = 0.9; rim.intensity = 0.2;
-    } else if (activeTab !== 'print') {
-      scene.background = new T.Color(0x0b1120);
-    } else {
-      scene.background = new T.Color(0x161d2c);
+      hemi.intensity = 0.3; key.intensity = 0.9; rim.intensity = 0;
     }
     j.pedestal.visible = on;
     plate.visible = !on;
@@ -1052,7 +1049,7 @@
     key.intensity = on ? 0.85 : 0.85;
     rim.intensity = on ? 0.3 : 0.42;
     if (!cfg.customStage) {
-      scene.background.set(on ? 0x161d2c : 0x0b1120);
+      scene.background = new T.Color(on ? 0x161d2c : 0x0b1120);
       plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
       plateMesh.material.roughness = on ? 0.55 : 0.85;
       grid.visible = !on;
@@ -1492,6 +1489,7 @@
   }
 
   function setTab(tab) {
+    var wasPrint = activeTab === 'print';
     activeTab = tab;
     var isColor = tab === 'color';
     dom.tabModel.setAttribute('aria-selected', String(tab === 'model'));
@@ -1518,7 +1516,7 @@
     refreshColors();
     renderPartList();
     rebuildWire();
-    if (cfg.printMeshes) centerCamera('iso');
+    if (cfg.printMeshes && (tab === 'print' || wasPrint)) centerCamera('iso');
   }
 
   var toastTimer = null;
