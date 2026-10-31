@@ -379,7 +379,181 @@
         return y + e + edge;
       }
 
+      // -----------------------------------------------------------------------
+      // Round tower: same themes, wrapped around the cylinder. Angles are measured from the exit (rel = 0),
+      // which faces -z; c.R is the outer radius and c.wa the half angle the exit window takes up.
+      // -----------------------------------------------------------------------
+      var FRONT = -Math.PI / 2;
+      // A curved block on the wall between angles a0 < a1, from radius R + w0 to R + w1 (w0 < 0 sinks it in).
+      function arcBlock(out, c, a0, a1, y0, y1, w0, w1) {
+        var n = Math.max(1, Math.ceil((a1 - a0) / (K.TAU / 48))), loop = [], i;
+        for (i = 0; i <= n; i++) { var A = FRONT + a0 + (a1 - a0) * i / n; loop.push([(c.R + w1) * Math.cos(A), (c.R + w1) * Math.sin(A)]); }
+        for (i = n; i >= 0; i--) { var B = FRONT + a0 + (a1 - a0) * i / n; loop.push([(c.R + w0) * Math.cos(B), (c.R + w0) * Math.sin(B)]); }
+        K.extrude(out, loop, null, y0, y1);
+      }
+      // The same block with the exit window cut out of it, for anything below the top of the window.
+      function arcClear(out, c, a0, a1, y0, y1, w0, w1) {
+        while (a0 >= Math.PI) { a0 -= K.TAU; a1 -= K.TAU; }
+        while (a0 < -Math.PI) { a0 += K.TAU; a1 += K.TAU; }
+        var minA = 1.5 / c.R;
+        if (y0 >= c.floorT + c.winH) { arcBlock(out, c, a0, a1, y0, y1, w0, w1); return; }
+        if (Math.min(a1, -c.wa) - a0 > minA) arcBlock(out, c, a0, Math.min(a1, -c.wa), y0, y1, w0, w1);
+        if (a1 - Math.max(a0, c.wa) > minA) arcBlock(out, c, Math.max(a0, c.wa), a1, y0, y1, w0, w1);
+      }
+      // A loop drawn in [u, y] on the wall (u = distance around it, centred on angle rel), bent to the curve.
+      function onCurve(out, c, rel, poly, w0, w1) {
+        var from = out.length;
+        K.extrude(out, poly.map(function (q) { return [q[0], -q[1]]; }), null, w0, w1);
+        K.standUp(out, from);
+        K.map(out, from, function (u, y, w) {
+          var A = FRONT + rel - u / c.R, r = c.R + w;
+          return [r * Math.cos(A), y, r * Math.sin(A)];
+        });
+      }
+      // A straight beam in [u, y], chopped into short overlapping pieces so it follows the curve.
+      function curveBeam(out, c, rel, a, b, bw, w0, w1) {
+        var len = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1]));
+        var n = Math.max(1, Math.ceil(len / 5));
+        for (var i = 0; i < n; i++) {
+          var p = [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n];
+          var q = [a[0] + (b[0] - a[0]) * (i + 1) / n, a[1] + (b[1] - a[1]) * (i + 1) / n];
+          onCurve(out, c, rel, K.strokeQuad(p, q, bw, true), w0, w1);
+        }
+      }
+      // Running-bond blocks all the way round, y0..y1, raised by d. The exit stays clear.
+      function roundCourses(out, c, y0, y1, bh, bl, d, gap) {
+        var n = Math.max(6, Math.round(K.TAU * c.R / bl)), da = K.TAU / n, ga = gap / c.R;
+        for (var row = 0, y = y0; y + bh * 0.6 <= y1; y += bh, row++) {
+          var top = Math.min(y1, y + bh) - gap;
+          for (var i = 0; i < n; i++) {
+            var a0 = -Math.PI + (i + (row % 2) / 2) * da;
+            arcClear(out, c, a0 + ga / 2, a0 + da - ga / 2, y, top, -0.4, d);
+          }
+        }
+      }
+      // The round skirt: same profile as skirt(), rising to a circle of radius topR. The hole is the dice channel.
+      function roundSkirt(out, c, y, e, edge, topR, rise) {
+        var N = 64;
+        var rs = [
+          { p: K.circle(0, 0, c.R + 0.3, N), y: y },
+          { p: K.circle(0, 0, c.R + e, N), y: y + e },
+          { p: K.circle(0, 0, c.R + e, N), y: y + e + edge }
+        ];
+        if (rise > 0) rs.push({ p: K.circle(0, 0, topR, N), y: y + e + edge + rise });
+        K.rings(out, rs, [K.rect(0, 0, c.iw + 0.2, c.idp + 0.2)]);
+        return y + e + edge;
+      }
+
+      function decorateRound(style, c) {
+        var trim = [], acc = [], winTop = c.floorT + c.winH;
+        var roofR = c.R - c.t + 1.2;
+
+        if (style === 1) {
+          // Castle: stone courses, an arch over the exit, a corbelled parapet with battlements, round turrets
+          var bh = Math.max(4.5, c.die * 0.32), top = c.H - 6, cb = 2;
+          roundCourses(trim, c, c.floorT, top, bh, bh * 2.1, 0.8, 0.8);
+          var ri = c.wa * c.R, ro = ri + Math.max(3.5, c.die * 0.25), ns = 9;
+          for (var i = 0; i < ns; i++) {
+            var a0 = Math.PI * i / ns + 0.025, a1 = Math.PI * (i + 1) / ns - 0.025, grow = i === 4 ? 1.2 : 0;
+            onCurve(trim, c, 0, [[ri * Math.cos(a0), winTop + ri * Math.sin(a0)], [(ro + grow) * Math.cos(a0), winTop + (ro + grow) * Math.sin(a0)],
+              [(ro + grow) * Math.cos(a1), winTop + (ro + grow) * Math.sin(a1)], [ri * Math.cos(a1), winTop + ri * Math.sin(a1)]], -0.4, 1.4);
+          }
+          roundSkirt(trim, c, top, cb, c.H - top - cb, 0, 0);
+          var m = Math.max(3.5, c.die * 0.3), nm = Math.max(4, Math.round(K.TAU * (c.R + cb) / (2 * m))), dm = K.TAU / nm;
+          for (var mi = 0; mi < nm; mi++) {
+            arcBlock(trim, c, (mi + 0.25) * dm, (mi + 0.75) * dm, c.H - 0.5, c.H + m * 1.1, -c.t + 0.2, cb);
+          }
+          // turrets at the sides, turned away from the exit so they stay out of the dice channel
+          var R = Math.max(5, Math.min(8, c.die * 0.38)), rr = c.R + R * 0.35;
+          [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(function (s) {
+            var cx = s[0] * rr * Math.cos(Math.PI / 6), cz = s[1] * rr * Math.sin(Math.PI / 6), yt = c.H + 3, roof = (R + 2.4) * 1.5;
+            K.lathe(acc, [[R, 0], [R, c.H - 5], [R + 1.8, c.H - 3.2], [R + 1.8, yt], [R + 2.4, yt], [0, yt + roof]], 24, cx, cz);
+          });
+          // battlements on the tray's front rim
+          teeth(c.trayW, m, function (x0, x1) { K.box(trim, x0, c.floorT + c.rimH - 0.5, c.zt0, x1, c.floorT + c.rimH + m * 0.8, c.zt0 + c.rim); });
+        }
+
+        if (style === 2) {
+          // Pagoda: stacked round eaves with upturned tips, a funnel roof, columns and a beam at the exit
+          var e = Math.max(5, Math.min(9, c.die * 0.45)), edge = 1.4, roofRise = e * 0.55;
+          var roofY = c.H - e - edge;
+          var lo = winTop + 6, hiY = roofY - e * 2.4;
+          var nT = Math.max(1, Math.min(4, Math.round((hiY - lo) / 38) + 1));
+          var tips = function (y, ee) {
+            for (var q = 0; q < 8; q++) {
+              var A = Math.PI / 8 + q * Math.PI / 4, tr = c.R + ee - 1;
+              K.lathe(acc, [[1.6, y - 0.6], [0, y + ee * 0.75]], 12, tr * Math.cos(A), tr * Math.sin(A));
+            }
+          };
+          for (var k = 0; k < nT; k++) {
+            var yk = nT > 1 ? lo + k * (hiY - lo) / (nT - 1) : lo;
+            if (hiY < lo) yk = lo;
+            tips(roundSkirt(trim, c, yk, e * 0.85, edge, c.R + 0.6, e * 0.4), e * 0.85);
+          }
+          tips(roundSkirt(trim, c, roofY, e + 1, edge, roofR, roofRise), e + 1);
+          [-1, 1].forEach(function (sx) {
+            var px = c.iw / 2 + 2;
+            K.lathe(acc, [[1.7, c.floorT - 0.5], [1.7, winTop + 3]], 16, sx * px, -Math.sqrt(c.R * c.R - px * px) - 0.5);
+          });
+          arcBlock(acc, c, -c.wa - 0.12, c.wa + 0.12, winTop, winTop + 3, -0.4, 3);
+        }
+
+        if (style === 3) {
+          // Tavern: half-timbered walls (posts, story beams, braces), a conical roof skirt and a chimney
+          var bw = Math.max(2.2, c.die * 0.15), d = 1.2, y0 = c.floorT + bw / 2, yE = c.H - 6;
+          var nP = 2 * Math.max(3, Math.round(K.TAU * c.R / 60)), dP = K.TAU / nP, baw = bw / 2 / c.R;
+          var ns2 = Math.max(1, Math.round((yE - y0) / 42)), sh = (yE - y0) / ns2;
+          for (var pi = 0; pi < nP; pi++) {
+            var rel = pi * dP, wrapped = rel > Math.PI ? rel - K.TAU : rel;
+            // a post that would land in the window starts above it
+            var py = Math.abs(wrapped) < c.wa + baw ? winTop + bw / 2 : y0;
+            arcBlock(trim, c, rel - baw, rel + baw, py, yE, -0.4, d);
+          }
+          for (var j = 0; j <= ns2; j++) {
+            var yr = y0 + j * sh;
+            // two overlapping halves, so the ring has no seam where its ends would share an edge
+            arcClear(trim, c, -Math.PI, 0.02, yr - bw / 2, yr + bw / 2, -0.5, d - 0.15);
+            arcClear(trim, c, -0.02, Math.PI + 0.04, yr - bw / 2, yr + bw / 2, -0.5, d - 0.15);
+          }
+          arcBlock(trim, c, -c.wa - 0.1, c.wa + 0.1, winTop, winTop + bw, -0.5, d - 0.15);
+          var halfU = dP / 2 * c.R;
+          for (var bay = 0; bay < nP; bay++) {
+            var mid = (bay + 0.5) * dP, wm = mid > Math.PI ? mid - K.TAU : mid;
+            for (var j2 = 0; j2 < ns2; j2++) {
+              var yb = y0 + j2 * sh, yt2 = yb + sh;
+              // the bays either side of the exit only brace above the window
+              if (yb < winTop && Math.abs(wm) < c.wa + dP / 2) continue;
+              var up = (bay + j2) % 2 === 0;
+              curveBeam(trim, c, mid, [-halfU, up ? yb : yt2], [halfU, up ? yt2 : yb], bw, -0.6, d - 0.3);
+            }
+          }
+          var ee2 = Math.max(4, c.die * 0.3);
+          roundSkirt(trim, c, yE, ee2, 1.2, roofR, ee2 * 0.8);
+          var cw = Math.max(6, c.die * 0.4), cz0 = c.idp / 2 + 0.3;
+          K.box(acc, -cw / 2, c.H - 2.5, cz0, cw / 2, c.H + 12, cz0 + cw);
+          K.box(acc, -cw / 2 - 0.8, c.H + 12, cz0 - 0.8, cw / 2 + 0.8, c.H + 14, cz0 + cw + 0.8);
+        }
+
+        if (style === 4) {
+          // Sci-fi: hull panels, light strips, vents, an armoured collar and an antenna
+          var ph = Math.max(14, c.die * 1.3), sa = 0.9 / c.R;
+          roundCourses(trim, c, c.floorT, c.H - 6, ph, K.TAU * c.R / 8, 0.8, 1.2);
+          [Math.PI / 2, Math.PI, -Math.PI / 2].forEach(function (rel) {
+            arcBlock(acc, c, rel - sa, rel + sa, c.floorT + 4, c.H - 8, -0.4, 1.4);
+            for (var v = 0; v < 5; v++) {
+              var yv = c.floorT + 10 + v * 2.6, va = rel + K.TAU / 16;
+              arcBlock(trim, c, va - 5 / c.R, va + 5 / c.R, yv, yv + 1.3, -0.4, 1.6);
+            }
+          });
+          arcBlock(acc, c, -c.wa, c.wa, winTop, winTop + 2.6, -0.4, 1.4);
+          roundSkirt(trim, c, c.H - 6, 3, 3.5, c.R, 2);
+          K.lathe(acc, [[1.8, c.H - 2], [1.2, c.H + 16], [2, c.H + 17], [0, c.H + 19.5]], 14, 0, c.R + 1.2);
+        }
+        return { trim: trim, accent: acc };
+      }
+
       function decorate(style, c) {
+        if (c.round) return decorateRound(style, c);
         var trim = [], acc = [];
         var F = towerFaces(c.W, c.D), winTop = c.floorT + c.winH;
         var sides = [F.left, F.right, F.back];
@@ -487,21 +661,37 @@
       function buildTower(p) {
         var t = p.wall, die = p.dieSize;
         var iw = die * 1.75, idp = die * 2.3;
-        var W = iw + 2 * t, D = idp + 2 * t, H = p.height;
+        var round = Math.round(p.shape || 0) === 1;
+        // Round: the same rectangular dice channel inside a cylinder, thinnest (the wall setting) at its corners.
+        var R = Math.sqrt(iw * iw + idp * idp) / 2 + t;
+        var W = round ? 2 * R : iw + 2 * t, D = round ? 2 * R : idp + 2 * t, H = p.height;
         var floorT = 3, winH = die * 1.7;
         var tower = [], baffles = [], tray = [];
 
-        // floor, side walls, back wall, front wall above the exit window
-        K.box(tower, -W / 2, 0, -D / 2, W / 2, floorT, D / 2);
-        K.box(tower, -W / 2, floorT * 0.5, -D / 2, -W / 2 + t, H, D / 2);
-        K.box(tower, W / 2 - t, floorT * 0.5, -D / 2, W / 2, H, D / 2);
-        K.box(tower, -W / 2 + t - 0.6, floorT * 0.5, D / 2 - t, W / 2 - t + 0.6, H, D / 2);
-        K.box(tower, -W / 2 + t - 0.6, floorT + winH, -D / 2, W / 2 - t + 0.6, H, -D / 2 + t);
+        if (round) {
+          // floor, the wall beside the exit window (a C seen from above), the full ring above the window
+          var N = 64, halfW = Math.asin(iw / 2 / R), cLoop = [];
+          K.extrude(tower, K.circle(0, 0, R, N), null, 0, floorT);
+          for (var q = 0; q <= N; q++) {
+            var A = FRONT + halfW + (K.TAU - 2 * halfW) * q / N;
+            cLoop.push([R * Math.cos(A), R * Math.sin(A)]);
+          }
+          cLoop.push([-iw / 2, idp / 2], [iw / 2, idp / 2]);
+          K.extrude(tower, cLoop, null, floorT * 0.5, floorT + winH + 0.5);
+          K.extrude(tower, K.circle(0, 0, R, N), [K.rect(0, 0, iw, idp)], floorT + winH, H);
+        } else {
+          // floor, side walls, back wall, front wall above the exit window
+          K.box(tower, -W / 2, 0, -D / 2, W / 2, floorT, D / 2);
+          K.box(tower, -W / 2, floorT * 0.5, -D / 2, -W / 2 + t, H, D / 2);
+          K.box(tower, W / 2 - t, floorT * 0.5, -D / 2, W / 2, H, D / 2);
+          K.box(tower, -W / 2 + t - 0.6, floorT * 0.5, D / 2 - t, W / 2 - t + 0.6, H, D / 2);
+          K.box(tower, -W / 2 + t - 0.6, floorT + winH, -D / 2, W / 2 - t + 0.6, H, -D / 2 + t);
+        }
 
         // baffle ramps, alternating back / front, the lowest one runs out through the window
         var tan = Math.tan(p.angle * Math.PI / 180);
         var tkv = 2.4 / Math.cos(p.angle * Math.PI / 180);
-        var zBack = D / 2 - t, zFront = -D / 2 + t;
+        var zBack = idp / 2, zFront = -idp / 2;
         var yA0 = floorT + 2 + idp * tan;
         var gap = die * 1.25;
         var span = H - 1.2 * die - yA0;
@@ -519,16 +709,18 @@
         }
 
         // landing tray in front of the window
-        var trayW = W + 10, rim = 2.4;
+        // on a round tower the floor and side rims run back until they meet the curved wall, so dice can't slip past
+        var trayW = iw + 2 * t + 10, rim = 2.4;
         var zt0 = -D / 2 - p.trayLen;
-        K.box(tray, -trayW / 2, 0, zt0, trayW / 2, floorT, -D / 2 + 1.5);
+        var zMeet = round ? -Math.sqrt(R * R - trayW * trayW / 4) + 1 : 0;
+        K.box(tray, -trayW / 2, 0, zt0, trayW / 2, floorT, round ? zMeet : -D / 2 + 1.5);
         K.box(tray, -trayW / 2, floorT * 0.5, zt0, trayW / 2, floorT + p.rimH, zt0 + rim);
-        K.box(tray, -trayW / 2, floorT * 0.5, zt0 + rim - 0.6, -trayW / 2 + rim, floorT + p.rimH, -D / 2 - 0.5);
-        K.box(tray, trayW / 2 - rim, floorT * 0.5, zt0 + rim - 0.6, trayW / 2, floorT + p.rimH, -D / 2 - 0.5);
+        K.box(tray, -trayW / 2, floorT * 0.5, zt0 + rim - 0.6, -trayW / 2 + rim, floorT + p.rimH, round ? zMeet : -D / 2 - 0.5);
+        K.box(tray, trayW / 2 - rim, floorT * 0.5, zt0 + rim - 0.6, trayW / 2, floorT + p.rimH, round ? zMeet : -D / 2 - 0.5);
 
         var style = Math.round(p.style || 0);
         var deco = decorate(style, { W: W, D: D, H: H, t: t, die: die, iw: iw, idp: idp, floorT: floorT, winH: winH,
-          trayW: trayW, rim: rim, rimH: p.rimH, zt0: zt0 });
+          trayW: trayW, rim: rim, rimH: p.rimH, zt0: zt0, round: round, R: R, wa: Math.asin(iw / 2 / R) + 0.03 });
         var all = [tower, baffles, tray, deco.trim, deco.accent];
         var zMid = (zt0 + D / 2) / 2;
         all.forEach(function (a) { K.move(a, 0, 0, 0, -zMid); K.spinY(a, 0, Math.PI); });
@@ -566,6 +758,7 @@
         openGroups: ['Style', 'Tower'],
         parameters: [
           { group: 'Style', key: 'style', label: 'Theme', unit: '', min: 0, max: 4, step: 1, value: 0, options: THEMES },
+          { group: 'Style', key: 'shape', label: 'Tower shape', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Square', 'Round'] },
           { group: 'Tower', key: 'dieSize', label: 'Largest die (width)', unit: ' mm', min: 12, max: 26, step: 1, value: 17 },
           { group: 'Tower', key: 'height', label: 'Tower height', unit: ' mm', min: 80, max: 200, step: 5, value: 150 },
           { group: 'Tower', key: 'baffles', label: 'Baffle ramps (as many as fit)', unit: ' ramps', min: 1, max: 6, step: 1, value: 3 },
@@ -582,7 +775,9 @@
           { label: 'Pagoda', values: { style: 2, dieSize: 17, height: 170, baffles: 4, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
           { label: 'Tavern', values: { style: 3, dieSize: 17, height: 140, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
           { label: 'Sci-fi pylon', values: { style: 4, dieSize: 17, height: 160, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
-          { label: 'Default tower', values: { style: 0, dieSize: 17, height: 150, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } }
+          { label: 'Round tower', values: { style: 0, shape: 1, dieSize: 17, height: 150, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } },
+          { label: 'Round keep', values: { style: 1, shape: 1, dieSize: 18, height: 160, baffles: 3, angle: 45, wall: 2.6, trayLen: 70, rimH: 8 } },
+          { label: 'Default tower', values: { style: 0, shape: 0, dieSize: 17, height: 150, baffles: 3, angle: 45, wall: 2.4, trayLen: 65, rimH: 7 } }
         ],
         build: function (p) { return buildTower(p); }
       };
