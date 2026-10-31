@@ -32,7 +32,7 @@
           var E = 13 * p.ear * hs, ez = s * hr * 0.58, ey = hy + hr * 0.42, W = 6.4 * p.ear * hs, side = s * 0.42;
           var poly = [[-W, ey], [W, ey], [W * side + E * 0.22 * s, ey + E], [W * side - E * 0.06 * s, ey + E]];
           S.plate('ears', poly, [hx - hr * 0.1, 0, ez], [0, 0, 1], 3.4, fur, 2.5, 1);
-          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.5, 0, ez], [0, 0, 1], 2, pink, 0.4, 0.6);
+          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.2, 0, ez], [0, 0, 1], 2.8, pink, 0.5, 0.8);
         });
         S.ell('muzzle', [hx + hr * 0.72, hy - hr * 0.5, 0], [hr * 0.24, hr * 0.17, hr * 0.26], cream, 2);
         // back of a tabby: stripes that are slightly proud, painted their own colour

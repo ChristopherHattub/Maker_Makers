@@ -994,6 +994,15 @@
           var top = ly * A;
           for (ib2 = 0; ib2 < A; ib2++) { var allow = D[ib2] - h * self.reach * 0.92; if (allow > F[top + ib2]) F[top + ib2] = allow; }
         }
+        // Drop specks: keep only solid connected to the bed through cell faces.
+        var keep = new Uint8Array(N), st = new Int32Array(N), sp = 0, cc;
+        for (i = A; i < 2 * A; i++) if (F[i] < 0) { keep[i] = 1; st[sp++] = i; }
+        while (sp) {
+          cc = st[--sp];
+          var nb6 = [cc - 1, cc + 1, cc - nx, cc + nx, cc - A, cc + A];
+          for (var b6 = 0; b6 < 6; b6++) { var q6 = nb6[b6]; if (q6 >= A && q6 < N && F[q6] < 0 && !keep[q6]) { keep[q6] = 1; st[sp++] = q6; } }
+        }
+        for (i = A; i < N; i++) if (F[i] < 0 && !keep[i]) F[i] = 0.5;
         // The bed: layer 0 is just outside, so the underside meshes flat.
         for (i = 0; i < A; i++) if (F[i] < 0) F[i] = 1e-4;
         for (i = 0; i < A; i++) { F[i] = F[i] < 1e-3 && F[i + A] < 0 ? 1e-4 : Math.max(F[i], 1e-4); }
@@ -1155,7 +1164,7 @@
           var E = 13 * p.ear * hs, ez = s * hr * 0.58, ey = hy + hr * 0.42, W = 6.4 * p.ear * hs, side = s * 0.42;
           var poly = [[-W, ey], [W, ey], [W * side + E * 0.22 * s, ey + E], [W * side - E * 0.06 * s, ey + E]];
           S.plate('ears', poly, [hx - hr * 0.1, 0, ez], [0, 0, 1], 3.4, fur, 2.5, 1);
-          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.5, 0, ez], [0, 0, 1], 2, pink, 0.4, 0.6);
+          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.2, 0, ez], [0, 0, 1], 2.8, pink, 0.5, 0.8);
         });
         S.ell('muzzle', [hx + hr * 0.72, hy - hr * 0.5, 0], [hr * 0.24, hr * 0.17, hr * 0.26], cream, 2);
         // back of a tabby: stripes that are slightly proud, painted their own colour

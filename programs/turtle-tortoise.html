@@ -994,6 +994,15 @@
           var top = ly * A;
           for (ib2 = 0; ib2 < A; ib2++) { var allow = D[ib2] - h * self.reach * 0.92; if (allow > F[top + ib2]) F[top + ib2] = allow; }
         }
+        // Drop specks: keep only solid connected to the bed through cell faces.
+        var keep = new Uint8Array(N), st = new Int32Array(N), sp = 0, cc;
+        for (i = A; i < 2 * A; i++) if (F[i] < 0) { keep[i] = 1; st[sp++] = i; }
+        while (sp) {
+          cc = st[--sp];
+          var nb6 = [cc - 1, cc + 1, cc - nx, cc + nx, cc - A, cc + A];
+          for (var b6 = 0; b6 < 6; b6++) { var q6 = nb6[b6]; if (q6 >= A && q6 < N && F[q6] < 0 && !keep[q6]) { keep[q6] = 1; st[sp++] = q6; } }
+        }
+        for (i = A; i < N; i++) if (F[i] < 0 && !keep[i]) F[i] = 0.5;
         // The bed: layer 0 is just outside, so the underside meshes flat.
         for (i = 0; i < A; i++) if (F[i] < 0) F[i] = 1e-4;
         for (i = 0; i < A; i++) { F[i] = F[i] < 1e-3 && F[i + A] < 0 ? 1e-4 : Math.max(F[i], 1e-4); }
