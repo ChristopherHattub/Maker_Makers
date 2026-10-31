@@ -156,6 +156,7 @@ function renderProgram(progId) {
   activeProgram = PROGRAMS.find(p => p.id === progId) || PROGRAMS[0];
 
   hideAllScreens();
+  setViewerMenu(false);
   document.getElementById('viewer-screen').style.display = 'block';
   document.getElementById('viewer-screen').classList.toggle('has-program', Boolean(activeProgram.programUrl));
   const code = `MM-${String(activeProgram.slot).padStart(3, '0')}`;
@@ -501,3 +502,16 @@ loadPublicPrinters().then(() => {
 initSplash();
 window.addEventListener('hashchange', renderRoute);
 renderRoute();
+
+// Phone layout: the viewer top bar's actions sit in a menu that starts closed.
+function setViewerMenu(open) {
+  var bar = document.querySelector('.viewer-topbar');
+  var btn = document.getElementById('viewer-menu-toggle');
+  if (!bar || !btn) return;
+  bar.classList.toggle('menu-open', open);
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function toggleViewerMenu() {
+  setViewerMenu(!document.querySelector('.viewer-topbar').classList.contains('menu-open'));
+}
