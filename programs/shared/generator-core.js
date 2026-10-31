@@ -1811,7 +1811,7 @@
   // api.sculpt.edits and rebuilds with them. Sculpt tool: drag the surface. Strokes are stored and replayed on every rebuild.
   // cfg.sculpt: { pieces: [{ id, label }], available(), pieceAt(point), bounds(id) }.
   // ---------------------------------------------------------------------------
-  var sc8 = { tool: 'select', brush: 'grab', mirror: false, strength: 15, sel: null, edits: {}, strokes: [], undo: [], redo: [], radius: 6, shift: null, draft: false };
+  var sc8 = { tool: 'select', brush: 'grab', mirror: false, strength: 25, sel: null, edits: {}, strokes: [], undo: [], redo: [], radius: 6, shift: null, draft: false };
   var sc8Drag = null, sc8Box = null, sc8Brush = null, sc8Ui = null, sc8Mark = null;
   var sc8MarkMat = new T.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
@@ -1877,7 +1877,7 @@
     if (!sum) return;
     px /= sum; py /= sum; pz /= sum;
     var al = Math.hypot(ax, ay, az) || 1; ax /= al; ay /= al; az /= al;
-    var amt = (st.amt / 50) * r * 0.07, mix = Math.min(0.9, (st.amt / 50) * 0.5);
+    var amt = (st.amt * 0.6 / 50) * r * 0.07, mix = Math.min(0.9, (st.amt * 0.6 / 50) * 0.5); // 100% on the slider is a strength of 0.6
     V.forEach(function (v) {
       if (!v.w) return;
       var x = v.x, y = v.y, z = v.z, nl = Math.hypot(v.nx, v.ny, v.nz) || 1;
@@ -2111,13 +2111,15 @@
         var selectBox = el('div', {}), sculptBox = el('div', {});
         box.appendChild(note); box.appendChild(selectBox); box.appendChild(sculptBox);
 
-        function slider(label, min, max, step, get, set, fmt, onDone) {
+        function slider(label, min, max, step, get, set, fmt, onDone, warnAt) {
           var out = el('span', { class: 'mm-slider-value' });
+          var warn = el('span', { class: 'mm-slider-warn', hidden: '', text: 'May cause mesh errors' });
+          function checkWarn(v) { if (warnAt) warn.hidden = v < warnAt; }
           var input = el('input', { type: 'range', min: String(min), max: String(max), step: String(step) });
-          input.value = get(); out.textContent = fmt(get());
-          input.addEventListener('input', function () { set(Number(input.value)); out.textContent = fmt(Number(input.value)); });
+          input.value = get(); out.textContent = fmt(get()); checkWarn(get());
+          input.addEventListener('input', function () { set(Number(input.value)); out.textContent = fmt(Number(input.value)); checkWarn(Number(input.value)); });
           input.addEventListener('change', function () { if (onDone) onDone(); });
-          return { node: el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: label }), out]), input]),
+          return { node: el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('span', { class: 'mm-slider-title' }, [el('label', { text: label }), warn]), out]), input]),
             sync: function () { input.value = get(); out.textContent = fmt(get()); } };
         }
         // Select tool
@@ -2178,8 +2180,8 @@
         sculptBox.appendChild(el('h3', { class: 'mm-group-title', text: 'Brushes' }));
         sculptBox.appendChild(brushChips);
         sculptBox.appendChild(brushNote);
-        var rS = slider('Brush size', 2, 40, 1, function () { return sc8.radius; }, function (v) { sc8.radius = v; }, function (v) { return v + ' mm'; });
-        var sS = slider('Strength', 1, 100, 1, function () { return sc8.strength; }, function (v) { sc8.strength = v; }, function (v) { return v + '%'; });
+        var rS = slider('Brush size', 2, 40, 1, function () { return sc8.radius; }, function (v) { sc8.radius = v; }, function (v) { return v + ' mm'; }, null, 20);
+        var sS = slider('Strength', 1, 100, 1, function () { return sc8.strength; }, function (v) { sc8.strength = v; }, function (v) { return v + '%'; }, null, 60);
         sculptBox.appendChild(rS.node);
         sculptBox.appendChild(sS.node);
         var mirrorBtn = el('button', { class: 'mm-chip', type: 'button', text: 'Mirror left and right', onclick: function () { sc8.mirror = !sc8.mirror; sc8Ui(); } });

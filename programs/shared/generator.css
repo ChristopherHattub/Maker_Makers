@@ -415,6 +415,9 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-overlay--tr { top: 0.75rem; right: 0.75rem; color: var(--bp-cyan); }
 .mm-sculpt-flag { top: 3rem; left: 50%; transform: translateX(-50%); white-space: nowrap; max-width: calc(100% - 1.5rem); border-color: #fbbf24; color: #fbbf24; text-transform: none; }
 .mm-sculpt-flag[hidden] { display: none; }
+.mm-slider-title { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem; }
+.mm-slider-warn { color: #fbbf24; font-size: 0.68rem; }
+.mm-slider-warn[hidden] { display: none; }
 .mm-part-tree { display: flex; flex-direction: column; gap: 0.35rem; }
 .mm-part-node > summary { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; list-style: none; }
 .mm-part-node > summary::-webkit-details-marker { display: none; }
