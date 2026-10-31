@@ -93,7 +93,10 @@
     var yOf = function (iy) { return y0 + iy * c; };
 
     // ---- connected pieces (26 neighbours) --------------------------------------------------
-    var label = new Int32Array(N), comps = [], stack = new Int32Array(N > 1e6 ? 1e6 : N + 1), sp, idx, nl = 0;
+    var solidCells = 0;
+    for (i = 0; i < N; i++) solidCells += solid[i];
+    // every cell is pushed at most once, so this never overflows (a capped stack split big solids into false floating parts)
+    var label = new Int32Array(N), comps = [], stack = new Int32Array(solidCells + 1), sp, idx, nl = 0;
     var NB = [];
     for (var dy = -1; dy <= 1; dy++) for (var dz = -1; dz <= 1; dz++) for (var dx = -1; dx <= 1; dx++) if (dx || dy || dz) NB.push([dx, dy, dz]);
     for (idx = 0; idx < N; idx++) {

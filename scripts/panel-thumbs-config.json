@@ -626,5 +626,65 @@
    "melee": "#eef6ff",
    "gem": "#dbeeff"
   }
+ },
+ "dino-builder": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "dragon-maker": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "cat-sculptor": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "dog-builder": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "flexi-snake": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "flexi-fish": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "turtle-tortoise": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "owl-stacker": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "penguin-pals": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "octopus-squid": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "mushroom-critters": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "shark-trophy": {
+  "yaw": 20,
+  "elev": 16
+ },
+ "elephant-builder": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "monster-maker": {
+  "yaw": 58,
+  "elev": 16
+ },
+ "unicorn-pegasus": {
+  "yaw": 58,
+  "elev": 16
  }
 }

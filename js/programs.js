@@ -762,6 +762,141 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/fancy-ring.svg',
     programUrl: 'programs/fancy-ring.html',
     description: 'Design an engagement ring display prop in a jewellery-style studio: six real cuts with a carat slider, prong, bezel, halo and three stone settings, plain, tapered or split shank bands, US ring sizes, metal looks and an engraving inside the band. Prints as two glue-together halves plus the stone, with no supports on the default settings. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 76,
+    title: 'Dino Builder',
+    bundle: 'animals',
+    category: 'ANIMALS // DINOSAURS',
+    thumbnailUrl: 'assets/thumbnails/dino-builder.svg',
+    programUrl: 'programs/dino-builder.html',
+    description: 'Build a T-rex, Stegosaurus or Triceratops: pick the species, head, tail, plates and horns. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 77,
+    title: 'Dragon Maker',
+    bundle: 'animals',
+    category: 'ANIMALS // FANTASY',
+    thumbnailUrl: 'assets/thumbnails/dragon-maker.svg',
+    programUrl: 'programs/dragon-maker.html',
+    description: 'A sitting dragon with folded wings, horns, back spikes and a tail on the bed. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 78,
+    title: 'Cat Sculptor',
+    bundle: 'animals',
+    category: 'ANIMALS // PETS',
+    thumbnailUrl: 'assets/thumbnails/cat-sculptor.svg',
+    programUrl: 'programs/cat-sculptor.html',
+    description: 'Sitting, loaf or curled-up cat: tune body, head, ears, eyes and tail. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 79,
+    title: 'Dog Builder',
+    bundle: 'animals',
+    category: 'ANIMALS // PETS',
+    thumbnailUrl: 'assets/thumbnails/dog-builder.svg',
+    programUrl: 'programs/dog-builder.html',
+    description: 'A sitting dog with presets for pug, corgi, husky and puppy: tune snout, ears and tail. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 80,
+    title: 'Articulated Snake',
+    bundle: 'animals',
+    category: 'ANIMALS // FLEXI',
+    thumbnailUrl: 'assets/thumbnails/flexi-snake.svg',
+    programUrl: 'programs/flexi-snake.html',
+    description: 'A print-in-place jointed snake with a wedge head and forked tongue: set length, thickness, wiggle and joint clearance. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 81,
+    title: 'Flexi Fish',
+    bundle: 'animals',
+    category: 'ANIMALS // FLEXI',
+    thumbnailUrl: 'assets/thumbnails/flexi-fish.svg',
+    programUrl: 'programs/flexi-fish.html',
+    description: 'A print-in-place jointed fish with a fan tail and fins: set length, body, fins, wiggle and joint clearance. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 82,
+    title: 'Turtle & Tortoise',
+    bundle: 'animals',
+    category: 'ANIMALS // WILDLIFE',
+    thumbnailUrl: 'assets/thumbnails/turtle-tortoise.svg',
+    programUrl: 'programs/turtle-tortoise.html',
+    description: 'A turtle or high-domed tortoise, with a solid shell or an open trinket dish in the shell. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 83,
+    title: 'Owl Stacker',
+    bundle: 'animals',
+    category: 'ANIMALS // BIRDS',
+    thumbnailUrl: 'assets/thumbnails/owl-stacker.svg',
+    programUrl: 'programs/owl-stacker.html',
+    description: 'One owl or a totem of up to three owls stacked head on head: tune eyes, tufts, wings and belly feathers. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 84,
+    title: 'Penguin Pals',
+    bundle: 'animals',
+    category: 'ANIMALS // BIRDS',
+    thumbnailUrl: 'assets/thumbnails/penguin-pals.svg',
+    programUrl: 'programs/penguin-pals.html',
+    description: 'A penguin with an optional chick, scarf or party hat. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 85,
+    title: 'Octopus & Squid',
+    bundle: 'animals',
+    category: 'ANIMALS // SEA LIFE',
+    thumbnailUrl: 'assets/thumbnails/octopus-squid.svg',
+    programUrl: 'programs/octopus-squid.html',
+    description: 'A dome octopus or tall squid with arms curling flat on the bed: set arm count, curl and length. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 86,
+    title: 'Mushroom Critters',
+    bundle: 'animals',
+    category: 'ANIMALS // WOODLAND',
+    thumbnailUrl: 'assets/thumbnails/mushroom-critters.svg',
+    programUrl: 'programs/mushroom-critters.html',
+    description: 'A mushroom gnome with a spotted cap, a frog or a snail. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 87,
+    title: 'Shark Fin Trophy',
+    bundle: 'animals',
+    category: 'ANIMALS // SEA LIFE',
+    thumbnailUrl: 'assets/thumbnails/shark-trophy.svg',
+    programUrl: 'programs/shark-trophy.html',
+    description: 'One or two swept shark fins cutting through a wave top on a stepped plinth: tune fin, waves and base. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 88,
+    title: 'Elephant Builder',
+    bundle: 'animals',
+    category: 'ANIMALS // WILDLIFE',
+    thumbnailUrl: 'assets/thumbnails/elephant-builder.svg',
+    programUrl: 'programs/elephant-builder.html',
+    description: 'A chunky elephant with the trunk resting or raised: tune body, legs, head, ears and tusks. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 89,
+    title: 'Alien & Monster Maker',
+    bundle: 'animals',
+    category: 'ANIMALS // CREATURES',
+    thumbnailUrl: 'assets/thumbnails/monster-maker.svg',
+    programUrl: 'programs/monster-maker.html',
+    description: 'An alien, cyclops, horned beast or tentacle blob: choose eyes, mouth, fangs, arms, horns, antennae and spots. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 90,
+    title: 'Unicorn & Pegasus',
+    bundle: 'animals',
+    category: 'ANIMALS // FANTASY',
+    thumbnailUrl: 'assets/thumbnails/unicorn-pegasus.svg',
+    programUrl: 'programs/unicorn-pegasus.html',
+    description: 'A kneeling unicorn, pegasus, winged unicorn or pony: tune neck, head, horn, mane, tail and wings. Prints with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -826,8 +961,8 @@ const BUNDLES = [
   { id: 'flexi', name: 'Flexi Creatures', accent: '#5eead4',
     description: 'Print-in-place articulated animals: a dragon, gecko, crocodile, octopus, scorpion, centipede, turtle, shark, seahorse and caterpillar.',
     generators: ['SLOT-91', 'SLOT-92', 'SLOT-93', 'SLOT-94', 'SLOT-95', 'SLOT-96', 'SLOT-97', 'SLOT-98', 'SLOT-99', 'SLOT-100'] },
-  { id: 'animals', name: 'Animals & Creatures', accent: '#ffb86b', at: [4, 9], size: [4, 2], planned: true,
-    description: 'Pets, wildlife and fantasy beasts.' },
+  { id: 'animals', name: 'Animals & Creatures', accent: '#ffb86b', at: [4, 9], size: [4, 2],
+    description: 'Pets, wildlife, sea life and fantasy beasts.' },
   { id: 'jewelry', name: 'Jewellery & Wearables', accent: '#f08cff', at: [8, 9], size: [4, 2],
     description: 'Rings, pendants and charms.' },
   { id: 'tabletop', name: 'Tabletop & Gaming', accent: '#8f9bff', at: [12, 9], size: [4, 2],

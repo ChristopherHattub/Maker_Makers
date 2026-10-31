@@ -17,8 +17,9 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [architecture.md](architecture.md) | How the page, scripts and screens fit together, state, and external services |
 | [file-structure.md](file-structure.md) | Every file in the repo and what it is for |
 | [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the generator contract, and how to add a generator |
-| [slot-registry.md](slot-registry.md) | Every built slot, reserved ranges (76-90 animals) and groups |
+| [slot-registry.md](slot-registry.md) | Every built slot, reserved ranges and groups |
 | [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, the Color tool, exports, and the visual rules |
+| [animals.md](animals.md) | The fifteen animal generators (slots 76-90): support-free kit, build script and print-check notes |
 | [flexi-creatures.md](flexi-creatures.md) | The ten print-in-place flexi animals (slots 91-100): ball-joint kit, clearance rules and the check script |
 | [workshop.md](workshop.md) | The Workshop 3D editor and the `?embed=workshop` generator hook |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
