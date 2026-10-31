@@ -418,6 +418,26 @@
       "overhang"
     ]
   },
+  "flexi-fish": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default fish": [
+      "overhang"
+    ],
+    "Goldfish": [
+      "overhang"
+    ],
+    "Slim trout": [
+      "overhang"
+    ],
+    "Tiny fish": [
+      "overhang"
+    ],
+    "Straight (easy print)": [
+      "overhang"
+    ]
+  },
   "flexi-gecko": {
     "defaults": [
       "overhang"

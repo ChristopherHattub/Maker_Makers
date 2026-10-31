@@ -618,5 +618,65 @@
    "rim": "#ffd23f",
    "text": "#ffffff"
   }
+ },
+ "dino-builder": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "dragon-maker": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "cat-sculptor": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "dog-builder": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "flexi-snake": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "flexi-fish": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "turtle-tortoise": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "owl-stacker": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "penguin-pals": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "octopus-squid": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "mushroom-critters": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "shark-trophy": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "elephant-builder": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "monster-maker": {
+  "yaw": -40,
+  "elev": 16
+ },
+ "unicorn-pegasus": {
+  "yaw": -40,
+  "elev": 16
  }
 }

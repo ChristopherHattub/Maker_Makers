@@ -33,7 +33,7 @@ The homepage shows generators as grouped, connected tiles. Generators are listed
 
 Members are the ids in `generators` plus every `GENERATORS` entry whose `bundle` field names the group. Position and size are automatic: each region is sized to its tiles and packed around the Workshop tile. Older entries still carry `at` and `size`; they are ignored. Any generator in no group lands in an automatic "More" region. See [homepage.md](homepage.md).
 
-The full list of built slots, reserved ranges (76-90 animals) and the next free slot is in [slot-registry.md](slot-registry.md).
+The full list of built slots, reserved ranges and the next free slot is in [slot-registry.md](slot-registry.md).
 
 ## Active slots
 

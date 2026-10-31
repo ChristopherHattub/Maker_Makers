@@ -7,11 +7,11 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | Slots | State |
 | --- | --- |
 | 1-75 | Built, except **slots 14 and 39, which are unused** (gaps; the homepage only shows slots with a `programUrl`; 39 was the Balloon Twister, removed). 73 generators. |
-| 76-90 | **Reserved for animals** (the `animals` group, currently `planned`). The picks are not decided yet; do not use these slots for anything else. |
+| 76-90 | Built: the fifteen animal generators ([animals.md](animals.md)). |
 | 91-100 | Built: the ten Flexi Creatures. |
 | 102+ | Free. Any number works. |
 
-Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys, garden, animals, jewelry). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 98 generators in 20 groups (3 groups are `planned` and empty: toys, garden, jewelry). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -90,6 +90,21 @@ Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys,
 | 73 | Spinner Dial | tabletop | `spinner-dial.html` |
 | 74 | Chess Piece Set | tabletop | `chess-set.html` |
 | 75 | Character Standee | tabletop | `character-standee.html` |
+| 76 | Dino Builder | animals | `dino-builder.html` |
+| 77 | Dragon Maker | animals | `dragon-maker.html` |
+| 78 | Cat Sculptor | animals | `cat-sculptor.html` |
+| 79 | Dog Builder | animals | `dog-builder.html` |
+| 80 | Articulated Snake | animals | `flexi-snake.html` |
+| 81 | Flexi Fish | animals | `flexi-fish.html` |
+| 82 | Turtle & Tortoise | animals | `turtle-tortoise.html` |
+| 83 | Owl Stacker | animals | `owl-stacker.html` |
+| 84 | Penguin Pals | animals | `penguin-pals.html` |
+| 85 | Octopus & Squid | animals | `octopus-squid.html` |
+| 86 | Mushroom Critters | animals | `mushroom-critters.html` |
+| 87 | Shark Fin Trophy | animals | `shark-trophy.html` |
+| 88 | Elephant Builder | animals | `elephant-builder.html` |
+| 89 | Alien & Monster Maker | animals | `monster-maker.html` |
+| 90 | Unicorn & Pegasus | animals | `unicorn-pegasus.html` |
 | 91 | Flexi Dragon | flexi | `flexi-dragon.html` |
 | 92 | Flexi Gecko | flexi | `flexi-gecko.html` |
 | 93 | Flexi Crocodile | flexi | `flexi-crocodile.html` |
@@ -123,7 +138,7 @@ Total built: 83 generators in 20 groups (4 groups are `planned` and empty: toys,
 | toys | Toys & Games | planned (empty) |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
-| animals | Animals & Creatures | planned (empty) |
+| animals | Animals & Creatures | 15 |
 | jewelry | Jewellery & Wearables | planned (empty) |
 | tabletop | Tabletop & Gaming | 10 |
 A generator in no group lands in an automatic "More" region, so a missing `bundle` is visible on the map.
