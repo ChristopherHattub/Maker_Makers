@@ -779,6 +779,7 @@
     var seq = ++printCheckSeq, box = $('mm-printcheck');
     if (printCheckTimer) clearTimeout(printCheckTimer);
     clearPrintMarks();
+    if (cfg.sculpt && activeTab === 'sculpt') { if (box) box.hidden = true; return; } // checked once, on leaving the tab
     if (box) { box.hidden = false; $('mm-printchip').className = 'mm-printchip is-busy'; $('mm-printchip').textContent = 'Print check...'; }
     printCheckTimer = setTimeout(function () {
       withPrintChecker(function (PC) {
@@ -1494,7 +1495,7 @@
   }
 
   function setTab(tab) {
-    var wasPrint = activeTab === 'print';
+    var wasPrint = activeTab === 'print', wasSculpt = activeTab === 'sculpt';
     activeTab = tab;
     var isColor = tab === 'color';
     dom.tabModel.setAttribute('aria-selected', String(tab === 'model'));
@@ -1514,7 +1515,11 @@
     // Placement tools (stamps, carving) belong to their own tab: clear their preview and cursor here.
     if (tab !== 'model' && typeof cfg.onHover === 'function') cfg.onHover(null, api);
     dom.extraTabs.forEach(function (t) { if (t.id !== tab && typeof t.cfg.onHover === 'function') t.cfg.onHover(null, api); });
-    if (cfg.sculpt) { if (tab !== 'sculpt') sculptBrushAt(null); sculptRefresh(); }
+    if (cfg.sculpt) {
+      if (tab !== 'sculpt') sculptBrushAt(null);
+      if (tab === 'sculpt' || wasSculpt) schedulePrintCheck();
+      sculptRefresh();
+    }
     updateCursor();
     if (isColor || tab === 'print') ensureParts();
     applyModelMaterial();
@@ -1774,27 +1779,146 @@
   // api.sculpt.edits and rebuilds with them. Sculpt tool: drag the surface. Strokes are stored and replayed on every rebuild.
   // cfg.sculpt: { pieces: [{ id, label }], available(), pieceAt(point), bounds(id) }.
   // ---------------------------------------------------------------------------
-  var sc8 = { tool: 'select', sel: null, edits: {}, strokes: [], undo: [], radius: 14, shift: null, draft: false };
-  var sc8Drag = null, sc8Box = null, sc8Brush = null, sc8Ui = null;
+  var sc8 = { tool: 'select', brush: 'grab', mirror: false, strength: 50, sel: null, edits: {}, strokes: [], undo: [], redo: [], radius: 14, shift: null, draft: false };
+  var sc8Drag = null, sc8Box = null, sc8Brush = null, sc8Ui = null, sc8Mark = null;
+  var sc8MarkMat = new T.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
   function sculptOn() { return !!cfg.sculpt && activeTab === 'sculpt'; }
   function sculptEdited() { return Object.keys(sc8.edits).length > 0 || sc8.strokes.length > 0; }
-  function sculptSnapshot() { sc8.undo.push({ edits: JSON.stringify(sc8.edits), strokes: sc8.strokes.length }); if (sc8.undo.length > 40) sc8.undo.shift(); }
+  function sculptState() { return { edits: JSON.stringify(sc8.edits), strokes: sc8.strokes.slice() }; }
+  function sculptSnapshot() { sc8.undo.push(sculptState()); sc8.redo = []; if (sc8.undo.length > 40) sc8.undo.shift(); }
+  function sculptStep(from, to) {
+    var st = from.pop();
+    if (!st) return;
+    to.push(sculptState());
+    sc8.edits = JSON.parse(st.edits);
+    sc8.strokes = st.strokes;
+    sculptCommit();
+  }
+  function sculptUndo() { sculptStep(sc8.undo, sc8.redo); }
+  function sculptRedo() { sculptStep(sc8.redo, sc8.undo); }
   function sculptEdit(id) { return sc8.edits[id] || (sc8.edits[id] = { m: [0, 0, 0], s: [1, 1, 1] }); }
   function sculptWeight(d, r) { var t = 1 - d / r; return t <= 0 ? 0 : t * t * (3 - 2 * t); }
 
-  function sculptApplyOne(p, st) {
-    var rr = st.r * st.r;
+  // Grab: moves the surface by a drag. Every other brush is a run of dabs, each one reading the surface around its centre.
+  function sculptGrab(p, st, zm) {
+    var rr = st.r * st.r, cz = zm === undefined ? st.c[2] : 2 * zm - st.c[2], dzm = zm === undefined ? st.d[2] : -st.d[2];
     for (var i = 0; i < p.length; i += 3) {
-      var dx = p[i] - st.c[0], dy = p[i + 1] - st.c[1], dz = p[i + 2] - st.c[2], d2 = dx * dx + dy * dy + dz * dz;
+      var dx = p[i] - st.c[0], dy = p[i + 1] - st.c[1], dz = p[i + 2] - cz, d2 = dx * dx + dy * dy + dz * dz;
       if (d2 >= rr) continue;
       var w = sculptWeight(Math.sqrt(d2), st.r);
-      p[i] += st.d[0] * w; p[i + 2] += st.d[2] * w;
+      p[i] += st.d[0] * w; p[i + 2] += dzm * w;
       if (p[i + 1] > 1e-4) p[i + 1] = Math.max(0, p[i + 1] + st.d[1] * w); // the flat underside stays on the bed
     }
   }
+  function sculptDab(entries, st, zm) {
+    var r = st.r, cx = st.c[0], cy = st.c[1], cz = zm === undefined ? st.c[2] : 2 * zm - st.c[2], rr = r * r, V = new Map();
+    function key(p, i) { return Math.round(p[i] * 1000) + ',' + Math.round(p[i + 1] * 1000) + ',' + Math.round(p[i + 2] * 1000); }
+    function near(p, i) { var a = p[i] - cx, b = p[i + 1] - cy, c = p[i + 2] - cz; return a * a + b * b + c * c < rr; }
+    function node(p, i) {
+      var k = key(p, i), v = V.get(k);
+      if (!v) { v = { x: p[i], y: p[i + 1], z: p[i + 2], nx: 0, ny: 0, nz: 0, sx: 0, sy: 0, sz: 0, c: 0, refs: [] }; V.set(k, v); }
+      return v;
+    }
+    entries.forEach(function (e) {
+      var p = e.positions;
+      for (var i = 0; i < p.length; i += 9) {
+        if (!near(p, i) && !near(p, i + 3) && !near(p, i + 6)) continue;
+        var a = node(p, i), b = node(p, i + 3), c = node(p, i + 6);
+        var ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, wx = c.x - a.x, wy = c.y - a.y, wz = c.z - a.z;
+        var nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+        [[a, b, c, i], [b, c, a, i + 3], [c, a, b, i + 6]].forEach(function (t) {
+          var v = t[0];
+          v.nx += nx; v.ny += ny; v.nz += nz;
+          v.sx += t[1].x + t[2].x; v.sy += t[1].y + t[2].y; v.sz += t[1].z + t[2].z; v.c += 2;
+          v.refs.push(p, t[3]);
+        });
+      }
+    });
+    var sum = 0, px = 0, py = 0, pz = 0, ax = 0, ay = 0, az = 0;
+    V.forEach(function (v) {
+      var d = Math.hypot(v.x - cx, v.y - cy, v.z - cz);
+      v.w = d < r ? sculptWeight(d, r) : 0;
+      if (!v.w) return;
+      sum += v.w; px += v.x * v.w; py += v.y * v.w; pz += v.z * v.w; ax += v.nx * v.w; ay += v.ny * v.w; az += v.nz * v.w;
+    });
+    if (!sum) return;
+    px /= sum; py /= sum; pz /= sum;
+    var al = Math.hypot(ax, ay, az) || 1; ax /= al; ay /= al; az /= al;
+    var amt = (st.amt / 50) * r * 0.07, mix = Math.min(0.9, (st.amt / 50) * 0.5);
+    V.forEach(function (v) {
+      if (!v.w) return;
+      var x = v.x, y = v.y, z = v.z, nl = Math.hypot(v.nx, v.ny, v.nz) || 1;
+      if (st.tool === 'inflate' || st.tool === 'deflate') {
+        var sg = st.tool === 'inflate' ? 1 : -1;
+        x += (v.nx / nl) * amt * v.w * sg; y += (v.ny / nl) * amt * v.w * sg; z += (v.nz / nl) * amt * v.w * sg;
+      } else if (st.tool === 'smooth') {
+        x += (v.sx / v.c - x) * mix * v.w; y += (v.sy / v.c - y) * mix * v.w; z += (v.sz / v.c - z) * mix * v.w;
+      } else if (st.tool === 'flatten') {
+        var h = (x - px) * ax + (y - py) * ay + (z - pz) * az;
+        x -= ax * h * mix * v.w; y -= ay * h * mix * v.w; z -= az * h * mix * v.w;
+      } else if (st.tool === 'pinch') {
+        x += (px - x) * mix * 0.5 * v.w; y += (py - y) * mix * 0.5 * v.w; z += (pz - z) * mix * 0.5 * v.w;
+      }
+      for (var i = 0; i < v.refs.length; i += 2) {
+        var p = v.refs[i], k = v.refs[i + 1];
+        p[k] = x; p[k + 2] = z;
+        if (v.y > 1e-4) p[k + 1] = Math.max(0, y); // the flat underside stays on the bed
+      }
+    });
+  }
+  function sculptApplyOne(entries, st) {
+    if (st.tool && st.tool !== 'grab') {
+      sculptDab(entries, st);
+      if (st.zm !== undefined) sculptDab(entries, st, st.zm);
+      return;
+    }
+    entries.forEach(function (e) { sculptGrab(e.positions, st); if (st.zm !== undefined) sculptGrab(e.positions, st, st.zm); });
+  }
   function sculptApplyStrokes(entries) {
-    sc8.strokes.forEach(function (st) { entries.forEach(function (e) { sculptApplyOne(e.positions, st); }); });
+    sc8.strokes.forEach(function (st) { sculptApplyOne(entries, st); });
+  }
+  function sculptMeshChanged() {
+    modelMeshes.forEach(function (mesh) { mesh.geometry.attributes.position.needsUpdate = true; });
+    var normals = groupedNormals(modelData);
+    modelMeshes.forEach(function (mesh, i) { mesh.geometry.attributes.normal.array.set(normals[i]); mesh.geometry.attributes.normal.needsUpdate = true; });
+  }
+  // After a brush stroke the mesh is already right: no rebuild, only what depends on it.
+  function sculptSettle() {
+    modelMeshes.forEach(function (mesh) { mesh.geometry.computeBoundingSphere(); });
+    printCache = null;
+    parts = null;
+    if (paints.length) ensureParts();
+    refreshColors();
+    renderPartList();
+    updateStats();
+    rebuildWire();
+    sculptRefresh();
+  }
+  function sculptMirrorPlane() { return sc8.mirror && sc8.shift ? -sc8.shift[1] : undefined; }
+
+  // Tints the triangles of the selected piece (and the pieces that follow it).
+  function sculptHighlight() {
+    if (sc8Mark) { scene.remove(sc8Mark); sc8Mark.geometry.dispose(); sc8Mark = null; }
+    var id = sculptOn() && sc8.tool === 'select' ? sc8.sel : null, b = id ? cfg.sculpt.bounds(id) : null;
+    if (!b) return;
+    var out = [], pad = 2, q = { x: 0, y: 0, z: 0 };
+    modelData.forEach(function (e) {
+      var p = e.positions;
+      for (var i = 0; i < p.length; i += 9) {
+        q.x = (p[i] + p[i + 3] + p[i + 6]) / 3; q.y = (p[i + 1] + p[i + 4] + p[i + 7]) / 3; q.z = (p[i + 2] + p[i + 5] + p[i + 8]) / 3;
+        if (q.x < b.lo[0] - pad || q.x > b.hi[0] + pad || q.y < b.lo[1] - pad || q.y > b.hi[1] + pad || q.z < b.lo[2] - pad || q.z > b.hi[2] + pad) continue;
+        var who = cfg.sculpt.pieceAt(q);
+        if (who !== id && !cfg.sculpt.isUnder(who, id)) continue;
+        for (var k = 0; k < 9; k++) out.push(p[i + k]);
+      }
+    });
+    if (!out.length) return;
+    var g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(new Float32Array(out), 3));
+    sc8Mark = new T.Mesh(g, sc8MarkMat);
+    sc8Mark.renderOrder = 2;
+    scene.add(sc8Mark);
   }
 
   function sculptRefresh() {
@@ -1808,6 +1932,7 @@
     var b = sculptOn() && sc8.tool === 'select' && sc8.sel ? cfg.sculpt.bounds(sc8.sel) : null;
     sc8Box.visible = !!b;
     if (b) { sc8Box.box.min.set(b.lo[0], b.lo[1], b.lo[2]); sc8Box.box.max.set(b.hi[0], b.hi[1], b.hi[2]); }
+    sculptHighlight();
     if (sc8Ui) sc8Ui();
   }
   function sculptCommit() { sc8.draft = false; rebuild(); }
@@ -1845,9 +1970,25 @@
       drag.base = (sc8.edits[id] && sc8.edits[id].m || [0, 0, 0]).slice();
       sculptRefresh();
     } else {
-      drag.type = 'grab';
-      drag.stroke = { c: [hit.point.x, hit.point.y, hit.point.z], r: sc8.radius, d: [0, 0, 0] };
-      drag.orig = modelData.map(function (m) { return m.positions.slice(); });
+      var zm = sculptMirrorPlane();
+      if (sc8.brush === 'grab') {
+        drag.type = 'grab';
+        drag.stroke = { c: [hit.point.x, hit.point.y, hit.point.z], r: sc8.radius, d: [0, 0, 0], zm: zm };
+        drag.orig = modelData.map(function (m) { return m.positions.slice(); });
+      } else {
+        drag.type = 'paint';
+        drag.moved = true;
+        sculptSnapshot();
+        drag.dab = function (pt) {
+          var st = { tool: sc8.brush, c: [pt.x, pt.y, pt.z], r: sc8.radius, amt: sc8.strength, zm: zm };
+          sc8.strokes.push(st);
+          sculptApplyOne(modelData, st);
+          sculptMeshChanged();
+          sculptBrushAt(pt);
+          if ($('mm-sculpt-flag')) $('mm-sculpt-flag').hidden = false;
+        };
+        drag.dab(hit.point);
+      }
     }
     sc8Drag = drag;
   }
@@ -1861,6 +2002,18 @@
     var drag = sc8Drag;
     if (drag.type === 'none') return;
     e.preventDefault();
+    if (drag.type === 'paint') {
+      drag.ex = e.clientX; drag.ey = e.clientY;
+      if (drag.queued) return;
+      drag.queued = true;
+      requestAnimationFrame(function () {
+        drag.queued = false;
+        if (sc8Drag !== drag) return;
+        var h = pickAt(drag.ex, drag.ey);
+        if (h) drag.dab(h.point);
+      });
+      return;
+    }
     var pt = sculptPlanePoint(e, drag);
     if (!pt) return;
     var d = pt.sub(drag.start);
@@ -1880,9 +2033,9 @@
       requestAnimationFrame(function () {
         drag.queued = false;
         if (sc8Drag !== drag) return;
-        modelData.forEach(function (m, i) { m.positions.set(drag.orig[i]); sculptApplyOne(m.positions, drag.stroke); modelMeshes[i].geometry.attributes.position.needsUpdate = true; });
-        var normals = groupedNormals(modelData);
-        modelMeshes.forEach(function (mesh, i) { mesh.geometry.attributes.normal.array.set(normals[i]); mesh.geometry.attributes.normal.needsUpdate = true; });
+        modelData.forEach(function (m, i) { m.positions.set(drag.orig[i]); });
+        sculptApplyOne(modelData, drag.stroke);
+        sculptMeshChanged();
         sculptBrushAt(new T.Vector3(drag.stroke.c[0] + drag.stroke.d[0], drag.stroke.c[1] + drag.stroke.d[1], drag.stroke.c[2] + drag.stroke.d[2]));
       });
     }
@@ -1899,9 +2052,14 @@
     }
     if (!drag.moved) return;
     if (drag.type === 'move') { sculptCommit(); return; }
-    sc8.strokes.push(drag.stroke);
-    modelData.forEach(function (m, i) { m.positions.set(drag.orig[i]); });
-    sculptCommit();
+    if (drag.type === 'grab') {
+      // a drag that ends before its last frame ran: bring the mesh up to the final position
+      modelData.forEach(function (m, i) { m.positions.set(drag.orig[i]); });
+      sculptApplyOne(modelData, drag.stroke);
+      sculptMeshChanged();
+      sc8.strokes.push(drag.stroke);
+    }
+    sculptSettle();
   }
 
   function sculptTabConfig() {
@@ -1966,30 +2124,40 @@
         detail.appendChild(sW.node); detail.appendChild(sH.node); detail.appendChild(sD.node);
         detail.appendChild(el('div', { class: 'mm-export-row' }, [delBtn, resetPiece]));
         // Sculpt tool
+        var brushes = [['grab', 'Grab', 'Drag to pull the surface.'], ['inflate', 'Inflate', 'Brush over the surface to puff it out.'], ['deflate', 'Deflate', 'Brush over the surface to press it in.'],
+          ['smooth', 'Smooth', 'Brush over bumps to soften them.'], ['flatten', 'Flatten', 'Brush over the surface to level it.'], ['pinch', 'Pinch', 'Brush along a line to draw the surface together.']];
+        var brushChips = el('div', { class: 'mm-chips' }), brushNote = el('p', { class: 'mm-note' });
+        brushes.forEach(function (b) {
+          brushChips.appendChild(el('button', { class: 'mm-chip', type: 'button', 'data-id': b[0], text: b[1], onclick: function () { sc8.brush = b[0]; sc8Ui(); } }));
+        });
+        sculptBox.appendChild(el('h3', { class: 'mm-group-title', text: 'Brushes' }));
+        sculptBox.appendChild(brushChips);
+        sculptBox.appendChild(brushNote);
         var rS = slider('Brush size', 4, 40, 1, function () { return sc8.radius; }, function (v) { sc8.radius = v; }, function (v) { return v + ' mm'; });
+        var sS = slider('Strength', 5, 100, 5, function () { return sc8.strength; }, function (v) { sc8.strength = v; }, function (v) { return v + '%'; });
         sculptBox.appendChild(rS.node);
+        sculptBox.appendChild(sS.node);
+        var mirrorBtn = el('button', { class: 'mm-chip', type: 'button', text: 'Mirror left and right', onclick: function () { sc8.mirror = !sc8.mirror; sc8Ui(); } });
+        sculptBox.appendChild(el('div', { class: 'mm-chips' }, [mirrorBtn]));
         // Both tools
-        var undoBtn = el('button', { class: 'mm-btn', type: 'button', text: 'Undo', onclick: function () {
-          var s = sc8.undo.pop();
-          if (!s) return;
-          sc8.edits = JSON.parse(s.edits);
-          sc8.strokes.length = s.strokes;
-          sculptCommit();
-        } });
-        var resetAll = el('button', { class: 'mm-btn', type: 'button', text: 'Reset all', onclick: function () {
+        var undoBtn = el('button', { class: 'mm-btn', type: 'button', text: 'Undo', title: 'Ctrl+Z', onclick: sculptUndo });
+        var redoBtn = el('button', { class: 'mm-btn', type: 'button', text: 'Redo', title: 'Ctrl+Y', onclick: sculptRedo });
+        var resetAll = el('button', { class: 'mm-btn mm-btn--block', type: 'button', text: 'Reset all', onclick: function () {
           if (!sculptEdited()) return;
           sculptSnapshot();
           sc8.edits = {}; sc8.strokes = []; sc8.sel = null;
           sculptCommit();
         } });
-        box.appendChild(el('div', { class: 'mm-export-row' }, [undoBtn, resetAll]));
+        box.appendChild(el('div', { class: 'mm-export-row' }, [undoBtn, redoBtn]));
+        box.appendChild(resetAll);
+        box.appendChild(el('p', { class: 'mm-note', text: 'The print check runs when you leave this tab, so all your edits are checked at once.' }));
 
         sc8Ui = function () {
           toolBtns.select.setAttribute('aria-pressed', String(sc8.tool === 'select'));
           toolBtns.sculpt.setAttribute('aria-pressed', String(sc8.tool === 'sculpt'));
           selectBox.hidden = sc8.tool !== 'select';
           sculptBox.hidden = sc8.tool !== 'sculpt';
-          note.textContent = sc8.tool === 'select' ? 'Click a piece or pick it from the list. Drag it on the model to move it.' : 'Drag the surface of the model to pull it into shape.';
+          note.textContent = sc8.tool === 'select' ? 'Click a piece or pick it from the list. Drag it on the model to move it.' : 'Pick a brush, then work on the model.';
           var list = cfg.sculpt.available(), key = list.map(function (p) { return p.id; }).join();
           if (key !== chipKey) {
             chipKey = key;
@@ -2007,6 +2175,10 @@
             sW.sync(); sH.sync(); sD.sync();
           }
           undoBtn.disabled = !sc8.undo.length;
+          redoBtn.disabled = !sc8.redo.length;
+          Array.prototype.forEach.call(brushChips.children, function (c) { c.setAttribute('aria-pressed', String(c.getAttribute('data-id') === sc8.brush)); });
+          brushNote.textContent = brushes.filter(function (b) { return b[0] === sc8.brush; })[0][2];
+          mirrorBtn.setAttribute('aria-pressed', String(sc8.mirror));
           resetAll.disabled = !sculptEdited();
         };
       }
@@ -2037,6 +2209,15 @@
     window.addEventListener('pointermove', sculptPointerMove);
     window.addEventListener('pointerup', sculptPointerUp);
     window.addEventListener('pointercancel', sculptPointerUp);
+    // Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo (Cmd on a Mac), only in this tab.
+    window.addEventListener('keydown', function (e) {
+      if (!sculptOn() || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+      var t = e.target, typing = t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && t.type !== 'range'));
+      if (typing) return;
+      var k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); sculptUndo(); }
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); sculptRedo(); }
+    });
   }
 
   function handleResize() {
