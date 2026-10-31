@@ -449,8 +449,10 @@
       oninput: function () {
         params[p.key] = Number(input.value);
         output.textContent = formatParam(p, params[p.key]);
+        if (cfg.sculpt) sc8.draft = true; // sculpted models use a quick coarse mesh while a slider moves
         scheduleRebuild();
-      }
+      },
+      onchange: function () { if (cfg.sculpt && sc8.draft) sculptCommit(); }
     });
     sliderRefs[p.key] = { input: input, output: output, def: p };
     return el('div', { class: 'mm-slider' }, [

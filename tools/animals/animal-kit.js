@@ -786,7 +786,7 @@
         // Light smoothing removes the small ripple left by the grid. The flat underside stays on the bed.
         var nv = P.length / 3, sum = new Float32Array(nv * 3), cnt = new Uint16Array(nv), pass, ii;
         function link(u, v) { sum[u * 3] += P[v * 3]; sum[u * 3 + 1] += P[v * 3 + 1]; sum[u * 3 + 2] += P[v * 3 + 2]; cnt[u]++; }
-        for (pass = 0; pass < 6; pass++) {
+        for (pass = 0; pass < (this.smoothing || 6); pass++) {
           var lam = pass % 2 ? -0.34 : 0.33; // shrink then inflate, so the volume holds
           sum.fill(0); cnt.fill(0);
           out.forEach(function (idx) { for (var e = 0; e < idx.length; e += 3) { var a0 = idx[e], b0 = idx[e + 1], c0 = idx[e + 2]; link(a0, b0); link(a0, c0); link(b0, c0); link(b0, a0); link(c0, a0); link(c0, b0); } });
@@ -848,4 +848,20 @@
           out.push([c[0] + dx, c[1] + r[1] * top - (sink || 0), c[2] + r[2] * u, rad * (1 - 0.3 * Math.abs(u))]);
         }
         return out;
+      }
+      // A small, set-in reptile eye: a low iris with a dark pupil. Keep it under a brow ridge sculpted before run().
+      // slit > 0 gives an upright slit pupil of that height factor.
+      function reptileEye(sc, S, id, pid, o, dir, parent, R0, iris, slit) {
+        var e = S.face(id, o, dir, parent);
+        if (!e) return null;
+        var R = R0 * e.k;
+        S.addon(id, e.p, R);
+        sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 34, seg: 22, sink: 1.2 }), iris);
+        var rise = (R / Math.sin(deg(34))) * (1 - Math.cos(deg(34))), pu = S.sub(pid, id, vadd(e.p, vmul(e.n, rise * 0.72)), R * 0.5);
+        if (!pu) return e;
+        if (slit) {
+          var hh = R * slit * pu.k, q = pu.p;
+          sc.add('pupils', 'b', sweep([[q[0], q[1] - hh, q[2], 0.4 * pu.k], [q[0] + e.n[0] * 0.15, q[1], q[2] + e.n[2] * 0.15, Math.max(0.55, R * 0.2) * pu.k], [q[0], q[1] + hh, q[2], 0.4 * pu.k]], { seg: 8, per: 3, floor: null }), '#0f172a');
+        } else sc.add('pupils', 'b', dome(pu.p, e.n, R * 0.55 * pu.k, { sink: 0.5 }), '#0f172a');
+        return e;
       }
