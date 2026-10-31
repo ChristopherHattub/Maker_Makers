@@ -457,6 +457,9 @@
         });
         return q;
       };
+      // Where a detail placed by hand on the surface goes after its own edit: moved by m, with its own size factor.
+      Sculpt.prototype.ownMove = function (id, p) { var e = this._edit(id), m = e && e.m ? e.m : [0, 0, 0]; return [p[0] + m[0] / this.outScale, p[1] + m[1] / this.outScale, p[2] + m[2] / this.outScale]; };
+      Sculpt.prototype.ownScale = function (id) { var e = this._edit(id), s = e && e.s ? e.s : [1, 1, 1]; return [s[0], s[1], s[2]]; };
       Sculpt.prototype.scaleOf = function (id) { var k = 1; this._chain(id).forEach(function (c) { var s = c.e.s || [1, 1, 1]; k *= (s[0] + s[1] + s[2]) / 3; }); return k; };
       Sculpt.prototype._applyEdits = function () {
         var self = this, box = {};
@@ -496,7 +499,8 @@
       // Which piece is at a point of the finished model? Used by the Select tool.
       Sculpt.prototype.pieceAt = function (pt) {
         var sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, x = (pt.x + sh[0]) / k, y = pt.y / k, z = (pt.z + sh[1]) / k, best = null, bd = 1e9, i;
-        for (i = 0; i < this.addons.length; i++) { var a = this.addons[i]; if (Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.6) return a.id; }
+        var small = this.addons.slice().sort(function (u, v) { return u.r - v.r; }); // a pupil sits inside its eye: the smaller one wins
+        for (i = 0; i < small.length; i++) { var a = small[i]; if (Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.4) return a.id; }
         this.ops.forEach(function (o) {
           if (!o.piece || o.carve || o.paint || o.relief) return;
           var d = o.d(x, y, z);
@@ -517,6 +521,13 @@
             for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); }
             any = true;
           }); }); });
+        });
+        (this.addons || []).forEach(function (a) {
+          var g = 0, up = self.parents && self.parents[a.id], isIt = a.id === id;
+          while (!isIt && up && g++ < 6) { if (up === id) isIt = true; up = self.parents[up]; }
+          if (!isIt) return;
+          for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], a.p[i] - a.r); hi[i] = Math.max(hi[i], a.p[i] + a.r); }
+          any = true;
         });
         if (!any) return null;
         return { lo: [lo[0] * k - sh[0], lo[1] * k, lo[2] * k - sh[1]], hi: [hi[0] * k - sh[0], hi[1] * k, hi[2] * k - sh[1]] };

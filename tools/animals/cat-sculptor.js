@@ -61,10 +61,11 @@
         S.path('tail', tc, fur, 2.5);
         S.piece('collar');
         if (Math.round(p.collar) === 1 && pose === 0) S.path('collar', [[0, 47, 0, 0]].slice(0, 0).concat(ringPts(hx - 2, hy - hr * 0.72, 0, 9.5 * k, 11.5 * k, 1.9)), '#fb7185', 0.8, 2);
-        S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head';
+        S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head'; S.parents.pupilL = 'eyeL'; S.parents.pupilR = 'eyeR';
         S.run();
         // mouth, nose and eyes go on the finished surface, and follow the head when it is edited
         if (!S.deleted('nose')) {
+          S.pivots.nose = [hx + 60, hy - hr * 0.1, 0];
           var nO = S.xf('nose', [hx + 60, hy - hr * 0.1, 0]), nose = S.hit(nO, [-1, 0, 0]), nk = S.scaleOf('nose');
           sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0], nose.n[1] + 0.15, 0]), 2.1 * hs * nk, { angle: 55 }), pink);
           S.addon('nose', nose.p, 2.1 * hs * nk);
@@ -72,14 +73,20 @@
         [-1, 1].forEach(function (s) {
           var id = s < 0 ? 'eyeL' : 'eyeR';
           if (S.deleted(id)) return;
-          var yE = hy + hr * 0.2, zE = s * hr * 0.46, eO = S.xf(id, [hx + 60, yE, zE]), e = S.hit(eO, [-1, 0, 0]), R = p.eye * hs * S.scaleOf(id);
+          var yE = hy + hr * 0.2, zE = s * hr * 0.46;
+          S.pivots[id] = [hx + 60, yE, zE];
+          var eO = S.xf(id, [hx + 60, yE, zE]), e = S.hit(eO, [-1, 0, 0]), R = p.eye * hs * S.scaleOf(id);
           S.addon(id, e.p, R);
           if (Math.round(p.closed) === 1 || pose === 2) { // sleeping: a soft closed-eye line
             sc.add('eyes', 'b', sweep([[e.p[0] - 0.6, e.p[1] + 0.8, e.p[2] - R, 0.75], [e.p[0] - 0.1, e.p[1] - 0.3, e.p[2], 0.75], [e.p[0] - 0.6, e.p[1] + 0.8, e.p[2] + R, 0.75]], { seg: 8, per: 4, floor: null }), '#334155');
           } else {
             sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 42 }), '#bef264');
-            var pu = vadd(e.p, vmul(e.n, R * 0.28));
-            sc.add('pupils', 'b', sweep([[pu[0], pu[1] - R * 0.55, pu[2], 0.65], [pu[0] + 0.25, pu[1], pu[2], 0.95], [pu[0], pu[1] + R * 0.55, pu[2], 0.65]], { seg: 8, per: 3, floor: null }), '#1e293b');
+            var pid = s < 0 ? 'pupilL' : 'pupilR';
+            if (!S.deleted(pid)) {
+              var pu = S.ownMove(pid, vadd(e.p, vmul(e.n, R * 0.28))), ps = S.ownScale(pid), hh = R * 0.55 * ps[1], rw = (ps[0] + ps[2]) / 2;
+              sc.add('pupils', 'b', sweep([[pu[0], pu[1] - hh, pu[2], 0.65 * rw], [pu[0] + 0.25, pu[1], pu[2], 0.95 * rw], [pu[0], pu[1] + hh, pu[2], 0.65 * rw]], { seg: 8, per: 3, floor: null }), '#1e293b');
+              S.addon(pid, pu, Math.max(hh, 1.2));
+            }
           }
         });
         S.addTo(sc);
@@ -121,10 +128,11 @@
           ['Plain sitter', { stripes: 0, ear: 1.2, eye: 4.2 }]
         ]),
         sculpt: sculptModule([
-          { id: 'head', label: 'Head' }, { id: 'torso', label: 'Body' }, { id: 'earL', label: 'Left ear' }, { id: 'earR', label: 'Right ear' },
-          { id: 'eyeL', label: 'Left eye' }, { id: 'eyeR', label: 'Right eye' }, { id: 'nose', label: 'Nose' }, { id: 'tail', label: 'Tail' },
-          { id: 'frontL', label: 'Left front leg' }, { id: 'frontR', label: 'Right front leg' }, { id: 'hindL', label: 'Left hind leg' }, { id: 'hindR', label: 'Right hind leg' },
-          { id: 'collar', label: 'Collar' }, { id: 'stripes', label: 'Stripes' }
+          { id: 'head', label: 'Head', section: 'Head' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' },
+          { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' },
+          { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' }, { id: 'nose', label: 'Nose', section: 'Head' },
+          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'collar', label: 'Collar', section: 'Body' }, { id: 'stripes', label: 'Stripes', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
+          { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),
         build: buildCat
       };

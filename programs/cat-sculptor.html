@@ -894,6 +894,9 @@
         });
         return q;
       };
+      // Where a detail placed by hand on the surface goes after its own edit: moved by m, with its own size factor.
+      Sculpt.prototype.ownMove = function (id, p) { var e = this._edit(id), m = e && e.m ? e.m : [0, 0, 0]; return [p[0] + m[0] / this.outScale, p[1] + m[1] / this.outScale, p[2] + m[2] / this.outScale]; };
+      Sculpt.prototype.ownScale = function (id) { var e = this._edit(id), s = e && e.s ? e.s : [1, 1, 1]; return [s[0], s[1], s[2]]; };
       Sculpt.prototype.scaleOf = function (id) { var k = 1; this._chain(id).forEach(function (c) { var s = c.e.s || [1, 1, 1]; k *= (s[0] + s[1] + s[2]) / 3; }); return k; };
       Sculpt.prototype._applyEdits = function () {
         var self = this, box = {};
@@ -933,7 +936,8 @@
       // Which piece is at a point of the finished model? Used by the Select tool.
       Sculpt.prototype.pieceAt = function (pt) {
         var sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, x = (pt.x + sh[0]) / k, y = pt.y / k, z = (pt.z + sh[1]) / k, best = null, bd = 1e9, i;
-        for (i = 0; i < this.addons.length; i++) { var a = this.addons[i]; if (Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.6) return a.id; }
+        var small = this.addons.slice().sort(function (u, v) { return u.r - v.r; }); // a pupil sits inside its eye: the smaller one wins
+        for (i = 0; i < small.length; i++) { var a = small[i]; if (Math.hypot(a.p[0] - x, a.p[1] - y, a.p[2] - z) < a.r + 0.4) return a.id; }
         this.ops.forEach(function (o) {
           if (!o.piece || o.carve || o.paint || o.relief) return;
           var d = o.d(x, y, z);
@@ -954,6 +958,13 @@
             for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); }
             any = true;
           }); }); });
+        });
+        (this.addons || []).forEach(function (a) {
+          var g = 0, up = self.parents && self.parents[a.id], isIt = a.id === id;
+          while (!isIt && up && g++ < 6) { if (up === id) isIt = true; up = self.parents[up]; }
+          if (!isIt) return;
+          for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], a.p[i] - a.r); hi[i] = Math.max(hi[i], a.p[i] + a.r); }
+          any = true;
         });
         if (!any) return null;
         return { lo: [lo[0] * k - sh[0], lo[1] * k, lo[2] * k - sh[1]], hi: [hi[0] * k - sh[0], hi[1] * k, hi[2] * k - sh[1]] };
@@ -1300,10 +1311,11 @@
         S.path('tail', tc, fur, 2.5);
         S.piece('collar');
         if (Math.round(p.collar) === 1 && pose === 0) S.path('collar', [[0, 47, 0, 0]].slice(0, 0).concat(ringPts(hx - 2, hy - hr * 0.72, 0, 9.5 * k, 11.5 * k, 1.9)), '#fb7185', 0.8, 2);
-        S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head';
+        S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head'; S.parents.pupilL = 'eyeL'; S.parents.pupilR = 'eyeR';
         S.run();
         // mouth, nose and eyes go on the finished surface, and follow the head when it is edited
         if (!S.deleted('nose')) {
+          S.pivots.nose = [hx + 60, hy - hr * 0.1, 0];
           var nO = S.xf('nose', [hx + 60, hy - hr * 0.1, 0]), nose = S.hit(nO, [-1, 0, 0]), nk = S.scaleOf('nose');
           sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0], nose.n[1] + 0.15, 0]), 2.1 * hs * nk, { angle: 55 }), pink);
           S.addon('nose', nose.p, 2.1 * hs * nk);
@@ -1311,14 +1323,20 @@
         [-1, 1].forEach(function (s) {
           var id = s < 0 ? 'eyeL' : 'eyeR';
           if (S.deleted(id)) return;
-          var yE = hy + hr * 0.2, zE = s * hr * 0.46, eO = S.xf(id, [hx + 60, yE, zE]), e = S.hit(eO, [-1, 0, 0]), R = p.eye * hs * S.scaleOf(id);
+          var yE = hy + hr * 0.2, zE = s * hr * 0.46;
+          S.pivots[id] = [hx + 60, yE, zE];
+          var eO = S.xf(id, [hx + 60, yE, zE]), e = S.hit(eO, [-1, 0, 0]), R = p.eye * hs * S.scaleOf(id);
           S.addon(id, e.p, R);
           if (Math.round(p.closed) === 1 || pose === 2) { // sleeping: a soft closed-eye line
             sc.add('eyes', 'b', sweep([[e.p[0] - 0.6, e.p[1] + 0.8, e.p[2] - R, 0.75], [e.p[0] - 0.1, e.p[1] - 0.3, e.p[2], 0.75], [e.p[0] - 0.6, e.p[1] + 0.8, e.p[2] + R, 0.75]], { seg: 8, per: 4, floor: null }), '#334155');
           } else {
             sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 42 }), '#bef264');
-            var pu = vadd(e.p, vmul(e.n, R * 0.28));
-            sc.add('pupils', 'b', sweep([[pu[0], pu[1] - R * 0.55, pu[2], 0.65], [pu[0] + 0.25, pu[1], pu[2], 0.95], [pu[0], pu[1] + R * 0.55, pu[2], 0.65]], { seg: 8, per: 3, floor: null }), '#1e293b');
+            var pid = s < 0 ? 'pupilL' : 'pupilR';
+            if (!S.deleted(pid)) {
+              var pu = S.ownMove(pid, vadd(e.p, vmul(e.n, R * 0.28))), ps = S.ownScale(pid), hh = R * 0.55 * ps[1], rw = (ps[0] + ps[2]) / 2;
+              sc.add('pupils', 'b', sweep([[pu[0], pu[1] - hh, pu[2], 0.65 * rw], [pu[0] + 0.25, pu[1], pu[2], 0.95 * rw], [pu[0], pu[1] + hh, pu[2], 0.65 * rw]], { seg: 8, per: 3, floor: null }), '#1e293b');
+              S.addon(pid, pu, Math.max(hh, 1.2));
+            }
           }
         });
         S.addTo(sc);
@@ -1360,10 +1378,11 @@
           ['Plain sitter', { stripes: 0, ear: 1.2, eye: 4.2 }]
         ]),
         sculpt: sculptModule([
-          { id: 'head', label: 'Head' }, { id: 'torso', label: 'Body' }, { id: 'earL', label: 'Left ear' }, { id: 'earR', label: 'Right ear' },
-          { id: 'eyeL', label: 'Left eye' }, { id: 'eyeR', label: 'Right eye' }, { id: 'nose', label: 'Nose' }, { id: 'tail', label: 'Tail' },
-          { id: 'frontL', label: 'Left front leg' }, { id: 'frontR', label: 'Right front leg' }, { id: 'hindL', label: 'Left hind leg' }, { id: 'hindR', label: 'Right hind leg' },
-          { id: 'collar', label: 'Collar' }, { id: 'stripes', label: 'Stripes' }
+          { id: 'head', label: 'Head', section: 'Head' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' },
+          { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' },
+          { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' }, { id: 'nose', label: 'Nose', section: 'Head' },
+          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'collar', label: 'Collar', section: 'Body' }, { id: 'stripes', label: 'Stripes', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
+          { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),
         build: buildCat
       };

@@ -196,18 +196,18 @@ Every generator page gets a small chip at the bottom left of the 3D view, run by
 | Overhang | Solid with nothing under it within about 50° from vertical (a 45° slope passes, 60° fails). Sags or strands without supports. |
 | Thin wall | Features thinner than 0.8 mm, which a 0.4 mm nozzle may skip. |
 
-The chip is green ("No supports needed"), amber (warnings only) or red ("Needs supports"). Clicking it lists the problems, and red dots in the 3D view mark where. It is an estimate from the mesh, not a guarantee, and it never blocks an export. A generator can opt out with `printCheck: false` or tune it with `printCheckOptions` (`{ minWall, cell }`). `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` runs the same check after the watertight test (`--strict` fails on errors), so use it on defaults, presets and slider extremes. The check ignores the Workshop embed.
+The chip is green ("No supports needed"), amber (warnings only) or red ("Needs supports"). Clicking it lists the problems, and red dots in the 3D view mark where. It is an estimate from the mesh, not a guarantee, and it never blocks an export. A generator can opt out with `printCheck: false` or tune it with `printCheckOptions` (`{ minWall, cell }`). `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` runs the same check after the watertight test (`--strict` fails on errors), so use it on defaults, presets and slider extremes. The check ignores the Workshop embed. On the page it runs in a background worker, so a big model does not freeze the editor; if a worker cannot start, it runs on the page.
 
 ### Sculpt tab (experimental, `cfg.sculpt`)
 
-A generator that sets `cfg.sculpt` gets a **Sculpt** tab, second to last in the tab row, with two tools. So far only Cat Sculptor uses it.
+A generator that sets `cfg.sculpt` gets a **Sculpt** tab, right after Parametric, with two tools. So far only Cat Sculptor uses it.
 
 - **Select**: click a piece (or pick it from the list), which tints it, and drag it to move it, stretch it with the three sliders, delete or restore it.
 - **Sculpt**: six brushes (Grab, Inflate, Deflate, Smooth, Flatten, Pinch) with size, strength and a left-right mirror. Strokes are stored and replayed on every rebuild, so they survive slider changes. The surface stays closed.
 
-Undo, Redo (Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z; Cmd on a Mac) and Reset all cover both tools. The print check does not run while this tab is open; it runs once on leaving it. After any edit the viewport shows the flag "Sculpted Models may have print errors", on every tab. Edits reach exports and the print check. They are not saved on reload, and the Workshop embed does not offer the tab.
+Undo, Redo (Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z; Cmd on a Mac) and Reset all cover both tools. Pieces are listed in collapsible sections (`section`), and a piece with a `parent` nests under that piece. The print check does not run while this tab is open; it runs once on leaving it. After any edit the viewport shows the flag "Sculpted Models may have print errors", on every tab. Edits reach exports and the print check. They are not saved on reload, and the Workshop embed does not offer the tab.
 
-`cfg.sculpt` is `{ pieces: [{ id, label }], available(), pieceAt(point), bounds(id), isUnder(id, parent) }`. The build reads `api.sculpt.edits` (`{ id: { m: [x, y, z], s: [x, y, z], del } }`) and `api.sculpt.draft` (true while dragging, for a coarser fast mesh). For generators built with the animal kit, `sculptModule(pieces)` in `tools/animals/animal-kit.js` supplies all of this: name the pieces with `S.piece(id, parent)`, call `S.useEdits(api, scale)`, and pass `S` to `finishSculpt`. A moved piece skips the kit's support trimming, so it can overhang or float, which is why the flag exists. See [animals.md](animals.md).
+`cfg.sculpt` is `{ pieces: [{ id, label, section, parent }], available(), pieceAt(point), bounds(id), isUnder(id, parent) }`. The build reads `api.sculpt.edits` (`{ id: { m: [x, y, z], s: [x, y, z], del } }`) and `api.sculpt.draft` (true while dragging, for a coarser fast mesh). For generators built with the animal kit, `sculptModule(pieces)` in `tools/animals/animal-kit.js` supplies all of this: name the pieces with `S.piece(id, parent)`, call `S.useEdits(api, scale)`, and pass `S` to `finishSculpt`. A moved piece skips the kit's support trimming, so it can overhang or float, which is why the flag exists. See [animals.md](animals.md).
 
 ## Standalone download
 

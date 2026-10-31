@@ -415,6 +415,15 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 .mm-overlay--tr { top: 0.75rem; right: 0.75rem; color: var(--bp-cyan); }
 .mm-sculpt-flag { top: 3rem; left: 50%; transform: translateX(-50%); white-space: nowrap; max-width: calc(100% - 1.5rem); border-color: #fbbf24; color: #fbbf24; text-transform: none; }
 .mm-sculpt-flag[hidden] { display: none; }
+.mm-part-tree { display: flex; flex-direction: column; gap: 0.35rem; }
+.mm-part-node > summary { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; list-style: none; }
+.mm-part-node > summary::-webkit-details-marker { display: none; }
+.mm-part-node > summary::before { content: '+'; color: var(--bp-cyan); width: 0.8rem; flex: none; text-align: center; }
+.mm-part-node[open] > summary::before { content: '-'; }
+.mm-part-section > summary { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--bp-cyan); padding: 0.35rem 0; }
+.mm-part-kids { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.35rem; padding-left: 1rem; }
+.mm-part-kids > .mm-part-node { flex-basis: 100%; }
+.mm-part-kids > .mm-part-node > .mm-part-kids { margin-top: 0.35rem; }
 .mm-overlay--bl { bottom: 0.75rem; left: 0.75rem; }
 
 .mm-view-buttons {

@@ -203,7 +203,7 @@
 
     // Optional generator tabs (cfg.tabs), shown right after Parametric.
     var tabDefs = (cfg.tabs || []).slice();
-    if (cfg.sculpt && !/[?&]embed=workshop\b/.test(location.search)) tabDefs.push(sculptTabConfig());
+    if (cfg.sculpt && !/[?&]embed=workshop\b/.test(location.search)) tabDefs.unshift(sculptTabConfig());
     var extraTabs = tabDefs.map(function (t) {
       return {
         id: t.id, cfg: t,
@@ -214,7 +214,7 @@
 
     var panel = el('aside', { class: 'mm-panel' }, [
       sheetHandle,
-      el('div', { class: 'mm-tabs', role: 'tablist' }, (cfg.hideModelTab ? [] : (cfg.tabsFirst ? [] : [tabModel])).concat(extraTabs.filter(function (t) { return !t.cfg.late; }).map(function (t) { return t.btn; }), cfg.hideModelTab ? [] : (cfg.tabsFirst ? [tabModel] : []), [tabColor], extraTabs.filter(function (t) { return t.cfg.late; }).map(function (t) { return t.btn; }), [tabPrint])),
+      el('div', { class: 'mm-tabs', role: 'tablist' }, (cfg.hideModelTab ? [] : (cfg.tabsFirst ? [] : [tabModel])).concat(extraTabs.map(function (t) { return t.btn; }), cfg.hideModelTab ? [] : (cfg.tabsFirst ? [tabModel] : []), [tabColor, tabPrint])),
       modelBody
     ].concat(extraTabs.map(function (t) { return t.body; }), [
       colorBody,
@@ -774,16 +774,48 @@
     document.head.appendChild(s);
   }
 
+  // The check takes seconds on a big model, so it runs in a background worker and the page keeps responding. The worker is
+  // made from the check's own code, so this also works in the standalone download. No worker: it runs on the page as before.
+  var printWorker = null, printWorkerBusy = false, printWorkerFailed = false;
+  function runPrintWorker(PC, seq) {
+    if (printWorkerFailed || typeof Worker === 'undefined' || typeof Blob === 'undefined') return false;
+    try {
+      if (!printWorker) {
+        var src = 'var chamfer = ' + PC.chamfer.toString() + ';\nvar check = ' + PC.check.toString() + ';\n' +
+          'onmessage = function (e) { var r = null; try { r = check(e.data.entries, e.data.opt); } catch (err) { r = null; } postMessage({ seq: e.data.seq, res: r }); };';
+        var url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        printWorker = new Worker(url);
+        URL.revokeObjectURL(url);
+        printWorker.onmessage = function (e) {
+          printWorkerBusy = false;
+          if (e.data.seq === printCheckSeq) showPrintResult(e.data.res);
+        };
+        printWorker.onerror = function () {
+          printWorkerFailed = true; printWorkerBusy = false; printWorker = null;
+          schedulePrintCheck();
+        };
+      }
+      printWorkerBusy = true;
+      printWorker.postMessage({ seq: seq, opt: cfg.printCheckOptions || {}, entries: printEntries().map(function (e) { return { name: e.name, positions: e.positions }; }) });
+      return true;
+    } catch (err) {
+      printWorkerFailed = true; printWorkerBusy = false; printWorker = null;
+      return false;
+    }
+  }
+
   function schedulePrintCheck() {
     if (EMBED || cfg.printCheck === false) return;
     var seq = ++printCheckSeq, box = $('mm-printcheck');
     if (printCheckTimer) clearTimeout(printCheckTimer);
     clearPrintMarks();
+    if (printWorkerBusy && printWorker) { printWorker.terminate(); printWorker = null; printWorkerBusy = false; } // its answer is out of date
     if (cfg.sculpt && activeTab === 'sculpt') { if (box) box.hidden = true; return; } // checked once, on leaving the tab
     if (box) { box.hidden = false; $('mm-printchip').className = 'mm-printchip is-busy'; $('mm-printchip').textContent = 'Print check...'; }
     printCheckTimer = setTimeout(function () {
       withPrintChecker(function (PC) {
         if (seq !== printCheckSeq) return;
+        if (runPrintWorker(PC, seq)) return;
         var t0 = Date.now(), res;
         try { res = PC.check(printEntries(), cfg.printCheckOptions || {}); } catch (e) { res = null; }
         printCheckSlow = Date.now() - t0 > 1500 ? 1500 : 0; // a slow model waits longer before it is checked again
@@ -1774,12 +1806,12 @@
   // 7. API for the generator, resize and render loop
   // ---------------------------------------------------------------------------
   // ---------------------------------------------------------------------------
-  // Sculpt tab (cfg.sculpt): an experimental edit mode, second to last in the tab row.
+  // Sculpt tab (cfg.sculpt): an experimental edit mode, right after Parametric.
   // Select tool: click a piece, drag it to move it, stretch it with sliders, delete it. The generator gets the edits in
   // api.sculpt.edits and rebuilds with them. Sculpt tool: drag the surface. Strokes are stored and replayed on every rebuild.
   // cfg.sculpt: { pieces: [{ id, label }], available(), pieceAt(point), bounds(id) }.
   // ---------------------------------------------------------------------------
-  var sc8 = { tool: 'select', brush: 'grab', mirror: false, strength: 50, sel: null, edits: {}, strokes: [], undo: [], redo: [], radius: 14, shift: null, draft: false };
+  var sc8 = { tool: 'select', brush: 'grab', mirror: false, strength: 15, sel: null, edits: {}, strokes: [], undo: [], redo: [], radius: 6, shift: null, draft: false };
   var sc8Drag = null, sc8Box = null, sc8Brush = null, sc8Ui = null, sc8Mark = null;
   var sc8MarkMat = new T.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
@@ -2064,7 +2096,7 @@
 
   function sculptTabConfig() {
     return {
-      id: 'sculpt', label: 'Sculpt', late: true,
+      id: 'sculpt', label: 'Sculpt',
       hint: 'Drag to edit. Empty space orbits',
       onPick: function () {},
       mount: function (box) {
@@ -2089,9 +2121,22 @@
             sync: function () { input.value = get(); out.textContent = fmt(get()); } };
         }
         // Select tool
-        var chips = el('div', { class: 'mm-chips' }), detail = el('div', {}), chipKey = '';
+        var chips = el('div', { class: 'mm-part-tree' }), detail = el('div', {}), chipKey = '', chipEls = {}, openers = {};
         selectBox.appendChild(el('h3', { class: 'mm-group-title', text: 'Pieces' }));
         selectBox.appendChild(chips);
+        function partChip(p, inSummary) {
+          var c = el('button', { class: 'mm-chip', type: 'button', text: p.label, onclick: function (e) { if (inSummary) e.preventDefault(); sc8.sel = p.id; sculptRefresh(); } });
+          chipEls[p.id] = c;
+          return c;
+        }
+        // A piece with children is a collapsible row; pieces are grouped into sections by their `section` name.
+        function partNode(p, list) {
+          var kids = list.filter(function (q) { return q.parent === p.id; });
+          if (!kids.length) return partChip(p, false);
+          var d = el('details', { class: 'mm-part-node' }, [el('summary', {}, [partChip(p, true)]), el('div', { class: 'mm-part-kids' }, kids.map(function (q) { return partNode(q, list); }))]);
+          kids.forEach(function (q) { openers[q.id] = { d: d, parent: p.id }; });
+          return d;
+        }
         selectBox.appendChild(detail);
         var snapped = false;
         function setScale(axis, v) {
@@ -2133,8 +2178,8 @@
         sculptBox.appendChild(el('h3', { class: 'mm-group-title', text: 'Brushes' }));
         sculptBox.appendChild(brushChips);
         sculptBox.appendChild(brushNote);
-        var rS = slider('Brush size', 4, 40, 1, function () { return sc8.radius; }, function (v) { sc8.radius = v; }, function (v) { return v + ' mm'; });
-        var sS = slider('Strength', 5, 100, 5, function () { return sc8.strength; }, function (v) { sc8.strength = v; }, function (v) { return v + '%'; });
+        var rS = slider('Brush size', 2, 40, 1, function () { return sc8.radius; }, function (v) { sc8.radius = v; }, function (v) { return v + ' mm'; });
+        var sS = slider('Strength', 1, 100, 1, function () { return sc8.strength; }, function (v) { sc8.strength = v; }, function (v) { return v + '%'; });
         sculptBox.appendChild(rS.node);
         sculptBox.appendChild(sS.node);
         var mirrorBtn = el('button', { class: 'mm-chip', type: 'button', text: 'Mirror left and right', onclick: function () { sc8.mirror = !sc8.mirror; sc8Ui(); } });
@@ -2162,11 +2207,24 @@
           if (key !== chipKey) {
             chipKey = key;
             while (chips.firstChild) chips.removeChild(chips.firstChild);
-            list.forEach(function (p) {
-              chips.appendChild(el('button', { class: 'mm-chip', type: 'button', 'data-id': p.id, text: p.label, onclick: function () { sc8.sel = p.id; sculptRefresh(); } }));
+            chipEls = {}; openers = {};
+            var names = [];
+            list.forEach(function (p) { var n = p.section || 'Pieces'; if (names.indexOf(n) < 0) names.push(n); });
+            names.forEach(function (n, i) {
+              var tops = list.filter(function (p) { return (p.section || 'Pieces') === n && !(p.parent && list.some(function (q) { return q.id === p.parent; })); });
+              var sec = el('details', { class: 'mm-part-node mm-part-section' }, [el('summary', { text: n }), el('div', { class: 'mm-part-kids' }, tops.map(function (p) { return partNode(p, list); }))]);
+              if (i === 0) sec.open = true;
+              chips.appendChild(sec);
             });
           }
-          Array.prototype.forEach.call(chips.children, function (c) { c.setAttribute('aria-pressed', String(c.getAttribute('data-id') === sc8.sel)); });
+          Object.keys(chipEls).forEach(function (id) { chipEls[id].setAttribute('aria-pressed', String(id === sc8.sel)); });
+          // Picking a nested piece on the model opens the rows that hold it.
+          if (sc8.sel && chipEls[sc8.sel]) {
+            var up = chipEls[sc8.sel].parentNode;
+            while (up && up !== chips) { if (up.tagName === 'DETAILS') up.open = true; up = up.parentNode; }
+            if (sc8.sel !== sc8Ui.lastSel) { var o = openers[sc8.sel]; if (o) o.d.open = true; }
+          }
+          sc8Ui.lastSel = sc8.sel;
           detail.hidden = !sc8.sel;
           if (sc8.sel) {
             var info = cfg.sculpt.pieces.filter(function (p) { return p.id === sc8.sel; })[0], ed = sc8.edits[sc8.sel];
