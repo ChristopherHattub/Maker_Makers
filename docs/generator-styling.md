@@ -58,7 +58,7 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `palette` | yes | `[{ name, color }]`. Shown as swatches in the Color tool. Eight entries lay out as two rows. |
 | `partNames` | no | Maps a mesh name to a label, for example `{ body: 'Ghost body', detail: 'Stamp' }`. |
 | `printSettings` | no | Only `material` is read (default `'PLA'`): the Print tab's starting material. |
-| `parameters` | yes | The sliders. See below. |
+| `parameters` | yes | The sliders. See below. A parameter may carry `showIf: function (params) { return ...; }`: the slider is hidden while it returns false, and an accordion group whose sliders are all hidden is hidden too. Hidden sliders keep their values. |
 | `presets` | no | `[{ label, values }]`. Each preset sets some parameters. |
 | `build(params, api)` | yes | Returns the mesh list. See [build()](#build-params-api). |
 | `mount(container, api)` | no | Adds generator-only controls under the sliders (for example, a stamp picker). |

@@ -280,7 +280,14 @@
     // First group opens by default (cfg.openGroups can list names instead); the rest start collapsed.
     var sections = groups.map(function (group, i) {
       var open = cfg.openGroups ? cfg.openGroups.indexOf(group.name) >= 0 : i === 0;
-      return accordion(group.name, el('div', {}, group.items.map(sliderFor)), open);
+      var nodes = group.items.map(function (p) {
+        var node = sliderFor(p);
+        if (typeof p.showIf === 'function') showIfRefs.push({ node: node, p: p });
+        return node;
+      });
+      var acc = accordion(group.name, el('div', {}, nodes), open);
+      if (group.items.every(function (p) { return typeof p.showIf === 'function'; })) showIfGroups.push({ node: acc, items: group.items });
+      return acc;
     });
 
     dom.modelBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Parametric controls' }));
@@ -331,6 +338,12 @@
   }
 
   var sliderRefs = {};
+  var showIfRefs = [];   // sliders with a showIf(params) rule, and the accordion groups made only of them
+  var showIfGroups = [];
+  function applyShowIf() {
+    showIfRefs.forEach(function (r) { r.node.hidden = !r.p.showIf(params); });
+    showIfGroups.forEach(function (g) { g.node.hidden = g.items.every(function (p) { return !p.showIf(params); }); });
+  }
 
   // Print tab: material only. It picks the finish of the realistic render (cfg.printSettings.material sets the default).
   var printSettings = { material: (cfg.printSettings && cfg.printSettings.material) || 'PLA' };
@@ -706,6 +719,7 @@
   }
 
   function rebuild() {
+    applyShowIf();
     var output = cfg.build(params, api) || [];
     modelData = output;
 

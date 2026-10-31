@@ -219,6 +219,7 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 
 /* ---------- Sliders ---------- */
 .mm-slider { margin-bottom: 0.95rem; }
+.mm-slider[hidden], .mm-acc[hidden] { display: none; }
 
 .mm-slider-head {
   display: flex;
