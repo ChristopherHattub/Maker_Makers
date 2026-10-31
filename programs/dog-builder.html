@@ -659,6 +659,213 @@
         return lathe(fr, o.concat(inn), seg || 40, { ay: w / a });
       }
 
+      // ---- Self-limiting shapes: built bottom to top and never growing outward faster than about 45 degrees (Y up, faces +x) ----
+      var GROW = 0.9; // largest outward step per mm of height
+
+      // Closed loft from horizontal rings, bottom to top: [{ y, cx, cz, rx, rz }]. Flat bottom, pole on top.
+      // o.pow squares the section off (2 = ellipse), o.mod(thDeg, t) multiplies the radius, o.yaw turns the section, o.free skips the growth limit.
+      function loft(rings, seg, o) {
+        o = o || {};
+        seg = seg || 40;
+        var pow = o.pow || 2, n = rings.length, V = [], i, j, cy = Math.cos(o.yaw || 0), sy = Math.sin(o.yaw || 0);
+        for (i = 0; i < n; i++) {
+          var r = rings[i], row = [], ti = i / (n - 1);
+          for (j = 0; j < seg; j++) {
+            var th = (j / seg) * TAU, c = Math.cos(th), s = Math.sin(th);
+            var q = Math.pow(Math.pow(Math.abs(c), pow) + Math.pow(Math.abs(s), pow), -1 / pow);
+            var m = o.mod ? o.mod((th * 180) / Math.PI, ti) : 1;
+            var lx = r.rx * c * q * m, lz = r.rz * s * q * m;
+            row.push([r.cx + lx * cy - lz * sy, r.y, r.cz + lx * sy + lz * cy]);
+          }
+          V.push(row);
+        }
+        if (!o.free) {
+          for (i = 1; i < n; i++) {
+            var lim = GROW * (V[i][0][1] - V[i - 1][0][1]), px = 0, pz = 0;
+            for (j = 0; j < seg; j++) { px += V[i - 1][j][0]; pz += V[i - 1][j][2]; }
+            px /= seg; pz /= seg;
+            for (j = 0; j < seg; j++) {
+              var a = V[i - 1][j], b = V[i][j], nx = a[0] - px, nz = a[2] - pz, nl = Math.hypot(nx, nz) || 1;
+              nx /= nl; nz /= nl;
+              var out = (b[0] - a[0]) * nx + (b[2] - a[2]) * nz;
+              var dx = b[0] - a[0], dz = b[2] - a[2], dl = Math.hypot(dx, dz);
+              if (out > 0 && dl > lim) { b[0] = a[0] + (dx * lim) / dl; b[2] = a[2] + (dz * lim) / dl; }
+            }
+          }
+        }
+        var pos = [], idx = [], top = V[n - 1], tx = 0, tz = 0, tn = rings[n - 1].y, bx = 0, bz = 0;
+        for (j = 0; j < seg; j++) { tx += top[j][0]; tz += top[j][2]; bx += V[0][j][0]; bz += V[0][j][2]; }
+        pos.push(bx / seg, V[0][0][1], bz / seg);
+        for (i = 0; i < n; i++) for (j = 0; j < seg; j++) pos.push(V[i][j][0], V[i][j][1], V[i][j][2]);
+        pos.push(tx / seg, tn + (o.poleLift === undefined ? 0.05 : o.poleLift), tz / seg);
+        var last = 1 + n * seg;
+        function at(a, b) { return 1 + a * seg + b; }
+        for (j = 0; j < seg; j++) idx.push(0, at(0, (j + 1) % seg), at(0, j));
+        for (i = 0; i < n - 1; i++) for (j = 0; j < seg; j++) {
+          var nj = (j + 1) % seg;
+          idx.push(at(i, j), at(i, nj), at(i + 1, nj), at(i, j), at(i + 1, nj), at(i + 1, j));
+        }
+        for (j = 0; j < seg; j++) idx.push(at(n - 1, j), at(n - 1, (j + 1) % seg), last);
+        return { tris: expandTris(new Float32Array(pos), idx), V: V, seg: seg, surf: function (thDeg, y) { return loftSurf(V, seg, thDeg, y); } };
+      }
+      // Point and outward normal on a loft, at an angle (0 = +x, 90 = +z) and a height.
+      function loftSurf(V, seg, thDeg, y) {
+        var n = V.length, i = 0;
+        while (i < n - 2 && V[i + 1][0][1] < y) i++;
+        var ta = clamp((y - V[i][0][1]) / ((V[i + 1][0][1] - V[i][0][1]) || 1), 0, 1);
+        var f = ((((thDeg % 360) + 360) % 360) / 360) * seg, j0 = Math.floor(f) % seg, j1 = (j0 + 1) % seg, tb = f - Math.floor(f);
+        function P(ii, jj) { return V[ii][(jj + seg) % seg]; }
+        function mix(a, b, t) { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+        var p = mix(mix(P(i, j0), P(i, j1), tb), mix(P(i + 1, j0), P(i + 1, j1), tb), ta);
+        var cx = 0, cz = 0, q;
+        for (q = 0; q < seg; q++) { cx += V[i][q][0]; cz += V[i][q][2]; }
+        cx /= seg; cz /= seg;
+        var du = vsub(P(i, j0 + 1), P(i, j0 - 1)), dv = vsub(P(i + 1, j0), P(i, j0)), nrm = vnorm(vcross(du, dv));
+        if (nrm[0] * (p[0] - cx) + nrm[2] * (p[2] - cz) < 0) nrm = vmul(nrm, -1);
+        return { p: p, n: nrm };
+      }
+
+      // Rounded form: a dome of semi-axes rx, ry, rz around c. Below the middle it narrows to the bed, or to o.anchor
+      // ([x, y, z], a point inside the shape underneath, with o.anchorR its radius there), by no more than the growth limit.
+      function pod(c, rx, ry, rz, o) {
+        o = o || {};
+        var y1 = c[1] + ry, anchor = o.anchor, y0 = anchor ? anchor[1] : Math.max(0, c[1] - ry), ar = o.anchorR === undefined ? 1.5 : o.anchorR;
+        var N = o.rings || 30, rings = [], flare = o.flare === undefined ? 0 : o.flare;
+        for (var i = 0; i <= N; i++) {
+          var y = lerp(y0, y1, Math.pow(i / N, 0.9)), t = clamp((y - c[1]) / ry, -1, 1), k = Math.sqrt(Math.max(1 - t * t, 0.0004));
+          if (i === N) k = 0.02;
+          var w = anchor ? smooth(clamp((y - y0) / Math.max(c[1] - y0, 0.01), 0, 1)) : 1;
+          var cx = anchor ? lerp(anchor[0], c[0], w) : c[0], cz = anchor ? lerp(anchor[2], c[2], w) : c[2];
+          var sq = y < c[1] && flare ? lerp(1, k, 1 - flare) : k;
+          var rr = { y: y, cx: cx, cz: cz, rx: rx * sq, rz: rz * sq };
+          if (anchor && i === 0) { rr.rx = ar; rr.rz = ar; }
+          else if (!anchor && i === 0 && y0 <= 0.001) { rr.rx = rx * Math.max(sq, 0.2); rr.rz = rz * Math.max(sq, 0.2); }
+          rings.push(rr);
+        }
+        return loft(rings, o.seg || 44, { pow: o.pow, mod: o.mod, yaw: o.yaw });
+      }
+
+      // Tube along a smooth path. pts [[x, y, z, r], ...]; ends close with a round tip unless o.flatStart.
+      // o.bed keeps it lying on the bed: the axis follows 0.65 x radius, so the flat underside meets the sides at 45 degrees.
+      // o.rise forces each step to climb at least as fast as it travels, so a free-standing limb never overhangs.
+      function sweep(pts, o) {
+        o = o || {};
+        var seg = o.seg || 20, per = o.per || 7, S = [], i, k;
+        function cr(a, b, c, d, t) { return 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t); }
+        for (i = 0; i < pts.length - 1; i++) {
+          var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+          for (k = 0; k < per; k++) {
+            var t = k / per;
+            S.push([cr(p0[0], p1[0], p2[0], p3[0], t), cr(p0[1], p1[1], p2[1], p3[1], t), cr(p0[2], p1[2], p2[2], p3[2], t), Math.max(lerp(p1[3], p2[3], t), 0.4)]);
+          }
+        }
+        S.push(pts[pts.length - 1].slice());
+        if (o.rise) {
+          for (i = 1; i < S.length; i++) {
+            var hh = Math.hypot(S[i][0] - S[i - 1][0], S[i][2] - S[i - 1][2]);
+            if (S[i][1] < S[i - 1][1] + hh * 1.08) S[i][1] = S[i - 1][1] + hh * 1.08;
+          }
+        }
+        function tip(sample, dirSign, cap) { // round end: extra samples past the end, shrinking
+          var a = sample, r = a[3], d = cap.d, out = [];
+          for (var q = 1; q <= 4; q++) {
+            var ang = (q / 5) * (Math.PI / 2), sc = Math.cos(ang);
+            out.push([a[0] + d[0] * dirSign * r * Math.sin(ang), a[1] + d[1] * dirSign * r * Math.sin(ang), a[2] + d[2] * dirSign * r * Math.sin(ang), Math.max(r * sc, 0.25)]);
+          }
+          return out;
+        }
+        var dEnd = vnorm(vsub(S[S.length - 1], S[S.length - 2])), dStart = vnorm(vsub(S[1], S[0]));
+        var endCaps = o.flatEnd ? [] : tip(S[S.length - 1], 1, { d: dEnd });
+        var startCaps = o.flatStart ? [] : tip(S[0], -1, { d: dStart }).reverse();
+        var all = startCaps.concat(S, endCaps);
+        var floor = o.floor === undefined ? 0 : o.floor;
+        if (o.bed) all = all.map(function (a) { return [a[0], 0.65 * a[3], a[2], a[3]]; });
+        var up = [0, 1, 0], pos = [], idx = [];
+        pos.push(0, 0, 0);
+        var prevU = null;
+        for (i = 0; i < all.length; i++) {
+          var a0 = all[Math.max(i - 1, 0)], a1 = all[Math.min(i + 1, all.length - 1)], dirv = vnorm(vsub(a1, a0));
+          var u = prevU ? vnorm(vsub(prevU, vmul(dirv, vdot(prevU, dirv)))) : vnorm(vcross(Math.abs(dirv[1]) > 0.95 ? [1, 0, 0] : up, dirv));
+          prevU = u;
+          var v = vcross(dirv, u);
+          for (k = 0; k < seg; k++) {
+            var th = (k / seg) * TAU, rr = all[i][3];
+            var x = all[i][0] + (u[0] * Math.cos(th) + v[0] * Math.sin(th)) * rr, y = all[i][1] + (u[1] * Math.cos(th) + v[1] * Math.sin(th)) * rr, z = all[i][2] + (u[2] * Math.cos(th) + v[2] * Math.sin(th)) * rr;
+            if (floor !== null && y < floor) y = floor;
+            pos.push(x, y, z);
+          }
+        }
+        var n = all.length, f = all[0], l = all[n - 1];
+        pos[0] = f[0]; pos[1] = Math.max(f[1], floor === null ? -1e9 : floor); pos[2] = f[2];
+        pos.push(l[0], Math.max(l[1], floor === null ? -1e9 : floor), l[2]);
+        function at(a, b) { return 1 + a * seg + b; }
+        for (k = 0; k < seg; k++) idx.push(0, at(0, (k + 1) % seg), at(0, k));
+        for (i = 0; i < n - 1; i++) for (k = 0; k < seg; k++) {
+          var nk = (k + 1) % seg;
+          idx.push(at(i, k), at(i, nk), at(i + 1, nk), at(i, k), at(i + 1, nk), at(i + 1, k));
+        }
+        var lastV = 1 + n * seg;
+        for (k = 0; k < seg; k++) idx.push(at(n - 1, k), at(n - 1, (k + 1) % seg), lastV);
+        return expandTris(new Float32Array(pos), idx);
+      }
+      // Tapered spike or horn from a point inside the host up to a tip. It is pushed up if it would lean too far.
+      function horn(base, tip, r0, o) {
+        o = o || {};
+        var mid = [lerp(base[0], tip[0], 0.55) + (o.bendX || 0), lerp(base[1], tip[1], 0.55), lerp(base[2], tip[2], 0.55) + (o.bendZ || 0), r0 * 0.68];
+        return sweep([[base[0], base[1], base[2], r0], mid, [tip[0], tip[1], tip[2], Math.max(r0 * 0.16, 0.5)]], { rise: true, seg: o.seg || 14, per: 5, flatStart: o.flatStart });
+      }
+      // Shallow dome stuck on a surface: it meets the surface at 45 degrees, so even on a vertical face its lower edge prints.
+      function dome(p, n, baseR, o) {
+        o = o || {};
+        var ang = deg(o.angle || 45), R = baseR / Math.sin(ang), h = R * (1 - Math.cos(ang)), sink = o.sink === undefined ? Math.max(1.2, baseR * 0.5) : o.sink;
+        var prof = [[0, h]], i;
+        for (i = 1; i <= 6; i++) { var a = (i / 6) * ang; prof.push([R * Math.sin(a), h - R + R * Math.cos(a)]); }
+        prof.push([baseR, -sink], [0, -sink]);
+        return lathe(frame(p, n, [0, 1, 0]), prof, o.seg || 20);
+      }
+      // Thin raised line on a loft (mouth, wing edge, shell scute): [[thDeg, y], ...] on the surface, meeting it at 45 degrees.
+      function ridge(host, marks, w, o) {
+        o = o || {};
+        var R = w / 1.41, sunk = R * 0.71, pts = marks.map(function (m) { var s = host.surf(m[0], m[1]); return vsub(s.p, vmul(s.n, sunk)).concat([R * (m[2] === undefined ? 1 : m[2])]); });
+        return sweep(pts, { seg: o.seg || 10, per: o.per || 4, floor: 0 });
+      }
+      // Flat plate standing in a vertical plane. poly [[s, y], ...]: s runs along the heading dir (a [x, 0, z] vector), y is world height.
+      function vslab(poly, at, dir, t, ch) {
+        var d = vnorm(dir), side = [-d[2], 0, d[0]];
+        return slab(poly, { o: [at[0] - side[0] * t / 2, at[1] || 0, at[2] - side[2] * t / 2], x: d, y: [0, 1, 0], z: side }, t, ch === undefined ? 0.5 : ch);
+      }
+      // Closed block whose top is a height field over a disc or rounded square: top(x, z) is the top height, it starts at y0.
+      function reliefDisc(R, y0, top, nr, nt, shape) {
+        var pos = [], idx = [], i, j;
+        function edge(th) { if (!shape) return R; var c = Math.abs(Math.cos(th)), s = Math.abs(Math.sin(th)); return R / Math.pow(Math.pow(c, shape) + Math.pow(s, shape), 1 / shape); }
+        pos.push(0, y0, 0);
+        for (j = 0; j < nt; j++) { var a = (j / nt) * TAU; pos.push(Math.cos(a) * edge(a), y0, Math.sin(a) * edge(a)); }
+        for (i = nr; i >= 1; i--) for (j = 0; j < nt; j++) {
+          var th = (j / nt) * TAU, rr = (i / nr) * edge(th), x = Math.cos(th) * rr, z = Math.sin(th) * rr;
+          pos.push(x, top(x, z), z);
+        }
+        pos.push(0, top(0, 0), 0);
+        function at(a, b) { return 1 + a * nt + b; }
+        var rows = nr + 1;
+        for (j = 0; j < nt; j++) idx.push(0, at(0, j), at(0, (j + 1) % nt));
+        for (i = 0; i < rows - 1; i++) for (j = 0; j < nt; j++) {
+          var nj = (j + 1) % nt;
+          idx.push(at(i, j), at(i + 1, j), at(i + 1, nj), at(i, j), at(i + 1, nj), at(i, nj));
+        }
+        var last = 1 + rows * nt;
+        for (j = 0; j < nt; j++) idx.push(at(rows - 1, j), last, at(rows - 1, (j + 1) % nt));
+        return expandTris(new Float32Array(pos), idx);
+      }
+      function eyePair(sc, host, th, y, r, o) { // white eyes with dark pupils, on both sides of the +x face
+        o = o || {};
+        [-1, 1].forEach(function (sd) {
+          var s = host.surf(sd * th, y);
+          sc.add('eyes', 'b', dome(s.p, s.n, r, { angle: 50 }), o.white || '#f8fafc');
+          var R = r / Math.sin(deg(50)), h = R * (1 - Math.cos(deg(50))), ahead = vadd(s.p, vmul(s.n, h * 0.8));
+          sc.add('pupils', 'b', dome(vadd(ahead, vmul(s.n, -0.2)), s.n, r * (o.pupil || 0.55), { sink: 0.8 }), o.dark || '#1e293b');
+        });
+      }
+
       // -----------------------------------------------------------------------
       // Dog Builder: a sitting dog with adjustable snout, ears, tail and size
       // -----------------------------------------------------------------------

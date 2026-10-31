@@ -12,7 +12,7 @@
         for (k = 1; k <= n; k++) P.push(p.pitch * lerp(1, 0.85, k / n));
         var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 1.6, bend: p.__bend,
           hAxis: function (j) { return 0.85 * rj[j]; } });
-        var hs = p.headSize, hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], 17 * hs, 1.25 * rj[0] * hs, 0.7 * rj[0] * hs, 0.72, 0);
+        var hs = p.headSize, hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], 17 * hs, 1.25 * rj[0] * hs, 0.7 * rj[0] * hs, 1, 0);
         sc.add('head', 'head', hd.shell, '#86efac');
         sc.add('head', 'head', ch.rootBall, '#86efac');
         [-1, 1].forEach(function (sd) {

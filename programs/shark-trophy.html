@@ -812,7 +812,7 @@
       function horn(base, tip, r0, o) {
         o = o || {};
         var mid = [lerp(base[0], tip[0], 0.55) + (o.bendX || 0), lerp(base[1], tip[1], 0.55), lerp(base[2], tip[2], 0.55) + (o.bendZ || 0), r0 * 0.68];
-        return sweep([[base[0], base[1], base[2], r0], mid, [tip[0], tip[1], tip[2], Math.max(r0 * 0.16, 0.5)]], { rise: true, seg: o.seg || 14, per: 5 });
+        return sweep([[base[0], base[1], base[2], r0], mid, [tip[0], tip[1], tip[2], Math.max(r0 * 0.16, 0.5)]], { rise: true, seg: o.seg || 14, per: 5, flatStart: o.flatStart });
       }
       // Shallow dome stuck on a surface: it meets the surface at 45 degrees, so even on a vertical face its lower edge prints.
       function dome(p, n, baseR, o) {

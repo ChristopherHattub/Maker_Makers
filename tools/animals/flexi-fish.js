@@ -17,7 +17,7 @@
         for (k = 1; k <= n; k++) P.push(p.pitch * lerp(1, 0.85, k / n));
         var ch = chain({ J0: [0, Y0, 0], dir: [1, 0, 0], P: P, rj: rj, yaw: wiggle(n, p.wiggle, p.waves), g: g, bulge: p.bead, tip: rj[n] * 1.2, bend: p.__bend,
           hAxis: function (j) { return 0.85 * rj[j]; } });
-        var hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], p.headLen, rj[0] * 1.05, 0.5 * rj[0], 0.95, 0);
+        var hd = headShell([0, Y0, 0], [1, 0, 0], jd0, rj[0], p.headLen, rj[0] * 1.05, 0.5 * rj[0], 1.25, 0);
         sc.add('head', 'head', hd.shell, '#fdba74');
         sc.add('head', 'head', ch.rootBall, '#fdba74');
         [-1, 1].forEach(function (sd) {
@@ -40,8 +40,8 @@
         }
         var ls = ch.segs[n - 1], F2 = p.tailFin;
         if (F2 > 0) {
-          var low = Math.min(F2 * 0.62, ls.fr.o[1] - 0.6), s0 = ls.sF - 3.2;
-          var poly = [[0, -low * 0.3], [F2 * 0.45, -low * 0.8], [F2 * 0.95, -low], [F2 * 0.78, -low * 0.3], [F2 * 0.85, F2 * 0.3], [F2 * 0.95, F2 * 0.75], [F2 * 0.45, F2 * 0.55], [0, F2 * 0.3]];
+          var low = ls.fr.o[1], s0 = ls.sF - 3.2;
+          var poly = [[0, -low], [F2 * 0.95, -low], [F2 * 0.78, -low * 0.3], [F2 * 0.85, F2 * 0.3], [F2 * 0.95, F2 * 0.75], [F2 * 0.45, F2 * 0.55], [0, F2 * 0.3]];
           var o = vadd(ls.fr.o, vmul(ls.fr.a, s0)), a = vnorm([ls.fr.a[0], 0, ls.fr.a[2]]), sid = vnorm([ls.fr.u[0], 0, ls.fr.u[2]]);
           sc.add('fins', 'seg' + n, slab(poly, { o: [o[0] - sid[0] * 1.2, ls.fr.o[1], o[2] - sid[2] * 1.2], x: a, y: [0, 1, 0], z: sid }, 2.4, 0.6), '#fb923c');
         }

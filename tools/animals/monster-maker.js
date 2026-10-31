@@ -6,15 +6,16 @@
         var sc = new Scene(), kind = Math.round(p.kind), W = p.width, H = p.height, n = Math.round(p.eyes), er = p.eyeSize, i;
         var skin = ['#86efac', '#d8b4fe', '#fdba74', '#93c5fd'][kind], dark = ['#4ade80', '#a78bfa', '#fb923c', '#60a5fa'][kind];
         var taper = [0.86, 1, 1, 1][kind], R = W * taper;
-        var body = pod([0, H * 0.52, 0], R, H * 0.52, R * 0.88, { flare: 0.75, mod: kind === 2 ? function (th, t) { return 1 + 0.035 * Math.sin(deg(th) * 11 + t * 14); } : null, seg: 72, rings: 40 });
+        var body = pod([0, H * 0.52, 0], R, H * 0.52, R * 0.88, { flare: 0.75, mod: kind === 2 ? function (th, t) { return 1 + 0.018 * Math.sin(deg(th) * 11 + t * 14); } : null, seg: 72, rings: 40 });
         sc.add('body', 'b', body.tris, skin);
         // eyes in an arc across the face
         var eyeY = H * 0.68, spread = n > 1 ? Math.min(34, 12 + n * 7) : 0;
         for (i = 0; i < n; i++) {
-          var th = n > 1 ? lerp(-spread, spread, i / (n - 1)) : 0, y = eyeY + (n > 2 ? H * 0.09 * (1 - Math.abs(th) / (spread || 1)) : 0), r = (n === 1 ? 1.6 : 1) * er;
+          var th = n > 1 ? lerp(-spread, spread, i / (n - 1)) : 0, y = n === 1 ? H * 0.58 : eyeY + (n > 2 ? H * 0.09 * (1 - Math.abs(th) / (spread || 1)) : 0), r = (n === 1 ? 1.5 : 1) * er;
           var s = body.surf(th, y);
-          sc.add('eyes', 'b', dome(s.p, s.n, r, { angle: 50 }), '#f8fafc');
-          var h = (r / Math.sin(deg(50))) * (1 - Math.cos(deg(50)));
+          var ea = r > 8 ? 36 : 50;
+          sc.add('eyes', 'b', dome(s.p, s.n, r, { angle: ea }), '#f8fafc');
+          var h = (r / Math.sin(deg(ea))) * (1 - Math.cos(deg(ea)));
           sc.add('pupils', 'b', dome(vadd(s.p, vmul(s.n, h * 0.65)), s.n, r * 0.5, { sink: 0.8 }), '#1e293b');
         }
         // mouth with fangs that point up from the lower lip
