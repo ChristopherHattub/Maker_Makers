@@ -764,6 +764,15 @@ const GENERATORS = [
     description: 'Design an engagement ring display prop in a jewellery-style studio: six real cuts with a carat slider, prong, bezel, halo and three stone settings, plain, tapered or split shank bands, US ring sizes, metal looks and an engraving inside the band. Prints as two glue-together halves plus the stone, with no supports on the default settings. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 103,
+    title: 'Pin Maker',
+    bundle: 'jewelry',
+    category: 'WEARABLE // BADGES',
+    thumbnailUrl: 'assets/thumbnails/pin-maker.svg',
+    programUrl: 'programs/pin-maker.html',
+    description: 'Turn a picture into a wearable badge pin. Choose a logo, drawing or photo (or a heart, star, shield, circle, tile or hexagon) and it is traced into the pin outline in your browser, with nothing uploaded. Set the size, plate thickness, border and raised rim, add a hanging hole, and use the Stamps tab for text and shapes that sit on the face. Flat back for gluing on a pin-back. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',

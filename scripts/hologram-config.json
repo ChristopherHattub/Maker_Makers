@@ -464,5 +464,11 @@
     "hue": 285,
     "sat": 55,
     "light": 82
+  },
+  "pin-maker": {
+    "hue": 320,
+    "sat": 70,
+    "light": 80,
+    "stand": true
   }
 }

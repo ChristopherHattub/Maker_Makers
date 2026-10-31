@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-103 Pin Maker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Pin Maker: a picture becomes a flat badge. The picture is read and traced in the browser (nothing is uploaded),
+    // its outline is extruded into a plate with an optional raised rim, and the Stamps tab adds text and shapes.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      var TAU = Math.PI * 2;
+      var THREE_ = null;
+      var GRID = 256;       // working size of the built-in outline shapes
+      var MAX_PX_PER_MM = 7; // finest tracing resolution; a small pin does not need more
+      var PICK_PX = 200;    // longest side of a picture after it is shrunk for tracing
+      var EDGE = 0.4;       // mm chamfer on the plate edges (and on top of the rim)
+      var SINK = 0.5;       // mm a stamp sinks into the plate so it is fused to it
+
+      var img = null, imgVersion = 0; // the visitor's picture: { w, h, r, g, b, a } (never leaves the browser)
+      var stamps = [];     // { type, text, size, rotation (degrees), raise, x, y } in plate coordinates (y up)
+      var stampType = 'text', stampText = 'HELLO', refreshUI = null, setImageStatus = null;
+      var lastPin = null, cache = { key: '', val: null }, rasterCache = {};
+
+      // One open-licence font (Archivo Black, SIL OFL 1.1) taken from the Text Generator, see docs/text-generator.md.
+      var STAMP_FONT = {"cap":172,"g":{"0":[167,"m157,86q0,-43,-17,-66q-16,-23,-56,-23q-41,0,-57,23q-17,23,-17,66q0,43,17,66q16,23,57,23q40,0,56,-23q17,-23,17,-66zm60,99l0,-25q0,-23,5,-33q6,-10,19,-10q13,0,18,10q5,10,5,33l0,25q0,23,-5,32q-5,10,-18,10q-13,0,-19,-10q-5,-10,-5,-32z"],"1":[167,"m156,39l0,-39l-130,0l0,39l41,0l0,77l-41,0l0,29q17,1,38,9q21,8,36,18l17,0l0,-133z"],"2":[167,"m153,123q0,-14,-7,-26q-8,-12,-19,-21q-11,-9,-30,-22q-11,-7,-17,-12l75,0l0,-42l-143,0l0,12q0,13,6,24q7,10,18,21q12,10,35,28q18,14,25,22q7,7,7,15q0,7,-5,13q-5,5,-16,5q-11,0,-18,-7q-6,-6,-6,-17l0,-5l-45,0q0,2,0,6q0,27,19,42q19,16,55,16q20,0,35,-6q15,-7,23,-18q8,-12,8,-28z"],"3":[167,"m151,128q0,-13,-7,-23q-7,-10,-18,-15l0,-1q15,-4,22,-15q8,-11,8,-27q-1,-22,-19,-36q-18,-14,-53,-14q-24,0,-41,7q-16,6,-24,17q-8,12,-8,26l0,5l44,0q0,-21,26,-21q26,0,26,23q0,9,-5,14q-5,4,-13,4l-18,0l0,31l14,0q8,0,13,5q5,4,5,13q0,8,-6,14q-6,6,-16,6q-11,0,-17,-6q-6,-5,-6,-13l-42,0l0,6q0,13,8,24q8,11,24,17q16,6,37,6q20,0,35,-6q16,-6,23,-17q8,-11,8,-24z"],"4":[167,"m40,72l50,0l0,36q7,11,15,26q8,15,11,25l21,0l0,-87l24,0l0,-37l-24,0l0,-35l-47,0l0,35l-84,0l0,38q13,19,27,47q13,28,21,55l49,0q-2,-13,-12,-32q-10,-20,-25,-39q-14,-19,-26,-32z"],"5":[167,"m62,130l-2,-26q0,0,5,3q5,3,13,5q8,3,19,3q27,0,43,-16q16,-15,16,-43q0,-16,-8,-30q-9,-13,-25,-21q-16,-8,-37,-8q-37,0,-57,16q-19,16,-19,43l44,0q0,-11,7,-18q7,-6,20,-6q12,0,19,7q7,7,7,18q0,12,-7,19q-7,7,-19,7q-10,0,-15,-3q-4,-3,-7,-6q-2,-3,-2,-4l-40,6l8,96l119,0l0,-42z"],"6":[167,"m154,117l-45,0l0,2q0,10,-6,16q-6,6,-17,6q-12,0,-19,-8q-6,-8,-6,-22l0,-14q7,6,17,10q10,3,19,3q17,0,31,-6q14,-6,22,-18q8,-12,8,-29q0,-28,-20,-44q-19,-16,-53,-16q-38,0,-56,21q-19,20,-19,64q0,49,18,71q19,22,57,22q31,0,50,-15q19,-15,19,-43zm61,55q0,-11,6,-18q6,-6,18,-6q12,0,18,6q7,6,7,18q0,12,-7,18q-6,7,-18,7q-12,0,-18,-7q-6,-6,-6,-18z"],"7":[167,"m95,15l0,-15l-55,0q0,34,14,67q15,33,40,62l-83,0l0,43l145,0l0,-23q-28,-35,-45,-67q-16,-32,-16,-67z"],"8":[167,"m150,124q0,-13,-5,-21q-5,-7,-16,-15l0,-1q14,-8,21,-17q7,-8,7,-23q0,-24,-20,-37q-20,-13,-54,-13q-34,0,-53,13q-20,13,-20,37q0,15,7,23q7,9,21,17l0,1q-11,8,-16,15q-5,8,-5,21q0,16,8,28q9,11,24,17q15,6,34,6q19,0,34,-6q15,-6,24,-17q9,-12,9,-28zm60,122q0,-9,6,-14q7,-4,17,-4q10,0,17,4q7,5,7,14q0,10,-7,15q-6,4,-17,4q-11,0,-17,-4q-6,-5,-6,-15zm60,51q0,-9,6,-15q7,-5,17,-5q11,0,17,5q7,6,7,15q0,10,-7,15q-7,6,-17,6q-10,0,-16,-6q-7,-5,-7,-15z"],"9":[167,"m157,90q0,-49,-19,-71q-18,-22,-56,-22q-31,0,-50,15q-19,15,-19,43l45,0l0,-2q0,-9,6,-16q6,-6,17,-6q12,0,19,8q6,8,6,22l0,14q-7,-6,-17,-9q-10,-4,-19,-4q-17,0,-31,6q-14,7,-22,18q-8,12,-8,29q0,29,20,44q19,16,53,16q38,0,56,-21q19,-20,19,-64zm57,117q0,-12,7,-18q6,-7,18,-7q12,0,18,6q6,7,6,18q0,12,-6,19q-6,6,-18,6q-12,0,-18,-6q-7,-6,-7,-18z"]," ":[83,""],"!":[83,"m26,62l-14,110l60,0l-15,-110zm17,0l0,46l49,0l0,-46z"],"\"":[125,"m44,100l-17,0l-12,35l0,37l41,0l0,-37zm98,100l-17,0l-11,35l0,37l40,0l0,-37z"],"#":[165,"m160,126l0,-28l-28,0l-7,-31l27,0l0,-27l-34,0l-9,-43l-29,0l9,43l-29,0l-9,-43l-30,0l9,43l-25,0l0,27l32,0l7,31l-27,0l0,28l32,0l11,49l31,0l-12,-49l28,0l11,49l30,0l-11,-49zm66,67l29,0l7,31l-29,0z"],"$":[167,"m150,113l-46,0q0,7,-6,10q-5,3,-12,3q-18,0,-18,-9q0,-5,7,-7q6,-2,20,-4q18,-2,29,-6q12,-3,21,-12q9,-8,9,-24q0,-23,-16,-34q-15,-11,-41,-12l2,-35l-28,0l2,35q-24,2,-40,14q-16,11,-16,31l47,0l0,-1q0,-8,7,-12q7,-3,14,-3q21,0,21,10q0,5,-6,7q-7,2,-22,5q-17,3,-29,6q-11,4,-20,12q-8,9,-8,24q0,21,14,31q14,11,38,13l-2,34l28,0l-2,-34q23,-2,38,-12q15,-11,15,-30z"],"%":[250,"m103,130q0,-21,-11,-33q-11,-11,-34,-11q-24,0,-35,11q-11,12,-11,33q0,21,11,33q11,12,35,12q23,0,34,-12q11,-12,11,-33zm58,0l105,172l27,0l-104,-172zm43,134l0,-8q0,-10,3,-16q4,-5,12,-5q14,0,14,21l0,8q0,22,-14,22q-8,0,-12,-6q-3,-6,-3,-16zm236,42q0,-21,-11,-33q-11,-12,-34,-12q-24,0,-35,12q-11,12,-11,33q0,21,11,33q11,12,35,12q23,0,34,-12q11,-12,11,-33zm176,46l0,-8q0,-10,3,-16q4,-6,12,-6q14,0,14,22l0,8q0,22,-14,22q-8,0,-12,-6q-3,-6,-3,-16z"],"&":[222,"m187,128l0,-6l-44,0q0,8,-9,13q-9,5,-26,5q-16,0,-25,-6q-8,-6,-8,-15q0,-8,5,-12q5,-4,13,-4l26,0l0,-31l-32,0q-8,0,-13,-4q-4,-5,-4,-14q0,-10,8,-16q9,-6,28,-6q37,0,37,23l0,48l79,0l0,-31l-34,0l0,-16q0,-28,-20,-44q-20,-15,-62,-15q-44,0,-65,14q-22,14,-22,37q0,15,8,26q8,11,22,15l0,1q-11,4,-18,14q-7,10,-7,22q0,13,9,25q9,11,27,17q19,7,44,7q26,0,45,-6q18,-6,28,-17q10,-11,10,-24z"],"'":[70,"m43,100l-17,0l-12,35l0,37l41,0l0,-37z"],"(":[97,"m56,72q0,-27,9,-58q9,-31,24,-54l-30,0q-22,23,-33,52q-12,30,-12,60q0,31,12,60q11,29,33,52l30,0q-15,-23,-24,-54q-9,-31,-9,-58z"],")":[97,"m84,72q0,-30,-12,-60q-12,-29,-33,-52l-30,0q14,23,24,54q9,31,9,58q0,27,-9,58q-10,31,-24,54l30,0q21,-23,33,-52q12,-29,12,-60z"],"*":[139,"m103,159l12,-20l-28,-13l28,-12l-12,-21l-25,18l3,-30l-23,0l3,30l-25,-18l-12,21l28,12l-28,13l12,20l25,-17l-3,30l23,0l-3,-30z"],"+":[165,"m149,83l0,-33l-50,0l0,-50l-33,0l0,50l-49,0l0,33l49,0l0,49l33,0l0,-49z"],",":[83,"m42,-46l-27,0l21,46l-21,0l0,50l53,0l0,-47z"],"-":[83,"m10,49l0,40l64,0l0,-40z"],".":[83,"m15,0l0,50l53,0l0,-50z"],"/":[70,"m0,-12l40,196l30,0l-40,-196z"],":":[83,"m15,82l0,50l53,0l0,-50zm15,0l0,50l53,0l0,-50z"],";":[83,"m15,82l0,50l53,0l0,-50zm42,-46l-27,0l21,46l-21,0l0,50l53,0l0,-47z"],"<":[165,"m58,65l90,-33l0,-35l-131,50l0,36l131,51l0,-36z"],"=":[165,"m17,78l0,33l132,0l0,-33zm17,21l0,33l132,0l0,-33z"],">":[165,"m148,47l-131,-50l0,35l90,33l-90,33l0,36l131,-51z"],"?":[153,"m142,124q0,-10,-5,-17q-4,-8,-10,-13q-5,-5,-14,-12q-7,-5,-11,-8q-3,-4,-3,-7l0,-5l-43,0l0,12q0,6,4,11q4,5,12,12q8,8,12,13q5,6,5,13q0,7,-5,12q-4,6,-12,6q-16,0,-16,-21q0,-5,0,-7l-46,0q0,2,0,4q-1,2,-1,5q0,16,9,28q9,12,24,19q16,6,36,6q19,0,33,-6q15,-6,23,-18q8,-12,8,-27zm53,0l0,46l50,0l0,-46z"],"@":[185,"m180,81q0,-25,-6,-40q-7,-15,-17,-22q-9,-6,-20,-6q-20,0,-28,13q-6,-6,-14,-10q-8,-3,-19,-3q-36,0,-36,28q0,15,8,23q7,8,21,10q14,3,36,3l0,5q0,6,-3,9q-4,4,-9,4q-5,0,-9,-3q-3,-2,-3,-7l-38,0q0,1,0,2q0,15,13,23q13,9,38,9q22,0,35,-8q14,-8,14,-25l0,-40q0,-7,8,-7q4,0,8,8q4,9,4,34q0,40,-18,60q-18,19,-50,19q-36,0,-54,-24q-19,-23,-19,-70q0,-44,16,-66q16,-22,50,-22q8,0,19,2q11,3,17,6l0,-16q-7,-3,-18,-5q-11,-2,-18,-2q-40,0,-61,25q-22,26,-22,79q0,56,25,82q24,26,65,26q39,0,62,-23q23,-23,23,-71zm78,46q0,-10,11,-10q6,0,11,4q5,5,5,11l0,8q-14,0,-20,-3q-7,-4,-7,-10z"],"A":[195,"m134,0l-7,24l-61,0l-7,-24l-56,0l62,172l65,0l62,-172zm78,63l37,0l-18,61l-1,0z"],"B":[195,"m181,130q0,-32,-29,-40l0,-1q33,-8,33,-43q0,-14,-7,-24q-7,-10,-18,-16q-12,-6,-25,-6l-116,0l0,172l114,0q13,0,24,-5q11,-6,17,-15q7,-10,7,-22zm74,105l38,0q5,0,9,4q4,4,4,10l0,2q0,6,-4,9q-4,4,-9,4l-38,0zm74,40l42,0q5,0,9,4q4,4,4,10l0,2q0,6,-4,10q-4,4,-9,4l-42,0z"],"C":[195,"m183,101l-52,0q0,15,-8,24q-8,9,-23,9q-16,0,-24,-11q-8,-10,-8,-29l0,-16q0,-18,8,-29q8,-11,24,-11q16,0,24,9q8,8,8,23l51,0q0,-35,-21,-54q-22,-19,-61,-19q-44,0,-67,23q-23,22,-23,66q0,44,23,67q23,22,67,22q38,0,60,-19q22,-19,22,-55z"],"D":[195,"m183,86q0,-86,-90,-86l-74,0l0,172l74,0q90,0,90,-86zm74,41l18,0q35,0,35,38l0,15q0,37,-35,37l-18,0z"],"E":[181,"m19,172l148,0l0,-41l-93,0l0,-24l80,0l0,-39l-80,0l0,-27l95,0l0,-41l-150,0z"],"F":[167,"m19,172l139,0l0,-41l-84,0l0,-30l72,0l0,-39l-72,0l0,-62l-55,0z"],"G":[208,"m193,110l-53,0q0,11,-10,17q-9,7,-23,7q-19,0,-29,-11q-10,-10,-10,-29l0,-16q0,-19,10,-29q10,-11,29,-11q14,0,23,7q10,6,10,16l-39,0l0,35l92,0l0,-96l-29,0l-5,17q-24,-20,-62,-20q-43,0,-64,22q-22,23,-22,67q0,44,25,66q24,23,69,23q25,0,45,-7q19,-8,31,-23q12,-14,12,-35z"],"H":[208,"m135,0l0,65l-61,0l0,-65l-55,0l0,172l55,0l0,-63l61,0l0,63l55,0l0,-172z"],"I":[97,"m21,0l0,172l55,0l0,-172z"],"J":[167,"m77,-3q-34,0,-53,15q-18,16,-18,48l0,2l52,0l0,-2q0,-12,4,-17q4,-5,13,-5q9,0,14,5q4,5,4,17l0,112l55,0l0,-112q0,-32,-18,-48q-18,-15,-53,-15z"],"K":[208,"m135,172l69,0l-62,-71l63,-101l-65,0l-36,63l-30,-24l0,-39l-55,0l0,172l55,0l0,-73z"],"L":[167,"m19,172l55,0l0,-128l88,0l0,-44l-143,0z"],"M":[236,"m166,0l0,62q0,12,1,24q1,12,2,20q1,8,1,11l-1,0l-31,-117l-44,0l-32,116l-1,0q1,-2,2,-10q1,-8,2,-20q1,-12,1,-24l0,-62l-51,0l0,172l78,0l26,-99l1,0l26,99l75,0l0,-172z"],"N":[208,"m142,0l-73,84l0,-84l-50,0l0,172l48,0l72,-85l0,85l51,0l0,-172z"],"O":[208,"m197,86q0,-43,-24,-66q-24,-23,-69,-23q-44,0,-69,23q-24,22,-24,66q0,44,24,66q25,23,69,23q45,0,69,-23q24,-22,24,-66zm68,94l0,-16q0,-18,9,-29q9,-11,27,-11q18,0,27,11q10,11,10,29l0,16q0,18,-10,29q-9,11,-27,11q-18,0,-27,-11q-9,-11,-9,-29z"],"P":[181,"m170,116l0,-4q0,-16,-7,-29q-7,-13,-19,-20q-13,-7,-29,-7l-41,0l0,-56l-55,0l0,172l96,0q16,0,29,-7q12,-8,19,-21q7,-12,7,-28zm74,96l23,0q8,0,13,4q4,5,4,13l0,2q0,8,-4,12q-5,4,-13,4l-23,0z"],"Q":[208,"m104,175q45,0,69,-23q24,-22,24,-66q0,-29,-11,-49q-11,-20,-31,-30l39,-40l-66,0l-26,30q-44,1,-67,23q-24,23,-24,66q0,44,24,66q25,23,69,23zm104,134q-18,0,-27,-11q-9,-11,-9,-29l0,-16q0,-18,9,-29q9,-11,27,-11q18,0,27,11q10,11,10,29l0,16q0,18,-10,29q-9,11,-27,11z"],"R":[195,"m149,72l38,-72l-62,0l-31,63l-20,0l0,-63l-55,0l0,172l105,0q18,0,31,-7q14,-7,20,-19q7,-12,7,-27q0,-15,-9,-28q-8,-13,-24,-19zm110,133l-36,0l0,-32l36,0q7,0,11,5q5,4,5,11q0,7,-5,11q-4,5,-11,5z"],"S":[181,"m167,122l0,-3l-52,0l0,1q0,8,-5,13q-6,5,-17,5q-11,0,-17,-4q-6,-3,-6,-8q0,-6,8,-10q8,-3,26,-6q21,-5,34,-9q13,-5,23,-15q10,-11,11,-29q0,-30,-21,-45q-21,-15,-55,-15q-40,0,-63,14q-22,13,-22,47l52,0q0,-13,7,-17q7,-4,21,-4q10,0,17,2q7,2,7,9q0,6,-8,9q-7,4,-24,7q-21,5,-35,9q-14,5,-24,17q-10,11,-10,30q0,28,21,42q22,13,56,13q33,0,54,-13q21,-14,22,-40z"],"T":[181,"m118,128l0,-128l-56,0l0,128l-56,0l0,44l168,0l0,-44z"],"U":[208,"m104,-3q-41,0,-63,19q-22,18,-22,53l0,103l55,0l0,-102q0,-14,8,-23q7,-9,22,-9q15,0,23,9q8,9,8,23l0,102l55,0l0,-103q0,-35,-22,-53q-23,-19,-64,-19z"],"V":[195,"m65,0l-61,172l59,0l35,-115l1,0l35,115l56,0l-61,-172z"],"W":[250,"m148,0l-22,105l-1,0l-23,-105l-60,0l-41,172l58,0l20,-97l1,0l19,97l55,0l20,-97l1,0l19,97l55,0l-40,-172z"],"X":[195,"m195,0l-67,0l-32,54l-1,0l-32,-54l-62,0l62,91l-56,81l67,0l26,-44l1,0l26,44l62,0l-56,-81z"],"Y":[195,"m125,0l-55,0l0,67l-68,105l63,0l33,-57l1,0l33,57l61,0l-68,-105z"],"Z":[181,"m91,41l82,0l0,-41l-167,0l0,18l80,113l-74,0l0,41l159,0l0,-18z"],"[":[97,"m56,159l0,-173l29,0l0,-26l-68,0l0,224l68,0l0,-25z"],"\\":[70,"m39,-12l-39,196l30,0l40,-196z"],"]":[97,"m17,-40l0,26l28,0l0,173l-28,0l0,25l68,0l0,-224z"],"^":[165,"m116,84l-33,53l-33,-53l-36,0l51,88l35,0l51,-88z"],"_":[125,"m0,-31l0,15l125,0l0,-15z"],"`":[83,"m46,148l-40,32l0,1l49,0l23,-33z"],"a":[167,"m149,92l0,-51q0,-5,2,-7q2,-3,6,-3l9,0l0,-29q-1,0,-4,-2q-3,-1,-9,-2q-6,-1,-13,-1q-15,0,-24,4q-10,5,-13,13q-10,-8,-21,-12q-12,-5,-28,-5q-46,0,-46,37q0,19,10,29q10,11,30,14q19,4,51,4l0,7q0,7,-6,11q-5,4,-13,4q-8,0,-14,-2q-5,-3,-5,-9l0,-1l-49,0q-1,1,-1,3q0,19,18,30q18,11,51,11q31,0,50,-10q19,-10,19,-33zm57,41q0,-13,17,-13q10,0,17,5q8,6,8,13l0,12q-21,0,-32,-5q-10,-5,-10,-12z"],"b":[167,"m102,135q27,0,41,-17q15,-18,15,-52q0,-34,-15,-51q-14,-18,-41,-18q-27,0,-42,22l-4,-19l-41,0l0,181l50,0l0,-61q14,15,37,15zm65,70l0,-8q0,-13,5,-20q6,-8,17,-8q21,0,21,25l0,14q0,25,-21,25q-11,0,-17,-8q-5,-7,-5,-20z"],"c":[167,"m156,79l-48,0q0,22,-25,22q-24,0,-24,-28l0,-14q0,-28,25,-28q26,0,26,23l46,0q0,-29,-20,-43q-20,-14,-53,-14q-34,0,-54,18q-20,17,-20,51q0,34,20,52q20,17,54,17q33,0,53,-14q20,-14,20,-42z"],"d":[167,"m111,0l-4,19q-15,-22,-42,-22q-27,0,-41,18q-15,17,-15,51q0,34,15,52q14,17,41,17q23,0,37,-15l0,61l50,0l0,-181zm59,73l0,-14q0,-25,21,-25q11,0,17,8q5,7,5,20l0,8q0,13,-5,20q-6,8,-17,8q-21,0,-21,-25z"],"e":[167,"m158,66l0,-8l-99,0q0,-15,6,-22q7,-7,20,-7q13,0,19,5q6,5,6,14l48,0q0,-24,-18,-37q-19,-14,-54,-14q-36,0,-57,17q-20,17,-20,52q0,34,20,52q20,17,54,17q37,0,56,-17q19,-17,19,-52zm59,81l49,0q0,10,-6,16q-6,6,-17,6q-23,0,-26,-22z"],"f":[97,"m96,180l0,-29l-12,0q-8,0,-11,-3q-3,-3,-3,-11l0,-5l26,0l0,-34l-26,0l0,-98l-49,0l0,98l-19,0l0,34l19,0l0,6q0,25,12,36q13,10,36,10q5,0,14,-1q8,-1,13,-3z"],"g":[167,"m133,121q7,-5,11,-13q5,-7,5,-15q0,-21,-16,-32q-16,-11,-40,-11l-19,0q-16,0,-16,-7q0,-4,4,-6q3,-2,12,-2l45,0q22,0,33,-11q12,-12,12,-31q0,-14,-8,-25q-7,-10,-20,-15q-13,-5,-28,-5l-73,0q-9,0,-17,4q-8,4,-12,11q-5,8,-5,17q0,10,6,17q6,8,15,12q-6,5,-9,11q-4,6,-4,13q0,9,8,17q7,8,18,11q-10,6,-16,14q-6,8,-6,17q0,23,19,33q19,10,49,10q14,0,22,-1q12,7,16,14q4,6,4,9l41,0q0,-15,-8,-24q-8,-8,-23,-12zm62,93q0,-9,5,-13q5,-4,14,-4q9,0,14,4q5,4,5,13q0,8,-5,12q-5,4,-14,4q-8,0,-14,-4q-5,-4,-5,-12zm49,-12q0,-6,3,-9q4,-4,10,-4l39,0q5,0,9,4q4,3,4,9q0,6,-4,9q-4,3,-9,3l-39,0q-6,0,-10,-3q-3,-3,-3,-9z"],"h":[167,"m106,135q23,0,35,-13q11,-12,11,-36l0,-86l-50,0l0,80q0,8,-4,13q-4,5,-12,5q-10,0,-15,-6q-6,-6,-6,-14l0,-78l-50,0l0,181l50,0l0,-63q8,8,19,13q10,4,22,4z"],"i":[83,"m17,148l0,33l50,0l0,-33zm17,0l0,132l50,0l0,-132z"],"j":[83,"m17,148l0,33l50,0l0,-33zm21,-52q-7,0,-16,1q-10,1,-15,3l0,30l13,0q14,0,14,16l0,134l50,0l0,-139q0,-24,-11,-35q-11,-10,-35,-10z"],"k":[167,"m107,132l58,0l-49,-53l50,-79l-56,0l-28,45l-17,-16l0,-29l-50,0l0,182l50,0l0,-100z"],"l":[83,"m17,0l0,181l50,0l0,-181z"],"m":[250,"m235,86l0,-86l-49,0l0,80q0,8,-5,13q-4,5,-11,5q-9,0,-14,-6q-6,-6,-6,-14l0,-78l-50,0l0,80q0,8,-4,13q-4,5,-11,5q-9,0,-15,-6q-5,-6,-5,-14l0,-78l-50,0l0,132l41,0l3,-20q8,11,20,17q12,6,26,6q30,0,40,-23q8,11,20,17q12,6,25,6q23,0,34,-13q11,-13,11,-36z"],"n":[167,"m152,86l0,-86l-50,0l0,80q0,8,-4,13q-4,5,-12,5q-10,0,-15,-6q-6,-6,-6,-14l0,-78l-50,0l0,132l41,0l3,-20q8,11,20,17q13,6,27,6q23,0,35,-13q11,-12,11,-36z"],"o":[167,"m158,66q0,-34,-20,-51q-20,-18,-55,-18q-34,0,-54,18q-20,17,-20,51q0,34,20,52q20,17,54,17q35,0,55,-18q20,-17,20,-51zm59,73l0,-14q0,-28,24,-28q25,0,25,28l0,14q0,28,-25,28q-24,0,-24,-28z"],"p":[167,"m158,66q0,-34,-15,-52q-14,-17,-41,-17q-23,0,-37,15l0,-61l-50,0l0,181l41,0l4,-19q15,22,42,22q27,0,41,-17q15,-18,15,-52zm65,70l0,-8q0,-12,5,-20q6,-8,17,-8q21,0,21,26l0,13q0,25,-21,25q-11,0,-17,-7q-5,-8,-5,-21z"],"q":[167,"m107,113l4,19l41,0l0,-181l-50,0l0,61q-14,-15,-37,-15q-27,0,-41,17q-15,18,-15,52q0,34,15,52q14,17,41,17q27,0,42,-22zm59,73l0,-13q0,-26,21,-26q11,0,17,8q5,8,5,20l0,8q0,13,-5,21q-6,7,-17,7q-21,0,-21,-25z"],"r":[111,"m110,132l0,-41l-16,0q-15,0,-22,-8q-7,-8,-7,-24l0,-59l-50,0l0,132l41,0l3,-20q5,12,14,17q10,6,22,6q6,0,11,-1q4,-1,4,-2z"],"s":[153,"m141,93l-46,0q0,7,-7,10q-4,2,-11,2q-18,0,-18,-8q0,-5,6,-7q7,-2,21,-4q17,-3,29,-6q12,-3,21,-12q8,-9,8,-24q0,-25,-19,-36q-18,-11,-49,-11q-17,0,-33,5q-15,5,-25,15q-10,10,-10,26l46,0l0,-1q1,-8,7,-12q7,-3,15,-3q21,0,21,10q0,5,-7,7q-6,2,-21,5q-18,3,-29,6q-11,4,-20,12q-8,8,-8,23q0,25,18,35q18,10,48,10q26,0,45,-10q18,-11,18,-32z"],"t":[111,"m103,132l0,-34l-28,0l0,-50q0,-9,3,-13q3,-4,11,-4l14,0l0,-29q-6,-2,-15,-4q-10,-1,-17,-1q-22,0,-34,8q-12,8,-12,27l0,66l-18,0l0,34l20,0l11,40l37,0l0,-40z"],"u":[167,"m111,0l-3,20q-8,-11,-21,-17q-12,-6,-26,-6q-23,0,-35,13q-11,13,-11,37l0,85l49,0l0,-79q0,-9,5,-14q4,-5,12,-5q9,0,15,6q6,6,6,15l0,77l50,0l0,-132z"],"v":[153,"m50,0l-50,132l54,0l24,-82l2,0l24,82l49,0l-51,-132z"],"w":[236,"m139,0l-20,74l-1,0l-21,-74l-49,0l-48,132l54,0l20,-78l1,0l21,78l50,0l20,-78l1,0l21,78l48,0l-48,-132z"],"x":[167,"m166,0l-58,0l-25,42l-1,0l-26,-42l-55,0l51,70l-46,62l59,0l21,-35l1,0l21,35l55,0l-47,-63z"],"y":[153,"m39,-52q-16,0,-29,4l0,30l20,0q19,0,23,18l-53,132l54,0l25,-88l2,0l23,88l49,0l-47,-128q-10,-28,-25,-42q-15,-14,-42,-14z"],"z":[139,"m76,34l58,0l0,-34l-129,0l0,16l56,82l-53,0l0,34l124,0l0,-15z"],"{":[97,"m68,150l-2,-51q-1,-25,-25,-25l0,-3q24,0,25,-25l2,-51q1,-10,19,-10l0,-25l-22,0q-15,0,-25,7q-11,8,-11,21l0,61q0,7,-6,10q-6,4,-15,4l0,19q8,0,15,4q6,4,6,11l0,59q0,14,11,21q10,7,25,7l22,0l0,-24q-18,0,-19,-10z"],"|":[70,"m19,-53l0,235l31,0l0,-235z"],"}":[97,"m68,156l0,-59q0,-7,7,-11q6,-4,15,-4l0,-19q-9,0,-16,-4q-6,-3,-6,-10l0,-61q0,-13,-10,-21q-11,-7,-25,-7l-23,0l0,25q19,0,19,10l3,51q1,25,25,25l0,3q-24,0,-25,25l-3,51q0,10,-19,10l0,24l23,0q14,0,25,-7q10,-7,10,-21z"],"~":[165,"m113,50q-7,0,-14,2q-6,2,-16,6q-10,5,-17,7q-6,2,-14,2q-11,0,-20,-5q-10,-4,-16,-9q-6,-6,-6,-6l0,32q0,1,6,6q6,5,16,10q9,4,20,4q7,0,14,-2q7,-2,16,-6q10,-4,17,-7q7,-2,14,-2q11,0,21,5q9,4,15,10q6,5,6,5l0,-32q0,-1,-6,-6q-6,-5,-15,-10q-10,-4,-21,-4z"]}};
+      var STAMP_NAMES = { text: 'Text', star: 'Star', heart: 'Heart', shield: 'Shield', sword: 'Sword', crown: 'Crown' };
+
+      // -----------------------------------------------------------------------
+      // Built-in pin shapes (polygons, any size, y up). They go through the same tracing path as a picture.
+      // -----------------------------------------------------------------------
+      var SHAPE_NAMES = ['Your picture', 'Heart', 'Circle', 'Rounded square', 'Shield', 'Star', 'Hexagon'];
+
+      function shapePolygon(name) {
+        var i, a, pts = [];
+        if (name === 'Circle') {
+          for (i = 0; i < 72; i++) { a = i / 72 * TAU; pts.push([Math.cos(a), Math.sin(a)]); }
+        } else if (name === 'Rounded square') {
+          var rc = 0.3, corners = [[1 - rc, 1 - rc, 0], [-1 + rc, 1 - rc, 1], [-1 + rc, -1 + rc, 2], [1 - rc, -1 + rc, 3]];
+          corners.forEach(function (c) {
+            for (i = 0; i <= 12; i++) { a = (c[2] + i / 12) * Math.PI / 2; pts.push([c[0] + rc * Math.cos(a), c[1] + rc * Math.sin(a)]); }
+          });
+        } else if (name === 'Shield') {
+          pts = [[-0.8, 1], [0, 0.82], [0.8, 1], [0.8, 0.05], [0.62, -0.42], [0.3, -0.76], [0, -1], [-0.3, -0.76], [-0.62, -0.42], [-0.8, 0.05]];
+        } else if (name === 'Star') {
+          for (i = 0; i < 10; i++) { a = i * Math.PI / 5 + Math.PI / 2; pts.push([Math.cos(a) * (i % 2 ? 0.46 : 1), Math.sin(a) * (i % 2 ? 0.46 : 1)]); }
+        } else if (name === 'Hexagon') {
+          for (i = 0; i < 6; i++) { a = i * Math.PI / 3 + Math.PI / 6; pts.push([Math.cos(a), Math.sin(a)]); }
+        } else {
+          for (i = 0; i < 72; i++) {
+            a = i / 72 * TAU;
+            pts.push([0.0625 * 16 * Math.pow(Math.sin(a), 3), 0.0625 * (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a))]);
+          }
+        }
+        return pts;
+      }
+
+      function pointIn(p, x, y) {
+        var c = false;
+        for (var i = 0, j = p.length - 1; i < p.length; j = i++) {
+          if ((p[i][1] > y) !== (p[j][1] > y) && x < (p[j][0] - p[i][0]) * (y - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c;
+        }
+        return c;
+      }
+      function loopArea(p) {
+        var s = 0;
+        for (var i = 0, j = p.length - 1; i < p.length; j = i++) s += p[j][0] * p[i][1] - p[i][0] * p[j][1];
+        return s / 2;
+      }
+
+      // The built-in shape as a picture with a transparent background.
+      function rasterShape(name) {
+        if (rasterCache[name]) return rasterCache[name];
+        var poly = shapePolygon(name), minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+        poly.forEach(function (q) { minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); });
+        var span = Math.max(maxX - minX, maxY - minY), sc = (GRID - 12) / span;
+        var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, a = new Uint8Array(GRID * GRID);
+        for (var y = 0; y < GRID; y++) {
+          for (var x = 0; x < GRID; x++) {
+            if (pointIn(poly, cx + (x + 0.5 - GRID / 2) / sc, cy - (y + 0.5 - GRID / 2) / sc)) a[y * GRID + x] = 255;
+          }
+        }
+        var z = new Uint8Array(GRID * GRID);
+        rasterCache[name] = { w: GRID, h: GRID, r: z, g: z, b: z, a: a };
+        return rasterCache[name];
+      }
+
+      // -----------------------------------------------------------------------
+      // Picture -> mask -> signed distance field -> outline loops (all in the browser, no network).
+      // -----------------------------------------------------------------------
+      function cornerColor(im) {
+        var sr = 0, sg = 0, sb = 0, n = 0;
+        [[0, 0], [im.w - 3, 0], [0, im.h - 3], [im.w - 3, im.h - 3]].forEach(function (c) {
+          for (var y = Math.max(0, c[1]); y < Math.min(im.h, c[1] + 3); y++) {
+            for (var x = Math.max(0, c[0]); x < Math.min(im.w, c[0] + 3); x++) {
+              var i = y * im.w + x;
+              if (im.a[i] > 128) { sr += im.r[i]; sg += im.g[i]; sb += im.b[i]; n++; }
+            }
+          }
+        });
+        return n ? [sr / n, sg / n, sb / n] : [255, 255, 255];
+      }
+
+      // mode: 0 not the background, 1 dark parts, 2 light parts, 3 transparent parts are the background
+      function makeMask(im, mode, thr) {
+        var n = im.w * im.h, m = new Uint8Array(n), i;
+        if (mode === 3) {
+          var ta = thr / 100 * 255;
+          for (i = 0; i < n; i++) m[i] = im.a[i] > ta ? 1 : 0;
+        } else if (mode === 0) {
+          var bg = cornerColor(im), tol = thr * 1.6;
+          for (i = 0; i < n; i++) {
+            var d = Math.max(Math.abs(im.r[i] - bg[0]), Math.abs(im.g[i] - bg[1]), Math.abs(im.b[i] - bg[2]));
+            m[i] = im.a[i] > 128 && d > tol ? 1 : 0;
+          }
+        } else {
+          var cut = thr * 2.55;
+          for (i = 0; i < n; i++) {
+            var l = 0.299 * im.r[i] + 0.587 * im.g[i] + 0.114 * im.b[i];
+            m[i] = im.a[i] > 128 && (mode === 1 ? l < cut : l > 255 - cut) ? 1 : 0;
+          }
+        }
+        return m;
+      }
+
+      // Label connected regions (4-connected) of value v. Returns { lab, areas } where lab is 1-based.
+      function label(m, w, h, v) {
+        var lab = new Int32Array(w * h), areas = [0], stack = [], n = 0, i, j;
+        for (i = 0; i < w * h; i++) {
+          if (m[i] !== v || lab[i]) continue;
+          n++; var area = 0;
+          stack.length = 0; stack.push(i); lab[i] = n;
+          while (stack.length) {
+            j = stack.pop(); area++;
+            var x = j % w, y = (j - x) / w;
+            if (x > 0 && m[j - 1] === v && !lab[j - 1]) { lab[j - 1] = n; stack.push(j - 1); }
+            if (x < w - 1 && m[j + 1] === v && !lab[j + 1]) { lab[j + 1] = n; stack.push(j + 1); }
+            if (y > 0 && m[j - w] === v && !lab[j - w]) { lab[j - w] = n; stack.push(j - w); }
+            if (y < h - 1 && m[j + w] === v && !lab[j + w]) { lab[j + w] = n; stack.push(j + w); }
+          }
+          areas.push(area);
+        }
+        return { lab: lab, areas: areas };
+      }
+
+      // Drop specks, optionally keep only the biggest piece, fill holes, and crop to the shape.
+      // Returns { m, w, h } or null when nothing is left.
+      function cleanMask(m0, w0, h0, keepHoles, biggestOnly) {
+        var w = w0 + 2, h = h0 + 2, m = new Uint8Array(w * h), x, y, i;
+        for (y = 0; y < h0; y++) for (x = 0; x < w0; x++) m[(y + 1) * w + x + 1] = m0[y * w0 + x];
+        var L = label(m, w, h, 1), big = 0, k;
+        for (k = 1; k < L.areas.length; k++) big = Math.max(big, L.areas[k]);
+        if (!big) return null;
+        var minA = Math.max(6, big * 0.01);
+        for (i = 0; i < w * h; i++) {
+          if (m[i] && (L.areas[L.lab[i]] < minA || (biggestOnly && L.areas[L.lab[i]] < big))) m[i] = 0;
+        }
+        var B = label(m, w, h, 0), outer = B.lab[0], holeMin = keepHoles ? Math.max(12, big * 0.004) : 1e12;
+        for (i = 0; i < w * h; i++) {
+          if (!m[i] && B.lab[i] !== outer && B.areas[B.lab[i]] < holeMin) m[i] = 1;
+        }
+        var x0 = w, x1 = -1, y0 = h, y1 = -1;
+        for (y = 0; y < h; y++) for (x = 0; x < w; x++) if (m[y * w + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        if (x1 < 0) return null;
+        var cw = x1 - x0 + 1, ch = y1 - y0 + 1, out = new Uint8Array(cw * ch);
+        for (y = 0; y < ch; y++) for (x = 0; x < cw; x++) out[y * cw + x] = m[(y + y0) * w + x + x0];
+        return { m: out, w: cw, h: ch };
+      }
+
+      // Exact squared distance transform (Felzenszwalb), in place on a Float32Array grid of 0 / big.
+      function edt(f, w, h) {
+        var n = Math.max(w, h), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1), g = new Float64Array(n), x, y;
+        function line(len) {
+          var k = 0, q, s;
+          v[0] = 0; z[0] = -1e20; z[1] = 1e20;
+          for (q = 1; q < len; q++) {
+            s = ((d[q] + q * q) - (d[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+            while (s <= z[k]) { k--; s = ((d[q] + q * q) - (d[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+            k++; v[k] = q; z[k] = s; z[k + 1] = 1e20;
+          }
+          k = 0;
+          for (q = 0; q < len; q++) {
+            while (z[k + 1] < q) k++;
+            g[q] = (q - v[k]) * (q - v[k]) + d[v[k]];
+          }
+        }
+        for (x = 0; x < w; x++) {
+          for (y = 0; y < h; y++) d[y] = f[y * w + x];
+          line(h);
+          for (y = 0; y < h; y++) f[y * w + x] = g[y];
+        }
+        for (y = 0; y < h; y++) {
+          for (x = 0; x < w; x++) d[x] = f[y * w + x];
+          line(w);
+          for (x = 0; x < w; x++) f[y * w + x] = g[x];
+        }
+      }
+
+      // Signed distance in pixels (positive inside the shape), with P empty pixels around it.
+      function signedField(c, P) {
+        var W = c.w + 2 * P, H = c.h + 2 * P, n = W * H, inside = new Uint8Array(n), x, y, i;
+        for (y = 0; y < c.h; y++) for (x = 0; x < c.w; x++) inside[(y + P) * W + x + P] = c.m[y * c.w + x];
+        var fi = new Float32Array(n), fo = new Float32Array(n), F = new Float32Array(n);
+        for (i = 0; i < n; i++) { fi[i] = inside[i] ? 1e9 : 0; fo[i] = inside[i] ? 0 : 1e9; }
+        edt(fi, W, H); edt(fo, W, H);
+        for (i = 0; i < n; i++) F[i] = inside[i] ? Math.sqrt(fi[i]) - 0.5 : -(Math.sqrt(fo[i]) - 0.5);
+        return { F: F, W: W, H: H };
+      }
+
+      function boxBlur(F, W, H, r) {
+        if (r < 1) return;
+        var tmp = new Float32Array(F.length), x, y, k, s, cnt = 2 * r + 1;
+        for (y = 0; y < H; y++) {
+          s = 0;
+          for (k = -r; k <= r; k++) s += F[y * W + Math.min(W - 1, Math.max(0, k))];
+          for (x = 0; x < W; x++) {
+            tmp[y * W + x] = s / cnt;
+            s += F[y * W + Math.min(W - 1, x + r + 1)] - F[y * W + Math.max(0, x - r)];
+          }
+        }
+        for (x = 0; x < W; x++) {
+          s = 0;
+          for (k = -r; k <= r; k++) s += tmp[Math.min(H - 1, Math.max(0, k)) * W + x];
+          for (y = 0; y < H; y++) {
+            F[y * W + x] = s / cnt;
+            s += tmp[Math.min(H - 1, y + r + 1) * W + x] - tmp[Math.max(0, y - r) * W + x];
+          }
+        }
+      }
+
+      // Marching squares on the field at the given level: closed loops of [x, y] grid positions.
+      var CASES = [[], [['L', 'T']], [['T', 'R']], [['L', 'R']], [['R', 'B']], null, [['T', 'B']], [['L', 'B']],
+        [['L', 'B']], [['T', 'B']], null, [['R', 'B']], [['L', 'R']], [['T', 'R']], [['L', 'T']], []];
+      function contours(F, W, H, iso) {
+        var segs = [], at = {}, i, j;
+        function edgeId(c, i0, j0) {
+          if (c === 'T') return 2 * (j0 * W + i0);
+          if (c === 'B') return 2 * ((j0 + 1) * W + i0);
+          if (c === 'L') return 2 * (j0 * W + i0) + 1;
+          return 2 * (j0 * W + i0 + 1) + 1;
+        }
+        for (j = 0; j < H - 1; j++) {
+          for (i = 0; i < W - 1; i++) {
+            var a = F[j * W + i], b = F[j * W + i + 1], c = F[(j + 1) * W + i + 1], d = F[(j + 1) * W + i];
+            var idx = (a > iso ? 1 : 0) | (b > iso ? 2 : 0) | (c > iso ? 4 : 0) | (d > iso ? 8 : 0), list = CASES[idx];
+            if (idx === 5 || idx === 10) {
+              var mid = (a + b + c + d) / 4 > iso;
+              if (idx === 5) list = mid ? [['T', 'R'], ['L', 'B']] : [['L', 'T'], ['R', 'B']];
+              else list = mid ? [['L', 'T'], ['R', 'B']] : [['T', 'R'], ['L', 'B']];
+            }
+            for (var s = 0; s < list.length; s++) {
+              var e1 = edgeId(list[s][0], i, j), e2 = edgeId(list[s][1], i, j), n = segs.length;
+              segs.push([e1, e2, false]);
+              (at[e1] = at[e1] || []).push(n);
+              (at[e2] = at[e2] || []).push(n);
+            }
+          }
+        }
+        function pointOf(e) {
+          var vert = e % 2, cell = (e - vert) / 2, x = cell % W, y = (cell - x) / W, p, q;
+          if (!vert) { p = F[y * W + x]; q = F[y * W + x + 1]; return [x + (iso - p) / (q - p), y]; }
+          p = F[y * W + x]; q = F[(y + 1) * W + x];
+          return [x, y + (iso - p) / (q - p)];
+        }
+        var loops = [];
+        for (var si = 0; si < segs.length; si++) {
+          if (segs[si][2]) continue;
+          var loop = [], start = segs[si][0], cur = segs[si][1];
+          segs[si][2] = true; loop.push(pointOf(start));
+          while (cur !== start) {
+            loop.push(pointOf(cur));
+            var next = -1, cand = at[cur];
+            for (var k = 0; k < cand.length; k++) if (!segs[cand[k]][2]) { next = cand[k]; break; }
+            if (next < 0) break;
+            segs[next][2] = true;
+            cur = segs[next][0] === cur ? segs[next][1] : segs[next][0];
+          }
+          if (loop.length >= 3) loops.push(loop);
+        }
+        return loops;
+      }
+
+      // Douglas-Peucker on a closed loop.
+      function simplify(loop, tol) {
+        var n = loop.length;
+        if (n < 8) return loop;
+        var far = 0, best = -1, i;
+        for (i = 1; i < n; i++) {
+          var d = (loop[i][0] - loop[0][0]) * (loop[i][0] - loop[0][0]) + (loop[i][1] - loop[0][1]) * (loop[i][1] - loop[0][1]);
+          if (d > best) { best = d; far = i; }
+        }
+        function run(pts) {
+          var keep = new Uint8Array(pts.length), stack = [[0, pts.length - 1]];
+          keep[0] = keep[pts.length - 1] = 1;
+          while (stack.length) {
+            var se = stack.pop(), s = se[0], e = se[1], ax = pts[s][0], ay = pts[s][1], bx = pts[e][0], by = pts[e][1];
+            var dx = bx - ax, dy = by - ay, len = Math.sqrt(dx * dx + dy * dy) || 1e-9, md = 0, mi = -1;
+            for (var k = s + 1; k < e; k++) {
+              var dist = Math.abs((pts[k][0] - ax) * dy - (pts[k][1] - ay) * dx) / len;
+              if (dist > md) { md = dist; mi = k; }
+            }
+            if (md > tol && mi > 0) { keep[mi] = 1; stack.push([s, mi], [mi, e]); }
+          }
+          return pts.filter(function (p, q) { return keep[q]; });
+        }
+        var a = run(loop.slice(0, far + 1)), b = run(loop.slice(far).concat([loop[0]]));
+        return a.slice(0, -1).concat(b.slice(0, -1));
+      }
+
+      // Mask at a lower resolution (box average, kept where at least half is set).
+      function shrinkMask(c, f) {
+        var w = Math.max(4, Math.round(c.w * f)), h = Math.max(4, Math.round(c.h * f)), out = new Uint8Array(w * h), x, y, i, j;
+        for (y = 0; y < h; y++) {
+          for (x = 0; x < w; x++) {
+            var x0 = Math.floor(x * c.w / w), x1 = Math.max(x0 + 1, Math.floor((x + 1) * c.w / w)), y0 = Math.floor(y * c.h / h), y1 = Math.max(y0 + 1, Math.floor((y + 1) * c.h / h)), sum = 0, n = 0;
+            for (j = y0; j < y1; j++) for (i = x0; i < x1; i++) { sum += c.m[j * c.w + i]; n++; }
+            out[y * w + x] = sum * 2 >= n ? 1 : 0;
+          }
+        }
+        return { m: out, w: w, h: h };
+      }
+
+      // Pin outline loops (mm, y up) from a cleaned mask: the signed field is padded, given an optional hanging lug and
+      // hole, smoothed, and cut at the border level (outer) and pulled in by the rim width (inner).
+      function outline(clean, s, pad, rimW, rh, smooth) {
+        var br = Math.round(smooth * s * 0.5), hang = rh > 0;
+        var P = Math.ceil((pad + rimW + (hang ? 2 * rh + 3.2 : 0)) * s) + 8 + 2 * br;
+        var fld = signedField(clean, P), F = fld.F, W = fld.W, H = fld.H, iso = -pad * s, x, y;
+        if (hang) {
+          // a round lug on the top edge with the hanging hole in it
+          var topRow = -1, sx = 0, cnt = 0;
+          for (y = 0; y < H && topRow < 0; y++) for (x = 0; x < W; x++) if (F[y * W + x] > iso) { topRow = y; sx += x; cnt++; }
+          var cxl = sx / Math.max(1, cnt), cyl = topRow - (rh + 0.8) * s, Rl = rh + 2;
+          for (y = 0; y < H; y++) {
+            for (x = 0; x < W; x++) {
+              var dist = Math.sqrt((x - cxl) * (x - cxl) + (y - cyl) * (y - cyl)), i = y * W + x;
+              F[i] = Math.min(Math.max(F[i], (Rl - pad) * s - dist), dist - (rh + pad) * s);
+            }
+          }
+        }
+        boxBlur(F, W, H, br); boxBlur(F, W, H, br);
+        var cx0 = P + clean.w / 2, cy0 = P + clean.h / 2, tol = Math.max(0.2, 0.07 * s);
+        function toMM(loops) {
+          return loops.map(function (l) { return simplify(l, tol).map(function (q) { return [(q[0] - cx0) / s, -(q[1] - cy0) / s]; }); })
+            .filter(function (l) { return l.length >= 3 && Math.abs(loopArea(l)) > 0.6; });
+        }
+        return { outer: toMM(contours(F, W, H, iso)), inner: rimW > 0 ? toMM(contours(F, W, H, iso + rimW * s)) : [] };
+      }
+
+      // The pin outline for the current parameters: { outer, inner } loops in mm (y up), cached while only
+      // non-outline parameters move.
+      function tracePin(p) {
+        var useImg = Math.round(p.shapeSrc) === 0, fallback = false, im, mode, thr, keep, biggest;
+        if (useImg && !img) { useImg = false; fallback = true; }
+        var shapeName = useImg ? 'Your picture' : (Math.round(p.shapeSrc) === 0 ? 'Heart' : SHAPE_NAMES[Math.round(p.shapeSrc)]);
+        var hang = Math.round(p.mount) === 1, rimW = p.rimH > 0 ? p.rimW : 0;
+        var key = [shapeName, useImg ? imgVersion : 0, p.traceMode, p.threshold, p.holes, p.pieces, p.smooth, p.size, p.padding, rimW, hang ? p.holeD : 0].join('|');
+        if (cache.key === key) return cache.val;
+        if (useImg) {
+          im = img; mode = Math.round(p.traceMode); thr = p.threshold; keep = Math.round(p.holes) === 1; biggest = Math.round(p.pieces) === 1;
+        } else {
+          im = rasterShape(shapeName); mode = 3; thr = 50; keep = false; biggest = false;
+        }
+        var clean = cleanMask(makeMask(im, mode, thr), im.w, im.h, keep, biggest);
+        if (!clean) { // nothing found: show the heart so the page is never empty, and say so
+          clean = cleanMask(makeMask(rasterShape('Heart'), 3, 50), GRID, GRID, false, false);
+          fallback = true;
+        }
+        var pad = Math.min(p.padding, p.size * 0.2), rh = p.holeD / 2;
+        var s = Math.max(clean.w, clean.h) / Math.max(5, p.size - 2 * pad);   // pixels per mm
+        if (s > MAX_PX_PER_MM) { clean = shrinkMask(clean, MAX_PX_PER_MM / s); s = Math.max(clean.w, clean.h) / Math.max(5, p.size - 2 * pad); }
+        var outer, inner;
+        // a very thin picture can vanish under heavy smoothing: try again with none before giving up
+        [p.smooth, 0].some(function (smooth) {
+          var r = outline(clean, s, pad, rimW, hang ? rh : 0, smooth);
+          outer = r.outer; inner = r.inner;
+          return outer.length > 0;
+        });
+        if (!outer.length) {
+          clean = cleanMask(makeMask(rasterShape('Heart'), 3, 50), GRID, GRID, false, false);
+          fallback = true;
+          s = Math.max(clean.w, clean.h) / Math.max(5, p.size - 2 * pad);
+          if (s > MAX_PX_PER_MM) { clean = shrinkMask(clean, MAX_PX_PER_MM / s); s = Math.max(clean.w, clean.h) / Math.max(5, p.size - 2 * pad); }
+          var r2 = outline(clean, s, pad, rimW, hang ? rh : 0, p.smooth);
+          outer = r2.outer; inner = r2.inner;
+        }
+        var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+        outer.forEach(function (l) { l.forEach(function (q) { minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); }); });
+        var val = { outer: outer, inner: inner, width: maxX - minX, height: maxY - minY, fallback: fallback };
+        cache = { key: key, val: val };
+        return val;
+      }
+
+      // Loops (outer boundaries and holes mixed) -> [{ outer, holes }] by how deeply each loop is nested.
+      function regions(loops) {
+        var info = loops.map(function (l) { return { loop: l, area: Math.abs(loopArea(l)), depth: 0, parent: -1 }; }), i, j;
+        for (i = 0; i < info.length; i++) {
+          var best = -1;
+          for (j = 0; j < info.length; j++) {
+            if (i === j || info[j].area <= info[i].area || !pointIn(info[j].loop, info[i].loop[0][0], info[i].loop[0][1])) continue;
+            info[i].depth++;
+            if (best < 0 || info[j].area < info[best].area) best = j;
+          }
+          info[i].parent = best;
+        }
+        var out = [], idx = {};
+        info.forEach(function (n, k) { if (n.depth % 2 === 0) { idx[k] = out.length; out.push({ outer: n.loop, holes: [] }); } });
+        info.forEach(function (n) { if (n.depth % 2 === 1 && idx[n.parent] !== undefined) out[idx[n.parent]].holes.push(n.loop); });
+        return out;
+      }
+
+      // Plate-plane shapes ({ outer, holes } in x, y) -> triangles standing from y0 up to y1 (y of the model).
+      // bevel > 0 chamfers both faces 45 degrees by that many mm, keeping the side walls on the outline.
+      function extrude(shapes, y0, y1, bevel) {
+        var T = THREE_, out = [];
+        shapes.forEach(function (sh) {
+          var v2 = function (q) { return new T.Vector2(q[0], q[1]); };
+          var shape = new T.Shape(sh.outer.map(v2));
+          sh.holes.forEach(function (hole) { shape.holes.push(new T.Path(hole.map(v2))); });
+          var b = bevel || 0;
+          var g = new T.ExtrudeGeometry(shape, { depth: y1 - y0 - 2 * b, bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: 1, curveSegments: 1, steps: 1 });
+          g.translate(0, 0, y0 + b);
+          g.rotateX(-Math.PI / 2); // plate y -> model -z, extrusion -> model +y
+          var arr = g.index ? g.toNonIndexed().attributes.position.array : g.attributes.position.array;
+          for (var i = 0; i < arr.length; i++) out.push(arr[i]);
+          g.dispose();
+        });
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // Stamps: raised shapes and text on the top face. Each one sinks SINK mm into the plate.
+      // -----------------------------------------------------------------------
+      function stampOutline(type) {
+        var i, a, pts = [];
+        if (type === 'star') {
+          for (i = 0; i < 10; i++) { a = i * Math.PI / 5 + Math.PI / 2; pts.push([Math.cos(a) * (i % 2 ? 0.44 : 1), Math.sin(a) * (i % 2 ? 0.44 : 1)]); }
+        } else if (type === 'heart') {
+          for (i = 0; i < 40; i++) {
+            a = i / 40 * TAU;
+            pts.push([0.0625 * 16 * Math.pow(Math.sin(a), 3), 0.0625 * (13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) - 0.05]);
+          }
+        } else if (type === 'shield') {
+          pts = [[-0.8, 1], [0, 0.82], [0.8, 1], [0.8, 0.05], [0.62, -0.42], [0.3, -0.76], [0, -1], [-0.3, -0.76], [-0.62, -0.42], [-0.8, 0.05]];
+        } else if (type === 'sword') {
+          pts = [[0, 1], [0.13, 0.76], [0.13, -0.38], [0.48, -0.38], [0.48, -0.55], [0.11, -0.55], [0.11, -0.84], [0.2, -0.84], [0.2, -1], [-0.2, -1], [-0.2, -0.84], [-0.11, -0.84], [-0.11, -0.55], [-0.48, -0.55], [-0.48, -0.38], [-0.13, -0.38], [-0.13, 0.76]];
+        } else {
+          pts = [[-1, -0.8], [1, -0.8], [1, 0.8], [0.5, 0.05], [0, 0.95], [-0.5, 0.05], [-1, 0.8]];
+        }
+        return [{ outer: pts, holes: [] }];
+      }
+
+      function glyphLoops(ch) {
+        var g = STAMP_FONT.g[ch];
+        if (!g) return null;
+        var loops = [], cur = null, x = 0, y = 0, re = /([mlqz])|(-?\d+)/g, op = null, nums = [], m;
+        function flush() {
+          if (op === 'm') { cur = [[nums[0], nums[1]]]; x = nums[0]; y = nums[1]; loops.push(cur); }
+          else if (op === 'l') { x += nums[0]; y += nums[1]; cur.push([x, y]); }
+          else if (op === 'q') {
+            var cx = x + nums[0], cy = y + nums[1], ex = x + nums[2], ey = y + nums[3];
+            for (var t = 1; t <= 4; t++) {
+              var f = t / 4, r = 1 - f;
+              cur.push([r * r * x + 2 * r * f * cx + f * f * ex, r * r * y + 2 * r * f * cy + f * f * ey]);
+            }
+            x = ex; y = ey;
+          }
+          nums = [];
+        }
+        while ((m = re.exec(g[1])) !== null) {
+          if (m[1]) { flush(); op = m[1]; if (op === 'z') op = null; } else nums.push(parseInt(m[2], 10));
+        }
+        flush();
+        loops = loops.map(function (l) {
+          return l.filter(function (pt, i) { var n = l[(i + 1) % l.length]; return Math.abs(pt[0] - n[0]) + Math.abs(pt[1] - n[1]) > 0.01; });
+        }).filter(function (l) { return l.length >= 3; });
+        var big = loops.reduce(function (b, l) { return Math.abs(loopArea(l)) > Math.abs(b) ? loopArea(l) : b; }, 0);
+        var outers = loops.filter(function (l) { return loopArea(l) * big > 0; }).map(function (l) { return { outer: l, holes: [] }; });
+        loops.filter(function (l) { return loopArea(l) * big <= 0; }).forEach(function (hole) {
+          for (var i = 0; i < outers.length; i++) if (pointIn(outers[i].outer, hole[0][0], hole[0][1])) { outers[i].holes.push(hole); return; }
+        });
+        return { adv: g[0], shapes: outers };
+      }
+      // Text outlines from the embedded font, height 2 for a capital, centred on 0, 0.
+      function textOutline(text) {
+        var k = 2 / STAMP_FONT.cap, out = [], penX = 0;
+        String(text).slice(0, 24).split('').forEach(function (ch) {
+          var gl = glyphLoops(ch);
+          if (!gl) { penX += STAMP_FONT.cap * 0.5; return; }
+          gl.shapes.forEach(function (s) {
+            var fit = function (l) { return l.map(function (q) { return [(q[0] + penX) * k, q[1] * k - 1]; }); };
+            out.push({ outer: fit(s.outer), holes: s.holes.map(fit) });
+          });
+          penX += gl.adv;
+        });
+        var w = penX * k / 2;
+        out.forEach(function (s) {
+          var mv = function (l) { return l.map(function (q) { return [q[0] - w, q[1]]; }); };
+          s.outer = mv(s.outer); s.holes = s.holes.map(mv);
+        });
+        return out;
+      }
+
+      // One stamp as plate-plane shapes. A long text shrinks to fit inside the pin's width.
+      function stampShapes(st) {
+        var shapes = st.type === 'text' ? textOutline(st.text) : stampOutline(st.type);
+        if (!shapes.length) return [];
+        var ang = (st.rotation || 0) * Math.PI / 180, ca = Math.cos(ang), sa = Math.sin(ang), hs = st.size / 2;
+        var xf = function (l, k) { return l.map(function (q) { return [(q[0] * ca - q[1] * sa) * hs * k, (q[0] * sa + q[1] * ca) * hs * k]; }); };
+        var maxU = 0.01, maxV = 0.01;
+        shapes.forEach(function (s) { xf(s.outer, 1).forEach(function (q) { maxU = Math.max(maxU, Math.abs(q[0])); maxV = Math.max(maxV, Math.abs(q[1])); }); });
+        var room = lastPin ? Math.max(lastPin.width, lastPin.height) * 0.96 : 1e9;
+        var fit = Math.min(1, room / (2 * Math.max(maxU, maxV)));
+        var place = function (f) {
+          return shapes.map(function (s) {
+            var mv = function (l) { return xf(l, f).map(function (q) { return [q[0] + st.x, q[1] + st.y]; }); };
+            return { outer: mv(s.outer), holes: s.holes.map(mv) };
+          });
+        };
+        var out = place(fit), tries = 0;
+        // shrink a stamp that hangs over the edge, so it sits on the face
+        while (lastPin && tries < 16 && !inside(out)) { fit *= 0.9; out = place(fit); tries++; }
+        return out;
+      }
+      function inside(shapes) {
+        return shapes.every(function (s) { return s.outer.every(function (q) { return insidePin(q[0], q[1]); }); });
+      }
+      function stampPositions(st, plateH) {
+        return extrude(stampShapes(st), plateH - SINK, plateH + st.raise);
+      }
+
+      function insidePin(x, y) {
+        if (!lastPin) return false;
+        if (!lastPin.regs) lastPin.regs = regions(lastPin.outer);
+        return lastPin.regs.some(function (r) {
+          return pointIn(r.outer, x, y) && !r.holes.some(function (hole) { return pointIn(hole, x, y); });
+        });
+      }
+      function stampFitsPin(st) { return inside(stampShapes(st)); }
+      // A viewport hit on the top face of the pin (or of its rim or a stamp), as a spot on the plate. Null anywhere else.
+      function topSpot(hit) {
+        if (!hit || (hit.meshName !== 'pin' && hit.meshName !== 'rim' && hit.meshName !== 'stamp')) return null;
+        if (hit.normal.y < 0.7) return null;
+        var x = hit.point.x, y = -hit.point.z;
+        return insidePin(x, y) ? { x: x, y: y } : null;
+      }
+      function newStamp(spot, p) {
+        return { type: stampType, text: stampText, size: p.stampSize, rotation: p.stampRotation, raise: p.stampRaise, x: spot.x, y: spot.y };
+      }
+
+      // -----------------------------------------------------------------------
+      // Loading the visitor's picture. It is drawn to a small canvas in this page and read from there.
+      // -----------------------------------------------------------------------
+      function loadPicture(file, api) {
+        if (!file || !/^image\//.test(file.type)) { api.toast('Pick an image file (PNG, JPG, SVG or WebP)'); return; }
+        var url = URL.createObjectURL(file), pic = new Image();
+        pic.onload = function () {
+          try {
+            var nw = pic.naturalWidth || pic.width || 300, nh = pic.naturalHeight || pic.height || 300;
+            var sc = PICK_PX / Math.max(nw, nh), w = Math.max(8, Math.round(nw * sc)), h = Math.max(8, Math.round(nh * sc));
+            var cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            var ctx = cv.getContext('2d');
+            ctx.drawImage(pic, 0, 0, w, h);
+            var d = ctx.getImageData(0, 0, w, h).data, n = w * h, r = new Uint8Array(n), g = new Uint8Array(n), b = new Uint8Array(n), a = new Uint8Array(n), i, clear = 0;
+            for (i = 0; i < n; i++) {
+              r[i] = d[i * 4]; g[i] = d[i * 4 + 1]; b[i] = d[i * 4 + 2]; a[i] = d[i * 4 + 3];
+              if (a[i] < 200) clear++;
+            }
+            img = { w: w, h: h, r: r, g: g, b: b, a: a };
+            imgVersion++;
+            // pick the tracing that probably fits: transparency, else a plain background, else dark on light
+            var mode = 1;
+            if (clear > n * 0.02) mode = 3;
+            else {
+              var bg = cornerColor(img), flat = true;
+              [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]].forEach(function (c) {
+                var k = c[1] * w + c[0];
+                if (Math.abs(r[k] - bg[0]) + Math.abs(g[k] - bg[1]) + Math.abs(b[k] - bg[2]) > 60) flat = false;
+              });
+              if (flat) mode = 0;
+            }
+            if (setImageStatus) setImageStatus(file.name);
+            api.setParams({ shapeSrc: 0, traceMode: mode, threshold: 50 });
+            api.rebuild();
+          } catch (e) {
+            api.toast('That picture could not be read');
+          }
+          URL.revokeObjectURL(url);
+        };
+        pic.onerror = function () { URL.revokeObjectURL(url); api.toast('That picture could not be read'); };
+        pic.src = url;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-103',
+        category: 'WEARABLE // BADGES',
+        title: 'Pin Maker',
+        fileName: 'Pin',
+        minFrame: 60,
+        defaultColor: '#a7f3d0',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Sunny Yellow', color: '#fde047' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Sky Blue', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { pin: 'Pin plate', rim: 'Raised rim', stamp: 'Stamp' },
+        parameters: [
+          { group: 'Shape', key: 'shapeSrc', label: 'Pin outline', min: 0, max: 6, step: 1, value: 1, options: SHAPE_NAMES },
+          { group: 'Shape', key: 'size', label: 'Pin size (longest side)', unit: ' mm', min: 25, max: 90, step: 1, value: 50 },
+          { group: 'Picture tracing', key: 'traceMode', label: 'What becomes the pin', min: 0, max: 3, step: 1, value: 0,
+            options: ['Everything but the background', 'Dark parts', 'Light parts', 'Opaque parts (transparent PNG)'],
+            showIf: function (p) { return Math.round(p.shapeSrc) === 0; } },
+          { group: 'Picture tracing', key: 'threshold', label: 'Tracing strength', unit: '%', min: 5, max: 95, step: 1, value: 50,
+            showIf: function (p) { return Math.round(p.shapeSrc) === 0; } },
+          { group: 'Picture tracing', key: 'holes', label: 'Holes in the picture', min: 0, max: 1, step: 1, value: 0, options: ['Fill them', 'Keep them'],
+            showIf: function (p) { return Math.round(p.shapeSrc) === 0; } },
+          { group: 'Picture tracing', key: 'pieces', label: 'Loose pieces', min: 0, max: 1, step: 1, value: 0, options: ['Keep all', 'Biggest only'],
+            showIf: function (p) { return Math.round(p.shapeSrc) === 0; } },
+          { group: 'Picture tracing', key: 'smooth', label: 'Smooth the outline', unit: ' mm', min: 0, max: 2, step: 0.1, value: 0.5,
+            showIf: function (p) { return Math.round(p.shapeSrc) === 0; } },
+          { group: 'Plate', key: 'thickness', label: 'Plate thickness', unit: ' mm', min: 2, max: 6, step: 0.2, value: 3 },
+          { group: 'Plate', key: 'padding', label: 'Border around the picture', unit: ' mm', min: 0, max: 6, step: 0.5, value: 1.5 },
+          { group: 'Plate', key: 'rimW', label: 'Raised rim width', unit: ' mm', min: 0.8, max: 3, step: 0.2, value: 1.2 },
+          { group: 'Plate', key: 'rimH', label: 'Raised rim height (0 = no rim)', unit: ' mm', min: 0, max: 2, step: 0.2, value: 1 },
+          { group: 'Mount', key: 'mount', label: 'Back', min: 0, max: 1, step: 1, value: 0, options: ['Flat back (glue a pin-back)', 'Hanging hole'] },
+          { group: 'Mount', key: 'holeD', label: 'Hole diameter', unit: ' mm', min: 2, max: 8, step: 0.5, value: 4,
+            showIf: function (p) { return Math.round(p.mount) === 1; } },
+          { tab: 'stamp', group: 'Stamp size', key: 'stampSize', label: 'Stamp height', unit: ' mm', min: 5, max: 40, step: 1, value: 12 },
+          { tab: 'stamp', group: 'Stamp size', key: 'stampRotation', label: 'Rotation', unit: '°', min: 0, max: 355, step: 5, value: 0 },
+          { tab: 'stamp', group: 'Stamp size', key: 'stampRaise', label: 'Stands out from the pin by', unit: ' mm', min: 0.6, max: 2.5, step: 0.1, value: 1 }
+        ],
+        presets: [
+          { label: 'Heart badge', values: { shapeSrc: 1, size: 50, thickness: 3, padding: 1.5, rimW: 1.2, rimH: 1, mount: 0 } },
+          { label: 'Round button', values: { shapeSrc: 2, size: 40, thickness: 3, padding: 1.5, rimW: 1.4, rimH: 1, mount: 0 } },
+          { label: 'Crest', values: { shapeSrc: 4, size: 50, thickness: 3.2, padding: 1.5, rimW: 1.2, rimH: 1.2, mount: 0 } },
+          { label: 'Star keyring', values: { shapeSrc: 5, size: 55, thickness: 3, padding: 1.5, rimW: 1.2, rimH: 1, mount: 1, holeD: 4 } },
+          { label: 'Tile with hole', values: { shapeSrc: 3, size: 45, thickness: 3.4, padding: 1.5, rimW: 1.4, rimH: 0.8, mount: 1, holeD: 4.5 } },
+          { label: 'Hex flat, no rim', values: { shapeSrc: 6, size: 42, thickness: 2.6, padding: 1.5, rimW: 1.2, rimH: 0, mount: 0 } },
+          { label: 'Default pin', values: { shapeSrc: 1, size: 50, traceMode: 0, threshold: 50, holes: 0, pieces: 0, smooth: 0.5, thickness: 3, padding: 1.5, rimW: 1.2, rimH: 1, mount: 0, holeD: 4, stampSize: 12, stampRotation: 0, stampRaise: 1 } }
+        ],
+        mount: function (container, api) {
+          var h = function (tag, attrs, text) {
+            var node = document.createElement(tag);
+            Object.keys(attrs || {}).forEach(function (k) {
+              if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+              else node.setAttribute(k, attrs[k]);
+            });
+            if (text) node.textContent = text;
+            return node;
+          };
+          container.appendChild(h('h3', { class: 'mm-group-title' }, 'Your picture'));
+          container.appendChild(h('p', { class: 'mm-note' }, 'Choose a logo, drawing or photo. It is traced into the pin outline right here in your browser. The picture is not uploaded or stored anywhere.'));
+          var input = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Choose a picture for the pin' });
+          input.style.display = 'none';
+          input.addEventListener('change', function () { loadPicture(input.files && input.files[0], api); input.value = ''; });
+          var status = h('p', { class: 'mm-note' }, 'No picture yet. The pin uses the shape chosen above.');
+          var pick = h('button', { class: 'mm-btn mm-btn--solid', type: 'button', onclick: function () { input.click(); } }, 'Choose a picture...');
+          var drop = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+            img = null; imgVersion++;
+            setImageStatus(null);
+            api.setParams({ shapeSrc: 1 });
+            api.rebuild();
+          } }, 'Remove picture');
+          var row = h('div', { class: 'mm-export-row' });
+          row.appendChild(pick); row.appendChild(drop);
+          container.appendChild(input); container.appendChild(row); container.appendChild(status);
+          setImageStatus = function (name) {
+            status.textContent = name ? 'Tracing: ' + name : 'No picture yet. The pin uses the shape chosen above.';
+            drop.disabled = !name;
+          };
+          setImageStatus(null);
+        },
+        tabs: [{
+          id: 'stamp',
+          label: 'Stamps',
+          hint: 'Tap the pin to place the stamp',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Stamp (click the pin to place)'));
+            var chips = h('div', { class: 'mm-chips' }), buttons = {};
+            var input = h('input', { type: 'text', maxlength: '24', value: stampText, 'aria-label': 'Stamp text' });
+            input.style.cssText = 'width:100%;box-sizing:border-box;padding:.5em;font:inherit;color:inherit;background:transparent;border:1px solid currentColor;border-radius:3px';
+            input.addEventListener('input', function () { stampText = input.value; });
+            Object.keys(STAMP_NAMES).forEach(function (type) {
+              var btn = h('button', { class: 'mm-chip', type: 'button', 'aria-pressed': String(type === stampType), onclick: function () {
+                stampType = type;
+                Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
+                input.style.display = type === 'text' ? '' : 'none';
+              } }, STAMP_NAMES[type]);
+              buttons[type] = btn;
+              chips.appendChild(btn);
+            });
+            container.appendChild(chips);
+            container.appendChild(input);
+            var count = h('p', { class: 'mm-note' }, '');
+            var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!stamps.length) return;
+              stamps.pop();
+              api.rebuild();
+            } }, 'Undo last stamp');
+            var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!stamps.length) return;
+              stamps = [];
+              api.rebuild();
+            } }, 'Clear stamps');
+            var row = h('div', { class: 'mm-export-row' });
+            row.appendChild(undo);
+            row.appendChild(clear);
+            container.appendChild(count);
+            container.appendChild(row);
+            refreshUI = function () {
+              count.textContent = stamps.length + (stamps.length === 1 ? ' stamp placed' : ' stamps placed');
+              undo.disabled = clear.disabled = stamps.length === 0;
+            };
+            refreshUI();
+          },
+          onHover: function (hit, api) {
+            var spot = topSpot(hit);
+            if (!spot || (stampType === 'text' && !stampText.trim())) { api.setPreview(null); return; }
+            api.setPreview({ positions: new Float32Array(stampPositions(newStamp(spot, api.params), api.params.thickness)) });
+          },
+          onPick: function (hit, api) {
+            var spot = topSpot(hit);
+            if (!spot) { api.toast('Tap the top face of the pin to place a stamp'); return; }
+            if (stampType === 'text' && !stampText.trim()) { api.toast('Type some text first'); return; }
+            var st = newStamp(spot, api.params);
+            stamps.push(st);
+            if (!stampFitsPin(st)) api.toast('Part of that stamp hangs over the edge of the pin. Undo it or move it in, or it will print in mid-air.');
+            api.rebuild();
+          }
+        }],
+        embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
+        // check-mesh.mjs: cover a text stamp, a shape stamp and one that sticks out past the edge
+        testSetup: function () {
+          stamps = [
+            { type: 'text', text: 'HI!', size: 8, rotation: 0, raise: 1, x: 0, y: 0 },
+            { type: 'star', size: 10, rotation: 15, raise: 1, x: 0, y: 9 },
+            { type: 'heart', size: 8, rotation: 0, raise: 1.5, x: -8, y: 2 }
+          ];
+        },
+        build: function (params, api) {
+          THREE_ = api.THREE;
+          var pin = tracePin(params);
+          lastPin = pin;
+          var th = params.thickness, meshes = [];
+          meshes.push({ name: 'pin', positions: new Float32Array(extrude(regions(pin.outer), 0, th, EDGE)), singlePart: true });
+          if (pin.inner.length) {
+            // the rim is the band between the outline and the same outline pulled in by the rim width
+            meshes.push({ name: 'rim', positions: new Float32Array(extrude(regions(pin.outer.concat(pin.inner)), th - SINK, th + params.rimH, Math.min(EDGE, params.rimH / 2, params.rimW / 3))), singlePart: true });
+          }
+          stamps.forEach(function (st) {
+            var pos = stampPositions(st, th);
+            if (pos.length) meshes.push({ name: 'stamp', positions: new Float32Array(pos), singlePart: true });
+          });
+          if (refreshUI) refreshUI();
+          return meshes;
+        }
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

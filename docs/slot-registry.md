@@ -10,7 +10,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 76-90 | Built: the fifteen animal generators ([animals.md](animals.md)). |
 | 91-100 | Built: the ten Flexi Creatures. |
 | 102 | Built: Fancy Ring. |
-| 103+ | Free. Any number works. |
+| 103 | Built: Pin Maker. |
+| 104+ | Free. Any number works. |
 
 Total built: 99 generators in 21 groups (2 groups are `planned` and empty: toys, garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -118,6 +119,7 @@ Total built: 99 generators in 21 groups (2 groups are `planned` and empty: toys,
 | 100 | Flexi Caterpillar | flexi | `flexi-caterpillar.html` |
 | 101 | Text Generator | personal | `text-generator.html` |
 | 102 | Fancy Ring | jewelry | `fancy-ring.html` |
+| 103 | Pin Maker | jewelry | `pin-maker.html` |
 
 ## Groups (BUNDLES)
 

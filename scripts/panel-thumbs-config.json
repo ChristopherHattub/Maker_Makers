@@ -686,5 +686,14 @@
  "unicorn-pegasus": {
   "yaw": 58,
   "elev": 16
+ },
+ "pin-maker": {
+  "colors": {
+   "pin": "#f9a8d4",
+   "rim": "#fde047",
+   "stamp": "#ffffff"
+  },
+  "yaw": 18,
+  "elev": 52
  }
 }
