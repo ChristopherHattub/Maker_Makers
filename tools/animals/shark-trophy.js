@@ -3,7 +3,7 @@
       // The back, fin and tail are sculpted as one surface, blended into rolling waves with white caps.
       // -----------------------------------------------------------------------
       function buildSharkFin(p) {
-        var sc = new Scene(), S = new Sculpt(Math.max(1.55, p.base / 62)), R = p.base / 2, hP = p.plinth, square = Math.round(p.shape) === 1, A = p.waveH, W = p.waves, h = p.height, c = p.chord, fins = Math.round(p.fins), i;
+        var sc = new Scene(), S = new Sculpt(Math.max(1.35, p.base / 82)), R = p.base / 2, hP = p.plinth, square = Math.round(p.shape) === 1, A = p.waveH, W = p.waves, h = p.height, c = p.chord, fins = Math.round(p.fins), i;
         var rw = R - 3, zk = 0.72, blue = '#60a5fa', fin = '#93c5fd', foam = '#f8fafc', gold = '#fbbf24', sea = hP + A * 0.5, freq = (TAU * W) / (2 * rw);
         // plinth: a chamfered foot with a gold band and a top step
         var pw = square ? 5 : 2;
