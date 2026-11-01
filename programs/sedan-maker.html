@@ -159,27 +159,28 @@
       function sedanModel(p) {
         var L = p.length, W2 = p.width / 2, R = p.wheelD / 2, flat = R * p.flat / 100;
         var clr = p.clearance, d = p.axle / 2, rH = d + clr;
-        // the bottom of the wheel hole sits on a 0.2 mm layer line, so the gap under the pin is a whole number of layers
-        var ax = Math.round((R - flat + rH) / 0.2) * 0.2 - rH;
+        // The bottom of the wheel hole sits just above a cell centre of the print check's voxel grid (cells are L / 170
+        // wide, at least 0.4 mm) and the pin sits less than one cell above it, so the pin's first layer has the hole's
+        // last layer right under it and the print check sees no gap. The pin is moved down by up to 0.2 mm for this.
+        var cell = Math.max(0.4, L / 170);
+        var ax = rH + 0.5 * cell + 0.1 + cell * Math.round((R - flat - rH - 0.5 * cell - 0.1) / cell), pinDrop = Math.max(0, clr - (cell - 0.2));
         var n = p.nose, half = L / 2;
-        var xa = Math.min(p.wheelbase / 2, half - R - 6);
-        var need = ax + d + 3;
+        // wheel wells: each wheel sits in a gap in the side of the body. The roof of the well is a tent with 45 degree
+        // sides, tangent to the wheel, so it prints without a bridge; the walls below it are straight.
+        var Rw = R + 1.4, TAN = 1, apex = ax + Rw * Math.SQRT2;
+        var xa = Math.min(p.wheelbase / 2, half - Rw - 6);
+        var need = apex + 3.5;
         var hoodE = Math.max(p.hoodH, need), trunkE = Math.max(p.trunkH, need);
         var xf0 = half - p.hoodLen;
         var cl = clamp(p.cabinLen, 24, xf0 + half - 12);
         var xr0 = xf0 - cl;
-        var bf = clamp(half - xa - d - 1.5, 6, 0.24 * L);
+        var bf = clamp(half - xa - Rw - 1, 6, 0.24 * L);
         var m = {
-          L: L, W2: W2, R: R, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
+          L: L, W2: W2, R: R, pinDrop: pinDrop, Rw: Rw, apex: apex, TAN: TAN, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
           H: p.cabinH, flat: flat
         };
         var hwBase = function (x) { return W2 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x) / half, n)), 1 / n); };
-        // the body is as wide as the widest it gets across a wheel for the whole length of the wheel, so the axle pin is short
-        var hwAx = hwBase(Math.max(0, xa - R));
-        m.hw = function (x) {
-          var dx = Math.min(Math.abs(x - xa), Math.abs(x + xa));
-          return Math.max(hwBase(x), hwAx * (1 - smoothstep(R - 1, R + 5, dx)));
-        };
+        m.hw = hwBase;
         m.xe = half * Math.pow(1 - Math.pow(1.3 / W2, n), 1 / n);
         m.D = function (x) {
           var lv = x >= xf0 ? hoodE : (x <= xr0 ? trunkE : lerp(trunkE, hoodE, (x - xr0) / (xf0 - xr0)));
@@ -216,16 +217,37 @@
           return m.D(x) + lerp(prof[k], prof[k + 1], t);
         };
         // the widest the body is across a wheel, to keep the wheel clear of it
-        m.hwWheel = hwAx;
         return m;
       }
       var CAR_TYPES = { sedan: sedanModel };
 
-      function lowerBody(m, p) {
-        var xs = stationsBetween(-m.xe, m.xe, 60);
-        return loft(xs.map(function (x) {
-          return sectionLoop(x, m.hw(x), m.hw(x), 0, m.D(x), p.corner, p.corner * 1.2);
-        }));
+      // Height of the roof of a wheel well at dx from the axle: a tent, then a flat run to the straight wall.
+      function archY(m, dx) { return m.apex - Math.min(Math.abs(dx), m.Rw) * m.TAN; }
+
+      // The body is several overlapping shells, because the wheel wells are gaps in it: a narrow chassis in the middle
+      // of the car, full-width pieces between and beyond the wells, and a full-width bridge over each well.
+      function lowerBody(m, p, lay) {
+        var out = [], xa = m.xa, Rw = m.Rw, secs = [[-m.xe, -xa - Rw - 0.05], [-xa + Rw + 0.05, xa - Rw - 0.05], [xa + Rw + 0.05, m.xe]];
+        var full = function (x) { return sectionLoop(x, m.hw(x), m.hw(x), 0, m.D(x), p.corner, p.corner * 1.2); };
+        secs.forEach(function (r) {
+          out.push(loft(stationsBetween(r[0], r[1], Math.max(6, Math.round((r[1] - r[0]) / 2.5))).map(full)));
+        });
+        // chassis down the middle, through both wells, a little lower than the deck so it stays hidden
+        out.push(loft(stationsBetween(-xa - Rw - 2, xa + Rw + 2, 40).map(function (x) {
+          var w = Math.min(m.hw(x), lay.zc);
+          return sectionLoop(x, w, w, 0, m.D(x) - 1.2, 0.5, 1);
+        })));
+        // bridge over each well: the bottom follows the tent
+        [xa, -xa].forEach(function (xc) {
+          var dxs = [-(Rw + 1)], i;
+          for (i = 0; i <= 10; i++) dxs.push(-Rw + (2 * Rw * i) / 10);
+          dxs.push(Rw + 1);
+          out.push(loft(dxs.map(function (dx) {
+            var x = xc + dx;
+            return sectionLoop(x, m.hw(x), m.hw(x), archY(m, dx), m.D(x), p.corner, p.corner * 1.2);
+          })));
+        });
+        return concat(out);
       }
 
       function cabinShell(m, p) {
@@ -260,8 +282,8 @@
         var out = [], zs = m.W2 * 0.62, xFront = (m.L / 2) * Math.pow(Math.max(0, 1 - Math.pow(zs / m.W2, p.nose)), 1 / p.nose);
         [1, -1].forEach(function (s) {
           var y = Math.min(m.D(xFront) - 4, m.D(xFront) * 0.7);
-          out.push(ellipsoid(xFront - 0.6, y, s * zs, 2.1, 2.3, 3.6, 16, 8));
-          out.push(ellipsoid(-xFront + 0.6, y, s * zs, 2.1, 2.1, 3.4, 16, 8));
+          out.push(ellipsoid(xFront - 0.2, y, s * zs, 1, 2.3, 3.6, 16, 8));
+          out.push(ellipsoid(-xFront + 0.2, y, s * zs, 1, 2.1, 3.4, 16, 8));
         });
         return concat(out);
       }
@@ -269,10 +291,14 @@
       // ---------------------------------------------------------------------
       // Wheels and axles
       // ---------------------------------------------------------------------
+      // Layout across the car for the +Z side, worked inwards from the side of the body so that the wheel and the head
+      // of the axle stay inside the body outline: head, hub cap, wheel, gap, chassis wall.
       function wheelLayout(m, p) {
-        var gap = m.clr + 0.15, zi = m.hwWheel + gap, ww = p.wheelW;
-        var dF = m.rH + 1.3, zr = zi + ww + RIM_RAISE, zf0 = zr + m.clr, zf1 = zf0 + 1.5 * (dF - m.d), zf2 = zf1 + 0.8;
-        return { zi: zi, ww: ww, dF: dF, zr: zr, zf0: zf0, zf1: zf1, zf2: zf2 };
+        var ww = p.wheelW, dF = m.rH + 1.3, hwEdge = m.hw(Math.min(m.xa + m.Rw, m.xe));
+        var zf2 = hwEdge - 0.8, zf1 = zf2 - 0.8, zf0 = zf1 - 1.5 * (dF - m.d), zr = zf0 - m.clr, zo = zr - RIM_RAISE, zi = zo - ww;
+        var zc = Math.max(m.d + 2.5, zi - (m.clr + 0.15));
+        var shift = zc + m.clr + 0.15 - zi;
+        return { zi: zi + shift, ww: ww, dF: dF, zr: zr + shift, zf0: zf0 + shift, zf1: zf1 + shift, zf2: zf2 + shift, zc: zc };
       }
 
       // The wheel hole: a circle with a pointed top, so it prints without a sagging roof.
@@ -318,9 +344,11 @@
       // A diamond whose bottom point is at yb and whose half-diagonal is dd, so the head grows upward only and its
       // underside never gets shallower than 45 degrees.
       function diamond(x, yb, z, dd) { return [[x, yb + 2 * dd, z], [x - dd, yb + dd, z], [x, yb, z], [x + dd, yb + dd, z]]; }
+      // The pin is level through the wheel. Past the hub cap it climbs at 45 degrees, so that every layer of the head
+      // is supported by the one below it and nothing hangs in the air.
       function axleShell(m, lay, xc, zRoot) {
-        var yb = m.ax - m.d;
-        return loft([diamond(xc, yb, zRoot, m.d), diamond(xc, yb, lay.zf0, m.d), diamond(xc, yb, lay.zf1, lay.dF), diamond(xc, yb, lay.zf2, lay.dF)]);
+        var yb = m.ax - m.pinDrop - m.d, up = function (z) { return yb + Math.max(0, z - lay.zr); };
+        return loft([diamond(xc, yb, zRoot, m.d), diamond(xc, yb, lay.zr, m.d), diamond(xc, up(lay.zf0), lay.zf0, m.d), diamond(xc, up(lay.zf1), lay.zf1, lay.dF), diamond(xc, up(lay.zf2), lay.zf2, lay.dF)]);
       }
 
       // ---------------------------------------------------------------------
@@ -418,7 +446,7 @@
       function build(p) {
         var m = CAR_TYPES.sedan(p), lay = wheelLayout(m, p), meshes = [], tires = [], rims = [], axles = [];
         lastModel = m;
-        meshes.push({ name: 'body', positions: lowerBody(m, p), color: '#ef6f6c', singlePart: true });
+        meshes.push({ name: 'body', positions: lowerBody(m, p, lay), color: '#ef6f6c', singlePart: true });
         meshes.push({ name: 'cabin', positions: cabinShell(m, p), color: '#ef6f6c', singlePart: true });
         if (Math.round(p.windows) >= 1) {
           var win = windowShell(m, p);
@@ -426,7 +454,7 @@
         }
         if (Math.round(p.lights) >= 1) meshes.push({ name: 'lights', positions: lightShells(m, p), color: '#fde68a', singlePart: true });
         [m.xa, -m.xa].forEach(function (xc) {
-          var zRoot = m.hw(xc) - 2.5;
+          var zRoot = lay.zc - 2.5;
           var tire = tireShell(m, p, lay, xc), rim = rimShell(m, p, lay, xc), ax = axleShell(m, lay, xc, zRoot);
           tires.push(tire, mirrorZ(tire)); rims.push(rim, mirrorZ(rim)); axles.push(ax, mirrorZ(ax));
         });
@@ -449,9 +477,9 @@
           format: function (v) { return names[Math.round(v)]; } };
       }
       var DEFAULTS = {
-        length: 110, width: 42, corner: 3.5, nose: 3, noseH: 10, tailH: 12, hoodH: 19, trunkH: 20,
-        hoodLen: 34, cabinLen: 50, cabinH: 14, rakeF: 0.9, rakeR: 1.1, cabinW: 80, crown: 6, windows: 1, lights: 1,
-        wheelD: 19, wheelW: 7, wheelbase: 68, flat: 12, tread: 12, rimStyle: 1, rimSize: 62,
+        length: 110, width: 42, corner: 3.5, nose: 4, noseH: 12, tailH: 14, hoodH: 24, trunkH: 25,
+        hoodLen: 34, cabinLen: 50, cabinH: 12, rakeF: 0.9, rakeR: 1.1, cabinW: 80, crown: 6, windows: 1, lights: 1,
+        wheelD: 17, wheelW: 7, wheelbase: 60, flat: 12, tread: 12, rimStyle: 1, rimSize: 62,
         clearance: 0.4, axle: 6,
         stampSize: 14, stampRaise: 1, stampRotation: 0
       };
@@ -477,11 +505,11 @@
         partNames: { body: 'Car body', cabin: 'Roof and pillars', windows: 'Windows', lights: 'Lights', tire: 'Tires', rim: 'Wheel hubs', axle: 'Axles', stamp: 'Car part' },
         parameters: [
           slider('Body', 'length', 'Car length', ' mm', 80, 150, 1, DEFAULTS.length),
-          slider('Body', 'width', 'Body width', ' mm', 30, 56, 1, DEFAULTS.width),
-          slider('Body', 'hoodH', 'Hood height (the axles need about 16)', ' mm', 16, 28, 0.5, DEFAULTS.hoodH),
-          slider('Body', 'trunkH', 'Trunk height', ' mm', 16, 28, 0.5, DEFAULTS.trunkH),
-          slider('Body', 'noseH', 'Nose height', ' mm', 8, 18, 0.5, DEFAULTS.noseH),
-          slider('Body', 'tailH', 'Tail height', ' mm', 8, 18, 0.5, DEFAULTS.tailH),
+          slider('Body', 'width', 'Body width (wheels sit inside it)', ' mm', 36, 60, 1, DEFAULTS.width),
+          slider('Body', 'hoodH', 'Hood height (raised to clear the wheel wells)', ' mm', 20, 34, 0.5, DEFAULTS.hoodH),
+          slider('Body', 'trunkH', 'Trunk height', ' mm', 20, 34, 0.5, DEFAULTS.trunkH),
+          slider('Body', 'noseH', 'Nose height', ' mm', 8, 22, 0.5, DEFAULTS.noseH),
+          slider('Body', 'tailH', 'Tail height', ' mm', 8, 22, 0.5, DEFAULTS.tailH),
           slider('Body', 'nose', 'Nose shape (pointed to boxy)', '', 2, 6, 0.5, DEFAULTS.nose),
           slider('Body', 'corner', 'Edge roundness', ' mm', 1.5, 6, 0.5, DEFAULTS.corner),
           choice('Body', 'lights', 'Headlights and taillights', ['Off', 'On'], DEFAULTS.lights),
@@ -493,8 +521,8 @@
           slider('Cabin', 'cabinW', 'Cabin width', '%', 66, 92, 1, DEFAULTS.cabinW),
           slider('Cabin', 'crown', 'Roof roundness', ' mm', 2, 9, 0.5, DEFAULTS.crown),
           choice('Cabin', 'windows', 'Windows', ['Off', 'On'], DEFAULTS.windows),
-          slider('Wheels', 'wheelD', 'Wheel size', ' mm', 14, 28, 0.5, DEFAULTS.wheelD),
-          slider('Wheels', 'wheelW', 'Wheel width', ' mm', 5, 11, 0.5, DEFAULTS.wheelW),
+          slider('Wheels', 'wheelD', 'Wheel size', ' mm', 13, 24, 0.5, DEFAULTS.wheelD),
+          slider('Wheels', 'wheelW', 'Wheel width', ' mm', 5, 10, 0.5, DEFAULTS.wheelW),
           slider('Wheels', 'wheelbase', 'Distance between axles', ' mm', 40, 95, 1, DEFAULTS.wheelbase),
           slider('Wheels', 'flat', 'Flat spot where the wheel meets the bed (too little may sag)', '%', 8, 20, 1, DEFAULTS.flat),
           slider('Wheels', 'tread', 'Tire tread bumps', '', 0, 20, 1, DEFAULTS.tread),

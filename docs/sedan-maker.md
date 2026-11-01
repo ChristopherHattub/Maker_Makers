@@ -8,25 +8,20 @@ Nothing here has been physically printed. The wheel clearance, the axle pins and
 
 Y up, millimetres, +X is the front of the car, Z is across it. The body rests on the bed and each tire touches the bed on a small flat spot (a percentage of the wheel radius). Everything prints in this pose with no rotation.
 
+The wheels sit **inside the body in wheel wells**: the side of the body is open around each wheel, and the wheel, hub cap and axle head all stay inside the body outline.
+
 | Mesh | What it is |
 | --- | --- |
-| `body` | Lower body: a loft of rounded-box cross-sections along X. The plan outline is a superellipse (the Nose shape slider), the top follows the deck line (nose, hood, trunk, tail heights). The bottom edge is a 45 degree chamfer so the first layers have no overhang. The side is widened over each wheel so the axle pin is short. |
+| `body` | Several overlapping shells, because the wells are gaps in it: a narrow chassis down the middle (through both wells), three full-width pieces (rear, middle, front) between and beyond the wells, and a full-width bridge over each well. Sections are rounded boxes lofted along X; the plan outline is a superellipse (Nose shape), the top follows the deck line, and the bottom edge is a 45 degree chamfer. |
 | `cabin` | The greenhouse: a second loft, narrower than the body, sunk 1.5 mm into it. Its roof line is a trapezoid (windshield and rear window slopes) smoothed by the stations. |
-| `windows` | A thin skin 0.35 mm proud on the cabin sides between the door line and the roof rail. Skipped when the cabin is too low for a window. |
+| `windows` | A thin skin 0.35 mm proud on the cabin sides between the door line and the roof rail. |
 | `lights` | Headlight and taillight ellipsoids, 2 each. |
 | `tire`, `rim`, `axle` | The four wheels, hub caps and axles, one mesh entry each (four shells), so one paint click colours all four. |
 | `stamp` | One entry per placed part. |
 
-## Print-in-place wheels
+## Wheel wells
 
-- The axle is a **diamond-section pin** (a square turned 45 degrees) so its underside is a 45 degree slope. It starts 2.5 mm inside the body, crosses the gap, passes through the wheel and ends in a flared head.
-- The wheel hole is a circle of radius `axle / 2 + clearance` with a pointed top (tangent lines at 45 degrees), so the hole roof has no bridge. The wheel stays on because the flared head is wider than the hole.
-- The head grows **upward only** from the pin's bottom point, so its underside never gets shallower than 45 degrees.
-- The hole's bottom sits on a 0.2 mm layer line so the gap under the pin is a whole number of layers.
-- When the car is placed on a table, the pin rests on the bottom of the hole, which lifts the body by about the clearance, so the wheels roll.
-- The wheel gap to the body is `clearance + 0.15`; the head starts `clearance` beyond the hub cap.
-
-Sliders: wheel size, width, distance between axles, flat spot, tread bumps, hub cap style (plain, 5 or 8 lobes) and size, wheel clearance (0.2 to 0.8, default 0.4), axle thickness.
+The roof of each well is a **tent with 45 degree sides tangent to the wheel** (apex at `axle height + 1.41 x (wheel radius + 1.4)`), so it prints without a bridge; the well walls below the tent are straight. The hood and trunk heights are raised automatically to leave 3.5 mm of roof over the apex (so the defaults are 24 and 25 mm, with 17 mm wheels). The layout across the car is worked inwards from the body side: axle head, hub cap, wheel, gap, chassis wall. A narrow body or a wide wheel shrinks the chassis; it never goes below the axle thickness plus 2.5 mm each side.
 
 ## Car parts tab
 
@@ -44,4 +39,4 @@ The page is built so a truck or an ice cream van can be added later without touc
 
 ## Checks
 
-`node scripts/ci/check-generator.mjs sedan-maker`: every mesh is watertight and manifold for the defaults and all six presets, and every slider at its minimum and maximum. The default model with no stamps reads "no supports needed". The test stamps include an exhaust pipe that reads a small overhang warning. The five other presets have known overhang errors recorded in `ci/printability-baseline.json`: they are at the axle pin where it crosses the wheel hole, where the print check's 0.4 mm voxels see the 0.4 mm clearance under the pin as empty, plus a few tire edge voxels. A real slicer prints a 0.4 mm gap as two layers.
+`node scripts/ci/check-generator.mjs sedan-maker`: every mesh is watertight and manifold for the defaults and all six presets, and every slider at its minimum and maximum. The default model reads clean in the print check; the test stamps add one small warning from the exhaust pipe. Other presets have small known overhang errors recorded in `ci/printability-baseline.json` (a few cells at the axle pin or tire edge where the 0.4 mm clearance is not lined up with the print check's voxels, and the upright rear window of Tall and boxy). A real slicer prints a 0.4 mm gap as two layers. Nothing has been physically printed.
