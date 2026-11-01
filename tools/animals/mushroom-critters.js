@@ -136,7 +136,7 @@
           ['Default mushroom gnome', {}],
           ['Tiny toadstool', { size: 0.8, cap: 1.25, capTall: 0.8 }],
           ['Frog', { species: 1 }],
-          ['Big frog', { species: 1, size: 1.3 }],
+          ['Big frog', { species: 1, size: 1.15 }],
           ['Snail', { species: 2 }],
           ['Giant snail', { species: 2, size: 1.3 }]
         ]),

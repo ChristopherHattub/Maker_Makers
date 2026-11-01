@@ -3,7 +3,7 @@
       // -----------------------------------------------------------------------
       function buildDog(p, api) {
         var sc = new Scene(), S = new Sculpt(1.3).useEdits(api, p.size / 100), k = p.chunk, hs = p.headSize, fur = '#d9a066', hr = 14 * hs, ear = '#a9713f', white = '#f8fafc';
-        var pose = Math.round(p.pose), hx = 8, hy = 62, tailPts;
+        var pose = Math.round(p.pose), hx = 8, hy = 62, tailPts, wantCollar = false;
         function paw(id, x, y, z) { S.ell('paws', [x, y, z], [7.5, 3.6, 5.2], white, 2); }
         S.piece('torso');
         if (pose === 0) { // sitting
@@ -18,7 +18,7 @@
             S.path('body', [[9, 36, s * 6.5 * k, 6], [13, 18, s * 6.6 * k, 5], [14, 5, s * 6.6 * k, 4.4]], fur, 2.5);
             paw('f', 18, 3.2, s * 6.6 * k);
           });
-          tailPts = [[-27, 8, 0, 5], [-33, 16, 0, 4.2], [-37, 27, 0, 3.4], [-34, 37, 0, 2.2]];
+          tailPts = [[-26, 10, 0, 5.6], [-29, 18, 0, 4.6], [-31, 28, 0, 3.6], [-31, 38, 0, 2.2]];
         } else if (pose === 1) { // standing on all four legs, the belly arches between them
           S.ell('body', [-3, 36, 0], [29 * k, 15.5, 14.5 * k], fur, 5);
           S.ell('body', [16, 40, 0], [15, 16, 13 * k], fur, 8);
@@ -34,7 +34,7 @@
             paw('h', -20, 3.2, s * 9.5 * k);
           });
           hx = 33; hy = 66;
-          tailPts = [[-29, 42, 0, 4.6], [-37, 49, 0, 3.8], [-42, 58, 0, 3], [-41, 67, 0, 2]];
+          tailPts = [[-29, 40, 0, 5], [-32, 49, 0, 4], [-34, 58, 0, 3], [-34, 67, 0, 2]];
         } else if (pose === 2) { // lying down with the paws out in front
           S.ell('body', [-8, 14, 0], [28 * k, 16, 17 * k], fur, 5);
           S.ell('body', [12, 20, 0], [14, 20, 13 * k], fur, 8);
@@ -92,17 +92,17 @@
         // collar with a round tag, tail rising from the rump
         if (Math.round(p.collar) === 1) {
           S.piece('collar');
-          var ring = [];
-          for (var i = 0; i <= 28; i++) { var a = (i / 28) * TAU; ring.push([hx - 3 + Math.cos(a) * 11.5 * k, hy - hr * 0.86 - Math.cos(a) * 3, Math.sin(a) * 11.5 * k, 1.9]); }
-          S.path('collar', ring, '#60a5fa', 0.8, 2);
-          S.ell('tag', [hx - 3 + 13 * k, hy - hr * 0.86 - 7, 0], [1.6, 3.6, 3.6], '#fde047', 0.8);
+          wantCollar = true;
+          var tagAt = [hx + 80, hy - hr * 0.86 - 6.5, 0];
         }
         var tl = p.tail;
         S.piece('tail');
         var t0 = tailPts[0];
         S.path('tail', tailPts.map(function (q) { return [t0[0] + (q[0] - t0[0]) * tl, t0[1] + (q[1] - t0[1]) * tl, t0[2] + (q[2] - t0[2]) * tl, q[3]]; }), fur, 3);
-        S.reach = pose === 3 ? 0.95 : 0.72;
+        S.reach = pose === 3 ? 1 : 0.72;
         S.run();
+        if (wantCollar) { var tg = S.face('tag', tagAt, [-1, 0, 0], 'collar'); if (tg) { sc.add('tag', 'b', dome(tg.p, tg.n, 3.6 * tg.k, { angle: 38, seg: 24 }), '#fde047'); S.addon('tag', tg.p, 3.6 * tg.k); } }
+        if (wantCollar) S.shell(sc, 'collar', 'collar', 'b', collarBand(hx - (pose === 1 ? 9 : 5), hy - hr * 0.86 - (pose === 1 ? 2 : 0), (pose === 1 ? 8.8 : 10) * k, (pose === 1 ? 9.6 : 10.5) * k, 1.6, pose === 1 ? 0 : 1.5), '#60a5fa');
         var nose = S.face('nose', [hx + 80, my + hr * 0.12, 0], [-1, 0, 0], 'muzzle');
         if (nose) { sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0] + 0.3, nose.n[1] + 0.25, 0]), hr * 0.21 * nose.k, { angle: 55 }), '#1e293b'); S.addon('nose', nose.p, hr * 0.21 * nose.k); }
         [-1, 1].forEach(function (s) {
@@ -151,7 +151,7 @@
         ]),
         sculpt: sculptModule([
           { id: 'head', label: 'Head', section: 'Head' }, { id: 'muzzle', label: 'Muzzle', section: 'Head', parent: 'head' }, { id: 'nose', label: 'Nose', section: 'Head', parent: 'muzzle' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
-          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'collar', label: 'Collar', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
+          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'collar', label: 'Collar', section: 'Body' }, { id: 'tag', label: 'Tag', section: 'Body', parent: 'collar' }, { id: 'tail', label: 'Tail', section: 'Body' },
           { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),
         build: buildDog

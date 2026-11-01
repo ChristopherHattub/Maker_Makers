@@ -289,6 +289,14 @@
       "overhang"
     ]
   },
+  "dog-builder": {
+    "Lying down": [
+      "overhang"
+    ],
+    "Begging": [
+      "overhang"
+    ]
+  },
   "egg-basket": {
     "defaults": [
       "overhang"
@@ -419,7 +427,7 @@
     ]
   },
   "flexi-fish": {
-    "Tiny fish": [
+    "Straight (easy print)": [
       "overhang"
     ]
   },

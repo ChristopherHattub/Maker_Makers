@@ -116,7 +116,7 @@
             S.path('feathers', [[root[0] + d[0] * 2, y0 + W * 0.28, root[2] + d[2] * 2, 2.2], [root[0] + d[0] * W * e[0], y0 + W * e[1], root[2] + d[2] * W * e[0], 1.5]], '#e0f2fe', 0.8);
           });
         });
-        S.reach = pose === 2 ? 0.92 : 0.72;
+        S.reach = pose === 2 ? 0.92 : 0.6;
         S.run();
         [-1, 1].forEach(function (s) {
           var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 2 * hs, hy + 3 * hs, s * 60], [0, 0, -s], 'head');

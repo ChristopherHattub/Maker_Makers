@@ -87,7 +87,7 @@
           ['Default elephant', {}],
           ['Happy trunk-up', { trunk: 1 }],
           ['Baby elephant', { size: 0.7, head: 1.25, ears: 1.15, tusk: 0, bulk: 0.9 }],
-          ['Big tusker', { size: 1.25, tusk: 1.3, ears: 1.1, bulk: 1.1, legs: 10 }]
+          ['Big tusker', { size: 1.2, tusk: 1, ears: 1.05, bulk: 1.05, legs: 9.5 }]
         ]),
         sculpt: sculptModule([
           { id: 'head', label: 'Head', section: 'Head' }, { id: 'trunk', label: 'Trunk', section: 'Head' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'tuskL', label: 'Left tusk', section: 'Head' }, { id: 'tuskR', label: 'Right tusk', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },

@@ -2,7 +2,7 @@
       // Cat Sculptor: a sitting, loafing or curled-up cat sculpted as one seamless surface
       // -----------------------------------------------------------------------
       function buildCat(p, api) {
-        var sc = new Scene(), S = new Sculpt(1.3).useEdits(api, p.size / 100), k = p.chunk, hs = p.headSize, pose = Math.round(p.pose), fur = '#fdba74', cream = '#fff1dc', dark = '#c2703d', pink = '#fda4af';
+        var sc = new Scene(), S = new Sculpt(1.15).useEdits(api, p.size / 100), k = p.chunk, hs = p.headSize, pose = Math.round(p.pose), fur = '#fdba74', cream = '#fff1dc', dark = '#c2703d', pink = '#fda4af';
         var hx, hy, hr = 13.5 * hs, sd, i;
         if (pose === 0) { // sitting
           S.piece('torso');
@@ -50,7 +50,7 @@
         var st = Math.round(p.stripes), bc = pose === 0 ? [-7, 15, 0] : pose === 1 ? [-4, 16, 0] : [-6, 13, -3], br = pose === 0 ? [21 * k, 19, 18 * k] : pose === 1 ? [28 * k, 20, 17 * k] : [27, 17 * k, 21 * k];
         for (i = 0; i < st; i++) {
           var dx = st > 1 ? lerp(-br[0] * 0.62, pose === 0 ? 2 : br[0] * 0.3, i / (st - 1)) : -br[0] * 0.3;
-          S.path('stripes', bandOver(bc, br, dx, 0.72, 1.9, 0.5), dark, 1, 2);
+          S.path('stripes', bandOver(bc, br, dx, 0.72, 2.3, 0.4), dark, 0.8, 3);
         }
         // tail on the bed, curling round the feet
         var tl = p.tail, tc;
@@ -59,10 +59,10 @@
         else tc = [[-30, 3.2, -8, 5], [-24, 3, -27 * tl, 4.6], [-6, 2.8, -33 * tl, 4.2], [14, 2.6, -27 * tl, 3.8], [26, 2.4, -13 * tl, 3.5]];
         S.piece('tail');
         S.path('tail', tc, fur, 2.5);
-        S.piece('collar');
-        if (Math.round(p.collar) === 1 && pose === 0) S.path('collar', [[0, 47, 0, 0]].slice(0, 0).concat(ringPts(hx - 2, hy - hr * 0.72, 0, 9.5 * k, 11.5 * k, 1.9)), '#fb7185', 0.8, 2);
+        var wantCollar = Math.round(p.collar) === 1 && pose === 0;
         S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head'; S.parents.pupilL = 'eyeL'; S.parents.pupilR = 'eyeR';
         S.run();
+        if (wantCollar) S.shell(sc, 'collar', 'collar', 'b', collarBand(hx - 3, hy - hr * 0.76, 9.6 * k, 11.2 * k, 1.5, 1), '#fb7185');
         // mouth, nose and eyes go on the finished surface, and follow the head when it is edited
         if (!S.deleted('nose')) {
           S.pivots.nose = [hx + 60, hy - hr * 0.1, 0];
@@ -92,12 +92,6 @@
         S.addTo(sc);
         return finishSculpt(sc, p.size / 100, S);
       }
-      function ringPts(x, y, z, rx, rz, r) {
-        var out = [];
-        for (var i = 0; i <= 28; i++) { var a = (i / 28) * TAU; out.push([x + Math.cos(a) * rx, y - Math.cos(a) * 3, z + Math.sin(a) * rz, r]); }
-        return out;
-      }
-
       var CAT_PARAMS = [
         { group: 'Pose', key: 'pose', label: 'Pose', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Sitting', 'Loaf', 'Curled up'] },
         { group: 'Pose', key: 'size', label: 'Overall size', unit: '%', min: 60, max: 130, step: 1, value: 100 },
