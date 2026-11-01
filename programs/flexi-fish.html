@@ -909,6 +909,8 @@
         Object.keys(box).forEach(function (id) { var b = box[id]; self.pivots[id] = [(b.lo[0] + b.hi[0]) / 2, (b.lo[1] + b.hi[1]) / 2, (b.lo[2] + b.hi[2]) / 2]; self.boxes[id] = b; });
         this.pieceIds = Object.keys(box);
         this.ops = this.ops.filter(function (o) { return !(o.piece && self.deleted(o.piece)); });
+        // Once something is deleted, leftovers must stay on screen as pieces, so nothing goes through the support trim.
+        if (this.st && Object.keys(this.st.edits).some(function (k) { return self.st.edits[k].del && k.indexOf('~') < 0; })) this.ops.forEach(function (o) { o.late = true; });
         this.ops.forEach(function (o) {
           if (!o.piece) return;
           var ch = self._chain(o.piece);

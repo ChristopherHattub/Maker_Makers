@@ -734,6 +734,7 @@
       output = output.map(function (e) { var c = Object.assign({}, e); c.positions = e.positions.slice(); return c; });
       if (cfg.sculpt.apply) output = cfg.sculpt.apply(output);
       sculptApplyStrokes(output);
+      output = sculptSplit(output);
     }
     modelData = output;
     printCache = null;
@@ -1941,18 +1942,116 @@
   }
   function sculptMirrorPlane() { return sc8.mirror ? (sc8.shift ? -sc8.shift[1] : 0) : undefined; }
 
+  // When an edit breaks a sculpted surface into separate solids, every solid after the largest of a piece becomes its own
+  // selectable piece, nested under the original. Ids are owner~n, with n in size order. Generators without the kit are already split by solid.
+  function sculptSplit(entries) {
+    sc8.split = null;
+    if (!cfg.sculpt.kit || !sculptEdited()) return entries;
+    var surface = entries.filter(function (e) { return e.smoothGroup === 'sculpt'; });
+    if (!surface.length) return entries;
+    var hasOwn = Object.keys(sc8.edits).some(function (k) { return k.indexOf('~') >= 0; });
+    if (sc8.draft && !hasOwn) return entries;
+    var ids = new Map(), parent = [], tv = [];
+    function find(a) { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; }
+    function vid(p, i) {
+      var k = Math.round(p[i] * 1000) + ',' + Math.round(p[i + 1] * 1000) + ',' + Math.round(p[i + 2] * 1000), v = ids.get(k);
+      if (v === undefined) { v = parent.length; parent.push(v); ids.set(k, v); }
+      return v;
+    }
+    surface.forEach(function (e) {
+      var p = e.positions, t = new Int32Array(p.length / 9);
+      for (var i = 0; i < p.length; i += 9) {
+        var a = find(vid(p, i)), b = find(vid(p, i + 3)), c = find(vid(p, i + 6));
+        if (a !== b) parent[b] = a;
+        if (find(a) !== c) parent[c] = find(a);
+        t[i / 9] = vid(p, i);
+      }
+      tv.push(t);
+    });
+    var shells = new Map();
+    surface.forEach(function (e, ei) {
+      var p = e.positions, t = tv[ei];
+      for (var f = 0; f < t.length; f++) {
+        var r = find(t[f]), S = shells.get(r);
+        if (!S) { S = { n: 0, lo: [1e9, 1e9, 1e9], hi: [-1e9, -1e9, -1e9], votes: {}, seen: 0 }; shells.set(r, S); }
+        S.n++;
+        for (var k = 0; k < 9; k++) { var ax = k % 3, v = p[f * 9 + k]; if (v < S.lo[ax]) S.lo[ax] = v; if (v > S.hi[ax]) S.hi[ax] = v; }
+        if (S.n % 16 === 1 && S.seen < 40) { // a sample of triangles votes on which piece this solid belongs to
+          S.seen++;
+          var who = cfg.sculpt.pieceAt({ x: (p[f * 9] + p[f * 9 + 3] + p[f * 9 + 6]) / 3, y: (p[f * 9 + 1] + p[f * 9 + 4] + p[f * 9 + 7]) / 3, z: (p[f * 9 + 2] + p[f * 9 + 5] + p[f * 9 + 8]) / 3 });
+          if (who) S.votes[who] = (S.votes[who] || 0) + 1;
+        }
+      }
+    });
+    var byOwner = {}, extras = [], rootOf = new Map();
+    shells.forEach(function (S, r) {
+      S.owner = Object.keys(S.votes).sort(function (a, b) { return S.votes[b] - S.votes[a]; })[0];
+      if (S.owner) (byOwner[S.owner] = byOwner[S.owner] || []).push(S);
+      S.root = r;
+    });
+    var known = cfg.sculpt.available();
+    Object.keys(byOwner).forEach(function (o) {
+      var info = known.filter(function (p) { return p.id === o; })[0] || { label: o };
+      byOwner[o].sort(function (a, b) { return b.n - a.n; }).slice(1).forEach(function (S, i) {
+        S.id = o + '~' + (i + 1);
+        S.ed = sc8.edits[S.id] || null;
+        extras.push({ id: S.id, label: info.label + ' piece ' + (i + 2), section: info.section, parent: o, shell: S });
+        rootOf.set(S.root, S);
+      });
+    });
+    if (!extras.length) return entries;
+    extras.forEach(function (x) {
+      var S = x.shell;
+      S.c = [(S.lo[0] + S.hi[0]) / 2, (S.lo[1] + S.hi[1]) / 2, (S.lo[2] + S.hi[2]) / 2];
+    });
+    var out = [], maps = [];
+    entries.forEach(function (e) {
+      var si = surface.indexOf(e);
+      if (si < 0) { out.push(e); maps.push(null); return; }
+      var t = tv[si], p = e.positions, keep = [], f, k;
+      for (f = 0; f < t.length; f++) { var S0 = rootOf.get(find(t[f])); if (!(S0 && S0.ed && S0.ed.del)) keep.push(f); }
+      var np = new Float32Array(keep.length * 9), own = new Array(keep.length);
+      keep.forEach(function (f2, n) {
+        var S1 = rootOf.get(find(t[f2])), ed = S1 && S1.ed;
+        own[n] = S1 ? S1.id : null;
+        for (k = 0; k < 9; k++) { var ax = k % 3, v = p[f2 * 9 + k]; np[n * 9 + k] = ed ? S1.c[ax] + (v - S1.c[ax]) * ed.s[ax] + ed.m[ax] : v; }
+      });
+      if (!keep.length) return;
+      var c = Object.assign({}, e); c.positions = np;
+      out.push(c); maps.push(own);
+    });
+    extras.forEach(function (x) {
+      var S = x.shell, ed = S.ed;
+      x.lo = S.lo; x.hi = S.hi;
+      if (ed && !ed.del) for (var i = 0; i < 3; i++) { var l = S.c[i] + (S.lo[i] - S.c[i]) * ed.s[i] + ed.m[i], h = S.c[i] + (S.hi[i] - S.c[i]) * ed.s[i] + ed.m[i]; x.lo = x.lo.slice(); x.hi = x.hi.slice(); x.lo[i] = l; x.hi[i] = h; }
+      x.gone = !!(ed && ed.del);
+    });
+    sc8.split = { extras: extras, maps: maps };
+    return out;
+  }
+  function sculptExtra(id) { return sc8.split ? sc8.split.extras.filter(function (x) { return x.id === id; })[0] : null; }
+  function sculptPieces() { return cfg.sculpt.available().concat(sc8.split ? sc8.split.extras : []); }
+  function sculptBounds(id) { var x = sculptExtra(id); return x ? (x.gone ? null : { lo: x.lo, hi: x.hi }) : cfg.sculpt.bounds(id); }
+
   // Tints the triangles of the selected piece (and the pieces that follow it).
   function sculptHighlight() {
     if (sc8Mark) { scene.remove(sc8Mark); sc8Mark.geometry.dispose(); sc8Mark = null; }
-    var id = sculptOn() && sc8.tool === 'select' ? sc8.sel : null, b = id ? cfg.sculpt.bounds(id) : null;
+    var id = sculptOn() && sc8.tool === 'select' ? sc8.sel : null, b = id ? sculptBounds(id) : null;
     if (!b) return;
     var out = [], pad = 2, q = { x: 0, y: 0, z: 0 };
-    if (cfg.sculpt.trisOf) cfg.sculpt.trisOf(id, modelData, out);
-    else modelData.forEach(function (e) {
+    var split = sc8.split;
+    if (sculptExtra(id)) modelData.forEach(function (e, ei) {
+      var own = split.maps[ei], p = e.positions;
+      if (own) for (var f = 0; f < own.length; f++) if (own[f] === id) for (var k = 0; k < 9; k++) out.push(p[f * 9 + k]);
+    });
+    else if (cfg.sculpt.trisOf) cfg.sculpt.trisOf(id, modelData, out);
+    else modelData.forEach(function (e, ei) {
+      var own = split && split.maps[ei];
       var p = e.positions;
       for (var i = 0; i < p.length; i += 9) {
         q.x = (p[i] + p[i + 3] + p[i + 6]) / 3; q.y = (p[i + 1] + p[i + 4] + p[i + 7]) / 3; q.z = (p[i + 2] + p[i + 5] + p[i + 8]) / 3;
         if (q.x < b.lo[0] - pad || q.x > b.hi[0] + pad || q.y < b.lo[1] - pad || q.y > b.hi[1] + pad || q.z < b.lo[2] - pad || q.z > b.hi[2] + pad) continue;
+        if (own && own[i / 9]) continue; // a broken-off solid is its own piece
         var who = cfg.sculpt.pieceAt(q);
         if (who !== id && !cfg.sculpt.isUnder(who, id)) continue;
         for (var k = 0; k < 9; k++) out.push(p[i + k]);
@@ -1974,7 +2073,7 @@
       sc8Box.visible = false;
       scene.add(sc8Box);
     }
-    var b = sculptOn() && sc8.tool === 'select' && sc8.sel ? cfg.sculpt.bounds(sc8.sel) : null;
+    var b = sculptOn() && sc8.tool === 'select' && sc8.sel ? sculptBounds(sc8.sel) : null;
     sc8Box.visible = !!b;
     if (b) { sc8Box.box.min.set(b.lo[0], b.lo[1], b.lo[2]); sc8Box.box.max.set(b.hi[0], b.hi[1], b.hi[2]); }
     sculptHighlight();
@@ -2009,7 +2108,8 @@
     camera.getWorldDirection(n);
     var drag = { start: hit.point.clone(), plane: new T.Plane().setFromNormalAndCoplanarPoint(n, hit.point), moved: false };
     if (sc8.tool === 'select') {
-      var id = cfg.sculpt.pieceAt(hit.point, hit);
+      var own = sc8.split && sc8.split.maps[hit.meshIndex];
+      var id = (own && own[hit.faceIndex]) || cfg.sculpt.pieceAt(hit.point, hit);
       sc8.sel = id;
       drag.type = 'move'; drag.id = id;
       drag.base = (sc8.edits[id] && sc8.edits[id].m || [0, 0, 0]).slice();
@@ -2342,7 +2442,7 @@
           selectBox.hidden = sc8.tool !== 'select';
           sculptBox.hidden = sc8.tool !== 'sculpt';
           note.textContent = sc8.tool === 'select' ? 'Click a piece or pick it from the list. Drag it on the model to move it.' : 'Pick a brush, then work on the model.';
-          var list = cfg.sculpt.available(), key = list.map(function (p) { return p.id; }).join();
+          var list = sculptPieces(), key = list.map(function (p) { return p.id; }).join();
           if (key !== chipKey) {
             chipKey = key;
             while (chips.firstChild) chips.removeChild(chips.firstChild);
@@ -2366,7 +2466,7 @@
           sc8Ui.lastSel = sc8.sel;
           detail.hidden = !sc8.sel;
           if (sc8.sel) {
-            var info = cfg.sculpt.available().filter(function (p) { return p.id === sc8.sel; })[0], ed = sc8.edits[sc8.sel];
+            var info = sculptPieces().filter(function (p) { return p.id === sc8.sel; })[0], ed = sc8.edits[sc8.sel];
             selName.textContent = 'Selected: ' + (info ? info.label : sc8.sel);
             delBtn.textContent = ed && ed.del ? 'Restore' : 'Delete';
             sW.sync(); sH.sync(); sD.sync();

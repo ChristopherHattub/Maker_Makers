@@ -909,6 +909,8 @@
         Object.keys(box).forEach(function (id) { var b = box[id]; self.pivots[id] = [(b.lo[0] + b.hi[0]) / 2, (b.lo[1] + b.hi[1]) / 2, (b.lo[2] + b.hi[2]) / 2]; self.boxes[id] = b; });
         this.pieceIds = Object.keys(box);
         this.ops = this.ops.filter(function (o) { return !(o.piece && self.deleted(o.piece)); });
+        // Once something is deleted, leftovers must stay on screen as pieces, so nothing goes through the support trim.
+        if (this.st && Object.keys(this.st.edits).some(function (k) { return self.st.edits[k].del && k.indexOf('~') < 0; })) this.ops.forEach(function (o) { o.late = true; });
         this.ops.forEach(function (o) {
           if (!o.piece) return;
           var ch = self._chain(o.piece);
@@ -1273,8 +1275,8 @@
       };
       // Smooth collar band around a neck: rounded on top, sloped underneath so it prints. tilt lowers the front by that many mm.
       function collarBand(x, y, rx, rz, proud, tilt) {
-        var rings = [], prof = [[-3.2, -2.2], [-2.2, -1.1], [-1.5, 0], [-1, 0.72], [-0.3, 1], [0.4, 1], [1.1, 0.72], [1.6, 0.25], [2, -0.6], [2.4, -2.2]], i;
-        for (i = 0; i < prof.length; i++) rings.push({ y: y + prof[i][0], cx: x, cz: 0, rx: rx + proud * prof[i][1], rz: rz + proud * prof[i][1] });
+        var rings = [], prof = [[-7, -5.2 - proud], [-5, -3.2 - proud], [-3, -1.2 - proud], [-1.8, 0], [-1, proud * 0.7], [-0.3, proud], [0.4, proud], [1.1, proud * 0.72], [1.6, proud * 0.25], [2.2, -1.2], [2.8, -3.5]], i;
+        for (i = 0; i < prof.length; i++) rings.push({ y: y + prof[i][0], cx: x, cz: 0, rx: rx + prof[i][1], rz: rz + prof[i][1] });
         var out = loft(rings, 72, { free: true, poleLift: 0 }).tris;
         for (i = 0; i < out.length; i += 3) out[i + 1] -= ((out[i] - x) / rx) * tilt;
         return out;
