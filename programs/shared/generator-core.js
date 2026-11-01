@@ -1991,6 +1991,7 @@
     });
   }
   function sculptApplyOne(entries, st) {
+    entries = entries.filter(function (e) { return !e.noSculpt; });   // an entry flagged noSculpt (Holiday Tree ornaments) ignores brush strokes
     if (st.tool && st.tool !== 'grab') {
       sculptDab(entries, st);
       if (st.zm !== undefined) sculptDab(entries, st, st.zm);

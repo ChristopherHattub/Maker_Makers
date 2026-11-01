@@ -16,18 +16,19 @@
       --s-bg-img: linear-gradient(#4a2530, #2b1a20);
     }
     .holiday .mm-gen-title { font-weight: 700; }
-    .ht-row { display: flex; flex-direction: column; gap: 0.15rem; margin: 0 0 0.5rem; }
-    .ht-label { font-size: 0.78rem; color: var(--s-muted); line-height: 1.1; }
-    .ht-tiles, .ht-tools { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-    .ht-tools { margin: 0.7rem 0 0.3rem; align-items: center; }
-    .ht-tile { width: 2.7rem; height: 2.7rem; padding: 0.22rem; border-radius: 12px; border: 2px solid var(--s-edge); background: #fff; cursor: pointer;
+    .ht-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; margin: 0.4rem 0; }
+    .ht-tools { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.5rem 0 0.2rem; align-items: center; }
+    .ht-tile { aspect-ratio: 1; min-width: 0; padding: 2px; border-radius: 8px; border: 2px solid var(--s-edge); background: #fff; cursor: pointer;
       box-shadow: 0 2px 0 var(--s-edge); transition: transform .12s, box-shadow .12s; }
+    .ht-tools .ht-tile { width: 2.6rem; height: 2.6rem; aspect-ratio: auto; padding: 0.2rem; border-radius: 12px; }
     .ht-tile svg { width: 100%; height: 100%; display: block; }
     .ht-tile:hover { transform: translateY(-2px); }
     .ht-tile:active { transform: translateY(1px); box-shadow: none; }
-    .ht-tile[aria-pressed="true"] { border-color: var(--s-accent); background: #ffe9ec; transform: scale(1.08); }
+    .ht-tile[aria-pressed="true"] { border-color: var(--s-accent); background: #ffe9ec; transform: scale(1.12); position: relative; z-index: 1; }
     .ht-tile:focus-visible { outline: 3px solid var(--s-accent); outline-offset: 2px; }
-    .ht-shape { margin-top: 0.8rem; }
+    .ht-hintline { margin: 0.2rem 0; }
+    .ht-slot .mm-acc { margin-bottom: 0.2rem; }
+    @media (max-width: 860px) { .ht-grid { grid-template-columns: repeat(6, 1fr); gap: 5px; } }
   </style>
 </head>
 <body class="mm-gen mm-soft holiday">
@@ -189,7 +190,8 @@
           if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
           else node.setAttribute(k, attrs[k]);
         });
-        if (text) node.textContent = text;
+        if (Array.isArray(text)) text.forEach(function (c) { node.appendChild(c); });
+        else if (text) node.textContent = text;
         return node;
       }
       function withDefaults(defaults, over) {
@@ -372,8 +374,8 @@
         { group: 'Tree', key: 'baseR', label: 'Bottom tier width (radius)', unit: ' mm', min: 16, max: 42, step: 1, value: 28 },
         { group: 'Tree', key: 'tiers', label: 'Number of tiers', unit: '', min: 3, max: 8, step: 1, value: 5 },
         { group: 'Tree', key: 'topPct', label: 'Top tier width (% of bottom)', unit: '%', min: 20, max: 60, step: 1, value: 34 },
-        { group: 'Tree', key: 'slope', label: 'Underside slope (steeper = safer print)', unit: '°', min: 45, max: 70, step: 1, value: 50 },
-        { group: 'Tree', key: 'lipH', label: 'Bough edge thickness', unit: ' mm', min: 1.6, max: 4, step: 0.2, value: 2 },
+        { group: 'Boughs', key: 'slope', label: 'Underside slope (steeper = safer print)', unit: '°', min: 45, max: 70, step: 1, value: 50 },
+        { group: 'Boughs', key: 'lipH', label: 'Bough edge thickness', unit: ' mm', min: 1.6, max: 4, step: 0.2, value: 2 },
         { group: 'Boughs', key: 'scallop', label: 'Wavy edges (depth)', unit: '%', min: 0, max: 10, step: 0.5, value: 4 },
         { group: 'Boughs', key: 'lobes', label: 'Wave count', unit: '', min: 3, max: 14, step: 1, value: 8 },
         { group: 'Trunk & base', key: 'trunkR', label: 'Trunk width (radius)', unit: ' mm', min: 5, max: 16, step: 0.5, value: 9 },
@@ -496,7 +498,7 @@
           var name = 'orn_' + st.id, pos = stampPositions(placed(st, p), 3.8, 1.6);
           PART_NAMES[name] = ITEM_NAME[st.type] + ' (' + colorName(st.color) + ')';
           ornGeo[name] = pos;
-          out.push({ name: name, color: st.color, positions: pos, singlePart: true });
+          out.push({ name: name, color: st.color, positions: pos, singlePart: true, noSculpt: true });
         });
         if (refreshPanel) refreshPanel();
         return out;
@@ -536,6 +538,13 @@
       var jiggleT0 = -1e9;
       var CHEERS = ['Pretty!', 'Ooh, sparkly!', 'Looks great!', 'Ta-da!', 'So festive!'];
       function clock() { return window.performance && performance.now ? performance.now() : Date.now(); }
+      var wiggleAmp = 0, wiggleT0 = -1e9, lastSpark = 0;
+      // The tree wobbles (and twinkles now and then) while a tree slider moves.
+      function wiggle(amp) {
+        var t = clock();
+        if (t - wiggleT0 > 140) { wiggleT0 = t; wiggleAmp = amp; }
+        if (stage && t - lastSpark > 350) { lastSpark = t; spawnBurst([0, (apiRef ? apiRef.params.height : 90) * (0.35 + Math.random() * 0.6), 0], '#f6b93b'); }
+      }
       function easeOutBack(t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
 
       function addOrnament(o, delay) {
@@ -584,7 +593,9 @@
       function tick() {
         if (!stage) return;
         var t = clock(), i, jt = (t - jiggleT0) / 520, mg = stage.modelGroup;
+        var wt = (t - wiggleT0) / 600;
         if (jt >= 0 && jt < 1) { var w = Math.sin(jt * Math.PI * 3) * (1 - jt) * 0.025; mg.scale.set(1 + w, 1 - w * 1.4, 1 + w); }
+        else if (wt >= 0 && wt < 1) { var ww = Math.sin(wt * Math.PI * 4) * (1 - wt) * wiggleAmp; mg.scale.set(1 + ww, 1 - ww * 1.2, 1 + ww); }
         else if (mg.scale.y !== 1) mg.scale.set(1, 1, 1);
         for (i = anims.length - 1; i >= 0; i--) {
           var an = anims[i], mesh = findMesh(an.name), k = (t - an.t0) / (an.kind === 'in' ? 650 : 220);
@@ -838,11 +849,83 @@
         return group;
       }
 
+      // ---- Sounds: tiny synthesized chimes, made with the browser's audio (no files, nothing downloaded) ----
+      var audio = null, soundOn = true, lastSlide = 0;
+      function ctx() {
+        if (!audio) {
+          try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = false; }
+        }
+        if (audio && audio.state === 'suspended') audio.resume();
+        return audio || null;
+      }
+      function note(freq, when, len, vol, type, slideTo) {
+        var c = ctx();
+        if (!c || !soundOn) return;
+        var t = c.currentTime + (when || 0), o = c.createOscillator(), g = c.createGain();
+        o.type = type || 'sine';
+        o.frequency.setValueAtTime(freq, t);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + len);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        o.connect(g); g.connect(c.destination);
+        o.start(t); o.stop(t + len + 0.05);
+      }
+      var SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5];   // C major pentatonic: every ornament sounds nice
+      function soundAdd(type, color) {
+        var ci = Math.max(0, COLORS.map(function (c) { return c.hex; }).indexOf(color)), f = SCALE[ci % SCALE.length];
+        if (type === 'bell') { note(f * 2, 0, 0.9, 0.12); note(f * 3.01, 0, 0.6, 0.05); note(f * 2, 0.12, 0.9, 0.1); }
+        else if (type === 'star' || type === 'snow') { note(f * 2, 0, 0.5, 0.09); note(f * 3, 0.07, 0.5, 0.08); note(f * 4, 0.14, 0.6, 0.06); }
+        else if (type === 'gift') { note(f, 0, 0.18, 0.12, 'triangle'); note(f * 1.5, 0.09, 0.3, 0.1, 'triangle'); }
+        else if (type === 'ginger' || type === 'cane') { note(f, 0, 0.12, 0.1, 'square'); note(f * 1.25, 0.08, 0.2, 0.08, 'square'); }
+        else { note(f, 0, 0.7, 0.14); note(f * 2.01, 0, 0.4, 0.05); }   // ball, heart, holly: a glassy ting
+      }
+      function soundErase() { note(520, 0, 0.14, 0.12, 'sine', 180); }
+      function soundSlide(norm) {
+        var t = clock();
+        if (t - lastSlide < 70) return;
+        lastSlide = t;
+        note(280 + norm * 700, 0, 0.12, 0.07, 'triangle');
+      }
+      function soundSurprise() { SCALE.forEach(function (f, i) { note(f, i * 0.06, 0.45, 0.08); }); }
+
       // ---- The Decorate tab ----
+      var treeSlot = null, ornSlot = null;
       function mountDecorate(container, api) {
         apiRef = api;
-        container.appendChild(el('h2', { class: 'mm-section-title' }, 'Decorate your tree'));
-        container.appendChild(el('p', { class: 'mm-note' }, 'Tap a picture, then tap the tree to hang it. Keep tapping to add more!'));
+        // 1. Tree: styles, size and shape (the old Parametric controls, kept short)
+        var frag = api.takeParams();
+        if (frag.firstChild && frag.firstChild.tagName === 'H2') frag.removeChild(frag.firstChild);
+        var treeBox = el('div', { class: 'ht-tree' });
+        treeBox.appendChild(frag);
+        // Keep Styles and the main Tree sliders in view; tuck the rest under one fold.
+        var accs = Array.prototype.slice.call(treeBox.children).filter(function (n) { return n.tagName === 'DETAILS'; });
+        var rest = accs.filter(function (d) { var t = d.querySelector('summary').textContent.toLowerCase(); return t !== 'presets' && t !== 'tree'; });
+        if (rest.length) {
+          var more = el('div', {});
+          rest.forEach(function (d) { more.appendChild(d); });
+          treeBox.appendChild(el('details', { class: 'mm-acc' }, [el('summary', { class: 'mm-acc-title' }, 'More tree options'), el('div', { class: 'mm-acc-body' }, [more])]));
+        }
+        var treeHead = el('h2', { class: 'mm-section-title' }, 'Your tree');
+        container.appendChild(treeHead);
+        container.appendChild(treeBox);
+        // Slider sounds and a little tree wiggle while a tree slider moves.
+        treeBox.addEventListener('input', function (e) {
+          var inp = e.target;
+          if (!inp || inp.type !== 'range') return;
+          var lo = parseFloat(inp.min), hi = parseFloat(inp.max), norm = hi > lo ? (parseFloat(inp.value) - lo) / (hi - lo) : 0.5;
+          soundSlide(norm);
+          wiggle(0.03);
+        });
+        treeBox.addEventListener('click', function (e) {
+          if (e.target && (e.target.closest('.mm-preset-card') || e.target.closest('.mm-chip') || e.target.closest('.mm-choice'))) { note(660, 0, 0.1, 0.09, 'triangle'); wiggle(0.04); }
+        });
+
+        // 2. Ornaments
+        container.appendChild(el('h2', { class: 'mm-section-title' }, 'Ornaments'));
+        ornSlot = el('div', { class: 'ht-slot' });
+        container.appendChild(ornSlot);
+        container.appendChild(el('p', { class: 'mm-note ht-hintline' }, 'Tap a picture, then tap the tree. Keep tapping to add more!'));
         var tiles = [];
         function mark() {
           tiles.forEach(function (t) { t.el.setAttribute('aria-pressed', String(t.type === pick.type && (t.type === 'erase' || t.color === pick.color))); });
@@ -855,46 +938,35 @@
           b.addEventListener('click', function () {
             pick = { type: type, color: color || pick.color };
             mark();
-            api.toast(type === 'erase' ? 'Eraser: tap an ornament to remove it' : label + ' picked');
+            if (type === 'erase') note(400, 0, 0.1, 0.08, 'triangle'); else soundAdd(type, color);
           });
           tiles.push({ el: b, type: type, color: color });
           parent.appendChild(b);
         }
-        ITEMS.forEach(function (d) {
-          var row = el('div', { class: 'ht-row' });
-          row.appendChild(el('span', { class: 'ht-label' }, d.name));
-          var box = el('div', { class: 'ht-tiles' });
-          COLORS.forEach(function (c) { tile(box, d.id, c.hex, c.name + ' ' + d.name); });
-          row.appendChild(box);
-          container.appendChild(row);
-        });
+        // One compact grid: a column per shape, a row per color.
+        var grid = el('div', { class: 'ht-grid' });
+        COLORS.forEach(function (c) { ITEMS.forEach(function (d) { tile(grid, d.id, c.hex, c.name + ' ' + d.name); }); });
+        container.appendChild(grid);
         var tools = el('div', { class: 'ht-tools' });
-        tile(tools, 'erase', null, 'Eraser');
-        var count = el('p', { class: 'mm-note' }, '');
-        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (ornaments.length) { ornaments.pop(); api.rebuild(); api.toast('Took one off'); } } }, 'Undo');
-        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (ornaments.length) { ornaments = []; anims = []; api.rebuild(); api.toast('Fresh tree!'); } } }, 'Clear all');
-        var sur = el('button', { class: 'mm-btn mm-btn--solid', type: 'button', onclick: function () { surprise(api); } }, 'Surprise me!');
-        tools.appendChild(undo); tools.appendChild(clear); tools.appendChild(sur);
+        tile(tools, 'erase', null, 'Eraser: tap an ornament to remove it');
+        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (ornaments.length) { ornaments.pop(); api.rebuild(); soundErase(); } } }, 'Undo');
+        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (ornaments.length) { ornaments = []; anims = []; api.rebuild(); soundErase(); api.toast('Fresh tree!'); } } }, 'Clear');
+        var sur = el('button', { class: 'mm-btn mm-btn--solid', type: 'button', onclick: function () { soundSurprise(); surprise(api); } }, 'Surprise me!');
+        var snd = el('button', { class: 'mm-btn', type: 'button', 'aria-pressed': 'true', title: 'Sounds on or off', onclick: function () {
+          soundOn = !soundOn; snd.textContent = soundOn ? 'Sound on' : 'Sound off'; snd.setAttribute('aria-pressed', String(soundOn));
+          if (soundOn) note(784, 0, 0.2, 0.1);
+        } }, 'Sound on');
+        tools.appendChild(undo); tools.appendChild(clear); tools.appendChild(sur); tools.appendChild(snd);
         container.appendChild(tools);
+        var count = el('p', { class: 'mm-note' }, '');
         container.appendChild(count);
         refreshPanel = function () {
-          count.textContent = ornaments.length + (ornaments.length === 1 ? ' ornament' : ' ornaments') + ' on your tree';
+          count.textContent = ornaments.length + (ornaments.length === 1 ? ' ornament' : ' ornaments') + ' on your tree. The room is just for fun and is not printed.';
           undo.disabled = clear.disabled = ornaments.length === 0;
         };
         mark();
         refreshPanel();
-        container.appendChild(el('p', { class: 'mm-note' }, 'Everything is fused to the tree so it prints as one piece. The room is just for fun and is not printed. Paint any part in the Color tab.'));
-
-        // All the old Parametric controls (tree shape, topper, hook, styles) live here too, folded away.
-        var frag = api.takeParams();
-        if (frag.firstChild && frag.firstChild.tagName === 'H2') frag.removeChild(frag.firstChild);
-        var inner = el('div', {});
-        inner.appendChild(frag);
-        var acc = el('details', { class: 'mm-acc ht-shape' }, [el('summary', { class: 'mm-acc-title' }, 'Tree shape, topper & styles'), el('div', { class: 'mm-acc-body' }, [inner])]);
-        treeAcc = acc;
-        container.appendChild(acc);
       }
-      var treeAcc = null;
 
       window.MM_GENERATOR = {
         code: 'MM-008',
@@ -935,7 +1007,7 @@
           },
           onPick: function (hit, api) {
             if (pick.type === 'erase') {
-              if (hit.meshName.indexOf('orn_') === 0) removeOrnament(parseInt(hit.meshName.slice(4), 10));
+              if (hit.meshName.indexOf('orn_') === 0) { removeOrnament(parseInt(hit.meshName.slice(4), 10)); soundErase(); }
               else api.toast('Tap an ornament to take it off');
               return;
             }
@@ -943,11 +1015,13 @@
             var p = api.params, local = stage ? stage.modelGroup.worldToLocal(hit.point.clone()) : hit.point;
             addOrnament({ type: pick.type, color: pick.color, size: p.stampSize, rotation: p.stampRotation, point: local.toArray(), normal: hit.normal.toArray(), h: p.height, r: p.baseR }, 0);
             jiggleT0 = clock();
+            soundAdd(pick.type, pick.color);
             api.rebuild();
             api.toast(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
           }
         }],
 
+        openGroups: ['Tree'],
         embedState: {
           get: function () { return ornaments; },
           set: function (v) {
@@ -973,9 +1047,14 @@
           spark.wrapS = spark.wrapT = T.ClampToEdgeWrapping;
           stage = { T: T, scene: env.scene, modelGroup: env.modelGroup, spark: spark };
           buildRoom(T, env.scene);
-          // Tree shape controls go after the ornament sliders.
+          // The engine puts the Next ornament sliders after the tab's own controls: move them to the top of the Ornaments section.
           var body = document.getElementById('mm-body-decorate');
-          if (body && treeAcc) body.appendChild(treeAcc);
+          if (body && ornSlot) {
+            Array.prototype.forEach.call(body.querySelectorAll('details.mm-acc'), function (d) {
+              var sum = d.querySelector('summary');
+              if (sum && sum.textContent === 'Next ornament' && d.parentNode === body) ornSlot.appendChild(d);
+            });
+          }
         },
         onFrame: tick,
 
