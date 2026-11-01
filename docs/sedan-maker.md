@@ -21,7 +21,7 @@ The wheels sit **inside the body in wheel wells**: the side of the body is open 
 
 ## Wheel wells
 
-The roof of each well is a **tent with 45 degree sides tangent to the wheel** (apex at `axle height + 1.41 x (wheel radius + 1.4)`), so it prints without a bridge; the well walls below the tent are straight. The hood and trunk heights are raised automatically to leave 3.5 mm of roof over the apex (so the defaults are 24 and 25 mm, with 17 mm wheels). The layout across the car is worked inwards from the body side: axle head, hub cap, wheel, gap, chassis wall. A narrow body or a wide wheel shrinks the chassis; it never goes below the axle thickness plus 2.5 mm each side.
+The roof of each well is a **tent with 45 degree sides tangent to the wheel** (apex at `axle height + 1.41 x (wheel radius + 0.7)`), so it prints without a bridge; the well walls below the tent are straight. The hood and trunk heights are raised automatically to leave 3.5 mm of roof over the apex (the defaults are 22 and 23 mm, with 16 mm wheels). The layout across the car is worked inwards from the body side: axle head, hub cap, wheel, gap, chassis wall. 
 
 ## Car parts tab
 
@@ -37,6 +37,19 @@ The page is built so a truck or an ice cream van can be added later without touc
 2. Register it in `CAR_TYPES` and add a **Car type** choice parameter (two options become a toggle, three or more a dropdown) that picks the function in `build`.
 3. Mesh builders read only the model, so they are shared. A van box or a truck bed is another loft added to `build` for that type.
 
+## Always functional
+
+`sedanModel` clamps every option so that no combination of sliders makes a car that cannot work:
+
+- The **body widens by itself** if the wheels need more room across than the Body width slider gives (axle head, hub cap, wheel, gaps and a chassis wall at least axle thickness plus 2.5 mm each side).
+- The **wheel width** is reduced if it still would not fit; the wells are kept at least 3 mm apart and 6 mm from the ends (the Distance between axles slider is clamped).
+- The **hood, trunk and deck** are raised to leave 3.5 mm of roof over each well, the nose and tail blends keep the wells covered.
+- The **axle thickness** is limited to 28 percent of the wheel radius, the wheel clearance to 0.3 to 0.7 mm, the flat spot to 14 percent, the wheel size to at least 15 mm.
+- The **hub cap** grows until its ring around the pointed hole is at least 0.6 mm wide, and drops its lobes if it cannot; it never reaches below the bed.
+- No two shells of the body share a vertex, so the body stays manifold at any length.
+
+A random sweep (700 random slider settings plus the defaults and presets) checks every mesh is watertight, the lowest point is on the bed, the chassis, head, wells and roof invariants above hold, and no wheel vertex lies inside the body, cabin or axle (and no body or axle vertex inside a wheel). The script is not in the repo; rerun the same idea after any change to `sedanModel`, `wheelLayout`, `rimShell` or `lowerBody`.
+
 ## Checks
 
-`node scripts/ci/check-generator.mjs sedan-maker`: every mesh is watertight and manifold for the defaults and all six presets, and every slider at its minimum and maximum. The default model reads clean in the print check; the test stamps add one small warning from the exhaust pipe. Other presets have small known overhang errors recorded in `ci/printability-baseline.json` (a few cells at the axle pin or tire edge where the 0.4 mm clearance is not lined up with the print check's voxels, and the upright rear window of Tall and boxy). A real slicer prints a 0.4 mm gap as two layers. Nothing has been physically printed.
+`node scripts/ci/check-generator.mjs sedan-maker`: every mesh is watertight and manifold for the defaults and all six presets, and every slider at its minimum and maximum. The default model reads clean in the print check; the test stamps add one small warning from the exhaust pipe. Sporty low and Chunky wheels have small known overhang errors (tire edge and pin cells) recorded in `ci/printability-baseline.json`; the other presets only show the exhaust-stamp warning. A real slicer prints a 0.4 mm gap as two layers. Nothing has been physically printed.

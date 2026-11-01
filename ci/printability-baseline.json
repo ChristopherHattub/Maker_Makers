@@ -1027,16 +1027,10 @@
     ]
   },
   "sedan-maker": {
-    "Long limo": [
-      "overhang"
-    ],
     "Sporty low": [
       "overhang"
     ],
     "Chunky wheels": [
-      "overhang"
-    ],
-    "Tall and boxy": [
       "overhang"
     ]
   },

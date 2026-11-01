@@ -157,8 +157,13 @@
       // Car types. A type returns the model that the wheels, lights and stamps read.
       // ---------------------------------------------------------------------
       function sedanModel(p) {
-        var L = p.length, W2 = p.width / 2, R = p.wheelD / 2, flat = R * p.flat / 100;
-        var clr = p.clearance, d = p.axle / 2, rH = d + clr;
+        // Every option is clamped here so that the car always works: the wheels fit in their wells, the body widens
+        // if the wheels need room, the axle never gets too thick for its wheel, and the roof clears the wells.
+        var L = p.length, W2 = p.width / 2, R = Math.max(7, p.wheelD / 2), flat = R * Math.min(p.flat, 14) / 100;
+        var clr = clamp(p.clearance, 0.3, 0.7), d = Math.min(p.axle / 2, 0.28 * R), rH = d + clr;
+        var dF = rH + 0.9;
+        // across the car (one side): axle head plate, inset, flare, gap, hub cap, wheel, gap to the chassis wall
+        var stack = 0.8 + 0.8 + 1.5 * (dF - d) + clr + RIM_RAISE + (clr + 0.15), zcMin = d + 2.5;
         // The bottom of the wheel hole sits just above a cell centre of the print check's voxel grid (cells are L / 170
         // wide, at least 0.4 mm) and the pin sits less than one cell above it, so the pin's first layer has the hole's
         // last layer right under it and the print check sees no gap. The pin is moved down by up to 0.2 mm for this.
@@ -167,8 +172,11 @@
         var n = p.nose, half = L / 2;
         // wheel wells: each wheel sits in a gap in the side of the body. The roof of the well is a tent with 45 degree
         // sides, tangent to the wheel, so it prints without a bridge; the walls below it are straight.
-        var Rw = R + 1.4, TAN = 1, apex = ax + Rw * Math.SQRT2;
-        var xa = Math.min(p.wheelbase / 2, half - Rw - 6);
+        var Rw = R + 0.7, TAN = 1, apex = ax + Rw * Math.SQRT2;
+        var xa = clamp(p.wheelbase / 2, Rw + 3, half - Rw - 6);
+        var xEdge = xa + Rw, fEdge = Math.pow(Math.max(0.01, 1 - Math.pow(xEdge / half, n)), 1 / n);
+        W2 = Math.max(W2, (zcMin + stack + 5) / fEdge);
+        var ww = Math.min(p.wheelW, W2 * fEdge - stack - zcMin);
         var need = apex + 3.5;
         var hoodE = Math.max(p.hoodH, need), trunkE = Math.max(p.trunkH, need);
         var xf0 = half - p.hoodLen;
@@ -176,7 +184,7 @@
         var xr0 = xf0 - cl;
         var bf = clamp(half - xa - Rw - 1, 6, 0.24 * L);
         var m = {
-          L: L, W2: W2, R: R, pinDrop: pinDrop, Rw: Rw, apex: apex, TAN: TAN, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
+          L: L, W2: W2, ww: ww, dF: dF, stack: stack, R: R, pinDrop: pinDrop, Rw: Rw, apex: apex, TAN: TAN, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
           H: p.cabinH, flat: flat
         };
         var hwBase = function (x) { return W2 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x) / half, n)), 1 / n); };
@@ -233,7 +241,7 @@
           out.push(loft(stationsBetween(r[0], r[1], Math.max(6, Math.round((r[1] - r[0]) / 2.5))).map(full)));
         });
         // chassis down the middle, through both wells, a little lower than the deck so it stays hidden
-        out.push(loft(stationsBetween(-xa - Rw - 2, xa + Rw + 2, 40).map(function (x) {
+        out.push(loft(stationsBetween(-xa - Rw - 2.0071, xa + Rw + 2.0071, 40).map(function (x) {
           var w = Math.min(m.hw(x), lay.zc);
           return sectionLoop(x, w, w, 0, m.D(x) - 1.2, 0.5, 1);
         })));
@@ -243,8 +251,8 @@
           for (i = 0; i <= 10; i++) dxs.push(-Rw + (2 * Rw * i) / 10);
           dxs.push(Rw + 1);
           out.push(loft(dxs.map(function (dx) {
-            var x = xc + dx;
-            return sectionLoop(x, m.hw(x), m.hw(x), archY(m, dx), m.D(x), p.corner, p.corner * 1.2);
+            var x = xc + dx + 0.0137; // off the stations of the neighbouring shells, so no two shells share a vertex
+            return sectionLoop(x, m.hw(x), m.hw(x), archY(m, dx), m.D(x), p.corner, p.corner * 1.2 + 0.35);
           })));
         });
         return concat(out);
@@ -294,11 +302,9 @@
       // Layout across the car for the +Z side, worked inwards from the side of the body so that the wheel and the head
       // of the axle stay inside the body outline: head, hub cap, wheel, gap, chassis wall.
       function wheelLayout(m, p) {
-        var ww = p.wheelW, dF = m.rH + 1.3, hwEdge = m.hw(Math.min(m.xa + m.Rw, m.xe));
+        var ww = m.ww, dF = m.dF, hwEdge = m.hw(Math.min(m.xa + m.Rw, m.xe));
         var zf2 = hwEdge - 0.8, zf1 = zf2 - 0.8, zf0 = zf1 - 1.5 * (dF - m.d), zr = zf0 - m.clr, zo = zr - RIM_RAISE, zi = zo - ww;
-        var zc = Math.max(m.d + 2.5, zi - (m.clr + 0.15));
-        var shift = zc + m.clr + 0.15 - zi;
-        return { zi: zi + shift, ww: ww, dF: dF, zr: zr + shift, zf0: zf0 + shift, zf1: zf1 + shift, zf2: zf2 + shift, zc: zc };
+        return { zi: zi, ww: ww, dF: dF, zr: zr, zf0: zf0, zf1: zf1, zf2: zf2, zc: zi - (m.clr + 0.15) };
       }
 
       // The wheel hole: a circle with a pointed top, so it prints without a sagging roof.
@@ -325,18 +331,28 @@
         });
       }
 
+      // The hub cap radius at the angle th for a style; the lobed styles scallop the edge.
+      function rimOuter(style, rr, th) {
+        if (style === 1) return rr * (0.88 + 0.12 * Math.cos(5 * th));
+        if (style === 2) return rr * (0.88 + 0.12 * Math.cos(8 * th));
+        return rr;
+      }
+      // Smallest width of the hub cap ring, so it never runs into the pointed top of the wheel hole.
+      function rimRing(m, style, rr) {
+        var w = 1e9, i, th;
+        for (i = 0; i < 240; i++) { th = (i / 240) * TAU; w = Math.min(w, rimOuter(style, rr, th) - 0.6 - holeR(m.rH, th)); }
+        return w;
+      }
       function rimShell(m, p, lay, xc) {
-        var R = m.R, style = Math.round(p.rimStyle), rr = (p.rimSize / 100) * R, zA = lay.zi + lay.ww - 1, zB = lay.zi + lay.ww + RIM_RAISE;
+        var R = m.R, style = Math.round(p.rimStyle), top = Math.min(R - Math.min(2, lay.ww * 0.3) - 0.3, m.ax - 0.4);
+        var rr = clamp((p.rimSize / 100) * R, m.rH + 1.2, top), zA = lay.zi + lay.ww - 1, zB = lay.zi + lay.ww + RIM_RAISE;
+        // grow the cap until the ring around the hole is at least 0.6 mm wide, and drop the lobes if it cannot
+        while (rimRing(m, style, rr) < 0.6 && rr < top) rr = Math.min(top, rr + 0.2);
+        if (rimRing(m, style, rr) < 0.6 && style) { style = 0; rr = clamp((p.rimSize / 100) * R, m.rH + 1.2, top); while (rimRing(m, 0, rr) < 0.6 && rr < top) rr = Math.min(top, rr + 0.2); }
         var prof = [[0, zA, 1], [0, zA, 4], [0, zB - 0.6, 4], [-0.6, zB, 4], [0, zB, 1]];
-        // the hub cap radius at the angle th; the star styles scallop the edge
-        function outer(th) {
-          if (style === 1) return rr * (0.84 + 0.16 * Math.cos(5 * th));
-          if (style === 2) return rr * (0.84 + 0.16 * Math.cos(8 * th));
-          return rr;
-        }
         // the first and last points are on the hole; the middle three are on the outer edge
         return ringSolid(prof.length, SEG, function (i, j, th) {
-          var e = prof[i], r = e[2] === 1 ? holeR(m.rH, th) : outer(th) + e[0];
+          var e = prof[i], r = e[2] === 1 ? holeR(m.rH, th) : rimOuter(style, rr, th) + e[0];
           return [xc + r * Math.cos(th), m.ax + r * Math.sin(th), e[1]];
         });
       }
@@ -460,7 +476,7 @@
         });
         meshes.push({ name: 'tire', positions: concat(tires), color: '#3b3f4a', singlePart: true });
         meshes.push({ name: 'rim', positions: concat(rims), color: '#d9dee5', singlePart: true });
-        meshes.push({ name: 'axle', positions: concat(axles), color: '#b4bec9', singlePart: true });
+        meshes.push({ name: 'axle', positions: concat(axles), color: '#d9dee5', singlePart: true });
         stamps.forEach(function (st) {
           var pos = stampPositions(st);
           if (pos.length) meshes.push({ name: 'stamp', positions: pos, color: '#3b3f4a', singlePart: true });
@@ -477,9 +493,9 @@
           format: function (v) { return names[Math.round(v)]; } };
       }
       var DEFAULTS = {
-        length: 110, width: 42, corner: 3.5, nose: 4, noseH: 12, tailH: 14, hoodH: 24, trunkH: 25,
-        hoodLen: 34, cabinLen: 50, cabinH: 12, rakeF: 0.9, rakeR: 1.1, cabinW: 80, crown: 6, windows: 1, lights: 1,
-        wheelD: 17, wheelW: 7, wheelbase: 60, flat: 12, tread: 12, rimStyle: 1, rimSize: 62,
+        length: 118, width: 46, corner: 4, nose: 4, noseH: 11, tailH: 12, hoodH: 22, trunkH: 23,
+        hoodLen: 34, cabinLen: 54, cabinH: 12, rakeF: 0.9, rakeR: 1.1, cabinW: 80, crown: 6, windows: 1, lights: 1,
+        wheelD: 16, wheelW: 7, wheelbase: 70, flat: 12, tread: 12, rimStyle: 1, rimSize: 62,
         clearance: 0.4, axle: 6,
         stampSize: 14, stampRaise: 1, stampRotation: 0
       };
@@ -505,7 +521,7 @@
         partNames: { body: 'Car body', cabin: 'Roof and pillars', windows: 'Windows', lights: 'Lights', tire: 'Tires', rim: 'Wheel hubs', axle: 'Axles', stamp: 'Car part' },
         parameters: [
           slider('Body', 'length', 'Car length', ' mm', 80, 150, 1, DEFAULTS.length),
-          slider('Body', 'width', 'Body width (wheels sit inside it)', ' mm', 36, 60, 1, DEFAULTS.width),
+          slider('Body', 'width', 'Body width (widens by itself if the wheels need room)', ' mm', 36, 64, 1, DEFAULTS.width),
           slider('Body', 'hoodH', 'Hood height (raised to clear the wheel wells)', ' mm', 20, 34, 0.5, DEFAULTS.hoodH),
           slider('Body', 'trunkH', 'Trunk height', ' mm', 20, 34, 0.5, DEFAULTS.trunkH),
           slider('Body', 'noseH', 'Nose height', ' mm', 8, 22, 0.5, DEFAULTS.noseH),
@@ -521,14 +537,14 @@
           slider('Cabin', 'cabinW', 'Cabin width', '%', 66, 92, 1, DEFAULTS.cabinW),
           slider('Cabin', 'crown', 'Roof roundness', ' mm', 2, 9, 0.5, DEFAULTS.crown),
           choice('Cabin', 'windows', 'Windows', ['Off', 'On'], DEFAULTS.windows),
-          slider('Wheels', 'wheelD', 'Wheel size', ' mm', 13, 24, 0.5, DEFAULTS.wheelD),
+          slider('Wheels', 'wheelD', 'Wheel size', ' mm', 15, 26, 0.5, DEFAULTS.wheelD),
           slider('Wheels', 'wheelW', 'Wheel width', ' mm', 5, 10, 0.5, DEFAULTS.wheelW),
           slider('Wheels', 'wheelbase', 'Distance between axles', ' mm', 40, 95, 1, DEFAULTS.wheelbase),
-          slider('Wheels', 'flat', 'Flat spot where the wheel meets the bed (too little may sag)', '%', 8, 20, 1, DEFAULTS.flat),
+          slider('Wheels', 'flat', 'Flat spot where the wheel meets the bed (too little may sag)', '%', 8, 14, 1, DEFAULTS.flat),
           slider('Wheels', 'tread', 'Tire tread bumps', '', 0, 20, 1, DEFAULTS.tread),
           choice('Wheels', 'rimStyle', 'Hub cap', ['Plain', '5 lobes', '8 lobes'], DEFAULTS.rimStyle),
           slider('Wheels', 'rimSize', 'Hub cap size', '%', 45, 78, 1, DEFAULTS.rimSize),
-          slider('Print fit', 'clearance', 'Wheel clearance (0.4 suits most printers)', ' mm', 0.2, 0.8, 0.2, DEFAULTS.clearance),
+          slider('Print fit', 'clearance', 'Wheel clearance (0.4 suits most printers)', ' mm', 0.3, 0.7, 0.1, DEFAULTS.clearance),
           slider('Print fit', 'axle', 'Axle thickness', ' mm', 4.8, 8, 0.2, DEFAULTS.axle),
           { group: 'Part size', tab: 'parts', key: 'stampSize', label: 'Part size', unit: ' mm', min: 6, max: 30, step: 1, value: DEFAULTS.stampSize },
           { group: 'Part size', tab: 'parts', key: 'stampRaise', label: 'Part height', unit: 'x', min: 0.6, max: 1.8, step: 0.1, value: DEFAULTS.stampRaise },
@@ -536,11 +552,11 @@
         ],
         presets: [
           presetOf('Default sedan', {}),
-          presetOf('Compact', { length: 92, width: 38, wheelbase: 56, hoodLen: 28, cabinLen: 44, cabinH: 13, wheelD: 17, wheelW: 6 }),
-          presetOf('Long limo', { length: 140, wheelbase: 96, hoodLen: 40, cabinLen: 66, cabinH: 13, hoodH: 20, trunkH: 20 }),
-          presetOf('Sporty low', { length: 118, width: 46, hoodH: 17, trunkH: 17, cabinH: 11, rakeF: 1.4, rakeR: 1.6, wheelD: 22, wheelW: 9, rimStyle: 2 }),
-          presetOf('Chunky wheels', { wheelD: 25, wheelW: 10, wheelbase: 72, tread: 12, hoodH: 22, trunkH: 22 }),
-          presetOf('Tall and boxy', { cabinH: 20, rakeF: 0.4, rakeR: 0.4, cabinLen: 54, nose: 5, cabinW: 88 })
+          presetOf('Compact', { length: 96, width: 42, wheelbase: 56, hoodLen: 28, cabinLen: 44, cabinH: 11, wheelD: 17, wheelW: 6, hoodH: 24, trunkH: 25 }),
+          presetOf('Long limo', { length: 150, wheelbase: 108, hoodLen: 42, cabinLen: 70, cabinH: 11 }),
+          presetOf('Sporty low', { length: 124, width: 52, cabinH: 10, rakeF: 1.4, rakeR: 1.6, wheelD: 23, wheelW: 9, rimStyle: 2 }),
+          presetOf('Chunky wheels', { wheelD: 24, wheelW: 10, wheelbase: 76, tread: 12 }),
+          presetOf('Tall and boxy', { cabinH: 18, rakeF: 0.4, rakeR: 0.4, cabinLen: 56, nose: 5, cabinW: 88 })
         ],
         tabs: [{
           id: 'parts',
