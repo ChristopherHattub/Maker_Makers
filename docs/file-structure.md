@@ -16,6 +16,7 @@
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
 ├── assets/
 │   └── thumbnails/          Slot thumbnails, one <id>.svg per generator
+│       ├── panel/           Full-colour side-panel previews, <id>.webp (640 x 480)
 │       ├── pro/             Optional PNG tile art, only seen on a homepage tile that has no hologram yet
 │       └── sprites/         Hologram hover tiles: poster-<id>.webp (still, loaded first), holo-<id>.webp (atlas,
 │                            loaded on hover / tap / idle), base-tile.webp, manifest-v2.json
@@ -24,14 +25,23 @@
 │   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
 ├── tools/
 │   ├── hologram.html        Renders a generator's real model as a 24-frame hologram atlas
-│   └── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
+│   ├── panel-thumbs.html    Renders the full-colour side-panel previews (assets/thumbnails/panel/)
+│   ├── animals/             Sources, shared kit, builder, thumbnails and print check for the animals (slots 76-90)
+│   ├── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
+│   └── text-fonts/          Builds the packed OFL font data for the Text Generator (slot 101)
 ├── scripts/
 │   ├── dev-server.mjs       Zero-dependency static server with live reload
 │   ├── receive-render.mjs   Receives the atlases tools/hologram.html uploads (default port 5190)
 │   ├── build-holo.py        Turns those atlases into holo-<id>.webp and updates manifest-v2.json
 │   ├── hologram-config.json Per-generator hologram colour and framing
+│   ├── build-panel-thumbs.py, panel-thumbs-config.json
+│   │                        Turn tools/panel-thumbs.html renders into assets/thumbnails/panel/<id>.webp
+│   ├── ci/                  check-generator.mjs (one generator's printability job) and plan.mjs (which generators a push checks)
 │   ├── build-hover-sheets.py, build-sprite-sheets.py, sprite-tints.json
 │   │                        Older Gemini sprite pipeline (kept for the ?gemini frames and the base tile)
+├── ci/
+│   └── printability-baseline.json  Known print-check errors per generator, the ratchet for CI (see printability-ci.md)
+├── .github/workflows/printability.yml  Per-generator printability check on GitHub Actions
 ├── screenshots/             Reference screenshots from earlier reviews (not used by the site)
 ├── .claude/
 │   ├── launch.json          Preview-server config (runs dev-server.mjs on port 5173)

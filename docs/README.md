@@ -18,24 +18,21 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [file-structure.md](file-structure.md) | Every file in the repo and what it is for |
 | [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the generator contract, and how to add a generator |
 | [slot-registry.md](slot-registry.md) | Every built slot, reserved ranges and groups |
-| [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, the Color tool, exports, and the visual rules |
-| [animals.md](animals.md) | The fifteen animal generators (slots 76-90): support-free kit, build script and print-check notes |
+| [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, Parametric / Sculpt / Color / Print tabs, print check, exports, and the visual rules |
+| [animals.md](animals.md) | The fifteen animal generators (slots 76-90): sculpted kit, build script, support-free rules and print-check notes |
 | [flexi-creatures.md](flexi-creatures.md) | The ten print-in-place flexi animals (slots 91-100): ball-joint kit, clearance rules and the check script |
 | [workshop.md](workshop.md) | The Workshop 3D editor and the `?embed=workshop` generator hook |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
 | [text-generator.md](text-generator.md) | The Text Generator (slot 101): packed OFL fonts, build styles, triangulation, offsets and the checks |
-| [dice-tower.md](dice-tower.md) | Dice Tower: shapes, theme sliders, tray shapes, stamps. |
+| [dice-tower.md](dice-tower.md) | The Dice Tower (slot 66): shapes, themes, tray shapes, stamps |
 | [hologram-tiles.md](hologram-tiles.md) | Hover holograms rendered from the real models (posters, `build-holo.py`) |
-| [sprite-sheet-skill.md](sprite-sheet-skill.md) | Abandoned Gemini hover-frame workflow (historical) |
-| [homepage.md](homepage.md) | The pannable world map of grouped generator tiles and how to add to it |
-| [hologram-tiles.md](hologram-tiles.md) | Rendering each generator's hologram hover tile from its real model |
-| [workshop.md](workshop.md) | The Workshop 3D editor and how generators embed in it |
+| [sprite-sheet-skill.md](sprite-sheet-skill.md) | Retired: the older Gemini-drawn hover-frame workflow (historical) |
+| [homepage.md](homepage.md) | The pannable world map of grouped generator tiles, sorting, and the full-colour side-panel previews |
 | [printer-map.md](printer-map.md) | The printer radar: data, search, and how to add a printer |
 | [development.md](development.md) | Running the site locally and the live-reload dev server |
 | [printability-ci.md](printability-ci.md) | The GitHub Actions printability check: per-generator jobs, when they run, the known-errors baseline |
 | [deployment.md](deployment.md) | Publishing to GitHub Pages |
 | [contributing.md](contributing.md) | Conventions and checklists for changes |
-| [sprite-sheet-skill.md](sprite-sheet-skill.md) | Retired: how the older Gemini-drawn hover frames were made |
 
 Step-by-step instructions for building a new generator live in the generator skill, [`.claude/skills/makermakers-generator/SKILL.md`](../.claude/skills/makermakers-generator/SKILL.md).
 

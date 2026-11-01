@@ -37,7 +37,7 @@ The full list of built slots, reserved ranges and the next free slot is in [slot
 
 ## Active slots
 
-A slot is **active** when it has a `programUrl`, and only active slots get a homepage tile. Slots in use today: 1 to 65, except 14. The homepage tile shows the generator's hologram (`assets/thumbnails/sprites/holo-<id>.webp`, see [hologram-tiles.md](hologram-tiles.md)); a tile with no hologram and no `thumbnailUrl` shows a plus sign. The viewer reads `programUrl` directly.
+A slot is **active** when it has a `programUrl`, and only active slots get a homepage tile. Slots in use today: 1 to 102, except 14 and 39 (see [slot-registry.md](slot-registry.md)). The homepage tile shows the generator's hologram (`assets/thumbnails/sprites/holo-<id>.webp`, see [hologram-tiles.md](hologram-tiles.md)); a tile with no hologram and no `thumbnailUrl` shows a plus sign. The viewer reads `programUrl` directly.
 
 ## The generator contract
 
@@ -59,7 +59,7 @@ Use relative paths only, such as `programs/ghost-builder.html`, never a path sta
 
    ```js
    {
-     slot: 66,
+     slot: 103,   // use the next free slot
      title: 'Honeycomb Wall Hook',
      bundle: 'organization',
      category: 'HOOKS & WALL STORAGE',

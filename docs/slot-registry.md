@@ -8,11 +8,12 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | --- | --- |
 | 1-75 | Built, except **slots 14 and 39, which are unused** (gaps; the homepage only shows slots with a `programUrl`; 39 was the Balloon Twister, removed). 73 generators. |
 | 76-90 | Built: the fifteen animal generators ([animals.md](animals.md)). |
-| 91-100 | Built: the ten Flexi Creatures. |
-| 102 | Built: Fancy Ring. |
+| 91-100 | Built: the ten Flexi Creatures ([flexi-creatures.md](flexi-creatures.md)). |
+| 101 | Built: Text Generator ([text-generator.md](text-generator.md)). |
+| 102 | Built: Fancy Ring ([fancy-ring.md](fancy-ring.md)). |
 | 103+ | Free. Any number works. |
 
-Total built: 99 generators in 21 groups (2 groups are `planned` and empty: toys, garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 100 generators in 20 groups (18 have generators; 2 are `planned` and empty: toys, garden). Five generators (10, 11, 12, 13, 15) have no `bundle` tag and are placed by a bundle's `generators` list instead. Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -147,4 +148,4 @@ A generator in no group lands in an automatic "More" region, so a missing `bundl
 
 ## Regenerating this table
 
-Evaluate `js/programs.js` (swap `const` for `var` so `PROGRAMS` and `BUNDLES` become globals), then list `PROGRAMS.filter(p => p.programUrl)` with `slot`, `title`, `bundles` and `programUrl`. The tables above were produced that way.
+Evaluate `js/programs.js` (swap `const` for `var` so `PROGRAMS` and `BUNDLES` become globals; a group's members are its `generators` ids plus every entry whose `bundle` names it), then list `PROGRAMS.filter(p => p.programUrl)` with `slot`, `title`, `bundles` and `programUrl`. The tables above were produced that way.

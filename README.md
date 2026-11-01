@@ -18,8 +18,11 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 ├── data/                 # Printer listings (verified) and OSM candidates
 ├── assets/thumbnails/    # Slot thumbnails; sprites/ holds the hologram hover tiles
 ├── programs/             # Generator pages; shared/ is the engine every generator uses
-├── tools/                # hologram.html (renders hologram tiles), flexi/ (flexi creature sources)
-├── scripts/              # Dev server and hologram build scripts
+├── tools/                # hologram.html and panel-thumbs.html (renderers), animals/, flexi/ and text-fonts/ (sources for those generators)
+├── scripts/              # Dev server, hologram / preview build scripts, scripts/ci (printability job)
+├── ci/                   # printability-baseline.json (known print-check errors)
+├── .github/workflows/    # printability.yml: one printability job per generator
+├── docs/                 # Full documentation
 └── .nojekyll             # Tells Pages to serve files as-is
 ```
 
@@ -41,12 +44,17 @@ To start it without opening a browser, or on another port:
 npm run serve -- --port 8080
 ```
 
+## Generators
+
+100 generators in 20 groups (slots 1-102; 14 and 39 are unused), from seasonal gifts and fidgets to animals, flexi creatures, tabletop pieces, a Text Generator and a Fancy Ring. The full list is in [docs/slot-registry.md](docs/slot-registry.md). Every generator has Parametric, Color tool and Print tabs (most also a Sculpt tab), a live printability chip, and exports STL and a coloured OBJ zip.
+
 ## Adding a generator
 
 1. Put the generator page in `programs/`, for example `programs/honeycomb-hook.html`. It holds only its config and `build()`; the shared engine in `programs/shared/` supplies the UI and exports (see [docs/generator-styling.md](docs/generator-styling.md)).
 2. Put its thumbnail in `assets/thumbnails/`.
 3. In `js/programs.js`, add a `GENERATORS` entry with the next free `slot` and its `title`, `category`, `thumbnailUrl`, `programUrl` and `description`, using relative paths such as `programs/honeycomb-hook.html`. To group it with others, add `bundle: '<bundle id>'` (groups are registered in `BUNDLES` in the same file; each is a region on the homepage map).
-4. Render its hologram hover tile (see [docs/hologram-tiles.md](docs/hologram-tiles.md)).
+4. Render its hologram hover tile (see [docs/hologram-tiles.md](docs/hologram-tiles.md)) and its side-panel preview (see [docs/homepage.md](docs/homepage.md#side-panel-previews-full-colour)).
+5. Run the printability check: `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` (see [docs/printability-ci.md](docs/printability-ci.md)).
 
 The full checklist is in [docs/generator-registry.md](docs/generator-registry.md).
 

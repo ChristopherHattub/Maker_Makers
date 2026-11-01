@@ -68,6 +68,24 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `onHover(hit, api)` | no | Called on pointer move with the hit under the cursor, or `null`. |
 | `onPick(hit, api)` | no | Called on a click in the Parametric tab. The hit has the same shape as for `onHover`. |
 
+### Less common fields
+
+These are read by the engine but only a few generators use them. Reach for them only when a generator genuinely needs a custom stage or tab layout.
+
+| Field | Meaning |
+| --- | --- |
+| `tabs`, `tabsFirst` | Extra editor tabs (see [Visual conventions](#visual-conventions)). `tabsFirst: true` puts them before Parametric and makes the first one the opening tab (Fancy Ring). |
+| `hideModelTab` | Hides the Parametric tab entirely; the first entry of `tabs` opens first. The generator can pull the Parametric controls into its own tab with `api.takeParams()`. |
+| `openGroups` | Accordion groups that start open (default: the first). |
+| `extrasTitle` | Heading of the accordion section that holds the `mount()` extras (default "Stamps & tools"). |
+| `embedState` | `{ get(), set(state) }` for state that lives outside `parameters`; sent to and restored from the Workshop ([Workshop embed](#workshop-embed)). |
+| `sculpt` | `false` opts out of the Sculpt tab; an object customises its pieces ([Sculpt tab](#sculpt-tab-experimental-cfgsculpt)). Ignored when `printMeshes` is set or in the Workshop embed. |
+| `printCheck`, `printCheckOptions` | `printCheck: false` hides the print-check chip; `printCheckOptions` is `{ minWall, cell }`. |
+| `customStage` | Makes the renderer transparent (no navy background, no plate or grid) so the generator draws its own backdrop with `onStage`. Used by Gift Box 2.0, Snowman 2.0 (Ornament Stacker) and Pottery Wheel. |
+| `onStage(env)` | Called once after the scene exists. `env` has `THREE`, `scene`, `camera`, `renderer`, `controls`, `hemi`, `key`, `rim`, `plateMesh`, `grid`, `container` and `modelGroup`. |
+| `onFrame()` | Called every animation frame before the render, for turntables and other live effects. |
+| `targetHeight` | Camera framing height in mm for an empty model (default 40). |
+
 ### Parameters
 
 Each entry in `parameters` makes one slider. Sliders are grouped by `group` in the order they first appear.
@@ -120,6 +138,9 @@ Use `api.THREE` for three.js helpers (geometry, matrices). A common pattern for 
 | `api.setPreview(entry or null)` | Shows a translucent preview mesh (`{ positions }`). Use it for hover previews. |
 | `api.toast(message)` | Shows a short message above the viewport. |
 | `api.centerCamera('front' or 'iso')` | Frames the model. |
+| `api.setSpin(on)` | Starts or stops the slow turntable of the [showcase render](#showcase-render). |
+| `api.takeParams()` | Returns a fragment holding the Parametric controls (presets, groups, View) so a generator tab can show them in its own menu. Used with `hideModelTab`. |
+| `api.sculpt` | The Sculpt tab's state object (tool, selection, stored edits). Read-only for generators. |
 
 ## Parametric and Color tabs
 
