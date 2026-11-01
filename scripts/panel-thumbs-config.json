@@ -704,5 +704,19 @@
    "post": "#a7c4a0",
    "stamps": "#e8a07a"
   }
+ },
+ "sedan-maker": {
+  "colors": {
+   "body": "#e8756f",
+   "cabin": "#e8756f",
+   "windows": "#a9d2f0",
+   "lights": "#fde68a",
+   "tire": "#3b3f4a",
+   "rim": "#d9dee5",
+   "axle": "#b4bec9",
+   "stamp": "#3b3f4a"
+  },
+  "yaw": 35,
+  "elev": 22
  }
 }

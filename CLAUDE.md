@@ -28,7 +28,7 @@ GitHub Pages serves the repo root straight from `main` (no workflow, `.nojekyll`
 
 ## Slots
 
-Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder. Next free slot: 105. Full list: [docs/slot-registry.md](docs/slot-registry.md).
+Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker. Next free slot: 106. Full list: [docs/slot-registry.md](docs/slot-registry.md).
 
 ## Adding a generator (checklist)
 
@@ -66,6 +66,7 @@ JS: single quotes, semicolons, 2-space indent, `var`/function style inside gener
 - **Spinner Ring** (slot 46): two prints of the rigid snap-fit band jammed while turning flat. The inner band now has a slit and pushes in straight ([docs/spinner-ring.md](docs/spinner-ring.md)); that version has not been printed. Its hologram tile and side-panel render still show the older ring.
 - **Fancy Ring** (slot 102): prints as two halves glued around the stone. Unprinted; the glue seam and fit of the stone are unproven. [docs/fancy-ring.md](docs/fancy-ring.md).
 - **Pin Maker** (slot 103): a picture traced into a badge pin, in the browser only. Unprinted; it has a flat back for a glued pin-back, no printed pin-back. [docs/pin-maker.md](docs/pin-maker.md).
+- **Sedan Maker** (slot 105): a toy sedan with print-in-place wheels on diamond-section axle pins, plus a Car parts stamp tab. Unprinted; wheel clearance, the axle pins and the tire flat spots are unproven, and five of its presets have a known overhang at the axle pin in the print check. [docs/sedan-maker.md](docs/sedan-maker.md).
 - **Infinity Cube** was dropped from the plan and has no slot; do not look for it.
 - **Hologram tiles are weak for some generators** (thin, flat or low-contrast models read poorly). Retune with `scripts/hologram-config.json` or re-render.
 - Workshop: generator shapes are single-colour and not autosaved. Overpass scan errors are swallowed (a failed scan looks empty). See "Known issues" in [docs/architecture.md](docs/architecture.md).

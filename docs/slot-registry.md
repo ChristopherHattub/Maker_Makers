@@ -12,9 +12,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 102 | Built: Fancy Ring. |
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
-| 105+ | Free. Any number works. |
+| 105 | Built: Sedan Maker. |
+| 106+ | Free. Any number works. |
 
-Total built: 100 generators in 21 groups (2 groups are `planned` and empty: toys, garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -122,6 +123,7 @@ Total built: 100 generators in 21 groups (2 groups are `planned` and empty: toys
 | 102 | Fancy Ring | jewelry | `fancy-ring.html` |
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps) |
+| 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
 
 ## Groups (BUNDLES)
 
@@ -141,7 +143,7 @@ Total built: 100 generators in 21 groups (2 groups are `planned` and empty: toys
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
 | organization | Organisation | 3 |
-| toys | Toys & Games | planned (empty) |
+| toys | Toys & Games | 1 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
 | animals | Animals & Creatures | 15 |

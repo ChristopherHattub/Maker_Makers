@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-105 Sedan Maker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Sedan Maker: a toy car with four wheels that are printed in place. Each wheel stands beside the body on a
+      // diamond-section axle pin with a flared head, with clearance all round, so the wheels spin straight off the bed.
+      // The body is a lofted shell (lower body, greenhouse, windows); the Car parts tab adds click-to-place stamps.
+      // Y up, millimetres, +X is the front of the car, Z is across it. Every solid is a closed shell.
+      //
+      // More car types: a car type is a function that returns the "model" (see sedanModel): the half-width and deck
+      // height along the car, the greenhouse profile, and where the axles are. Wheels, axles, lights and stamps only read
+      // the model, so a truck or an ice cream van needs a new model function and an entry in CAR_TYPES.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      var K = 5;            // points per rounded corner of a body cross-section
+      var SEG = 120;        // points around a wheel
+      var SINK = 1.2;       // mm a stamp sinks into the car so it is fused to it
+      var RIM_RAISE = 1;    // mm the hub cap stands out from the tyre face
+      var lastModel = null, stamps = [], stampType = 'mirror', refreshUI = null;
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t, s;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+      function mirrorZ(pos) {
+        var out = new Float32Array(pos.length), i;
+        for (i = 0; i < pos.length; i += 3) { out[i] = pos[i]; out[i + 1] = pos[i + 1]; out[i + 2] = -pos[i + 2]; }
+        return orient(out);
+      }
+
+      // A closed solid from a list of rings (arrays of [x, y, z], all the same length, same direction), capped at both ends.
+      function loft(rings) {
+        var o = [], n = rings[0].length, i, j, k, a, b, c, d, cA = [0, 0, 0], cB = [0, 0, 0], first = rings[0], last = rings[rings.length - 1];
+        for (j = 0; j < n; j++) {
+          for (k = 0; k < 3; k++) { cA[k] += first[j][k] / n; cB[k] += last[j][k] / n; }
+        }
+        for (i = 0; i < rings.length - 1; i++) {
+          for (j = 0; j < n; j++) {
+            k = (j + 1) % n;
+            a = rings[i][j]; b = rings[i][k]; c = rings[i + 1][k]; d = rings[i + 1][j];
+            tri(o, a, b, c); tri(o, a, c, d);
+          }
+        }
+        for (j = 0; j < n; j++) {
+          k = (j + 1) % n;
+          tri(o, cB, last[j], last[k]);
+          tri(o, cA, first[k], first[j]);
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Closed surface around a closed profile loop (a ring-shaped solid): pt(i, j, theta) gives the point.
+      function ringSolid(n, seg, pt) {
+        var P = [], o = [], i, j, k, i2, row, a, b, c, d;
+        for (i = 0; i < n; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        for (i = 0; i < n; i++) {
+          i2 = (i + 1) % n;
+          for (j = 0; j < seg; j++) {
+            k = (j + 1) % seg;
+            a = P[i][j]; b = P[i][k]; c = P[i2][k]; d = P[i2][j];
+            tri(o, a, d, c); tri(o, a, c, b);
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Ellipsoid, for the lights. Poles are single points, so there are no zero-area triangles.
+      function ellipsoid(cx, cy, cz, rx, ry, rz, nu, nv) {
+        var o = [], i, j, k, P = [], row, a, th, ph;
+        for (i = 0; i <= nv; i++) {
+          ph = -Math.PI / 2 + (Math.PI * i) / nv;
+          row = [];
+          if (i === 0 || i === nv) {
+            row.push([cx, cy + ry * Math.sin(ph), cz]);
+          } else {
+            for (j = 0; j < nu; j++) {
+              th = (j / nu) * TAU;
+              row.push([cx + rx * Math.cos(ph) * Math.cos(th), cy + ry * Math.sin(ph), cz + rz * Math.cos(ph) * Math.sin(th)]);
+            }
+          }
+          P.push(row);
+        }
+        for (i = 0; i < nv; i++) {
+          for (j = 0; j < nu; j++) {
+            k = (j + 1) % nu;
+            if (i === 0) tri(o, P[0][0], P[1][k], P[1][j]);
+            else if (i === nv - 1) tri(o, P[i][j], P[i][k], P[nv][0]);
+            else { a = P[i][j]; tri(o, a, P[i][k], P[i + 1][k]); tri(o, a, P[i + 1][k], P[i + 1][j]); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // ---------------------------------------------------------------------
+      // Body sections
+      // ---------------------------------------------------------------------
+      // One cross-section (across the car) at x: a rounded box from y0 to y1, half-width hwB at the bottom and hwT at the top.
+      // Always 4 * K + 6 points, so sections loft into one closed surface.
+      function sectionLoop(x, hwB, hwT, y0, y1, rb, rt) {
+        var h = y1 - y0, pts = [], i, a;
+        var cb = clamp(rb, 0.25, Math.max(0.25, Math.min(hwB * 0.45, h * 0.4)));
+        rt = clamp(rt, 0.25, Math.max(0.25, Math.min(hwT * 0.45, h * 0.4)));
+        pts.push([0, y0]);
+        // the bottom corner is a 45 degree chamfer, so the first layers print without an overhang
+        for (i = 0; i <= K; i++) pts.push([hwB - cb + cb * i / K, y0 + cb * i / K]);
+        for (i = 0; i <= K; i++) { a = (90 * i / K) * DEG; pts.push([hwT - rt + rt * Math.cos(a), y1 - rt + rt * Math.sin(a)]); }
+        pts.push([0, y1]);
+        for (i = 0; i <= K; i++) { a = (90 + 90 * i / K) * DEG; pts.push([-(hwT - rt) + rt * Math.cos(a), y1 - rt + rt * Math.sin(a)]); }
+        for (i = 0; i <= K; i++) pts.push([-hwB + cb * i / K, y0 + cb - cb * i / K]);
+        return pts.map(function (q) { return [x, q[1], q[0]]; });
+      }
+
+      // x stations from a to b, closer together at both ends where the shape changes fastest.
+      function stationsBetween(a, b, n) {
+        var out = [], i;
+        for (i = 0; i <= n; i++) out.push((a + b) / 2 - ((b - a) / 2) * Math.cos((Math.PI * i) / n));
+        return out;
+      }
+
+      // ---------------------------------------------------------------------
+      // Car types. A type returns the model that the wheels, lights and stamps read.
+      // ---------------------------------------------------------------------
+      function sedanModel(p) {
+        var L = p.length, W2 = p.width / 2, R = p.wheelD / 2, flat = R * p.flat / 100;
+        var clr = p.clearance, d = p.axle / 2, rH = d + clr;
+        // the bottom of the wheel hole sits on a 0.2 mm layer line, so the gap under the pin is a whole number of layers
+        var ax = Math.round((R - flat + rH) / 0.2) * 0.2 - rH;
+        var n = p.nose, half = L / 2;
+        var xa = Math.min(p.wheelbase / 2, half - R - 6);
+        var need = ax + d + 3;
+        var hoodE = Math.max(p.hoodH, need), trunkE = Math.max(p.trunkH, need);
+        var xf0 = half - p.hoodLen;
+        var cl = clamp(p.cabinLen, 24, xf0 + half - 12);
+        var xr0 = xf0 - cl;
+        var bf = clamp(half - xa - d - 1.5, 6, 0.24 * L);
+        var m = {
+          L: L, W2: W2, R: R, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
+          H: p.cabinH, flat: flat
+        };
+        var hwBase = function (x) { return W2 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x) / half, n)), 1 / n); };
+        // the body is as wide as the widest it gets across a wheel for the whole length of the wheel, so the axle pin is short
+        var hwAx = hwBase(Math.max(0, xa - R));
+        m.hw = function (x) {
+          var dx = Math.min(Math.abs(x - xa), Math.abs(x + xa));
+          return Math.max(hwBase(x), hwAx * (1 - smoothstep(R - 1, R + 5, dx)));
+        };
+        m.xe = half * Math.pow(1 - Math.pow(1.3 / W2, n), 1 / n);
+        m.D = function (x) {
+          var lv = x >= xf0 ? hoodE : (x <= xr0 ? trunkE : lerp(trunkE, hoodE, (x - xr0) / (xf0 - xr0)));
+          var f = smoothstep(0, bf, half - x), r = smoothstep(0, bf, x + half);
+          return lv - (lv - p.noseH) * (1 - f) - (lv - p.tailH) * (1 - r);
+        };
+        // greenhouse height above the deck: a trapezoid seen from the side, with the corners rounded by the stations
+        var rf = p.rakeF, rr = p.rakeR, off = p.cabinH * (rf + rr);
+        if (off > cl - 8) { rf *= (cl - 8) / off; rr *= (cl - 8) / off; }
+        var xf1 = xf0 - p.cabinH * rf, xr1 = xr0 + p.cabinH * rr;
+        function prof0(x) {
+          if (x >= xf0 || x <= xr0) return 0;
+          if (x > xf1) return p.cabinH * (xf0 - x) / (xf0 - xf1);
+          if (x < xr1) return p.cabinH * (x - xr0) / (xr1 - xr0);
+          return p.cabinH;
+        }
+        var cxs = stationsBetween(xr0, xf0, 36), prof = cxs.map(prof0), pass, i, q;
+        for (pass = 0; pass < 3; pass++) {
+          q = prof.slice();
+          for (i = 1; i < prof.length - 1; i++) q[i] = (prof[i - 1] + 2 * prof[i] + prof[i + 1]) / 4;
+          prof = q;
+        }
+        m.cabinX = cxs; m.cabinProf = prof;
+        m.hcMax = m.hw((xr0 + xf0) / 2) * p.cabinW / 100;
+        m.hc = function (x) {
+          var v = clamp((x - (xr0 + xf0) / 2) / (cl / 2), -1, 1);
+          return Math.max(1.6, m.hcMax * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(v), 4)), 0.25));
+        };
+        m.tumble = 0.88;
+        m.top = function (x) {
+          var k = 0, t;
+          while (k < cxs.length - 2 && cxs[k + 1] < x) k++;
+          t = clamp((x - cxs[k]) / (cxs[k + 1] - cxs[k]), 0, 1);
+          return m.D(x) + lerp(prof[k], prof[k + 1], t);
+        };
+        // the widest the body is across a wheel, to keep the wheel clear of it
+        m.hwWheel = hwAx;
+        return m;
+      }
+      var CAR_TYPES = { sedan: sedanModel };
+
+      function lowerBody(m, p) {
+        var xs = stationsBetween(-m.xe, m.xe, 60);
+        return loft(xs.map(function (x) {
+          return sectionLoop(x, m.hw(x), m.hw(x), 0, m.D(x), p.corner, p.corner * 1.2);
+        }));
+      }
+
+      function cabinShell(m, p) {
+        var xs = m.cabinX;
+        return loft(xs.map(function (x, i) {
+          var hc = m.hc(x), y0 = Math.max(0, m.D(x) - 1.5), y1 = m.D(x) + m.cabinProf[i];
+          return sectionLoop(x, hc, hc * m.tumble, y0, y1, 0.5, p.crown);
+        }));
+      }
+
+      // Windows: a thin proud skin on the greenhouse sides, between the door line and the roof rail.
+      function windowShell(m, p) {
+        var xs = m.cabinX, rows = [], run = [], best = [], i, x, w0, w1, hc, y0, y1;
+        for (i = 0; i < xs.length; i++) {
+          x = xs[i]; w0 = m.D(x) + 2.5; w1 = m.D(x) + m.cabinProf[i] - 3.2;
+          if (w1 - w0 >= 2.2) run.push(i);
+          else { if (run.length > best.length) best = run; run = []; }
+        }
+        if (run.length > best.length) best = run;
+        if (best.length < 4) return null;
+        best.forEach(function (idx) {
+          x = xs[idx]; hc = m.hc(x);
+          y0 = Math.max(0, m.D(x) - 1.5); y1 = m.D(x) + m.cabinProf[idx];
+          w0 = m.D(x) + 2.5; w1 = m.D(x) + m.cabinProf[idx] - 3.2;
+          var at = function (y) { return hc + (hc * m.tumble - hc) * (y - y0) / (y1 - y0) + 0.35; };
+          rows.push(sectionLoop(x, at(w0), at(w1), w0, w1, 0.3, 1));
+        });
+        return loft(rows);
+      }
+
+      function lightShells(m, p) {
+        var out = [], zs = m.W2 * 0.62, xFront = (m.L / 2) * Math.pow(Math.max(0, 1 - Math.pow(zs / m.W2, p.nose)), 1 / p.nose);
+        [1, -1].forEach(function (s) {
+          var y = Math.min(m.D(xFront) - 4, m.D(xFront) * 0.7);
+          out.push(ellipsoid(xFront - 0.6, y, s * zs, 2.1, 2.3, 3.6, 16, 8));
+          out.push(ellipsoid(-xFront + 0.6, y, s * zs, 2.1, 2.1, 3.4, 16, 8));
+        });
+        return concat(out);
+      }
+
+      // ---------------------------------------------------------------------
+      // Wheels and axles
+      // ---------------------------------------------------------------------
+      function wheelLayout(m, p) {
+        var gap = m.clr + 0.15, zi = m.hwWheel + gap, ww = p.wheelW;
+        var dF = m.rH + 1.3, zr = zi + ww + RIM_RAISE, zf0 = zr + m.clr, zf1 = zf0 + 1.5 * (dF - m.d), zf2 = zf1 + 0.8;
+        return { zi: zi, ww: ww, dF: dF, zr: zr, zf0: zf0, zf1: zf1, zf2: zf2 };
+      }
+
+      // The wheel hole: a circle with a pointed top, so it prints without a sagging roof.
+      function holeR(rH, th) {
+        var deg = ((th / DEG) % 360 + 360) % 360;
+        if (deg >= 45 && deg <= 90) return rH / Math.cos((deg - 45) * DEG);
+        if (deg > 90 && deg <= 135) return rH / Math.cos((deg - 135) * DEG);
+        return rH;
+      }
+
+      function tireShell(m, p, lay, xc) {
+        var R = m.R, ww = lay.ww, rs = Math.min(2, ww * 0.3), prof = [], t, a;
+        var tread = Math.round(p.tread), td = 0.55;
+        prof.push([0, 0, 1], [R - rs, 0, 0]);
+        for (t = 1; t <= 2; t++) { a = (-90 + 30 * t) * DEG; prof.push([R - rs + rs * Math.cos(a), rs + rs * Math.sin(a), 0]); }
+        prof.push([R, rs, 2], [R, ww - rs, 2]);
+        for (t = 1; t <= 2; t++) { a = 30 * t * DEG; prof.push([R - rs + rs * Math.cos(a), ww - rs + rs * Math.sin(a), 0]); }
+        prof.push([R - rs, ww, 0], [0, ww, 1]);
+        return ringSolid(prof.length, SEG, function (i, j, th) {
+          var e = prof[i], r = e[0];
+          if (e[2] === 1) r = holeR(m.rH, th);
+          else if (e[2] === 2 && tread > 0) r = R - td * (0.5 - 0.5 * Math.cos(tread * th));
+          return [xc + r * Math.cos(th), Math.max(0, m.ax + r * Math.sin(th)), lay.zi + e[1]];
+        });
+      }
+
+      function rimShell(m, p, lay, xc) {
+        var R = m.R, style = Math.round(p.rimStyle), rr = (p.rimSize / 100) * R, zA = lay.zi + lay.ww - 1, zB = lay.zi + lay.ww + RIM_RAISE;
+        var prof = [[0, zA, 1], [0, zA, 4], [0, zB - 0.6, 4], [-0.6, zB, 4], [0, zB, 1]];
+        // the hub cap radius at the angle th; the star styles scallop the edge
+        function outer(th) {
+          if (style === 1) return rr * (0.84 + 0.16 * Math.cos(5 * th));
+          if (style === 2) return rr * (0.84 + 0.16 * Math.cos(8 * th));
+          return rr;
+        }
+        // the first and last points are on the hole; the middle three are on the outer edge
+        return ringSolid(prof.length, SEG, function (i, j, th) {
+          var e = prof[i], r = e[2] === 1 ? holeR(m.rH, th) : outer(th) + e[0];
+          return [xc + r * Math.cos(th), m.ax + r * Math.sin(th), e[1]];
+        });
+      }
+
+      // A diamond whose bottom point is at yb and whose half-diagonal is dd, so the head grows upward only and its
+      // underside never gets shallower than 45 degrees.
+      function diamond(x, yb, z, dd) { return [[x, yb + 2 * dd, z], [x - dd, yb + dd, z], [x, yb, z], [x + dd, yb + dd, z]]; }
+      function axleShell(m, lay, xc, zRoot) {
+        var yb = m.ax - m.d;
+        return loft([diamond(xc, yb, zRoot, m.d), diamond(xc, yb, lay.zf0, m.d), diamond(xc, yb, lay.zf1, lay.dF), diamond(xc, yb, lay.zf2, lay.dF)]);
+      }
+
+      // ---------------------------------------------------------------------
+      // Stamps: small car parts placed on the surface. Each is modelled flat on the surface: a is across, b is up (or
+      // forward on a roof), c is out of the surface. They sink SINK mm into the car so they are fused to it.
+      // ---------------------------------------------------------------------
+      var STAMP_NAMES = { mirror: 'Mirror', spoiler: 'Spoiler', scoop: 'Hood scoop', antenna: 'Antenna', rack: 'Roof rack', light: 'Round light', handle: 'Door handle', exhaust: 'Exhaust pipe' };
+
+      function poly(cx, cy, rx, ry, n, rot) {
+        var out = [], i;
+        for (i = 0; i < n; i++) out.push([cx + rx * Math.cos(rot + (i / n) * TAU), cy + ry * Math.sin(rot + (i / n) * TAU)]);
+        return out;
+      }
+      function rect(a0, a1, b0, b1) { return [[a0, b0], [a1, b0], [a1, b1], [a0, b1]]; }
+      function ringAt(pg, c, k, cx, cy, ox, oy) { return pg.map(function (q) { return [cx + (q[0] - cx) * k + (ox || 0), cy + (q[1] - cy) * k + (oy || 0), c]; }); }
+      // a footprint raised from -SINK to h, the top shrunk about (cx, cy) by k
+      function prism(pg, h, k, cx, cy) { return loft([ringAt(pg, -SINK, 1, cx, cy), ringAt(pg, 0, 1, cx, cy), ringAt(pg, h, k, cx, cy)]); }
+
+      // Parts of one stamp in its own frame (a, b, c).
+      function stampLocal(type, S, hs) {
+        var out = [], i, t, pg, tip, ang, h;
+        if (type === 'mirror') {
+          pg = [[0, -0.5 * S]];
+          for (i = 0; i <= 14; i++) { ang = (-41.8 + (263.6 * i) / 14) * DEG; pg.push([0.4 * S * Math.cos(ang), 0.1 * S + 0.4 * S * Math.sin(ang)]); }
+          out.push(prism(pg, 0.36 * S * hs, 0.85, 0, 0.1 * S));
+        } else if (type === 'spoiler') {
+          h = Math.max(1.6, 0.26 * S * hs);
+          out.push(loft([
+            [[-0.55 * S, -0.22 * S, -SINK], [0.55 * S, -0.22 * S, -SINK], [0.55 * S, 0.22 * S, -SINK], [-0.55 * S, 0.22 * S, -SINK]],
+            [[-0.55 * S, -0.22 * S, 0], [0.55 * S, -0.22 * S, 0], [0.55 * S, 0.22 * S, 0], [-0.55 * S, 0.22 * S, 0]],
+            [[-0.52 * S, -0.22 * S, h], [0.52 * S, -0.22 * S, h], [0.52 * S, -0.1 * S, h], [-0.52 * S, -0.1 * S, h]]
+          ]));
+        } else if (type === 'scoop') {
+          out.push(prism(poly(0, 0, 0.4 * S, 0.3 * S, 20, 0), Math.max(1.6, 0.24 * S * hs), 0.6, 0, 0));
+        } else if (type === 'antenna') {
+          var r0 = Math.max(1.1, 0.07 * S);
+          out.push(prism(poly(0, 0, r0, r0, 12, 0), 0.9 * S * hs, 0.55, 0, 0));
+        } else if (type === 'rack') {
+          var w = Math.max(1.4, 0.1 * S), hh = Math.max(1.2, 0.13 * S * hs);
+          out.push(prism(rect(-0.5 * S, -0.5 * S + w, -0.4 * S, 0.4 * S), hh, 1, 0, 0));
+          out.push(prism(rect(0.5 * S - w, 0.5 * S, -0.4 * S, 0.4 * S), hh, 1, 0, 0));
+          out.push(prism(rect(-0.46 * S, 0.46 * S, -0.4 * S, -0.4 * S + w), hh + 0.4, 1, 0, 0));
+          out.push(prism(rect(-0.46 * S, 0.46 * S, 0.4 * S - w, 0.4 * S), hh + 0.4, 1, 0, 0));
+        } else if (type === 'light') {
+          var lr = 0.3 * S, lh = Math.min(Math.max(1.2, 0.14 * S * hs), lr * 0.6);
+          out.push(prism(poly(0, 0, lr, lr, 20, 0), lh, (lr - lh) / lr, 0, 0));
+        } else if (type === 'handle') {
+          // a ridge with 45 degree sides, so it prints on a wall without support
+          var hh2 = Math.max(1, 0.08 * S * hs), bw = hh2 + 0.7;
+          out.push(loft([
+            [[-0.4 * S, -bw, -SINK], [0.4 * S, -bw, -SINK], [0.4 * S, bw, -SINK], [-0.4 * S, bw, -SINK]],
+            [[-0.4 * S, -bw, 0], [0.4 * S, -bw, 0], [0.4 * S, bw, 0], [-0.4 * S, bw, 0]],
+            [[-0.4 * S + hh2, -0.7, hh2], [0.4 * S - hh2, -0.7, hh2], [0.4 * S - hh2, 0.7, hh2], [-0.4 * S + hh2, 0.7, hh2]]
+          ]));
+        } else {
+          out.push(prism(poly(0, 0, 0.22 * S, 0.22 * S, 4, Math.PI / 2), Math.max(2, 0.35 * S * hs), 1, 0, 0));
+        }
+        return out;
+      }
+
+      // Orientation of a stamp on a surface point: c is the surface normal, b is up (forward on a flat top), then turned.
+      function stampBasis(st) {
+        var n = [st.nx, st.ny, st.nz], ref = Math.abs(n[1]) > 0.85 ? [1, 0, 0] : [0, 1, 0];
+        var dot = ref[0] * n[0] + ref[1] * n[1] + ref[2] * n[2], b = [ref[0] - n[0] * dot, ref[1] - n[1] * dot, ref[2] - n[2] * dot];
+        var bl = Math.sqrt(b[0] * b[0] + b[1] * b[1] + b[2] * b[2]) || 1;
+        b = [b[0] / bl, b[1] / bl, b[2] / bl];
+        var a = [b[1] * n[2] - b[2] * n[1], b[2] * n[0] - b[0] * n[2], b[0] * n[1] - b[1] * n[0]];
+        var ca = Math.cos((st.rot || 0) * DEG), sa = Math.sin((st.rot || 0) * DEG);
+        var a2 = [a[0] * ca - b[0] * sa, a[1] * ca - b[1] * sa, a[2] * ca - b[2] * sa], b2 = [b[0] * ca + a[0] * sa, b[1] * ca + a[1] * sa, b[2] * ca + a[2] * sa];
+        return { a: a2, b: b2, c: n };
+      }
+      function stampPositions(st) {
+        var bs = stampBasis(st), parts = stampLocal(st.type, st.size, st.raise), out = [];
+        parts.forEach(function (pos) {
+          var o = new Float32Array(pos.length), i, x, y, z;
+          for (i = 0; i < pos.length; i += 3) {
+            x = pos[i]; y = pos[i + 1]; z = pos[i + 2];
+            o[i] = st.x + bs.a[0] * x + bs.b[0] * y + bs.c[0] * z;
+            o[i + 1] = st.y + bs.a[1] * x + bs.b[1] * y + bs.c[1] * z;
+            o[i + 2] = st.z + bs.a[2] * x + bs.b[2] * y + bs.c[2] * z;
+          }
+          out.push(orient(o));
+        });
+        return concat(out);
+      }
+      var STAMP_SURFACES = { body: 1, cabin: 1, windows: 1, lights: 1, stamp: 1 };
+      function newStamp(hit, p) {
+        return { type: stampType, size: p.stampSize, raise: p.stampRaise, rot: p.stampRotation,
+          x: hit.point.x, y: hit.point.y, z: hit.point.z, nx: hit.normal.x, ny: hit.normal.y, nz: hit.normal.z };
+      }
+
+      // ---------------------------------------------------------------------
+      // Build
+      // ---------------------------------------------------------------------
+      function build(p) {
+        var m = CAR_TYPES.sedan(p), lay = wheelLayout(m, p), meshes = [], tires = [], rims = [], axles = [];
+        lastModel = m;
+        meshes.push({ name: 'body', positions: lowerBody(m, p), color: '#ef6f6c', singlePart: true });
+        meshes.push({ name: 'cabin', positions: cabinShell(m, p), color: '#ef6f6c', singlePart: true });
+        if (Math.round(p.windows) >= 1) {
+          var win = windowShell(m, p);
+          if (win) meshes.push({ name: 'windows', positions: win, color: '#9fcfee', singlePart: true });
+        }
+        if (Math.round(p.lights) >= 1) meshes.push({ name: 'lights', positions: lightShells(m, p), color: '#fde68a', singlePart: true });
+        [m.xa, -m.xa].forEach(function (xc) {
+          var zRoot = m.hw(xc) - 2.5;
+          var tire = tireShell(m, p, lay, xc), rim = rimShell(m, p, lay, xc), ax = axleShell(m, lay, xc, zRoot);
+          tires.push(tire, mirrorZ(tire)); rims.push(rim, mirrorZ(rim)); axles.push(ax, mirrorZ(ax));
+        });
+        meshes.push({ name: 'tire', positions: concat(tires), color: '#3b3f4a', singlePart: true });
+        meshes.push({ name: 'rim', positions: concat(rims), color: '#d9dee5', singlePart: true });
+        meshes.push({ name: 'axle', positions: concat(axles), color: '#b4bec9', singlePart: true });
+        stamps.forEach(function (st) {
+          var pos = stampPositions(st);
+          if (pos.length) meshes.push({ name: 'stamp', positions: pos, color: '#3b3f4a', singlePart: true });
+        });
+        if (refreshUI) refreshUI();
+        return meshes;
+      }
+
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      var DEFAULTS = {
+        length: 110, width: 42, corner: 3.5, nose: 3, noseH: 10, tailH: 12, hoodH: 19, trunkH: 20,
+        hoodLen: 34, cabinLen: 50, cabinH: 14, rakeF: 0.9, rakeR: 1.1, cabinW: 80, crown: 6, windows: 1, lights: 1,
+        wheelD: 19, wheelW: 7, wheelbase: 68, flat: 12, tread: 12, rimStyle: 1, rimSize: 62,
+        clearance: 0.4, axle: 6,
+        stampSize: 14, stampRaise: 1, stampRotation: 0
+      };
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-105',
+        category: 'TOYS // VEHICLES',
+        title: 'Sedan Maker',
+        fileName: 'Sedan',
+        palette: [
+          { name: 'Cherry Red', color: '#ef6f6c' }, { name: 'Sky Blue', color: '#7fb6e8' },
+          { name: 'Sunny Yellow', color: '#f6d365' }, { name: 'Mint', color: '#a7e3c4' },
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Charcoal', color: '#3b3f4a' },
+          { name: 'Tangerine', color: '#f4a259' }, { name: 'Lilac', color: '#c3a6e8' }
+        ],
+        defaultColor: '#ef6f6c',
+        partNames: { body: 'Car body', cabin: 'Roof and pillars', windows: 'Windows', lights: 'Lights', tire: 'Tires', rim: 'Wheel hubs', axle: 'Axles', stamp: 'Car part' },
+        parameters: [
+          slider('Body', 'length', 'Car length', ' mm', 80, 150, 1, DEFAULTS.length),
+          slider('Body', 'width', 'Body width', ' mm', 30, 56, 1, DEFAULTS.width),
+          slider('Body', 'hoodH', 'Hood height (the axles need about 16)', ' mm', 16, 28, 0.5, DEFAULTS.hoodH),
+          slider('Body', 'trunkH', 'Trunk height', ' mm', 16, 28, 0.5, DEFAULTS.trunkH),
+          slider('Body', 'noseH', 'Nose height', ' mm', 8, 18, 0.5, DEFAULTS.noseH),
+          slider('Body', 'tailH', 'Tail height', ' mm', 8, 18, 0.5, DEFAULTS.tailH),
+          slider('Body', 'nose', 'Nose shape (pointed to boxy)', '', 2, 6, 0.5, DEFAULTS.nose),
+          slider('Body', 'corner', 'Edge roundness', ' mm', 1.5, 6, 0.5, DEFAULTS.corner),
+          choice('Body', 'lights', 'Headlights and taillights', ['Off', 'On'], DEFAULTS.lights),
+          slider('Cabin', 'hoodLen', 'Hood length', ' mm', 24, 50, 1, DEFAULTS.hoodLen),
+          slider('Cabin', 'cabinLen', 'Cabin length', ' mm', 30, 70, 1, DEFAULTS.cabinLen),
+          slider('Cabin', 'cabinH', 'Cabin height', ' mm', 9, 22, 0.5, DEFAULTS.cabinH),
+          slider('Cabin', 'rakeF', 'Windshield slope (low = upright)', '', 0.3, 1.6, 0.05, DEFAULTS.rakeF),
+          slider('Cabin', 'rakeR', 'Rear window slope (low = upright)', '', 0.3, 1.8, 0.05, DEFAULTS.rakeR),
+          slider('Cabin', 'cabinW', 'Cabin width', '%', 66, 92, 1, DEFAULTS.cabinW),
+          slider('Cabin', 'crown', 'Roof roundness', ' mm', 2, 9, 0.5, DEFAULTS.crown),
+          choice('Cabin', 'windows', 'Windows', ['Off', 'On'], DEFAULTS.windows),
+          slider('Wheels', 'wheelD', 'Wheel size', ' mm', 14, 28, 0.5, DEFAULTS.wheelD),
+          slider('Wheels', 'wheelW', 'Wheel width', ' mm', 5, 11, 0.5, DEFAULTS.wheelW),
+          slider('Wheels', 'wheelbase', 'Distance between axles', ' mm', 40, 95, 1, DEFAULTS.wheelbase),
+          slider('Wheels', 'flat', 'Flat spot where the wheel meets the bed (too little may sag)', '%', 8, 20, 1, DEFAULTS.flat),
+          slider('Wheels', 'tread', 'Tire tread bumps', '', 0, 20, 1, DEFAULTS.tread),
+          choice('Wheels', 'rimStyle', 'Hub cap', ['Plain', '5 lobes', '8 lobes'], DEFAULTS.rimStyle),
+          slider('Wheels', 'rimSize', 'Hub cap size', '%', 45, 78, 1, DEFAULTS.rimSize),
+          slider('Print fit', 'clearance', 'Wheel clearance (0.4 suits most printers)', ' mm', 0.2, 0.8, 0.2, DEFAULTS.clearance),
+          slider('Print fit', 'axle', 'Axle thickness', ' mm', 4.8, 8, 0.2, DEFAULTS.axle),
+          { group: 'Part size', tab: 'parts', key: 'stampSize', label: 'Part size', unit: ' mm', min: 6, max: 30, step: 1, value: DEFAULTS.stampSize },
+          { group: 'Part size', tab: 'parts', key: 'stampRaise', label: 'Part height', unit: 'x', min: 0.6, max: 1.8, step: 0.1, value: DEFAULTS.stampRaise },
+          { group: 'Part size', tab: 'parts', key: 'stampRotation', label: 'Turn', unit: '°', min: 0, max: 355, step: 5, value: DEFAULTS.stampRotation }
+        ],
+        presets: [
+          presetOf('Default sedan', {}),
+          presetOf('Compact', { length: 92, width: 38, wheelbase: 56, hoodLen: 28, cabinLen: 44, cabinH: 13, wheelD: 17, wheelW: 6 }),
+          presetOf('Long limo', { length: 140, wheelbase: 96, hoodLen: 40, cabinLen: 66, cabinH: 13, hoodH: 20, trunkH: 20 }),
+          presetOf('Sporty low', { length: 118, width: 46, hoodH: 17, trunkH: 17, cabinH: 11, rakeF: 1.4, rakeR: 1.6, wheelD: 22, wheelW: 9, rimStyle: 2 }),
+          presetOf('Chunky wheels', { wheelD: 25, wheelW: 10, wheelbase: 72, tread: 12, hoodH: 22, trunkH: 22 }),
+          presetOf('Tall and boxy', { cabinH: 20, rakeF: 0.4, rakeR: 0.4, cabinLen: 54, nose: 5, cabinW: 88 })
+        ],
+        tabs: [{
+          id: 'parts',
+          label: 'Car parts',
+          hint: 'Tap the car to place the part',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Part (tap the car to place)'));
+            var chips = h('div', { class: 'mm-chips' }), buttons = {};
+            Object.keys(STAMP_NAMES).forEach(function (type) {
+              var btn = h('button', { class: 'mm-chip', type: 'button', 'aria-pressed': String(type === stampType), onclick: function () {
+                stampType = type;
+                Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
+              } }, STAMP_NAMES[type]);
+              buttons[type] = btn;
+              chips.appendChild(btn);
+            });
+            container.appendChild(chips);
+            container.appendChild(h('p', { class: 'mm-note' }, 'Mirrors and lights go on the sides, spoilers and racks on the trunk and roof. Parts stay where you put them when sliders change.'));
+            var count = h('p', { class: 'mm-note' }, '');
+            var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!stamps.length) return;
+              stamps.pop();
+              api.rebuild();
+            } }, 'Undo last part');
+            var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!stamps.length) return;
+              stamps = [];
+              api.rebuild();
+            } }, 'Clear parts');
+            var row = h('div', { class: 'mm-export-row' });
+            row.appendChild(undo);
+            row.appendChild(clear);
+            container.appendChild(count);
+            container.appendChild(row);
+            refreshUI = function () {
+              count.textContent = stamps.length + (stamps.length === 1 ? ' part placed' : ' parts placed');
+              undo.disabled = clear.disabled = stamps.length === 0;
+            };
+            refreshUI();
+          },
+          onHover: function (hit, api) {
+            if (!hit || !STAMP_SURFACES[hit.meshName]) { api.setPreview(null); return; }
+            api.setPreview({ positions: stampPositions(newStamp(hit, api.params)) });
+          },
+          onPick: function (hit, api) {
+            if (!hit || !STAMP_SURFACES[hit.meshName]) { api.toast('Tap the body or roof of the car to place a part'); return; }
+            stamps.push(newStamp(hit, api.params));
+            api.rebuild();
+          }
+        }],
+        embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
+        // check-mesh.mjs: a mirror on the side, a spoiler on the trunk, an antenna and a rack on the roof, a handle and a light
+        testSetup: function (params) {
+          var m = CAR_TYPES.sedan(params), xm = (m.xr0 + m.xf0) / 2, xs = m.xr0 - 12, hc = m.hc(m.xf0 - 4), yw = m.D(m.xf0 - 4) + 4;
+          var base = { size: 14, raise: 1, rot: 0 };
+          function put(o) { var s = {}; Object.keys(base).forEach(function (k) { s[k] = base[k]; }); Object.keys(o).forEach(function (k) { s[k] = o[k]; }); return s; }
+          stamps = [
+            put({ type: 'mirror', x: m.xf0 - 4, y: yw, z: hc * 1.0, nx: 0, ny: 0, nz: 1 }),
+            put({ type: 'spoiler', x: xs, y: m.D(xs), z: 0, nx: 0, ny: 1, nz: 0 }),
+            put({ type: 'antenna', x: xm, y: m.top(xm), z: 8, nx: 0, ny: 1, nz: 0 }),
+            put({ type: 'rack', x: xm, y: m.top(xm), z: -5, nx: 0, ny: 1, nz: 0, size: 12 }),
+            put({ type: 'handle', x: xm, y: m.D(xm) + 6, z: m.hc(xm) * 0.97, nx: 0, ny: 0, nz: 1 }),
+            put({ type: 'light', x: 0, y: 10, z: m.hw(0), nx: 0, ny: 0, nz: 1, size: 10 }),
+            put({ type: 'exhaust', x: -m.xe, y: 7, z: 10, nx: -1, ny: 0, nz: 0, size: 10 })
+          ];
+        },
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

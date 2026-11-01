@@ -1026,6 +1026,23 @@
       "overhang"
     ]
   },
+  "sedan-maker": {
+    "Compact": [
+      "overhang"
+    ],
+    "Long limo": [
+      "overhang"
+    ],
+    "Sporty low": [
+      "overhang"
+    ],
+    "Chunky wheels": [
+      "overhang"
+    ],
+    "Tall and boxy": [
+      "overhang"
+    ]
+  },
   "shelf-bracket": {
     "Lattice": [
       "overhang"

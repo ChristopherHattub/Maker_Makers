@@ -782,6 +782,15 @@ const GENERATORS = [
     description: 'A paper towel holder as a countertop stand, wall mount or under-cabinet arm. Pick six base shapes (round, rounded square, hexagon, oval, flower, octagon) with square, chamfered or rounded edges, the rod width and length, smooth, ribbed, fluted or twisted rod styles, a hollow rod, tip shape, wall tilt and counterbored screw holes, then add hearts, stars, flowers, leaves or paws as raised stamps. Prints with no supports; a full 280 mm roll needs a tall printer or a shorter rod. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 105,
+    title: 'Sedan Maker',
+    bundle: 'toys',
+    category: 'TOYS // VEHICLES',
+    thumbnailUrl: 'assets/thumbnails/sedan-maker.svg',
+    programUrl: 'programs/sedan-maker.html',
+    description: 'A toy sedan with four wheels that are printed in place: each wheel spins on its own axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Prints with no supports on the default settings; wheel clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',
@@ -972,7 +981,7 @@ const BUNDLES = [
     description: 'Vases, lamps, frames and wall art.' },
   { id: 'organization', name: 'Organisation', accent: '#38d6c4', at: [16, 6], size: [4, 2],
     description: 'Hooks, trays, holders and storage.' },
-  { id: 'toys', name: 'Toys & Games', accent: '#ff5252', at: [12, 5], size: [4, 2], planned: true,
+  { id: 'toys', name: 'Toys & Games', accent: '#ff5252', at: [12, 5], size: [4, 2],
     description: 'Puzzles, spinners and pieces to play with.' },
   { id: 'garden', name: 'Garden', accent: '#7bd34a', at: [0, 9], size: [4, 2], planned: true,
     description: 'Planters, markers and plant stands.' },
