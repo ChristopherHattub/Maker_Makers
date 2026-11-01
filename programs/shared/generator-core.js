@@ -14,7 +14,7 @@
     throw new Error('generator-core.js needs window.MM_GENERATOR and THREE');
   }
 
-  var NEUTRAL_MODEL_COLOR = '#cbd5e1'; // Parametric tab: neutral matte, no paint colors
+  var NEUTRAL_MODEL_COLOR = '#cbd5e1'; // Tabs without part colors (e.g. Sculpt): neutral matte
   var CAVITY_SHADE = 0.82;             // How dark a fully shaded vertex gets (0..1)
   var PLATE_SIZES = [184, 256, 350];   // Preview beds in mm: A1 mini, X1 / P1 / A1, large format; bigger models get a bed to fit
   var CREASE_COS = Math.cos(50 * Math.PI / 180); // Faces turning more than 50 degrees are separate parts
@@ -1408,9 +1408,9 @@
     return label + ' · ' + triangleCount.toLocaleString() + ' tris';
   }
 
-  // Writes the colors for the current tab. Parametric shows the neutral model; Color shows paint.
+  // Writes the colors for the current tab. Parametric, Color and Print show the part colors and paint; other tabs show the neutral model.
   function refreshColors() {
-    var colorTab = activeTab === 'color' || activeTab === 'print' || (cfg.coloredTabs || []).indexOf(activeTab) >= 0; // Print preview (and cfg.coloredTabs) show the painted colors too
+    var colorTab = activeTab === 'model' || activeTab === 'color' || activeTab === 'print' || (cfg.coloredTabs || []).indexOf(activeTab) >= 0; // Print preview (and cfg.coloredTabs) show the painted colors too
     if (colorTab) ensureParts();
     modelMeshes.forEach(function (mesh, meshIndex) {
       var colorAttr = mesh.geometry.attributes.color;
