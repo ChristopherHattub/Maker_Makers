@@ -833,3 +833,10 @@ body.mm-gen.mm-embed .mm-panel { height: 100vh; width: 100%; max-width: none; bo
   pointer-events: none;
 }
 .mm-anim-caption[hidden] { display: none; }
+
+/* Cut-height label over the 3D view (Paper Towel Holder split option). */
+.mm-cut-label {
+  position: absolute; z-index: 5; display: none; pointer-events: none; white-space: nowrap;
+  padding: 0.15rem 0.45rem; border: 1px solid var(--bp-amber); background: rgba(6, 21, 45, 0.85);
+  color: var(--bp-amber); font-size: 0.8rem; letter-spacing: 0.04em;
+}

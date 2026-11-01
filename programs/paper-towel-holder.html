@@ -283,7 +283,7 @@
       // version prints lying down: a flat arm on the bed, the rod standing at one end and the mounting plate standing at the other.
       var DEFAULTS = { mount: 0, shape: 0, baseW: 130, baseD: 130, baseT: 9, corner: 18, edge: 2, edgeSize: 3,
         rodD: 32, rodL: 170, style: 0, detail: 8, tip: 0, hollow: 0, wall: 3, fillet: 6, tilt: 4, rodOff: 0,
-        drop: 85, postD: 36, screws: 2, screwD: 4.2,
+        drop: 85, postD: 36, fixing: 0, screws: 2, screwD: 4.2, magD: 10, magT: 3,
         stamp: 0, stampN: 3, stampSize: 16, stampRaise: 1.4, stampRing: 48, stampSpin: 0 };
       var MOUNTS = ['Countertop stand', 'Wall mount', 'Under cabinet'];
       var SHAPES = ['Round', 'Rounded square', 'Hexagon', 'Oval', 'Flower', 'Octagon'];
@@ -291,7 +291,7 @@
       var STYLES = ['Smooth', 'Ribs', 'Flutes', 'Twisted flutes'];
       var TIPS = ['Rounded', 'Pointed', 'Flat chamfer'];
       var STAMPS = ['None', 'Heart', 'Star', 'Flower', 'Leaf', 'Paw'];
-      var KX = [1, 1, 1, 1, 0.93, 0.924], KZ = [1, 1, 0.866, 1, 0.93, 0.924];
+      var KX = [1, 1, 1, 1, 0.86, 0.924], KZ = [1, 1, 0.866, 1, 0.86, 0.924];
       var NPT = 96;
 
       function sh(param, fn) { param.showIf = fn; return param; }
@@ -356,7 +356,16 @@
       }
 
       // Upright rod (stand and wall mount): root fillet, body, tip. Hollow rods are open at the top.
-      function rodUpright(p, z, y0, R, hollow) {
+      // Peg and socket for a rod split in two: the peg grows from the lower part, the socket is cut into the upper part.
+      // Both ends are chamfered at 45 degrees so neither needs support, and the socket has a 0.25 mm clearance all round.
+      function jointDims(R) {
+        var rp = clamp(R * 0.32, 5, 9);
+        return { rp: rp, h: 16, c: rp - 1.2, rs: rp + 0.25, ds: 17 };
+      }
+
+      // Upright rod (stand and wall mount): root fillet, body, tip. Hollow rods are open at the top.
+      // joint = { cut, part: 'low' | 'high' } builds only the lower part (with a peg) or the upper part (with a socket) of a rod split at height cut.
+      function rodUpright(p, z, y0, R, hollow, joint) {
         var f = p.fillet, L = p.rodL, ytop = y0 + L, style = Math.round(p.style), fl = style >= 2, tw = style === 3;
         var n = Math.max(3, Math.round(p.detail)), tanT = Math.tan((Math.round(p.mount) === 1 ? p.tilt : 0) * DEG);
         var prof = [[0, y0, 0]], k, a, i;
@@ -364,13 +373,28 @@
         else prof.push([R, y0, 0]);
         var yb0 = y0 + (f > 0.3 ? f : 0), tip = tipProf(Math.round(p.tip), R);
         var ri = R * 0.94 - p.wall, yEnd = hollow ? ytop - 0.8 : ytop - tip[0][1];
-        var len = yEnd - yb0, steps = Math.max(2, Math.ceil(len / (style === 1 ? 1.2 : 3))), s, y;
-        for (s = (f > 0.3 ? 1 : 0); s <= steps; s++) { y = yb0 + (len * s) / steps; prof.push([R * ripple(p, y - yb0, len), y, 0]); }
+        var len = yEnd - yb0, steps = Math.max(2, Math.ceil(len / (style === 1 ? 1.2 : 3))), s, y, cutIdx = -1, cutS = -1, best = 1e9;
+        if (joint) {
+          for (s = 0; s <= steps; s++) { y = yb0 + (len * s) / steps; if (Math.abs(y - joint.cut) < best) { best = Math.abs(y - joint.cut); cutS = s; } }
+        }
+        for (s = (f > 0.3 ? 1 : 0); s <= steps; s++) {
+          y = s === cutS ? joint.cut : yb0 + (len * s) / steps;
+          prof.push([R * ripple(p, y - yb0, len), y, 0]);
+          if (s === cutS) cutIdx = prof.length - 1;
+        }
         if (hollow) {
           prof.push([R - 0.8, ytop, 0]); prof.push([ri, ytop, 1]);
           var yf = y0 + 3 + 1; prof.push([ri, yf, 1]); prof.push([0, yf, 1]);
         } else {
           for (i = 1; i < tip.length; i++) prof.push([R * tip[i][0], ytop - tip[i][1], 0]);
+        }
+        if (joint) {
+          var jd = jointDims(R), cy = joint.cut;
+          if (joint.part === 'low') {
+            prof = prof.slice(0, cutIdx + 1).concat([[jd.rp, cy, 1], [jd.rp, cy + jd.h - jd.c, 1], [1.2, cy + jd.h, 1], [0, cy + jd.h, 1]]);
+          } else {
+            prof = [[0, cy + jd.ds, 1], [jd.rs, cy + jd.ds - jd.rs, 1], [jd.rs, cy, 1]].concat(prof.slice(cutIdx));
+          }
         }
         var seg = fl ? Math.max(72, n * 8) : 72;
         return surface(prof, seg, function (i2, j, th) {
@@ -421,10 +445,72 @@
         pts.push([cx, cy + r * Math.SQRT2]);
         return pts;
       }
+      // Keep the part of a counter-clockwise outline that is on or above y = c.
+      function clipBelow(pts, c) {
+        var out = [], n = pts.length, i, a, b, ia, ib, t;
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n]; ia = a[1] >= c; ib = b[1] >= c;
+          if (ia) out.push(a);
+          if (ia !== ib) { t = (c - a[1]) / (b[1] - a[1]); out.push([a[0] + t * (b[0] - a[0]), c]); }
+        }
+        return out;
+      }
+      // True when no edge in the lower half leans out going up by more than 40 degrees from vertical (it would need support).
+      function leanOK(pts, c, mid) {
+        var n = pts.length, i, a, b, lo, hi, dy, tan40 = 0.84;
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          if ((a[1] + b[1]) / 2 > mid) continue;
+          lo = a[1] <= b[1] ? a : b; hi = lo === a ? b : a; dy = hi[1] - lo[1];
+          if (dy < 1e-6) { if (lo[1] > c + 1e-6) return false; continue; }
+          if (Math.abs(hi[0]) - Math.abs(lo[0]) > tan40 * dy + 1e-6) return false;
+        }
+        return true;
+      }
+      // Distance from a point to the nearest edge of an outline.
+      function edgeDist(poly, pt) {
+        var m = 1e9, i, a, b, dx, dy, t;
+        for (i = 0; i < poly.length; i++) {
+          a = poly[i]; b = poly[(i + 1) % poly.length]; dx = b[0] - a[0]; dy = b[1] - a[1];
+          t = clamp(((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+          m = Math.min(m, Math.hypot(pt[0] - a[0] - t * dx, pt[1] - a[1] - t * dy));
+        }
+        return m;
+      }
+      // An upright plate outline for the under-cabinet mount: the chosen base shape with its bottom cut flat so it stands on the bed.
+      function plateOutline(shape, hw, hd, cr) {
+        var pts = shapePts(shape, hw, hd, cr).map(function (q) { return [q[0], q[1] + hd]; }), c, out = pts;
+        for (c = 0; c < hd * 1.2; c += 0.5) {
+          out = clipBelow(pts, c);
+          if (leanOK(out, c, hd)) break;
+        }
+        return out.map(function (q) { return [q[0], q[1] - c]; });
+      }
 
-      function build(p, api) {
+      // The model is built once for the Parametric view (split = null) and once more as the print layout when the rod is split.
+      var splitOn = false, showLayout = false, cutAt = null, lastRod = null, refreshPanel = null, apiRef = null;
+      var SPLIT_MIN_HEIGHT = 180;
+
+      // Where the rod can be cut: a straight stretch of the body, clear of the root fillet and the tip.
+      function cutRange(p) {
+        var R = p.rodD / 2, y0 = p.baseT - 1, ytop = y0 + p.rodL, f = p.fillet > 0.3 ? p.fillet : 0;
+        var lo = y0 + f + 22, hi = ytop - tipProf(Math.round(p.tip), R)[0][1] - 24;
+        return { lo: lo, hi: hi, top: ytop, ok: ytop > SPLIT_MIN_HEIGHT && hi > lo + 4 };
+      }
+      function splitCut(p) {
+        var r = cutRange(p);
+        return Math.round(clamp(cutAt == null ? (r.top + p.baseT - 1) / 2 : cutAt, r.lo, Math.max(r.lo, r.hi)));
+      }
+      function splitActive(p) { return splitOn && cutRange(p).ok; }
+
+      function buildAll(p, api, split) {
         var THREE = api.THREE, mount = Math.round(p.mount), shape = Math.round(p.shape), R = p.rodD / 2, T = p.baseT, out = [];
-        var cr = p.corner, hr = p.screwD + 0.8, sd = p.screwD / 2, hdp = Math.min(3, T * 0.45), k;
+        var cr = p.corner, mag = mount > 0 && Math.round(p.fixing) === 1, hr = mag ? p.magD / 2 + 1 : p.screwD + 0.8, sd = p.screwD / 2, k;
+        // a magnet pocket opens on the face against the wall or cabinet; it is a short cylinder with a 45 degree cone ceiling (wall)
+        // or a teardrop (cabinet), so it prints without supports. The plate grows thick enough to hold it.
+        var mr = p.magD / 2 + 0.15, mcav = p.magT + 0.3, mn = Math.max(0, Math.ceil((mr - 0.4) / 0.4));
+        if (mag) T = Math.max(T, mount === 1 ? mcav + mn * 0.4 + 1.2 : mcav + 1.6);
+        var hdp = Math.min(3, T * 0.45);
         var footR = R + (p.fillet > 0.3 ? p.fillet : 0);
         var hw = p.baseW / 2, hd = shape === 0 ? hw : p.baseD / 2, holes = [], rodZ = mount === 1 ? p.rodOff : 0;
         var ns = Math.max(2, Math.min(mount === 2 ? 3 : 4, Math.round(p.screws)));
@@ -441,27 +527,53 @@
           if (ns >= 4) holes.push([0, -hz]);
           var outline = shapePts(shape, hw, hd, cr);
           var ring = function (rad) { return holes.map(function (c) { return circlePts(c[0], c[1], rad, 28); }); };
-          pushMesh(out, mesh('plate', [extrude(THREE, outline, ring(sd), 0, T - hdp), extrude(THREE, outline, ring(hr), T - hdp - 0.2, T)]));
+          if (mag) {
+            var slabs = [extrude(THREE, outline, ring(mr), 0, mcav + 0.1)], rk, y1;
+            for (k = 0; k < mn; k++) {
+              rk = mr - (k + 1) * 0.4;
+              y1 = mcav + (k + 1) * 0.4;
+              slabs.push(extrude(THREE, outline, rk > 0.4 ? ring(rk) : null, mcav + k * 0.4, y1 + 0.1));
+            }
+            slabs.push(extrude(THREE, outline, null, mcav + mn * 0.4, T));
+            pushMesh(out, mesh('plate', slabs));
+          } else {
+            pushMesh(out, mesh('plate', [extrude(THREE, outline, ring(sd), 0, T - hdp), extrude(THREE, outline, ring(hr), T - hdp - 0.2, T)]));
+          }
         } else if (mount === 0) {
           pushMesh(out, mesh('base', [baseSolid(p, shape, hw, hd, cr, T)]));
         } else {
           // under cabinet: flat arm on the bed from the rod to the plate, plate standing at the far end
-          var drop = p.drop, H = Math.max(p.baseD, 2 * hr + 30), armHalf = Math.max(p.postD / 2, footR), pw = Math.max(hw, armHalf + 2 * hr + 10, 30);
+          var drop = p.drop, armHalf = Math.max(p.postD / 2, footR), pw = Math.max(hw, armHalf + 2 * hr + 10, 30);
+          var hh = Math.max(shape === 0 ? pw : p.baseD / 2, hr + 15);
           var arm = rrectPts(0, (drop - footR) / 2, armHalf, (drop + footR) / 2 + 1, Math.min(armHalf - 0.5, 6), 5);
           pushMesh(out, mesh('arm', [extrude(THREE, arm, null, 0, T)]));
-          var px = pw - hr - 4, py = H / 2, hy = H / 2 - hr - 4, pl = [], rc = Math.min(cr, pw - 1, H / 2 - 1), a2;
-          for (k = 0; k <= 16; k++) { a2 = (90 * k / 16) * DEG; pl.push([pw - rc + rc * Math.cos(a2), H - rc + rc * Math.sin(a2)]); }
-          for (k = 0; k <= 16; k++) { a2 = (90 + 90 * k / 16) * DEG; pl.push([-pw + rc + rc * Math.cos(a2), H - rc + rc * Math.sin(a2)]); }
-          pl.push([-pw, 0], [pw, 0]);
+          var pl = plateOutline(shape, pw, hh, Math.min(cr, pw - 1, hh - 1)), top = 0;
+          pl.forEach(function (q) { top = Math.max(top, q[1]); });
+          var py = top / 2, px = pw * KX[shape] - hr - 4, hy = (top / 2) * KZ[shape] - hr - 4;
           holes = [[-px, py], [px, py]];
           if (ns >= 3) holes.push([0, py + hy]);
+          // slide each hole toward the middle until a hole and its teardrop tip clear the (possibly scalloped) outline
+          holes = holes.map(function (c) {
+            var x = c[0], y = c[1], n2 = 0;
+            while (n2++ < 200 && (edgeDist(pl, [x, y]) < hr + 3 || edgeDist(pl, [x, y + hr * 1.42]) < 2.5)) {
+              if (Math.abs(x) > 0.5) x -= Math.sign(x) * 0.5; else y -= 0.5;
+            }
+            return [x, y];
+          });
           var tear = function (rad) { return holes.map(function (c) { return tearPts(c[0], c[1], rad); }); };
-          pushMesh(out, mesh('plate', [extrudeXY(THREE, pl, tear(sd), drop + hdp, drop + T), extrudeXY(THREE, pl, tear(hr), drop, drop + hdp + 0.2)]));
+          if (mag) pushMesh(out, mesh('plate', [extrudeXY(THREE, pl, null, drop, drop + T - mcav), extrudeXY(THREE, pl, tear(mr), drop + T - mcav - 0.1, drop + T)]));
+          else pushMesh(out, mesh('plate', [extrudeXY(THREE, pl, tear(sd), drop + hdp, drop + T), extrudeXY(THREE, pl, tear(hr), drop, drop + hdp + 0.2)]));
           shiftZ = -drop / 2;
         }
 
-        var hollowOK = Math.round(p.hollow) >= 1 && R * 0.94 - p.wall >= 4;
-        pushMesh(out, mesh('rod', [rodUpright(p, rodZ, T - 1, R, hollowOK)]));
+        var hollowOK = Math.round(p.hollow) >= 1 && R * 0.94 - p.wall >= 4 && !split;
+        var y0 = T - 1, rodHigh = null;
+        if (split) {
+          pushMesh(out, mesh('rod', [rodUpright(p, rodZ, y0, R, false, { cut: split.cut, part: 'low' })]));
+          rodHigh = rodUpright(p, rodZ, y0, R, false, { cut: split.cut, part: 'high' });
+        } else {
+          pushMesh(out, mesh('rod', [rodUpright(p, rodZ, y0, R, hollowOK)]));
+        }
 
         // stamps on the top face, a ring around the rod
         var type = Math.round(p.stamp);
@@ -489,8 +601,122 @@
         }
 
         if (shiftZ) out.forEach(function (m) { m.positions = xform(m.positions, { t: [0, 0, shiftZ] }); });
+        var tanT = Math.tan((mount === 1 ? p.tilt : 0) * DEG);
+        if (split) {
+          // the upper part stands on its cut face beside the rest, so each part prints upright with no supports
+          var maxX = 0;
+          out.forEach(function (m) { for (var i = 0; i < m.positions.length; i += 3) maxX = Math.max(maxX, m.positions[i]); });
+          var zc = rodZ + shiftZ - (split.cut - y0) * tanT;
+          out.push({ name: 'rod', smoothGroup: 'rod-top', positions: xform(rodHigh, { t: [maxX + R + 14, -split.cut, -zc] }) });
+        } else {
+          lastRod = { x: 0, z: rodZ + shiftZ, y0: y0, tan: tanT, R: R, p: p };
+        }
         return out;
       }
+
+      function build(p, api) {
+        apiRef = api;
+        var out = buildAll(p, api, null);
+        if (refreshPanel) refreshPanel();
+        return out;
+      }
+      function printMeshes(p, api) { return buildAll(p, api, { cut: splitCut(p) }); }
+
+      // --- Print tab: optional split of a tall rod, with a draggable cut line over the assembled model ---
+      function printPanel(box, api) {
+        apiRef = api;
+        function h(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; }
+        var title = h('div', 'mm-group-title', 'Split a tall rod in two');
+        var note = h('p', 'mm-note', '');
+        var tog = h('div', 'mm-toggle'), bOff = h('button', 'mm-toggle-btn', 'Print in one piece'), bOn = h('button', 'mm-toggle-btn', 'Split in two');
+        bOff.type = 'button'; bOn.type = 'button'; tog.appendChild(bOff); tog.appendChild(bOn);
+        var sl = h('div', 'mm-slider'), head = h('div', 'mm-slider-head'), lab = h('label', '', 'Cut height from the bed'), val = h('span', 'mm-slider-value', '');
+        var inp = document.createElement('input'); inp.type = 'range'; inp.step = '1';
+        head.appendChild(lab); head.appendChild(val); sl.appendChild(head); sl.appendChild(inp);
+        var vw = h('div', 'mm-toggle'), bAsm = h('button', 'mm-toggle-btn', 'Assembled'), bLay = h('button', 'mm-toggle-btn', 'Print layout');
+        bAsm.type = 'button'; bLay.type = 'button'; vw.appendChild(bAsm); vw.appendChild(bLay);
+        var tips = h('p', 'mm-note', 'Drag the amber ring on the rod to move the cut. The parts join with a round peg and socket (0.25 mm clearance); a drop of glue makes it permanent. Both parts print upright with no supports. The split print is built from the sliders, so Sculpt edits are not included.');
+        [title, note, tog, sl, vw, tips].forEach(function (n) { box.appendChild(n); });
+        var lastP = null;
+        function paint() {
+          if (!lastP) return;
+          var r = cutRange(lastP), ok = r.ok, on = splitOn && ok;
+          note.textContent = ok ? 'The rod prints ' + Math.round(r.top) + ' mm tall. Split it in two to fit a smaller printer; this is optional. A hollow rod prints solid when split.'
+            : 'Splitting is offered when the rod prints taller than ' + SPLIT_MIN_HEIGHT + ' mm. Raise Rod length on the Parametric tab to use it.';
+          tog.hidden = !ok; sl.hidden = !on; vw.hidden = !on; tips.hidden = !on;
+          bOff.setAttribute('aria-pressed', String(!on)); bOn.setAttribute('aria-pressed', String(on));
+          bAsm.setAttribute('aria-pressed', String(!showLayout)); bLay.setAttribute('aria-pressed', String(showLayout));
+          if (on) { inp.min = String(Math.ceil(r.lo)); inp.max = String(Math.floor(r.hi)); inp.value = String(splitCut(lastP)); val.textContent = splitCut(lastP) + ' mm'; }
+        }
+        refreshPanel = function () { lastP = api.params || lastP; paint(); };
+        function change(fn) { fn(); paint(); api.rebuild(); }
+        bOff.onclick = function () { change(function () { splitOn = false; showLayout = false; }); };
+        bOn.onclick = function () { change(function () { splitOn = true; if (cutAt == null && lastP) cutAt = splitCut(lastP); }); };
+        bAsm.onclick = function () { change(function () { showLayout = false; }); api.centerCamera && api.centerCamera('iso'); };
+        bLay.onclick = function () { change(function () { showLayout = true; }); api.centerCamera && api.centerCamera('iso'); };
+        inp.oninput = function () { cutAt = Number(inp.value); val.textContent = cutAt + ' mm'; api.rebuild(); };
+        lastP = api.params;
+        paint();
+      }
+
+      // The cut ring over the assembled model: amber ring and disc, a height label, and a drag handle.
+      var cutRing = null, cutLabel = null, cutDrag = false, rebuildQueued = false;
+      function onStage(info) {
+        var T3 = info.THREE, scene = info.scene, camera = info.camera, controls = info.controls, container = info.container;
+        var dom = info.renderer.domElement, ray = new T3.Raycaster(), ndc = new T3.Vector2();
+        cutRing = new T3.Group();
+        var ringMat = new T3.LineBasicMaterial({ color: 0xffae00, depthTest: false, transparent: true });
+        var disc = new T3.Mesh(new T3.CylinderGeometry(1, 1, 3, 48), new T3.MeshBasicMaterial({ color: 0xffae00, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false }));
+        var edge = new T3.LineLoop(new T3.BufferGeometry().setFromPoints(Array.from({ length: 64 }, function (_, i) { return new T3.Vector3(Math.cos(i / 64 * TAU), 0, Math.sin(i / 64 * TAU)); })), ringMat);
+        disc.renderOrder = 6; edge.renderOrder = 7;
+        cutRing.add(disc); cutRing.add(edge); cutRing.visible = false; scene.add(cutRing);
+        cutLabel = document.createElement('div'); cutLabel.className = 'mm-cut-label'; container.appendChild(cutLabel);
+
+        function shown() {
+          var tab = document.getElementById('mm-tab-print');
+          return !!(tab && tab.getAttribute('aria-selected') === 'true' && lastRod && splitActive(lastRod.p) && !showLayout);
+        }
+        function place() {
+          var p = lastRod.p, c = splitCut(p), z = lastRod.z - (c - lastRod.y0) * lastRod.tan, rad = lastRod.R + 12;
+          cutRing.position.set(lastRod.x, c, z); cutRing.scale.set(rad, 1, rad);
+          return { x: lastRod.x, y: c, z: z, rad: rad };
+        }
+        function setNdc(e) {
+          var r = dom.getBoundingClientRect();
+          ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+          ray.setFromCamera(ndc, camera);
+        }
+        function overHandle(e) { setNdc(e); return ray.intersectObject(disc).length > 0; }
+        container.addEventListener('pointerdown', function (e) {
+          if (e.button !== 0 || !cutRing.visible || !overHandle(e)) return;
+          cutDrag = true; controls.enabled = false; e.stopPropagation(); e.preventDefault();
+        }, true);
+        window.addEventListener('pointermove', function (e) {
+          if (!cutRing.visible) return;
+          if (!cutDrag) { dom.style.cursor = overHandle(e) ? 'ns-resize' : ''; return; }
+          setNdc(e);
+          var pos = place(), dir = new T3.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
+          if (dir.lengthSq() < 1e-6) return;
+          var plane = new T3.Plane().setFromNormalAndCoplanarPoint(dir.normalize(), new T3.Vector3(pos.x, 0, pos.z)), hit = new T3.Vector3();
+          if (!ray.ray.intersectPlane(plane, hit)) return;
+          var r = cutRange(lastRod.p);
+          cutAt = Math.round(clamp(hit.y, r.lo, r.hi));
+          place();
+          if (!rebuildQueued) { rebuildQueued = true; requestAnimationFrame(function () { rebuildQueued = false; if (apiRef) apiRef.rebuild(); }); }
+          if (refreshPanel) refreshPanel();
+        });
+        window.addEventListener('pointerup', function () { if (cutDrag) { cutDrag = false; controls.enabled = true; } });
+        onFrameImpl = function () {
+          var on = shown();
+          cutRing.visible = on; cutLabel.style.display = on ? 'block' : 'none';
+          if (!on) return;
+          var pos = place(), v = new T3.Vector3(pos.x + pos.rad, pos.y, pos.z).project(camera), r = dom.getBoundingClientRect(), cr2 = container.getBoundingClientRect();
+          cutLabel.textContent = pos.y + ' mm';
+          cutLabel.style.left = (r.left - cr2.left + (v.x * 0.5 + 0.5) * r.width + 8) + 'px';
+          cutLabel.style.top = (r.top - cr2.top + (-v.y * 0.5 + 0.5) * r.height - 10) + 'px';
+        };
+      }
+      var onFrameImpl = null;
 
       window.MM_GENERATOR = {
         code: 'MM-104',
@@ -507,7 +733,7 @@
         partNames: { base: 'Base', plate: 'Mounting plate', arm: 'Arm', rod: 'Rod', stamps: 'Stamps' },
         parameters: [
           choice('Mount', 'mount', 'Mount type', MOUNTS, DEFAULTS.mount),
-          choice('Base', 'shape', 'Base shape (not used under a cabinet)', SHAPES, DEFAULTS.shape),
+          choice('Base', 'shape', 'Base shape', SHAPES, DEFAULTS.shape),
           slider('Base', 'baseW', 'Base width (diameter for round)', ' mm', 60, 220, 1, DEFAULTS.baseW),
           sh(slider('Base', 'baseD', 'Base depth (plate height under a cabinet)', ' mm', 60, 220, 1, DEFAULTS.baseD), function (q) { return Math.round(q.shape) !== 0; }),
           slider('Base', 'baseT', 'Base thickness', ' mm', 5, 20, 0.5, DEFAULTS.baseT),
@@ -526,8 +752,11 @@
           sh(slider('Wall mount', 'rodOff', 'Rod position up or down the plate', ' mm', -30, 30, 1, DEFAULTS.rodOff), isMount(1)),
           sh(slider('Under cabinet', 'drop', 'Arm length (cabinet to rod, roll is about 120 across)', ' mm', 60, 130, 1, DEFAULTS.drop), isMount(2)),
           sh(slider('Under cabinet', 'postD', 'Arm width', ' mm', 24, 56, 1, DEFAULTS.postD), isMount(2)),
-          sh(slider('Screws', 'screws', 'Screw holes (3 at most under a cabinet)', '', 2, 4, 1, DEFAULTS.screws), function (q) { return Math.round(q.mount) !== 0; }),
-          sh(slider('Screws', 'screwD', 'Screw width', ' mm', 3, 6, 0.1, DEFAULTS.screwD), function (q) { return Math.round(q.mount) !== 0; }),
+          sh(choice('Fixing', 'fixing', 'Fix to the wall or cabinet with', ['Screws', 'Magnets'], DEFAULTS.fixing), function (q) { return Math.round(q.mount) !== 0; }),
+          sh(slider('Fixing', 'screws', 'How many (3 at most under a cabinet)', '', 2, 4, 1, DEFAULTS.screws), function (q) { return Math.round(q.mount) !== 0; }),
+          sh(slider('Fixing', 'screwD', 'Screw width', ' mm', 3, 6, 0.1, DEFAULTS.screwD), function (q) { return Math.round(q.mount) !== 0 && Math.round(q.fixing) === 0; }),
+          sh(slider('Fixing', 'magD', 'Magnet diameter (pocket opens on the back, glue the magnet in)', ' mm', 6, 25, 0.5, DEFAULTS.magD), function (q) { return Math.round(q.mount) !== 0 && Math.round(q.fixing) === 1; }),
+          sh(slider('Fixing', 'magT', 'Magnet thickness', ' mm', 1, 8, 0.5, DEFAULTS.magT), function (q) { return Math.round(q.mount) !== 0 && Math.round(q.fixing) === 1; }),
           sh(choice('Stamps', 'stamp', 'Stamp shape (stand and wall mount)', STAMPS, DEFAULTS.stamp), function (q) { return Math.round(q.mount) !== 2; }),
           sh(slider('Stamps', 'stampN', 'How many', '', 1, 8, 1, DEFAULTS.stampN), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; }),
           sh(slider('Stamps', 'stampSize', 'Stamp size', ' mm', 8, 36, 1, DEFAULTS.stampSize), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; }),
@@ -542,10 +771,18 @@
           presetOf(DEFAULTS, 'Mini roll stand', { baseW: 100, rodD: 26, rodL: 120, fillet: 4, tip: 2, stamp: 2, stampN: 3, stampSize: 12, stampRing: 38 }),
           presetOf(DEFAULTS, 'Kitchen wall mount', { mount: 1, shape: 3, baseW: 160, baseD: 90, baseT: 7, rodL: 160, tilt: 5, screws: 2 }),
           presetOf(DEFAULTS, 'Hollow wall mount with leaves', { mount: 1, shape: 1, baseW: 150, baseD: 110, baseT: 7, rodL: 150, hollow: 1, tilt: 6, screws: 4, stamp: 4, stampN: 2, stampSize: 14, stampRing: 40 }),
+          presetOf(DEFAULTS, 'Magnetic wall mount', { mount: 1, shape: 1, baseW: 140, baseD: 90, rodL: 150, tilt: 5, fixing: 1, screws: 4, magD: 12, magT: 3 }),
           presetOf(DEFAULTS, 'Under cabinet arm', { mount: 2, shape: 1, baseW: 90, baseD: 130, baseT: 7, rodL: 150, drop: 85, screws: 3 }),
+          presetOf(DEFAULTS, 'Magnetic under cabinet', { mount: 2, shape: 0, baseW: 100, rodL: 150, drop: 85, fixing: 1, screws: 3, magD: 10, magT: 3 }),
           presetOf(DEFAULTS, 'Twisted rod, octagon base', { shape: 5, baseW: 140, style: 3, detail: 6, tip: 2, rodL: 200, stamp: 5, stampN: 3 })
         ],
-        build: build
+        build: build,
+        printMeshes: printMeshes,
+        printActive: splitActive,
+        printShowParts: function () { return showLayout; },
+        printPanel: printPanel,
+        onStage: onStage,
+        onFrame: function () { if (onFrameImpl) onFrameImpl(); }
       };
 
     })();

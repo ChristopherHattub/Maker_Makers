@@ -240,7 +240,7 @@
     // Optional generator tabs (cfg.tabs), shown right after Parametric.
     var tabDefs = (cfg.tabs || []).slice();
     // Every generator gets the Sculpt tab unless it opts out with sculpt: false. Models that print differently from what they show cannot use it.
-    if (cfg.sculpt === false || cfg.printMeshes || /[?&]embed=workshop\b/.test(location.search)) cfg.sculpt = null;
+    if (cfg.sculpt === false || (cfg.printMeshes && typeof cfg.printActive !== 'function') || /[?&]embed=workshop\b/.test(location.search)) cfg.sculpt = null;
     else if (!cfg.sculpt) cfg.sculpt = sculptGeneric();
     if (cfg.sculpt) { if (cfg.tabsFirst) tabDefs.push(sculptTabConfig()); else tabDefs.unshift(sculptTabConfig()); }
     var extraTabs = tabDefs.map(function (t) {
@@ -392,6 +392,12 @@
   var printSettings = { material: (cfg.printSettings && cfg.printSettings.material) || 'PLA' };
   var PRINT_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU'];
 
+  // cfg.printMeshes may be switched on and off by the generator with cfg.printActive(params) (an optional print variant, such as
+  // a rod split in two). While it is off the model prints as shown. cfg.printShowParts(params) picks, while it is on, whether
+  // the Print tab shows the print layout (true) or the assembled model (false); exports and the print check use the layout.
+  function printOn() { return !!cfg.printMeshes && (typeof cfg.printActive !== 'function' || !!cfg.printActive(params)); }
+  function printShowing() { return printOn() && (typeof cfg.printShowParts !== 'function' || !!cfg.printShowParts(params)); }
+
   function renderPrintPanel() {
     dom.printBody.innerHTML = '';
     dom.printBody.appendChild(el('h2', { class: 'mm-section-title', text: 'Print' }));
@@ -403,6 +409,11 @@
     sel.value = printSettings.material;
     if (sel.value !== printSettings.material) { printSettings.material = 'PLA'; sel.value = 'PLA'; }
     dom.printBody.appendChild(el('div', { class: 'mm-group' }, [el('div', { class: 'mm-slider' }, [el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Material' })]), sel])]));
+    if (typeof cfg.printPanel === 'function') {
+      var extra = el('div', { class: 'mm-group' });
+      dom.printBody.appendChild(extra);
+      cfg.printPanel(extra, api);
+    }
     dom.printBody.appendChild(dom.exportBlock);
   }
 
@@ -902,7 +913,7 @@
         m.renderOrder = 5;
         printMarks.add(m);
       });
-      printMarks.visible = !cfg.printMeshes || activeTab === 'print';   // the marks are in print-plate coordinates
+      printMarks.visible = !printOn() || (activeTab === 'print' && printShowing());   // the marks are in print-plate coordinates
       scene.add(printMarks);
     }
   }
@@ -953,7 +964,7 @@
   // pose (a ring shown assembled, printed as parts on the plate). Exports, the print check and the Print tab use them.
   var printCache = null, printView = null, printViewFor = null;
   function printEntries() {
-    if (!cfg.printMeshes) return modelData;
+    if (!printOn()) return modelData;
     if (!printCache) printCache = cfg.printMeshes(params, api, modelData);
     return printCache;
   }
@@ -966,14 +977,14 @@
 
   function updatePrintView() {
     if (!cfg.printMeshes) return;
-    var on = activeTab === 'print';
+    var on = activeTab === 'print' && printShowing();
     modelGroup.visible = !on;
     if (printView && (!on || printViewFor !== printEntries())) {
       scene.remove(printView);
       printView.children.forEach(function (m) { m.geometry.dispose(); });
       printView = null;
     }
-    if (printMarks) printMarks.visible = on;
+    if (printMarks) printMarks.visible = printOn() ? on : true;
     if (!on) { updateStats(); return; }
     if (!printView) {
       printViewFor = printEntries();
@@ -1650,7 +1661,7 @@
     refreshColors();
     renderPartList();
     rebuildWire();
-    if (cfg.printMeshes && (tab === 'print' || wasPrint)) centerCamera('iso');
+    if (printOn() && (tab === 'print' || wasPrint)) centerCamera('iso');
   }
 
   var toastTimer = null;
@@ -1741,7 +1752,7 @@
 
       for (var t = 0; t < triCount; t++) {
         var b = t * 9;
-        var part = cfg.printMeshes ? null : parts[globalPartIndex(meshIndex, t)];
+        var part = printOn() ? null : parts[globalPartIndex(meshIndex, t)];
         var color = (part ? part.color || part.def || DEFAULT_COLOR : colorForKind(entry.name)).toUpperCase();
         if (colorIndex[color] === undefined) {
           colorIndex[color] = colorList.length;

@@ -52,7 +52,9 @@ function buildVariant(presetLabel) {
   }
   const api = { params, THREE, rebuild() {}, setParams() {}, setPreview() {}, toast() {}, centerCamera() {} };
   if (typeof cfg.testSetup === 'function') cfg.testSetup(params); // optional: place stamps/cuts so they are checked too
-  return cfg.build.call(cfg, params, api);
+  const built = cfg.build.call(cfg, params, api);
+  built.params = params;
+  return built;
 }
 
 const EPS = 0.001; // same weld tolerance as the engine
@@ -131,15 +133,19 @@ function runVariant(presetLabel, out) {
   if (!pcCheck) { out('PRINT CHECK skipped: could not load print-check.js'); return res; }
   try {
     // A generator shown in one pose and printed in another (cfg.printMeshes) is checked as it is really printed.
-    let printed = meshes;
+    // With cfg.printActive (an optional print variant, e.g. a rod split in two) both the shown model and the variant are checked.
+    const variants = [['', meshes]];
     if (typeof cfg.printMeshes === 'function') {
-      printed = cfg.printMeshes(meshes.params || {}, {}, meshes);
+      const printed = cfg.printMeshes(meshes.params || {}, { THREE, rebuild() {}, centerCamera() {} }, meshes);
       printed.forEach((e, i) => { const r = analyse([e]); if (r.open || r.nonManifold || r.nan) { res.meshOk = false; out('PRINT MESH "' + e.name + '" #' + i + ': open ' + r.open + ', non-manifold ' + r.nonManifold + ', volume ' + r.volume.toFixed(0)); } });
+      if (typeof cfg.printActive === 'function') variants.push([' (print variant)', printed]); else variants[0] = ['', printed];
     }
-    const pc = pcCheck(printed);
-    if (!pc.issues.length) out('PRINT CHECK: no supports needed (no floating parts, no overhang over ~50 degrees, no thin walls).');
-    pc.issues.forEach((i) => { out('PRINT CHECK ' + i.severity.toUpperCase() + ' (' + i.kind + '): ' + i.message); res.print.push({ kind: i.kind, severity: i.severity, message: i.message }); });
-    (pc.spots || []).slice(0, 6).forEach((s) => out('  at x ' + s.x.toFixed(1) + ' y ' + s.y.toFixed(1) + ' z ' + s.z.toFixed(1) + ' (Y-up), ' + Math.round(s.area) + ' mm2'));
+    variants.forEach(([tag, list]) => {
+      const pc = pcCheck(list);
+      if (!pc.issues.length) out('PRINT CHECK' + tag + ': no supports needed (no floating parts, no overhang over ~50 degrees, no thin walls).');
+      pc.issues.forEach((i) => { out('PRINT CHECK' + tag + ' ' + i.severity.toUpperCase() + ' (' + i.kind + '): ' + i.message); res.print.push({ kind: i.kind, severity: i.severity, message: i.message }); });
+      (pc.spots || []).slice(0, 6).forEach((s) => out('  at x ' + s.x.toFixed(1) + ' y ' + s.y.toFixed(1) + ' z ' + s.z.toFixed(1) + ' (Y-up), ' + Math.round(s.area) + ' mm2'));
+    });
   } catch (e) { out('PRINT CHECK skipped: ' + e.message); }
   return res;
 }

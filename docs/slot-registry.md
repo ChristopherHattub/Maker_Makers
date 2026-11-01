@@ -122,7 +122,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 101 | Text Generator | personal | `text-generator.html` |
 | 102 | Fancy Ring | jewelry | `fancy-ring.html` |
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
-| 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps) |
+| 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
 
 ## Groups (BUNDLES)
