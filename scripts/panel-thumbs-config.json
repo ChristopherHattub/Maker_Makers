@@ -695,5 +695,14 @@
   },
   "yaw": 18,
   "elev": 52
+ },
+ "paper-towel-holder": {
+  "colors": {
+   "base": "#e8d8c4",
+   "plate": "#e8d8c4",
+   "rod": "#a7c4a0",
+   "post": "#a7c4a0",
+   "stamps": "#e8a07a"
+  }
  }
 }

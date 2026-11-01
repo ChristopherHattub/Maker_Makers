@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-104 Paper Towel Holder // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Geometry helpers. Y up, millimetres. Every solid is a closed shell.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, ...]] rings; pt(i, j, theta) -> [x,y,z]. Rings with r ~ 0 are poles.
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Solid of revolution about Y. prof = [[r, y], ...] running up the outside; post(p, r, y, theta, i) may nudge a point.
+      function lathe(prof, seg, post, wrap) {
+        return surface(prof, seg, function (i, j, th) {
+          var r = prof[i][0], y = prof[i][1], p = [r * Math.cos(th), y, r * Math.sin(th)];
+          if (post) post(p, r, y, th, i);
+          return p;
+        }, wrap);
+      }
+
+      // Unit-ish sphere profile (pole to pole) scaled to rx / ry.
+      function ballProf(rx, ry, n) {
+        var prof = [], i, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : rx * Math.cos(a), ry * Math.sin(a)]);
+        }
+        return prof;
+      }
+      function ball(rx, ry, rz, seg, post) {
+        var n = Math.max(8, Math.round(seg / 2));
+        var pos = lathe(ballProf(1, 1, n), seg, post);
+        return xform(pos, { s: [rx, ry, rz] });
+      }
+      // Cone/cylinder along Y from y0 (radius r0) to y1 (radius r1, 0 = point); flat caps.
+      function cone(r0, r1, y0, y1, seg) {
+        var prof = [[0, y0], [r0, y0]];
+        if (r1 > 1e-6) { prof.push([r1, y1]); prof.push([0, y1]); } else prof.push([0, y1]);
+        return lathe(prof, seg);
+      }
+      // Ring (torus) of centre radius R and tube radius r in the XZ plane around Y.
+      function torus(R, r, seg, tube) {
+        var prof = [], i, a;
+        for (i = 0; i < tube; i++) { a = (i / tube) * TAU; prof.push([R + r * Math.cos(a), r * Math.sin(a)]); }
+        return lathe(prof, seg, null, true);
+      }
+
+      // --- flat shapes in XZ (extruded along Y) ---
+      // Star-shaped outline about its centre (ccw loop of [x, z]).
+      function fanPrism(pts, y0, y1, c) {
+        var o = [], n = pts.length, i, a, b, ct = c || [0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [ct[0], y1, ct[1]], at, bt);
+          tri(o, [ct[0], y0, ct[1]], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Band between two open polylines of equal length (with end caps).
+      function stripPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n - 1; i++) {
+          a = A[i]; a2 = A[i + 1]; b = B[i]; b2 = B[i + 1];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        var s0 = [A[0][0], y1, A[0][1]], s1 = [B[0][0], y1, B[0][1]], s2 = [B[0][0], y0, B[0][1]], s3 = [A[0][0], y0, A[0][1]];
+        tri(o, s0, s1, s2); tri(o, s0, s2, s3);
+        var e0 = [A[n - 1][0], y1, A[n - 1][1]], e1 = [B[n - 1][0], y1, B[n - 1][1]], e2 = [B[n - 1][0], y0, B[n - 1][1]], e3 = [A[n - 1][0], y0, A[n - 1][1]];
+        tri(o, e1, e0, e3); tri(o, e1, e3, e2);
+        return orient(new Float32Array(o));
+      }
+      // Rectangle stroke from (x0,z0) to (x1,z1), width w.
+      function stroke(x0, z0, x1, z1, w, y0, y1) {
+        var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+        var ex = dx / l * w * 0.2, ez = dz / l * w * 0.2;
+        var pts = [[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]];
+        return fanPrism(pts, y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      function circlePts(cx, cz, r, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU), cz + r * Math.sin((i / n) * TAU)]);
+        return pts;
+      }
+
+
+      function mesh(name, list, group, single) {
+        if (!list.length) return null;
+        var m = { name: name, positions: concat(list), smoothGroup: group || name };
+        if (single) m.singlePart = true;
+        return m;
+      }
+      function pushMesh(out, m) { if (m) out.push(m); }
+
+      // Param helpers: a named-option picker stored as a plain number (2 names = buttons, 3+ = dropdown).
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function presetOf(DEFAULTS, label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+
+
+      // --- extra helpers (extrusions, boxes, rounded rectangles, sweeps) ---
+      function box(x0, y0, z0, x1, y1, z1) {
+        return fanPrism([[x0, z0], [x1, z0], [x1, z1], [x0, z1]], y0, y1, [(x0 + x1) / 2, (z0 + z1) / 2]);
+      }
+      // Rounded rectangle outline about (cx, cz): n + 1 points per corner, so the point count never changes with r.
+      function rrectPts(cx, cz, hw, hd, r, n) {
+        r = Math.max(0.05, Math.min(r, hw - 0.01, hd - 0.01));
+        var cs = [[hw - r, hd - r, 0], [-(hw - r), hd - r, 90], [-(hw - r), -(hd - r), 180], [hw - r, -(hd - r), 270]];
+        var pts = [], i, k, a;
+        for (i = 0; i < 4; i++) {
+          for (k = 0; k <= n; k++) {
+            a = (cs[i][2] + (90 * k) / n) * DEG;
+            pts.push([cx + cs[i][0] + r * Math.cos(a), cz + cs[i][1] + r * Math.sin(a)]);
+          }
+        }
+        return pts;
+      }
+      // three.js only fixes hole winding when the outline is counter-clockwise, so make it so.
+      function ccw(pts) {
+        var a = 0, i, n = pts.length;
+        for (i = 0; i < n; i++) a += pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1];
+        return a < 0 ? pts.slice().reverse() : pts;
+      }
+      // A flat plate from plan outline pts [x, z] (holes: list of outlines), spanning y0..y1. Uses three.js triangulation.
+      function extrude(THREE, outer, holes, y0, y1, seg) {
+        var sh = new THREE.Shape(ccw(outer.map(function (p) { return [p[0], -p[1]]; })).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], -p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: y1 - y0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        return orient(xform(Float32Array.from(g.attributes.position.array), { rx: -Math.PI / 2, t: [0, y0, 0] }));
+      }
+      // A vertical plate: outline pts [x, y] in the XY plane, extruded along z from z0 to z1.
+      function extrudeXY(THREE, outer, holes, z0, z1, seg) {
+        var sh = new THREE.Shape(ccw(outer).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: z1 - z0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        return orient(xform(Float32Array.from(g.attributes.position.array), { t: [0, 0, z0] }));
+      }
+      // A vertical plate in the YZ plane: outline pts [y, z], extruded along x from x0 to x1.
+      function extrudeYZ(THREE, outer, holes, x0, x1, seg) {
+        var sh = new THREE.Shape(ccw(outer).map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0, bevelEnabled: false, steps: 1, curveSegments: seg || 12 });
+        var a = g.attributes.position.array, out = new Float32Array(a.length), i;
+        for (i = 0; i < a.length; i += 3) { out[i] = a[i + 2] + x0; out[i + 1] = a[i]; out[i + 2] = a[i + 1]; }
+        return orient(out);
+      }
+      function mirrorX(pos, dx) { return xform(pos, { s: [-1, 1, 1], t: [dx || 0, 0, 0] }); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function rnd(i, seed) { var s = Math.sin(i * 127.1 + (seed || 0) * 311.7) * 43758.5453; return s - Math.floor(s); }
+      function arcPts(cx, cz, r, a0, a1, n) {
+        var pts = [], i;
+        for (i = 0; i <= n; i++) pts.push([cx + r * Math.cos(a0 + (a1 - a0) * i / n), cz + r * Math.sin(a0 + (a1 - a0) * i / n)]);
+        return pts;
+      }
+      // A tube along a path in 3D with a radius at each point. Both ends are closed (give radius 0 at the ends).
+      // path[i] = [x, y, z], rad[i]; the cross-section plane is spanned by the X axis and (dir x X).
+      function sweep(path, rad, seg) {
+        var n = path.length, prof = [], i;
+        for (i = 0; i < n; i++) prof.push([rad[i], i]);
+        var dirs = [];
+        for (i = 0; i < n; i++) {
+          var a = path[Math.max(0, i - 1)], b = path[Math.min(n - 1, i + 1)];
+          var d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
+          d = [d[0] / l, d[1] / l, d[2] / l];
+          // N = d x X (X = 1,0,0) = (0, d.z, -d.y)
+          var nn = [0, d[2], -d[1]], nl = Math.sqrt(nn[1] * nn[1] + nn[2] * nn[2]) || 1;
+          dirs.push([0, nn[1] / nl, nn[2] / nl]);
+        }
+        return surface(prof, seg, function (i, j, th) {
+          var r = rad[i], c = Math.cos(th) * r, s = Math.sin(th) * r, P = path[i], N = dirs[i];
+          return [P[0] + c, P[1] + s * N[1], P[2] + s * N[2]];
+        }, false);
+      }
+
+      // Paper Towel Holder: a countertop stand, wall mount or under-cabinet arm with a rod sized for a roll.
+      // Everything prints with no supports and the rod always points straight up while printing. The under-cabinet
+      // version prints lying down: a flat arm on the bed, the rod standing at one end and the mounting plate standing at the other.
+      var DEFAULTS = { mount: 0, shape: 0, baseW: 130, baseD: 130, baseT: 9, corner: 18, edge: 2, edgeSize: 3,
+        rodD: 32, rodL: 170, style: 0, detail: 8, tip: 0, hollow: 0, wall: 3, fillet: 6, tilt: 4, rodOff: 0,
+        drop: 85, postD: 36, screws: 2, screwD: 4.2,
+        stamp: 0, stampN: 3, stampSize: 16, stampRaise: 1.4, stampRing: 48, stampSpin: 0 };
+      var MOUNTS = ['Countertop stand', 'Wall mount', 'Under cabinet'];
+      var SHAPES = ['Round', 'Rounded square', 'Hexagon', 'Oval', 'Flower', 'Octagon'];
+      var EDGES = ['Square', 'Chamfered', 'Rounded'];
+      var STYLES = ['Smooth', 'Ribs', 'Flutes', 'Twisted flutes'];
+      var TIPS = ['Rounded', 'Pointed', 'Flat chamfer'];
+      var STAMPS = ['None', 'Heart', 'Star', 'Flower', 'Leaf', 'Paw'];
+      var KX = [1, 1, 1, 1, 0.93, 0.924], KZ = [1, 1, 0.866, 1, 0.93, 0.924];
+      var NPT = 96;
+
+      function sh(param, fn) { param.showIf = fn; return param; }
+      function isMount(m) { return function (q) { return Math.round(q.mount) === m; }; }
+
+      // --- base outlines: every shape has exactly NPT points so levels can be lofted ---
+      function polyUnit(k, th) {
+        var s = TAU / k, a = (((th % s) + s) % s) - s / 2;
+        return Math.cos(s / 2) / Math.cos(a);
+      }
+      function shapePts(shape, hw, hd, cr) {
+        var pts = [], j, th, r;
+        if (shape === 1) return rrectPts(0, 0, hw, hd, cr, 23);
+        for (j = 0; j < NPT; j++) {
+          th = (j / NPT) * TAU;
+          r = shape === 2 ? polyUnit(6, th) : shape === 5 ? polyUnit(8, th) : shape === 4 ? 0.93 + 0.07 * Math.cos(8 * th) : 1;
+          pts.push([hw * r * Math.cos(th), hd * r * Math.sin(th)]);
+        }
+        return pts;
+      }
+      // Stack of equal-length outlines [{ y, pts }] joined into one closed solid with fan caps.
+      function loft(levels) {
+        var o = [], n = levels[0].pts.length, k, j;
+        function V(l, i) { var q = l.pts[i % n]; return [q[0], l.y, q[1]]; }
+        var first = levels[0], last = levels[levels.length - 1], cb = [0, first.y, 0], ct = [0, last.y, 0];
+        for (k = 0; k < levels.length - 1; k++) {
+          for (j = 0; j < n; j++) {
+            tri(o, V(levels[k], j), V(levels[k], j + 1), V(levels[k + 1], j + 1));
+            tri(o, V(levels[k], j), V(levels[k + 1], j + 1), V(levels[k + 1], j));
+          }
+        }
+        for (j = 0; j < n; j++) { tri(o, cb, V(first, j + 1), V(first, j)); tri(o, ct, V(last, j), V(last, j + 1)); }
+        return orient(new Float32Array(o));
+      }
+      function baseSolid(p, shape, hw, hd, cr, T) {
+        var e = Math.min(p.edgeSize, T * 0.45), edge = Math.round(p.edge), lv = [[0, 0.5], [0.5, 0]], k, a;
+        if (edge === 0) lv.push([T, 0]);
+        else if (edge === 1) { lv.push([T - e, 0]); lv.push([T, e]); }
+        else for (k = 0; k <= 5; k++) { a = (k / 5) * Math.PI / 2; lv.push([T - e + e * Math.sin(a), e * (1 - Math.cos(a))]); }
+        return loft(lv.map(function (l) {
+          return { y: l[0], pts: shapePts(shape, hw - l[1], (shape === 0 ? hw : hd) - l[1], Math.max(0.3, cr - l[1])) };
+        }));
+      }
+
+      // --- rod tips: [radius ratio, distance from the end], running from the body toward the end ---
+      function tipProf(style, R) {
+        var pts = [], c, a, k;
+        if (style === 1) {
+          c = 0.3 * R; pts.push([1, 2.2 * R]);
+          for (k = 0; k <= 3; k++) { a = (k / 3) * Math.PI / 2; pts.push([0.3 * Math.cos(a), c * (1 - Math.sin(a))]); }
+        } else if (style === 2) {
+          c = Math.min(0.3 * R, 6); pts.push([1, c]); pts.push([(R - c) / R, 0]); pts.push([0, 0]);
+        } else {
+          for (k = 0; k <= 7; k++) { a = (k / 7) * Math.PI / 2; pts.push([Math.cos(a), 0.9 * R * (1 - Math.sin(a))]); }
+        }
+        return pts;
+      }
+      // Gentle rippling of the rod radius for the Ribs style, faded out at both ends.
+      function ripple(p, t, len, y) {
+        if (Math.round(p.style) !== 1) return 1;
+        return 1 + 0.045 * Math.sin(TAU * Math.round(p.detail) * t / len) * smoothstep(0, 8, t) * smoothstep(0, 8, len - t);
+      }
+
+      // Upright rod (stand and wall mount): root fillet, body, tip. Hollow rods are open at the top.
+      function rodUpright(p, z, y0, R, hollow) {
+        var f = p.fillet, L = p.rodL, ytop = y0 + L, style = Math.round(p.style), fl = style >= 2, tw = style === 3;
+        var n = Math.max(3, Math.round(p.detail)), tanT = Math.tan((Math.round(p.mount) === 1 ? p.tilt : 0) * DEG);
+        var prof = [[0, y0, 0]], k, a, i;
+        if (f > 0.3) { for (k = 0; k <= 6; k++) { a = -Math.PI / 2 - (k / 6) * Math.PI / 2; prof.push([R + f + f * Math.cos(a), y0 + f + f * Math.sin(a), 0]); } }
+        else prof.push([R, y0, 0]);
+        var yb0 = y0 + (f > 0.3 ? f : 0), tip = tipProf(Math.round(p.tip), R);
+        var ri = R * 0.94 - p.wall, yEnd = hollow ? ytop - 0.8 : ytop - tip[0][1];
+        var len = yEnd - yb0, steps = Math.max(2, Math.ceil(len / (style === 1 ? 1.2 : 3))), s, y;
+        for (s = (f > 0.3 ? 1 : 0); s <= steps; s++) { y = yb0 + (len * s) / steps; prof.push([R * ripple(p, y - yb0, len), y, 0]); }
+        if (hollow) {
+          prof.push([R - 0.8, ytop, 0]); prof.push([ri, ytop, 1]);
+          var yf = y0 + 3 + 1; prof.push([ri, yf, 1]); prof.push([0, yf, 1]);
+        } else {
+          for (i = 1; i < tip.length; i++) prof.push([R * tip[i][0], ytop - tip[i][1], 0]);
+        }
+        var seg = fl ? Math.max(72, n * 8) : 72;
+        return surface(prof, seg, function (i2, j, th) {
+          var r = prof[i2][0], yy = prof[i2][1], g = 1;
+          if (fl && !prof[i2][2]) g = 1 + 0.055 * Math.cos(n * (th + (tw ? (yy - y0) * 0.021 : 0)));
+          return [r * g * Math.cos(th), yy, z - (yy - y0) * tanT + r * g * Math.sin(th)];
+        }, false);
+      }
+
+      // --- stamp outlines (unit radius, v is the up direction) ---
+      function stampPolys(type) {
+        var pts = [], k, t, n;
+        if (type === 1) {
+          for (k = 0; k < 64; k++) { t = (k / 64) * TAU; pts.push([16 * Math.pow(Math.sin(t), 3) / 17.5, (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 17.5 + 0.05]); }
+          return [pts];
+        }
+        if (type === 2) {
+          for (k = 0; k < 10; k++) { t = Math.PI / 2 + (k * Math.PI) / 5; n = k % 2 ? 0.42 : 1; pts.push([n * Math.cos(t), n * Math.sin(t)]); }
+          return [pts];
+        }
+        if (type === 3) {
+          for (k = 0; k < 72; k++) { t = (k / 72) * TAU; n = 0.5 + 0.5 * (0.5 + 0.5 * Math.cos(6 * t)); pts.push([n * Math.cos(t), n * Math.sin(t)]); }
+          return [pts];
+        }
+        if (type === 4) {
+          var N = 14, w = function (v) { return 0.6 * Math.pow(1 - v * v, 0.85); };
+          pts.push([0, -1]);
+          for (k = 1; k < N; k++) { t = -1 + (2 * k) / N; pts.push([w(t), t]); }
+          pts.push([0, 1]);
+          for (k = N - 1; k >= 1; k--) { t = -1 + (2 * k) / N; pts.push([-w(t), t]); }
+          return [pts];
+        }
+        var out = [], pad = [], toes = [[-0.62, 0.22], [-0.24, 0.68], [0.24, 0.68], [0.62, 0.22]];
+        for (k = 0; k < 32; k++) { t = (k / 32) * TAU; pad.push([0.58 * Math.cos(t), -0.28 + 0.45 * Math.sin(t)]); }
+        out.push(pad);
+        toes.forEach(function (c) {
+          var q = [];
+          for (k = 0; k < 20; k++) { t = (k / 20) * TAU; q.push([c[0] + 0.2 * Math.cos(t), c[1] + 0.2 * Math.sin(t)]); }
+          out.push(q);
+        });
+        return out;
+      }
+
+      // Circle with a pointed top (45 degree flanks) for holes that run sideways while printing.
+      function tearPts(cx, cy, r) {
+        var pts = [], k, a;
+        for (k = 0; k <= 20; k++) { a = (135 + (270 * k) / 20) * DEG; pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); }
+        pts.push([cx, cy + r * Math.SQRT2]);
+        return pts;
+      }
+
+      function build(p, api) {
+        var THREE = api.THREE, mount = Math.round(p.mount), shape = Math.round(p.shape), R = p.rodD / 2, T = p.baseT, out = [];
+        var cr = p.corner, hr = p.screwD + 0.8, sd = p.screwD / 2, hdp = Math.min(3, T * 0.45), k;
+        var footR = R + (p.fillet > 0.3 ? p.fillet : 0);
+        var hw = p.baseW / 2, hd = shape === 0 ? hw : p.baseD / 2, holes = [], rodZ = mount === 1 ? p.rodOff : 0;
+        var ns = Math.max(2, Math.min(mount === 2 ? 3 : 4, Math.round(p.screws)));
+        var e = mount === 0 ? (Math.round(p.edge) > 0 ? Math.min(p.edgeSize, T * 0.45) : 0) : 0, flat = 0, shiftZ = 0;
+
+        if (mount === 1) {
+          var usesZ = ns >= 3, minHalf = (footR + 2 * hr + 8) / 0.92;
+          hw = Math.max(hw, minHalf, (footR + 4) / 0.92);
+          hd = Math.max(hd, (footR + 4 + Math.abs(rodZ)) / 0.92, usesZ ? (footR + 2 * hr + 8 + Math.abs(rodZ)) / 0.92 : 0);
+          if (shape === 0) { hw = Math.max(hw, hd); hd = hw; }
+          var hx = hw * KX[shape] - hr - 4, hz = hd * KZ[shape] - hr - 4;
+          holes.push([-hx, 0], [hx, 0]);
+          if (ns >= 3) holes.push([0, hz]);
+          if (ns >= 4) holes.push([0, -hz]);
+          var outline = shapePts(shape, hw, hd, cr);
+          var ring = function (rad) { return holes.map(function (c) { return circlePts(c[0], c[1], rad, 28); }); };
+          pushMesh(out, mesh('plate', [extrude(THREE, outline, ring(sd), 0, T - hdp), extrude(THREE, outline, ring(hr), T - hdp - 0.2, T)]));
+        } else if (mount === 0) {
+          pushMesh(out, mesh('base', [baseSolid(p, shape, hw, hd, cr, T)]));
+        } else {
+          // under cabinet: flat arm on the bed from the rod to the plate, plate standing at the far end
+          var drop = p.drop, H = Math.max(p.baseD, 2 * hr + 30), armHalf = Math.max(p.postD / 2, footR), pw = Math.max(hw, armHalf + 2 * hr + 10, 30);
+          var arm = rrectPts(0, (drop - footR) / 2, armHalf, (drop + footR) / 2 + 1, Math.min(armHalf - 0.5, 6), 5);
+          pushMesh(out, mesh('arm', [extrude(THREE, arm, null, 0, T)]));
+          var px = pw - hr - 4, py = H / 2, hy = H / 2 - hr - 4, pl = [], rc = Math.min(cr, pw - 1, H / 2 - 1), a2;
+          for (k = 0; k <= 16; k++) { a2 = (90 * k / 16) * DEG; pl.push([pw - rc + rc * Math.cos(a2), H - rc + rc * Math.sin(a2)]); }
+          for (k = 0; k <= 16; k++) { a2 = (90 + 90 * k / 16) * DEG; pl.push([-pw + rc + rc * Math.cos(a2), H - rc + rc * Math.sin(a2)]); }
+          pl.push([-pw, 0], [pw, 0]);
+          holes = [[-px, py], [px, py]];
+          if (ns >= 3) holes.push([0, py + hy]);
+          var tear = function (rad) { return holes.map(function (c) { return tearPts(c[0], c[1], rad); }); };
+          pushMesh(out, mesh('plate', [extrudeXY(THREE, pl, tear(sd), drop + hdp, drop + T), extrudeXY(THREE, pl, tear(hr), drop, drop + hdp + 0.2)]));
+          shiftZ = -drop / 2;
+        }
+
+        var hollowOK = Math.round(p.hollow) >= 1 && R * 0.94 - p.wall >= 4;
+        pushMesh(out, mesh('rod', [rodUpright(p, rodZ, T - 1, R, hollowOK)]));
+
+        // stamps on the top face, a ring around the rod
+        var type = Math.round(p.stamp);
+        if (type > 0 && mount !== 2) {
+          var st = p.stampSize / 2, K = [1, 1, 0.866, 1, 0.9, 0.924][shape];
+          flat = Math.min(hw, hd) * K - e - 1;
+          var rmin = footR + st * 0.9 + 2, rmax = flat - st * 0.95, ringR = Math.min(p.stampRing, rmax);
+          if (ringR >= rmin) {
+            var cnt = Math.max(1, Math.min(Math.round(p.stampN), Math.floor(Math.PI / Math.asin(Math.min(1, (st * 1.05) / ringR))))), list = [], q, phi, cx, cz;
+            var polysUnit = stampPolys(type);
+            for (q = 0; q < cnt; q++) {
+              phi = Math.PI / 2 + p.stampSpin * DEG + (q * TAU) / cnt;
+              cx = ringR * Math.cos(phi); cz = rodZ + ringR * Math.sin(phi);
+              if (Math.hypot(cx, cz) + st * 0.95 > flat) continue;
+              if (holes.some(function (c) { return Math.hypot(c[0] - cx, c[1] - cz) < st * 0.95 + hr + 1.5; })) continue;
+              polysUnit.forEach(function (poly) {
+                var pts = poly.map(function (c) {
+                  return [cx + st * (c[1] * Math.cos(phi) + c[0] * Math.sin(phi)), cz + st * (c[1] * Math.sin(phi) - c[0] * Math.cos(phi))];
+                });
+                list.push(extrude(THREE, pts, null, T - 0.6, T + p.stampRaise, 12));
+              });
+            }
+            pushMesh(out, mesh('stamps', list));
+          }
+        }
+
+        if (shiftZ) out.forEach(function (m) { m.positions = xform(m.positions, { t: [0, 0, shiftZ] }); });
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-104',
+        category: 'HOME // KITCHEN',
+        title: 'Paper Towel Holder',
+        fileName: 'Paper_Towel_Holder',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Sage Green', color: '#a7c4a0' },
+          { name: 'Terracotta', color: '#e8a07a' }, { name: 'Ocean Glass', color: '#93c5fd' },
+          { name: 'Blush', color: '#fda4af' }, { name: 'Brass', color: '#d6b160' },
+          { name: 'Walnut', color: '#8a6a4f' }, { name: 'Charcoal', color: '#3b3f4a' }
+        ],
+        defaultColor: '#f1f5f9',
+        partNames: { base: 'Base', plate: 'Mounting plate', arm: 'Arm', rod: 'Rod', stamps: 'Stamps' },
+        parameters: [
+          choice('Mount', 'mount', 'Mount type', MOUNTS, DEFAULTS.mount),
+          choice('Base', 'shape', 'Base shape (not used under a cabinet)', SHAPES, DEFAULTS.shape),
+          slider('Base', 'baseW', 'Base width (diameter for round)', ' mm', 60, 220, 1, DEFAULTS.baseW),
+          sh(slider('Base', 'baseD', 'Base depth (plate height under a cabinet)', ' mm', 60, 220, 1, DEFAULTS.baseD), function (q) { return Math.round(q.shape) !== 0; }),
+          slider('Base', 'baseT', 'Base thickness', ' mm', 5, 20, 0.5, DEFAULTS.baseT),
+          sh(slider('Base', 'corner', 'Corner roundness', ' mm', 4, 50, 1, DEFAULTS.corner), function (q) { return Math.round(q.shape) === 1; }),
+          sh(choice('Base', 'edge', 'Top edge', EDGES, DEFAULTS.edge), isMount(0)),
+          sh(slider('Base', 'edgeSize', 'Edge size', ' mm', 1, 6, 0.5, DEFAULTS.edgeSize), function (q) { return Math.round(q.mount) === 0 && Math.round(q.edge) > 0; }),
+          slider('Rod', 'rodD', 'Rod width (roll tubes are about 40 to 45 wide inside)', ' mm', 18, 38, 0.5, DEFAULTS.rodD),
+          slider('Rod', 'rodL', 'Rod length (a full roll is about 280, which needs a tall printer)', ' mm', 60, 300, 5, DEFAULTS.rodL),
+          choice('Rod', 'style', 'Rod style', STYLES, DEFAULTS.style),
+          sh(slider('Rod', 'detail', 'Ribs along the rod, or flutes around it', '', 3, 16, 1, DEFAULTS.detail), function (q) { return Math.round(q.style) > 0; }),
+          choice('Rod', 'tip', 'Rod tip', TIPS, DEFAULTS.tip),
+          choice('Rod', 'hollow', 'Rod inside', ['Solid', 'Hollow'], DEFAULTS.hollow),
+          sh(slider('Rod', 'wall', 'Hollow wall thickness', ' mm', 2.4, 6, 0.2, DEFAULTS.wall), function (q) { return Math.round(q.hollow) >= 1; }),
+          slider('Rod', 'fillet', 'Rounded foot where the rod meets the base', ' mm', 0, 14, 1, DEFAULTS.fillet),
+          sh(slider('Wall mount', 'tilt', 'Tilt up the wall (higher = the roll stays on)', '°', 0, 12, 1, DEFAULTS.tilt), isMount(1)),
+          sh(slider('Wall mount', 'rodOff', 'Rod position up or down the plate', ' mm', -30, 30, 1, DEFAULTS.rodOff), isMount(1)),
+          sh(slider('Under cabinet', 'drop', 'Arm length (cabinet to rod, roll is about 120 across)', ' mm', 60, 130, 1, DEFAULTS.drop), isMount(2)),
+          sh(slider('Under cabinet', 'postD', 'Arm width', ' mm', 24, 56, 1, DEFAULTS.postD), isMount(2)),
+          sh(slider('Screws', 'screws', 'Screw holes (3 at most under a cabinet)', '', 2, 4, 1, DEFAULTS.screws), function (q) { return Math.round(q.mount) !== 0; }),
+          sh(slider('Screws', 'screwD', 'Screw width', ' mm', 3, 6, 0.1, DEFAULTS.screwD), function (q) { return Math.round(q.mount) !== 0; }),
+          sh(choice('Stamps', 'stamp', 'Stamp shape (stand and wall mount)', STAMPS, DEFAULTS.stamp), function (q) { return Math.round(q.mount) !== 2; }),
+          sh(slider('Stamps', 'stampN', 'How many', '', 1, 8, 1, DEFAULTS.stampN), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; }),
+          sh(slider('Stamps', 'stampSize', 'Stamp size', ' mm', 8, 36, 1, DEFAULTS.stampSize), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; }),
+          sh(slider('Stamps', 'stampRaise', 'Stamp height', ' mm', 0.8, 3, 0.2, DEFAULTS.stampRaise), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; }),
+          sh(slider('Stamps', 'stampRing', 'Distance from the rod (fits itself to the base)', ' mm', 20, 100, 1, DEFAULTS.stampRing), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; }),
+          sh(slider('Stamps', 'stampSpin', 'Turn the stamp ring', '°', 0, 355, 5, DEFAULTS.stampSpin), function (q) { return Math.round(q.stamp) > 0 && Math.round(q.mount) !== 2; })
+        ],
+        presets: [
+          presetOf(DEFAULTS, 'Default countertop stand', {}),
+          presetOf(DEFAULTS, 'Hexagon stand with hearts', { shape: 2, baseW: 150, rodL: 190, stamp: 1, stampN: 4, style: 2, detail: 10 }),
+          presetOf(DEFAULTS, 'Flower base, ribbed rod', { shape: 4, baseW: 140, style: 1, detail: 7, tip: 1, stamp: 3, stampN: 5, stampSize: 14 }),
+          presetOf(DEFAULTS, 'Mini roll stand', { baseW: 100, rodD: 26, rodL: 120, fillet: 4, tip: 2, stamp: 2, stampN: 3, stampSize: 12, stampRing: 38 }),
+          presetOf(DEFAULTS, 'Kitchen wall mount', { mount: 1, shape: 3, baseW: 160, baseD: 90, baseT: 7, rodL: 160, tilt: 5, screws: 2 }),
+          presetOf(DEFAULTS, 'Hollow wall mount with leaves', { mount: 1, shape: 1, baseW: 150, baseD: 110, baseT: 7, rodL: 150, hollow: 1, tilt: 6, screws: 4, stamp: 4, stampN: 2, stampSize: 14, stampRing: 40 }),
+          presetOf(DEFAULTS, 'Under cabinet arm', { mount: 2, shape: 1, baseW: 90, baseD: 130, baseT: 7, rodL: 150, drop: 85, screws: 3 }),
+          presetOf(DEFAULTS, 'Twisted rod, octagon base', { shape: 5, baseW: 140, style: 3, detail: 6, tip: 2, rodL: 200, stamp: 5, stampN: 3 })
+        ],
+        build: build
+      };
+
+    })();
+  </script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

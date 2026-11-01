@@ -773,6 +773,15 @@ const GENERATORS = [
     description: 'Turn a picture into a wearable badge pin. Choose a logo, drawing or photo (or a heart, star, shield, circle, tile or hexagon) and it is traced into the pin outline in your browser, with nothing uploaded. Set the size, plate thickness, border and raised rim, add a hanging hole, and use the Stamps tab for text and shapes that sit on the face. Flat back for gluing on a pin-back. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 104,
+    title: 'Paper Towel Holder',
+    bundle: 'organization',
+    category: 'HOME // KITCHEN',
+    thumbnailUrl: 'assets/thumbnails/paper-towel-holder.svg',
+    programUrl: 'programs/paper-towel-holder.html',
+    description: 'A paper towel holder as a countertop stand, wall mount or under-cabinet arm. Pick six base shapes (round, rounded square, hexagon, oval, flower, octagon) with square, chamfered or rounded edges, the rod width and length, smooth, ribbed, fluted or twisted rod styles, a hollow rod, tip shape, wall tilt and counterbored screw holes, then add hearts, stars, flowers, leaves or paws as raised stamps. Prints with no supports; a full 280 mm roll needs a tall printer or a shorter rod. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',
