@@ -788,7 +788,7 @@ const GENERATORS = [
     category: 'TOYS // VEHICLES',
     thumbnailUrl: 'assets/thumbnails/sedan-maker.svg',
     programUrl: 'programs/sedan-maker.html',
-    description: 'A toy sedan with four wheels that are printed in place: each wheel spins on its own axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Prints with no supports on the default settings; wheel clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+    description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,
