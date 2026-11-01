@@ -1152,7 +1152,7 @@
         merged.set(entries[i].positions, offset);
         offset += entries[i].positions.length;
       });
-      var normals = smoothNormals(merged);
+      var normals = cfg.creaseShading ? creaseNormals(merged, cfg.creaseShading) : smoothNormals(merged);
       offset = 0;
       members.forEach(function (i) {
         normalsFor[i] = normals.slice(offset, offset + entries[i].positions.length);
@@ -1186,6 +1186,39 @@
       normals[i * 3] = x / len;
       normals[i * 3 + 1] = y / len;
       normals[i * 3 + 2] = z / len;
+    }
+    return normals;
+  }
+
+  // Like smoothNormals, but a vertex only blends the faces within `degrees` of the face being shaded, so flat tops
+  // and straight walls keep crisp edges while curved outlines stay smooth (opt in with cfg.creaseShading).
+  function creaseNormals(positions, degrees) {
+    var count = positions.length / 3, triCount = count / 3;
+    var ids = weldIds(positions);
+    var cosLimit = Math.cos(degrees * Math.PI / 180);
+    var fn = new Float32Array(triCount * 3), at = {}, t, v, n, len, id;
+    for (t = 0; t < triCount; t++) {
+      n = faceNormalAt(positions, t * 9);
+      len = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+      if (len < 1e-12) continue; // degenerate sliver: contributes nothing
+      fn[t * 3] = n[0] / len; fn[t * 3 + 1] = n[1] / len; fn[t * 3 + 2] = n[2] / len;
+      for (v = 0; v < 3; v++) { id = ids[t * 3 + v]; (at[id] = at[id] || []).push(t); }
+    }
+    var normals = new Float32Array(positions.length), list, k, u, sx, sy, sz, d, w;
+    for (t = 0; t < triCount; t++) {
+      for (v = 0; v < 3; v++) {
+        list = at[ids[t * 3 + v]] || [];
+        sx = fn[t * 3]; sy = fn[t * 3 + 1]; sz = fn[t * 3 + 2];
+        if (sx === 0 && sy === 0 && sz === 0) sx = 1;
+        for (k = 0; k < list.length; k++) {
+          u = list[k];
+          if (u === t) continue;
+          d = fn[t * 3] * fn[u * 3] + fn[t * 3 + 1] * fn[u * 3 + 1] + fn[t * 3 + 2] * fn[u * 3 + 2];
+          if (d >= cosLimit) { sx += fn[u * 3]; sy += fn[u * 3 + 1]; sz += fn[u * 3 + 2]; }
+        }
+        w = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+        normals[(t * 3 + v) * 3] = sx / w; normals[(t * 3 + v) * 3 + 1] = sy / w; normals[(t * 3 + v) * 3 + 2] = sz / w;
+      }
     }
     return normals;
   }

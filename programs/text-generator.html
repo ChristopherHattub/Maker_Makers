@@ -13,7 +13,7 @@
     (function () {
       'use strict';
       // Text Generator: real font outlines (open-licence fonts, packed by tools/text-fonts/build.mjs) turned into
-      // printable text: raised or engraved plaques, loose letters, stepped shadowboxes and hollow LED channel letters.
+      // printable text: raised or engraved plaques, loose letters and stepped shadowboxes.
       // Everything lies flat on the bed. Font data units are 1/250 em.
       var DEG = Math.PI / 180;
       function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
@@ -27,8 +27,7 @@
         ['raised', 'Raised letters on a plate'],
         ['engraved', 'Engraved into a plate'],
         ['loose', 'Loose letters (no plate)'],
-        ['shadowbox', 'Shadowbox (stepped letters in a frame)'],
-        ['led', 'LED channel letters (hollow)']
+        ['shadowbox', 'Shadowbox (stepped letters in a frame)']
       ];
       var SHAPES = [['rounded', 'Rounded rectangle'], ['pill', 'Pill'], ['oval', 'Oval'], ['hex', 'Hexagon'], ['scallop', 'Scallop badge'], ['heart', 'Heart'], ['arch', 'Arch']];
       var HOLES = [['none', 'None'], ['left', 'Left'], ['right', 'Right'], ['top', 'Top']];
@@ -662,31 +661,14 @@
 
       function build(p) {
         var mode = state.mode;
-        var separate = mode === 'engraved' || mode === 'shadowbox' || mode === 'led';
+        var separate = mode === 'engraved' || mode === 'shadowbox';
         var lay = layout(p, separate), inst = lay.inst, meshes = [], i;
         updateNote(inst);
 
         if (mode === 'loose') {
           var loose = [];
-          inst.forEach(function (it) { it.gs.shapes.forEach(function (s) { extrude(loose, s, it.x, it.y, 0, p.raise + p.plateThick); }); });
+          inst.forEach(function (it) { it.gs.shapes.forEach(function (s) { extrude(loose, s, it.x, it.y, 0, p.looseThick); }); });
           pushMesh(meshes, 'text', loose);
-          return meshes;
-        }
-
-        if (mode === 'led') {
-          var face = [], wall = [], faceT = p.ledFace, depth = p.ledDepth, w = p.ledWall;
-          inst.forEach(function (it) {
-            it.gs.shapes.forEach(function (s) {
-              extrude(face, s, it.x, it.y, 0, faceT);
-              // walls need 0.8 mm at least; a letter with strokes too thin to hollow out is printed solid
-              var rings = [ringFor(s.outer, false, w, 0.8)];
-              s.holes.forEach(function (h) { rings.push(ringFor(h, true, w, 0.8)); });
-              if (rings.indexOf(null) >= 0) extrude(wall, s, it.x, it.y, faceT - 0.2, depth);
-              else rings.forEach(function (r) { extrude(wall, r, it.x, it.y, faceT - 0.2, depth); });
-            });
-          });
-          pushMesh(meshes, 'face', face);
-          pushMesh(meshes, 'wall', wall);
           return meshes;
         }
 
@@ -752,15 +734,16 @@
         { label: 'Name keychain', state: { mode: 'raised', font: 'bubble', shape: 'pill', hole: 'left', caps: 'typed', align: 'center' }, params: { textHeight: 14, spacing: 0.5, plateThick: 3, pad: 4, raise: 1.6, rimWidth: 1.2 } },
         { label: 'Door sign', state: { mode: 'raised', font: 'slab', shape: 'rounded', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 22, spacing: 1, plateThick: 4, pad: 8, corner: 8, raise: 2, rimWidth: 2.4 } },
         { label: 'Engraved plaque', state: { mode: 'engraved', font: 'tall', shape: 'rounded', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 18, spacing: 1.5, plateThick: 4, pad: 8, corner: 6, engraveDepth: 1.6 } },
-        { label: 'Wall letters', state: { mode: 'loose', font: 'arcade', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 40, spacing: 2, plateThick: 3, raise: 3 } },
+        { label: 'Wall letters', state: { mode: 'loose', font: 'arcade', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 40, spacing: 2, looseThick: 6 } },
         { label: 'Shadowbox name', state: { mode: 'shadowbox', font: 'block', shape: 'rounded', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 22, spacing: 1, backThick: 2, frameWall: 3, boxDepth: 14, layers: 4, layerThick: 2, layerStep: 0.5, pad: 6 } },
-        { label: 'LED sign letters', state: { mode: 'led', font: 'arcade', hole: 'none', caps: 'upper', align: 'center' }, params: { textHeight: 30, spacing: 4, ledFace: 1.2, ledWall: 1.6, ledDepth: 20 } },
         { label: 'Script keepsake', state: { mode: 'raised', font: 'script', shape: 'oval', hole: 'top', caps: 'typed', align: 'center' }, params: { textHeight: 16, spacing: 0, bold: 0.3, plateThick: 3, pad: 5, raise: 1.4, rimWidth: 1.2 } }
       ];
 
       window.MM_GENERATOR = {
         code: 'MM-101',
         sculpt: false,
+        tabsFirst: true,
+        creaseShading: 35,
         category: 'PERSONALISED // TEXT',
         title: 'Text Generator',
         fileName: 'Text',
@@ -772,8 +755,7 @@
         ],
         partNames: {
           base: 'Plate', rim: 'Border', surface: 'Plate top', text: 'Lettering', frame: 'Frame',
-          layer1: 'Letter layer 1', layer2: 'Letter layer 2', layer3: 'Letter layer 3', layer4: 'Letter layer 4', layer5: 'Letter layer 5', layer6: 'Letter layer 6',
-          face: 'Letter faces', wall: 'Letter walls'
+          layer1: 'Letter layer 1', layer2: 'Letter layer 2', layer3: 'Letter layer 3', layer4: 'Letter layer 4', layer5: 'Letter layer 5', layer6: 'Letter layer 6'
         },
         openGroups: ['Lettering'],
         testState: state,
@@ -783,28 +765,26 @@
           { group: 'Lettering', tab: 'text', key: 'spacing', label: 'Letter spacing', unit: ' mm', min: -1, max: 10, step: 0.1, value: 0.5 },
           { group: 'Lettering', tab: 'text', key: 'lineSpacing', label: 'Line spacing', unit: '%', min: 100, max: 220, step: 5, value: 150 },
           { group: 'Lettering', tab: 'text', key: 'bold', label: 'Boldness (below 0 = thinner)', unit: ' mm', min: -0.6, max: 1.5, step: 0.05, value: 0 },
-          { group: 'Plate', key: 'plateThick', label: 'Plate thickness', unit: ' mm', min: 1.6, max: 8, step: 0.2, value: 3 },
-          { group: 'Plate', key: 'pad', label: 'Space around the text', unit: ' mm', min: 2, max: 25, step: 0.5, value: 6 },
-          { group: 'Plate', key: 'corner', label: 'Corner rounding (rounded rectangle)', unit: ' mm', min: 0, max: 25, step: 0.5, value: 6 },
-          { group: 'Plate', key: 'raise', label: 'Letters stand up', unit: ' mm', min: 0.8, max: 8, step: 0.2, value: 1.6 },
-          { group: 'Plate', key: 'rimWidth', label: 'Border width (0 = none)', unit: ' mm', min: 0, max: 5, step: 0.2, value: 1.6 },
-          { group: 'Plate', key: 'rimHeight', label: 'Border height', unit: ' mm', min: 0.4, max: 4, step: 0.2, value: 1 },
-          { group: 'Engraved mode', key: 'engraveDepth', label: 'Engraving depth', unit: ' mm', min: 0.4, max: 6, step: 0.2, value: 1.2 },
-          { group: 'Hanging hole', key: 'holeDia', label: 'Hole diameter', unit: ' mm', min: 3, max: 12, step: 0.5, value: 5 },
-          { group: 'Hanging hole', key: 'holeWall', label: 'Ring wall', unit: ' mm', min: 2, max: 6, step: 0.5, value: 3 },
-          { group: 'Shadowbox mode', key: 'boxDepth', label: 'Box depth', unit: ' mm', min: 6, max: 40, step: 1, value: 14 },
-          { group: 'Shadowbox mode', key: 'frameWall', label: 'Frame wall', unit: ' mm', min: 1.6, max: 8, step: 0.2, value: 3 },
-          { group: 'Shadowbox mode', key: 'backThick', label: 'Back thickness', unit: ' mm', min: 1, max: 5, step: 0.2, value: 2 },
-          { group: 'Shadowbox mode', key: 'layers', label: 'Letter layers', unit: '', min: 2, max: 6, step: 1, value: 4 },
-          { group: 'Shadowbox mode', key: 'layerThick', label: 'Layer thickness', unit: ' mm', min: 1, max: 4, step: 0.2, value: 2 },
-          { group: 'Shadowbox mode', key: 'layerStep', label: 'Step in per layer (thin fonts: keep small)', unit: ' mm', min: 0, max: 1.5, step: 0.1, value: 0.5 },
-          { group: 'LED channel mode', key: 'ledFace', label: 'Front face (light diffuses through)', unit: ' mm', min: 0.6, max: 2.4, step: 0.2, value: 1.2 },
-          { group: 'LED channel mode', key: 'ledWall', label: 'Side wall (bold fonts only for thick walls)', unit: ' mm', min: 1.2, max: 4, step: 0.2, value: 1.6 },
-          { group: 'LED channel mode', key: 'ledDepth', label: 'Letter depth', unit: ' mm', min: 8, max: 50, step: 1, value: 20 }
+          { group: 'Plate', showIf: function () { return state.mode === 'raised' || state.mode === 'engraved'; }, key: 'plateThick', label: 'Plate thickness', unit: ' mm', min: 1.6, max: 8, step: 0.2, value: 3 },
+          { group: 'Plate', showIf: function () { return state.mode !== 'loose'; }, key: 'pad', label: 'Space around the text', unit: ' mm', min: 2, max: 25, step: 0.5, value: 6 },
+          { group: 'Plate', showIf: function () { return state.mode !== 'loose' && state.shape === 'rounded'; }, key: 'corner', label: 'Corner rounding (rounded rectangle)', unit: ' mm', min: 0, max: 25, step: 0.5, value: 6 },
+          { group: 'Raised mode', showIf: function () { return state.mode === 'raised'; }, key: 'raise', label: 'Letters stand up', unit: ' mm', min: 0.8, max: 8, step: 0.2, value: 1.6 },
+          { group: 'Raised mode', showIf: function () { return state.mode === 'raised'; }, key: 'rimWidth', label: 'Border width (0 = none)', unit: ' mm', min: 0, max: 5, step: 0.2, value: 1.6 },
+          { group: 'Raised mode', showIf: function () { return state.mode === 'raised'; }, key: 'rimHeight', label: 'Border height', unit: ' mm', min: 0.4, max: 4, step: 0.2, value: 1 },
+          { group: 'Loose letters', showIf: function () { return state.mode === 'loose'; }, key: 'looseThick', label: 'Letter thickness', unit: ' mm', min: 1.2, max: 20, step: 0.2, value: 6 },
+          { group: 'Engraved mode', showIf: function () { return state.mode === 'engraved'; }, key: 'engraveDepth', label: 'Engraving depth', unit: ' mm', min: 0.4, max: 6, step: 0.2, value: 1.2 },
+          { group: 'Hanging hole', showIf: function () { return state.mode !== 'loose' && state.hole !== 'none'; }, key: 'holeDia', label: 'Hole diameter', unit: ' mm', min: 3, max: 12, step: 0.5, value: 5 },
+          { group: 'Hanging hole', showIf: function () { return state.mode !== 'loose' && state.hole !== 'none'; }, key: 'holeWall', label: 'Ring wall', unit: ' mm', min: 2, max: 6, step: 0.5, value: 3 },
+          { group: 'Shadowbox mode', showIf: function () { return state.mode === 'shadowbox'; }, key: 'boxDepth', label: 'Box depth', unit: ' mm', min: 6, max: 40, step: 1, value: 14 },
+          { group: 'Shadowbox mode', showIf: function () { return state.mode === 'shadowbox'; }, key: 'frameWall', label: 'Frame wall', unit: ' mm', min: 1.6, max: 8, step: 0.2, value: 3 },
+          { group: 'Shadowbox mode', showIf: function () { return state.mode === 'shadowbox'; }, key: 'backThick', label: 'Back thickness', unit: ' mm', min: 1, max: 5, step: 0.2, value: 2 },
+          { group: 'Shadowbox mode', showIf: function () { return state.mode === 'shadowbox'; }, key: 'layers', label: 'Letter layers', unit: '', min: 2, max: 6, step: 1, value: 4 },
+          { group: 'Shadowbox mode', showIf: function () { return state.mode === 'shadowbox'; }, key: 'layerThick', label: 'Layer thickness', unit: ' mm', min: 1, max: 4, step: 0.2, value: 2 },
+          { group: 'Shadowbox mode', showIf: function () { return state.mode === 'shadowbox'; }, key: 'layerStep', label: 'Step in per layer (thin fonts: keep small)', unit: ' mm', min: 0, max: 1.5, step: 0.1, value: 0.5 }
         ],
 
         presets: [
-          { label: 'Default plaque', values: { textHeight: 16, spacing: 0.5, lineSpacing: 150, bold: 0, plateThick: 3, pad: 6, corner: 6, raise: 1.6, rimWidth: 1.6, rimHeight: 1, engraveDepth: 1.2, holeDia: 5, holeWall: 3, boxDepth: 14, frameWall: 3, backThick: 2, layers: 4, layerThick: 2, layerStep: 0.5, ledFace: 1.2, ledWall: 1.6, ledDepth: 20 } },
+          { label: 'Default plaque', values: { textHeight: 16, spacing: 0.5, lineSpacing: 150, bold: 0, plateThick: 3, pad: 6, corner: 6, raise: 1.6, rimWidth: 1.6, rimHeight: 1, engraveDepth: 1.2, holeDia: 5, holeWall: 3, boxDepth: 14, frameWall: 3, backThick: 2, layers: 4, layerThick: 2, layerStep: 0.5, looseThick: 6 } },
           { label: 'Big and chunky', values: { textHeight: 30, spacing: 1.5, plateThick: 4, raise: 3 } },
           { label: 'Small and neat', values: { textHeight: 10, spacing: 0.4, plateThick: 2.4, raise: 1.2, rimWidth: 1 } }
         ],
@@ -835,7 +815,7 @@
               var sel = h('select', {});
               options.forEach(function (o) { sel.appendChild(h('option', { value: o[0] }, o[1])); });
               sel.value = state[key];
-              sel.addEventListener('change', function () { state[key] = sel.value; api.rebuild(); });
+              sel.addEventListener('change', function () { state[key] = sel.value; syncFields(); api.rebuild(); });
               return sel;
             };
 
@@ -857,8 +837,11 @@
             container.appendChild(field('Font', selFont));
             container.appendChild(field('Capitals', selCase));
             container.appendChild(field('Alignment', selAlign));
-            container.appendChild(field('Plate / frame shape', selShape));
-            container.appendChild(field('Hanging hole', selHole));
+            var fShape = field('Plate / frame shape', selShape), fHole = field('Hanging hole', selHole);
+            container.appendChild(fShape);
+            container.appendChild(fHole);
+            var syncFields = function () { fShape.hidden = fHole.hidden = state.mode === 'loose'; };
+            syncFields();
 
             noteEl = h('p', { class: 'mm-note' });
             container.appendChild(noteEl);
@@ -882,6 +865,7 @@
             refreshUI = function () {
               ta.value = state.text; selMode.value = state.mode; selFont.value = state.font; selCase.value = state.caps;
               selAlign.value = state.align; selShape.value = state.shape; selHole.value = state.hole;
+              syncFields();
             };
             setTimeout(function () { api.centerCamera('iso'); }, 60);
           }

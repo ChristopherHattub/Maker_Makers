@@ -1,6 +1,6 @@
 # Text Generator (slot 101)
 
-`programs/text-generator.html`, bundle `personal`. Type up to 5 lines of text and print it as one of five build styles. Everything is flat on the bed (no supports): letters rise from the bed, LED letters print face down.
+`programs/text-generator.html`, bundle `personal`. Type up to 5 lines of text and print it as one of four build styles. Everything is flat on the bed (no supports). The Text tab opens first (`tabsFirst`). Sliders show only for the chosen build style (`showIf` reads the style), and the shape and hanging-hole fields hide for loose letters. The viewer uses `creaseShading: 35` so flat tops and straight walls keep crisp edges while curved outlines stay smooth.
 
 ## Build styles
 
@@ -10,7 +10,6 @@
 | Engraved into a plate | Plate with letter-shaped pockets (depth slider). Letters are spaced so glyph outlines never overlap | Plate, Plate top |
 | Loose letters | Each letter alone, height = plate thickness + "Letters stand up" | Lettering |
 | Shadowbox | Back plate, tall frame and up to 6 stepped letter layers, each inset by "Step in per layer" | Plate, Frame, Letter layer 1-6 |
-| LED channel letters | Thin front face (diffuses light) plus hollow side walls, open back for an LED strip | Letter faces, Letter walls |
 
 The Text tab holds the text box, build style, font, capitals, alignment, plate shape and hanging hole, plus "Quick looks" chips. Sliders live in the Parametric tab; sliders for styles that are not selected are ignored.
 
@@ -24,8 +23,8 @@ Ten open-licence (SIL OFL 1.1) fonts from the google/fonts repository: Archivo B
 
 - Quadratics are flattened (about one segment per 1.1 mm), loops cleaned, then sorted into outer loops (CCW) and holes (CW) by area sign. A counter that only touches the outline at a corner is pulled in 0.02 mm so the shapes stay separate.
 - Triangulation is built in (hole bridging plus ear clipping), so `check-mesh.mjs` can run without three.js. Results are cached per glyph, size and boldness.
-- Offsets (boldness, shadowbox layers, LED walls, borders) move each vertex along its miter normal. `probe()` measures how far a stroke can move before folding, and `offsetShape` / `ringFor` fall back to smaller offsets until the result is a clean, non-crossing outline. A very thin font with large walls therefore gets thinner walls rather than a broken mesh.
-- Modes that need non-overlapping glyphs (engraved, shadowbox, LED) push touching letters apart by 0.5 mm; raised and loose keep script fonts joined.
+- Offsets (boldness, shadowbox layers, borders) move each vertex along its miter normal. `probe()` measures how far a stroke can move before folding, and `offsetShape` / `ringFor` fall back to smaller offsets until the result is a clean, non-crossing outline. A very thin font with large walls therefore gets thinner walls rather than a broken mesh.
+- Modes that need non-overlapping glyphs (engraved, shadowbox) push touching letters apart by 0.5 mm; raised and loose keep script fonts joined.
 
 ## Checks
 
@@ -34,12 +33,12 @@ Ten open-licence (SIL OFL 1.1) fonts from the google/fonts repository: Archivo B
 Practical rules the generator enforces:
 
 - **Thin strokes warning:** the Text tab shows the typical thinnest stroke (10th percentile of wall-to-wall distance). Under 0.9 mm it turns amber (a 0.4 mm nozzle cannot print it). Lobster below about 16 mm and any script font below about 10 mm trigger it.
-- **LED walls** are at least 0.8 mm. A letter whose strokes are too thin or too close to hollow out (inner gaps of an m, say) is printed solid instead, so very thin fonts become mostly solid letters; pick Bungee, Sniglet, Titan One or Archivo Black for hollow letters.
-- **LED letters print face down:** the front face sits on the bed and the open back faces up for the LED strip. Default size is 30 mm, so a whole word can exceed the bed; the readout shows the size, and letters can be printed one at a time.
 - **Engraving** is limited to the plate thickness minus 0.8 mm, so there is always a floor.
 - **Shadowbox layers** step inward by an amount clamped to the stroke width, so thin fonts lose their upper layers' step rather than breaking.
 - **Heart** plates are sized to hold the text, so two lines make a large heart; one short line suits it best.
 
-**Nothing here has been physically printed.** Raised and engraved text have no overhangs, LED letters and shadowboxes are vertical walls on a flat face.
+**Nothing here has been physically printed.** Raised and engraved text have no overhangs, shadowboxes are vertical walls on a flat face.
 
 Known limits: no kerning, no right-to-left or complex scripts, no stencil bridges (letters with counters such as O, A, B are raised or pocketed, never cut through).
+
+The LED channel letters style was removed (2026-11-01); it will return in a later generator of its own.

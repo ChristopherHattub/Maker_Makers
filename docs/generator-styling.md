@@ -67,6 +67,7 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `mount(container, api)` | no | Adds generator-only controls under the sliders (for example, a stamp picker). |
 | `onStage(info)` / `onFrame()` | no | `onStage` gets `{ THREE, scene, camera, renderer, controls, container, modelGroup, ... }` once; `onFrame` runs every animation frame. The Spinner Ring uses them for its Print tab demo (it moves the meshes in `modelGroup`, never the exported geometry; the caption uses `.mm-anim-caption`). Reset anything you move when the tab is left. |
 | `onHover(hit, api)` | no | Called on pointer move with the hit under the cursor, or `null`. |
+| `creaseShading` | no | Degrees. Shade a vertex only from faces within this angle of each other, so flat tops and straight walls keep crisp edges (Text Generator: 35). Default is fully smooth. |
 | `onPick(hit, api)` | no | Called on a click in the Parametric tab. The hit has the same shape as for `onHover`. |
 
 ### Parameters
