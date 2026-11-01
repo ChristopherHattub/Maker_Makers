@@ -2346,10 +2346,22 @@
           }
         });
       });
+      // cfg.sculptLink(meshName, lo, hi) can return { key, label }: shells with the same key are one piece (a wheel and its axle).
+      if (cfg.sculptLink) {
+        var keyTo = {}, kept = [], remap = pieces.map(function (P) {
+          var top = Object.keys(P.tris)[0], link = cfg.sculptLink(top, P.lo, P.hi), into = link && keyTo[link.key];
+          if (!into) { kept.push(P); if (link) { keyTo[link.key] = P; P.linkLabel = link.label; } return kept.length - 1; }
+          Object.keys(P.tris).forEach(function (n) { into.tris[n] = (into.tris[n] || 0) + P.tris[n]; });
+          for (var a = 0; a < 3; a++) { into.lo[a] = Math.min(into.lo[a], P.lo[a]); into.hi[a] = Math.max(into.hi[a], P.hi[a]); }
+          return kept.indexOf(into);
+        });
+        pieces = kept;
+        maps.forEach(function (m) { for (var f = 0; f < m.length; f++) m[f] = remap[m[f]]; });
+      }
       var names = cfg.partNames || {}, totals = {};
       pieces.forEach(function (P) {
         var best = Object.keys(P.tris).sort(function (a, b) { return P.tris[b] - P.tris[a]; })[0];
-        P.name = best; P.base = names[best] || best.charAt(0).toUpperCase() + best.slice(1);
+        P.name = best; P.base = P.linkLabel || names[best] || best.charAt(0).toUpperCase() + best.slice(1);
         totals[P.base] = (totals[P.base] || 0) + 1;
       });
       pieces.forEach(function (P) {
@@ -2395,7 +2407,7 @@
         });
         an.pieces.forEach(function (P) {
           if (!P.ed || P.ed.del) return;
-          for (i = 0; i < 3; i++) {
+          for (var i = 0; i < 3; i++) {
             var l = P.c[i] + (P.lo[i] - P.c[i]) * P.ed.s[i] + P.ed.m[i] + (i === 1 ? P.lift : 0), h = P.c[i] + (P.hi[i] - P.c[i]) * P.ed.s[i] + P.ed.m[i] + (i === 1 ? P.lift : 0);
             P.lo[i] = l; P.hi[i] = h;
           }

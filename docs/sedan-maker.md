@@ -36,6 +36,10 @@ Wheel and axle are separate bodies with a **tolerance** (slider, default 0.3 mm,
 - The hole's bottom is placed just above a cell centre of the print check's voxel grid (cells are length / 170, at least 0.4 mm), and the pin is lowered by up to 0.2 mm if the tolerance is larger than a cell, so the print check sees the hub right under the pin.
 - When the car is placed on a table, the pin rests on the bottom of the neck, which lifts the body by about the tolerance, so the wheels roll.
 
+## Sculpt tab
+
+The Select tool lists the car body, the roof, each window, each light and the four wheels. `sculptLink` makes a tire, its hub cap and its hidden pin one piece, so a wheel moves and stretches as a whole. Pieces move independently: moving the body leaves the wheels where they are, so a moved or stretched part can stop the wheels turning. The viewport flag says so.
+
 ## Car parts tab
 
 Each stamp is stored as a surface point and normal (world coordinates, mm), a type, a size, a height factor and a turn. It is modelled flat on the surface (a across, b up or forward, c out of the surface) and sinks 1.2 mm into the car. On a wall `b` is up; on a flat top it is forward. Stamps stay where they were placed when sliders change, so a part may float or sink if the body is reshaped afterwards. Undo last and Clear are in the tab.

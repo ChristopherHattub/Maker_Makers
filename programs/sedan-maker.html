@@ -604,6 +604,13 @@
         ],
         defaultColor: '#ef6f6c',
         creaseShading: 38,
+        // Sculpt tab: a tire, its hub cap and its hidden axle pin move and stretch together as one wheel.
+        sculptLink: function (name, lo, hi) {
+          var m = lastModel, cx = (lo[0] + hi[0]) / 2, cz = (lo[2] + hi[2]) / 2;
+          if (!m || (name !== 'tire' && name !== 'rim' && !(name === 'body' && hi[0] - lo[0] < 2 * m.R))) return null;
+          var key = (cx > 0 ? 'Front' : 'Rear') + (cz > 0 ? ' right' : ' left');
+          return { key: key, label: key + ' wheel' };
+        },
         partNames: { body: 'Car body', cabin: 'Roof and pillars', windows: 'Windows', lights: 'Lights', tire: 'Tires', rim: 'Hub caps', stamp: 'Car part' },
         parameters: [
           slider('Body', 'length', 'Car length', ' mm', 80, 150, 1, DEFAULTS.length),
