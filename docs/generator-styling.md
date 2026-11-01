@@ -135,11 +135,11 @@ A generator does not build these. Declare a plain integer parameter (`step: 1`, 
 
 The panel has three tabs: Parametric, Color tool and Print. Only one is shown at a time.
 
-**Parametric** ends with a **View** section holding a *Display* dropdown (engine-owned, every generator gets it): *Solid*, *Wireframe* (only the triangle edges the model is built from) and *Solid + edges* (shaded model with the edges on top). It is a display mode only; exports are unchanged, and the Color tab always shows the solid so painting stays readable. Below it are presets, the sliders, and anything from `mount`. The model is drawn in one neutral matte color. Paint is not shown here.
+**Parametric** ends with a **View** section holding a *Display* dropdown (engine-owned, every generator gets it): *Solid*, *Wireframe* (only the triangle edges the model is built from) and *Solid + edges* (shaded model with the edges on top). It is a display mode only; exports are unchanged, and the Color tab always shows the solid so painting stays readable. Below it are presets, the sliders, and anything from `mount`. The model shows its part colors and any Color-tab paint, so edits made in the Color tab are still visible when switching back.
 
 Placement tools belong to the Parametric tab. In the Color tab the engine does not call `onHover` or `onPick`, clears any preview, and uses a pointer cursor (a crosshair in the Parametric tab when the generator has `onPick`). A generator does not need to handle this itself.
 
-**Color tool** shows the palette, a custom color picker, and the list of parts. Colors appear only in this tab. Click the model to paint the part under the cursor, or click a part in the list.
+**Color tool** shows the palette, a custom color picker, and the list of parts. Colors also show in the Parametric and Print tabs. Click the model to paint the part under the cursor, or click a part in the list.
 
 ### How parts are found
 
