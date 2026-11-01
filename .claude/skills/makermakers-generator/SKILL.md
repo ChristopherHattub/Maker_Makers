@@ -25,6 +25,16 @@ Sources of truth (read them before changing anything, they may have moved on sin
 
 Every generator, new or existing, **must** use the shared phone layout from `generator-core.js` / `generator.css`: pinned viewport on top (40%), resizable bottom sheet below with sticky tabs, accordion slider sections, large touch sliders, no page scroll (exports live in the Print tab). Never write generator-specific mobile CSS, never override the sheet or tab bar, and never make a generator's controls scroll the page. A generator that uses the engine as described here gets it automatically; if a control looks wrong on a phone, fix it in `shared/generator.css` for everyone. Always verify at 375x667 and 390x844 before finishing.
 
+## Sculpt tab is engine-owned
+
+Every generator gets a **Sculpt** tab right after Parametric, with no work needed. Its Select tool moves, stretches and deletes pieces (Delete key too), and its Sculpt tool has six brushes. Undo and redo work with Ctrl+Z and Ctrl+Y. After any edit the viewport shows "Sculpted Models may have print errors", and the print check waits until the user leaves the tab.
+
+- By default each separate closed shell of the model is a piece, named from `partNames`. So build features you want selectable as separate shells or mesh entries with clear names. A model that is one connected shell has only one piece.
+- Set `sculpt: false` in the config to opt out, only when edits make no sense (Fancy Ring, Pottery Wheel and Text Generator do). A generator with `printMeshes` never gets the tab.
+- Keep `build()` returning fresh results from `params`: the engine works on copies of the meshes and replays the user's edits after each build.
+- Generators built with the animal kit get finer pieces: see `docs/animals.md` and the Sculpt tab section of `docs/generator-styling.md`.
+- In the live check, open the tab, select a piece, drag it, delete it, undo, then Reset all. The model should return to its original size.
+
 ## Print tab realistic render is engine-owned
 
 Opening the Print tab automatically switches the viewport to a realistic render (painted colors, material finish for PLA/PETG/ABS/ASA/TPU, faint layer lines, studio lighting). Every generator gets it for free. The tab has one option, **Material**, plus the **Export block** (triangle count, file name, Export .STL, standalone .html download, disclaimer); there are no slicer settings. The Export block has **Export .STL** and **Export .OBJ (colors)**; the OBJ zip carries the Color-tab colors as materials for Bambu, Orca and Prusa (engine-owned, nothing to add per generator; there is no 3MF export). Never put export, file name or download controls in another tab. Never add your own print preview, print settings or extra Print tab controls, and never change materials or lighting in the generator. Check it in the live preview: open the Print tab, change the material, and confirm the model looks right.
@@ -175,6 +185,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
 - [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
+- [ ] Sculpt tab: pieces are listed with readable names, a selected piece turns yellow, move, stretch, delete, brush, undo and Reset all work, and the flag appears after an edit.
 - [ ] Print tab shows the realistic render (colors kept, changing Material updates it live) and has no other options.
 - [ ] Export .STL downloads and opens (size ~ 84 + 50 x triangles bytes; model sits on the bed).
 - [ ] Export .OBJ (colors) after painting two parts: `<name>-obj.zip` holds `<name>.obj` and `<name>.mtl`, with one `newmtl` per used color and a `usemtl` group per color covering all faces. A new download type must go through `confirmDownload`.
