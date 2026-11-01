@@ -200,14 +200,14 @@ The chip is green ("No supports needed"), amber (warnings only) or red ("Needs s
 
 ### Sculpt tab (experimental, `cfg.sculpt`)
 
-A generator that sets `cfg.sculpt` gets a **Sculpt** tab, right after Parametric, with two tools. All fifteen animals use it.
+A generator that sets `cfg.sculpt` gets a **Sculpt** tab, right after Parametric, with two tools. Every generator has it unless it sets `sculpt: false` (Fancy Ring, Pottery Wheel and Text Generator do). A generator with `printMeshes` never gets it, because its printed mesh differs from what is shown.
 
 - **Select**: click a piece (or pick it from the list), which tints it, and drag it to move it, stretch it with the three sliders, delete or restore it.
 - **Sculpt**: six brushes (Grab, Inflate, Deflate, Smooth, Flatten, Pinch) with size, strength and a left-right mirror. A warning shows beside the size slider from 20 mm and the strength slider from 60%. Strokes are stored and replayed on every rebuild, so they survive slider changes. The surface stays closed.
 
 Undo, Redo (Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z; Cmd on a Mac) and Reset all cover both tools. Pieces are listed in collapsible sections (`section`), and a piece with a `parent` nests under that piece. The print check does not run while this tab is open; it runs once on leaving it. After any edit the viewport shows the flag "Sculpted Models may have print errors", on every tab. Edits reach exports and the print check. They are not saved on reload, and the Workshop embed does not offer the tab.
 
-`cfg.sculpt` is `{ pieces: [{ id, label, section, parent }], available(), pieceAt(point), bounds(id), isUnder(id, parent) }`. The build reads `api.sculpt.edits` (`{ id: { m: [x, y, z], s: [x, y, z], del } }`) and `api.sculpt.draft` (true while dragging, for a coarser fast mesh). For generators built with the animal kit, `sculptModule(pieces)` in `tools/animals/animal-kit.js` supplies all of this: name the pieces with `S.piece(id, parent)`, call `S.useEdits(api, scale)`, and pass `S` to `finishSculpt`. A moved piece skips the kit's support trimming, so it can overhang or float, which is why the flag exists. See [animals.md](animals.md).
+Without any setup, each separate closed shell of the model becomes a piece, named from `partNames` (`sculptGeneric` in the engine). A shell moves, stretches or deletes as a whole, so a model built as one connected shell has only one piece, though the brushes still work on it. Delete or Backspace removes the selected piece. The animals give finer pieces through the kit, by setting `cfg.sculpt` to `{ pieces: [{ id, label, section, parent }], available(), pieceAt(point), bounds(id), isUnder(id, parent) }`. The build reads `api.sculpt.edits` (`{ id: { m: [x, y, z], s: [x, y, z], del } }`) and `api.sculpt.draft` (true while dragging, for a coarser fast mesh). For generators built with the animal kit, `sculptModule(pieces)` in `tools/animals/animal-kit.js` supplies all of this: name the pieces with `S.piece(id, parent)`, call `S.useEdits(api, scale)`, and pass `S` to `finishSculpt`. A moved piece skips the kit's support trimming, so it can overhang or float, which is why the flag exists. See [animals.md](animals.md).
 
 ## Standalone download
 

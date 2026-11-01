@@ -572,6 +572,7 @@
       // cfg.sculpt for a generator built with Sculpt. pieces: [{ id, label }].
       function sculptModule(pieces) {
         return {
+          kit: true,
           pieces: pieces,
           available: function () { var S = window.MM_SCULPT_LAST; return S ? pieces.filter(function (p) { return (S.pieceIds || []).indexOf(p.id) >= 0 || (S.addons || []).some(function (a) { return a.id === p.id; }) || S.deleted(p.id); }) : pieces; },
           pieceAt: function (pt) { var S = window.MM_SCULPT_LAST; return S ? S.pieceAt(pt) : null; },

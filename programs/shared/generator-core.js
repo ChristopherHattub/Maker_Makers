@@ -203,7 +203,10 @@
 
     // Optional generator tabs (cfg.tabs), shown right after Parametric.
     var tabDefs = (cfg.tabs || []).slice();
-    if (cfg.sculpt && !/[?&]embed=workshop\b/.test(location.search)) tabDefs.unshift(sculptTabConfig());
+    // Every generator gets the Sculpt tab unless it opts out with sculpt: false. Models that print differently from what they show cannot use it.
+    if (cfg.sculpt === false || cfg.printMeshes || /[?&]embed=workshop\b/.test(location.search)) cfg.sculpt = null;
+    else if (!cfg.sculpt) cfg.sculpt = sculptGeneric();
+    if (cfg.sculpt) { if (cfg.tabsFirst) tabDefs.push(sculptTabConfig()); else tabDefs.unshift(sculptTabConfig()); }
     var extraTabs = tabDefs.map(function (t) {
       return {
         id: t.id, cfg: t,
@@ -449,7 +452,7 @@
       oninput: function () {
         params[p.key] = Number(input.value);
         output.textContent = formatParam(p, params[p.key]);
-        if (cfg.sculpt) sc8.draft = true; // sculpted models use a quick coarse mesh while a slider moves
+        if (cfg.sculpt && cfg.sculpt.kit) sc8.draft = true; // sculpted models use a quick coarse mesh while a slider moves
         scheduleRebuild();
       },
       onchange: function () { if (cfg.sculpt && sc8.draft) sculptCommit(); }
@@ -726,8 +729,13 @@
   function rebuild() {
     applyShowIf();
     var output = cfg.build(params, api) || [];
+    if (cfg.sculpt) {
+      // Work on copies: a generator may keep and reuse its arrays between builds.
+      output = output.map(function (e) { var c = Object.assign({}, e); c.positions = e.positions.slice(); return c; });
+      if (cfg.sculpt.apply) output = cfg.sculpt.apply(output);
+      sculptApplyStrokes(output);
+    }
     modelData = output;
-    if (cfg.sculpt) sculptApplyStrokes(output);
     printCache = null;
 
     modelMeshes.forEach(function (m) { modelGroup.remove(m); m.geometry.dispose(); });
@@ -1480,7 +1488,9 @@
       point: hit.point.clone(),
       normal: normal,
       meshName: hit.object.name,
-      part: part
+      part: part,
+      meshIndex: meshIndex,
+      faceIndex: hit.faceIndex
     };
   }
 
@@ -1929,7 +1939,7 @@
     rebuildWire();
     sculptRefresh();
   }
-  function sculptMirrorPlane() { return sc8.mirror && sc8.shift ? -sc8.shift[1] : undefined; }
+  function sculptMirrorPlane() { return sc8.mirror ? (sc8.shift ? -sc8.shift[1] : 0) : undefined; }
 
   // Tints the triangles of the selected piece (and the pieces that follow it).
   function sculptHighlight() {
@@ -1937,7 +1947,8 @@
     var id = sculptOn() && sc8.tool === 'select' ? sc8.sel : null, b = id ? cfg.sculpt.bounds(id) : null;
     if (!b) return;
     var out = [], pad = 2, q = { x: 0, y: 0, z: 0 };
-    modelData.forEach(function (e) {
+    if (cfg.sculpt.trisOf) cfg.sculpt.trisOf(id, modelData, out);
+    else modelData.forEach(function (e) {
       var p = e.positions;
       for (var i = 0; i < p.length; i += 9) {
         q.x = (p[i] + p[i + 3] + p[i + 6]) / 3; q.y = (p[i + 1] + p[i + 4] + p[i + 7]) / 3; q.z = (p[i + 2] + p[i + 5] + p[i + 8]) / 3;
@@ -1998,7 +2009,7 @@
     camera.getWorldDirection(n);
     var drag = { start: hit.point.clone(), plane: new T.Plane().setFromNormalAndCoplanarPoint(n, hit.point), moved: false };
     if (sc8.tool === 'select') {
-      var id = cfg.sculpt.pieceAt(hit.point);
+      var id = cfg.sculpt.pieceAt(hit.point, hit);
       sc8.sel = id;
       drag.type = 'move'; drag.id = id;
       drag.base = (sc8.edits[id] && sc8.edits[id].m || [0, 0, 0]).slice();
@@ -2096,6 +2107,136 @@
     sculptSettle();
   }
 
+  function sculptToggleDelete() {
+    if (!sc8.sel) return;
+    sculptSnapshot();
+    var ed = sculptEdit(sc8.sel);
+    ed.del = !ed.del;
+    sculptCommit();
+  }
+
+  // Sculpt for any generator: each separate closed shell of the model is a piece, found from the mesh after every build.
+  // A shell can be moved, stretched or deleted as a whole, so the surfaces stay closed. A model built as one shell has one piece.
+  function sculptGeneric() {
+    var last = null;
+    function analyse(entries) {
+      var groups = {}, order = [];
+      entries.forEach(function (e, i) { var g = e.smoothGroup || ('#' + i); if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(i); });
+      var pieces = [], maps = entries.map(function (e) { return new Int32Array(e.positions.length / 9); }), counts = {};
+      order.forEach(function (g) {
+        var ids = new Map(), parent = [];
+        function find(a) { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; }
+        function vid(p, i) {
+          var k = Math.round(p[i] * 1000) + ',' + Math.round(p[i + 1] * 1000) + ',' + Math.round(p[i + 2] * 1000), v = ids.get(k);
+          if (v === undefined) { v = parent.length; parent.push(v); ids.set(k, v); }
+          return v;
+        }
+        var tv = [];
+        groups[g].forEach(function (ei) {
+          var p = entries[ei].positions, t = [];
+          for (var i = 0; i < p.length; i += 9) {
+            var a = vid(p, i), b = vid(p, i + 3), c = vid(p, i + 6), ra = find(a), rb = find(b);
+            if (ra !== rb) parent[rb] = ra;
+            var rc = find(c), r2 = find(a);
+            if (rc !== r2) parent[rc] = r2;
+            t.push(a);
+          }
+          tv.push(t);
+        });
+        var rootTo = new Map();
+        groups[g].forEach(function (ei, gi) {
+          var t = tv[gi], m = maps[ei], p = entries[ei].positions, name = entries[ei].name || 'body';
+          for (var f = 0; f < t.length; f++) {
+            var r = find(t[f]), pi = rootTo.get(r);
+            if (pi === undefined) { pi = pieces.length; rootTo.set(r, pi); pieces.push({ g: g, tris: {}, lo: [1e9, 1e9, 1e9], hi: [-1e9, -1e9, -1e9] }); }
+            m[f] = pi;
+            var P = pieces[pi];
+            P.tris[name] = (P.tris[name] || 0) + 1;
+            for (var c2 = 0; c2 < 9; c2++) { var ax = c2 % 3, v2 = p[f * 9 + c2]; if (v2 < P.lo[ax]) P.lo[ax] = v2; if (v2 > P.hi[ax]) P.hi[ax] = v2; }
+          }
+        });
+      });
+      var names = cfg.partNames || {}, totals = {};
+      pieces.forEach(function (P) {
+        var best = Object.keys(P.tris).sort(function (a, b) { return P.tris[b] - P.tris[a]; })[0];
+        P.name = best; P.base = names[best] || best.charAt(0).toUpperCase() + best.slice(1);
+        totals[P.base] = (totals[P.base] || 0) + 1;
+      });
+      pieces.forEach(function (P) {
+        counts[P.base] = (counts[P.base] || 0) + 1;
+        P.id = P.base + '#' + counts[P.base];
+        P.label = totals[P.base] > 1 ? P.base + ' ' + counts[P.base] : P.base;
+        P.section = totals[P.base] > 1 ? P.base : 'Pieces';
+      });
+      return { pieces: pieces, maps: maps };
+    }
+    return {
+      apply: function (entries) {
+        last = null;
+        if (!Object.keys(sc8.edits).length) return entries;
+        var an = analyse(entries);
+        an.pieces.forEach(function (P) {
+          var ed = sc8.edits[P.id];
+          P.ed = ed || null;
+          P.c = [(P.lo[0] + P.hi[0]) / 2, (P.lo[1] + P.hi[1]) / 2, (P.lo[2] + P.hi[2]) / 2];
+          P.lift = 0;
+          if (ed && !ed.del) { // a piece moved below the bed is lifted back onto it
+            var ny = P.c[1] + (P.lo[1] - P.c[1]) * ed.s[1] + ed.m[1];
+            P.lift = ny < 0 ? -ny : 0;
+          }
+        });
+        var out = [];
+        entries.forEach(function (e, ei) {
+          var p = e.positions, m = an.maps[ei], keep = [], i, k;
+          for (var f = 0; f < m.length; f++) if (!(an.pieces[m[f]].ed && an.pieces[m[f]].ed.del)) keep.push(f);
+          var np = new Float32Array(keep.length * 9), nm = new Int32Array(keep.length), sh = e.shade ? new Float32Array(keep.length * 3) : null;
+          keep.forEach(function (f, n) {
+            var P = an.pieces[m[f]], ed = P.ed;
+            nm[n] = m[f];
+            for (k = 0; k < 9; k++) {
+              var ax = k % 3, v = p[f * 9 + k];
+              np[n * 9 + k] = ed ? P.c[ax] + (v - P.c[ax]) * ed.s[ax] + ed.m[ax] + (ax === 1 ? P.lift : 0) : v;
+            }
+            if (sh) for (k = 0; k < 3; k++) sh[n * 3 + k] = e.shade[f * 3 + k];
+          });
+          if (!keep.length) return;
+          var c = Object.assign({}, e); c.positions = np; if (sh) c.shade = sh;
+          out.push(c); c.__map = nm;
+        });
+        an.pieces.forEach(function (P) {
+          if (!P.ed || P.ed.del) return;
+          for (i = 0; i < 3; i++) {
+            var l = P.c[i] + (P.lo[i] - P.c[i]) * P.ed.s[i] + P.ed.m[i] + (i === 1 ? P.lift : 0), h = P.c[i] + (P.hi[i] - P.c[i]) * P.ed.s[i] + P.ed.m[i] + (i === 1 ? P.lift : 0);
+            P.lo[i] = l; P.hi[i] = h;
+          }
+        });
+        last = { pieces: an.pieces, maps: out.map(function (e) { return e.__map; }) };
+        return out;
+      },
+      _ensure: function () { if (!last) last = analyse(modelData); return last; },
+      available: function () { return this._ensure().pieces; },
+      pieceAt: function (pt, hit) {
+        var a = this._ensure(), m = hit && a.maps[hit.meshIndex];
+        return m && a.pieces[m[hit.faceIndex]] ? a.pieces[m[hit.faceIndex]].id : null;
+      },
+      bounds: function (id) {
+        var P = this._ensure().pieces.filter(function (q) { return q.id === id; })[0];
+        return P && !(P.ed && P.ed.del) ? { lo: P.lo, hi: P.hi } : null;
+      },
+      isUnder: function () { return false; },
+      trisOf: function (id, entries, out) {
+        var a = this._ensure(), idx = -1;
+        a.pieces.forEach(function (q, i) { if (q.id === id) idx = i; });
+        if (idx < 0) return;
+        entries.forEach(function (e, ei) {
+          var m = a.maps[ei], p = e.positions;
+          if (!m) return;
+          for (var f = 0; f < m.length; f++) if (m[f] === idx) for (var k = 0; k < 9; k++) out.push(p[f * 9 + k]);
+        });
+      }
+    };
+  }
+
   function sculptTabConfig() {
     return {
       id: 'sculpt', label: 'Sculpt',
@@ -2155,13 +2296,7 @@
         var sW = slider('Stretch length', 40, 250, 5, function () { return curS(0); }, function (v) { setScale(0, v); }, pct, done);
         var sH = slider('Stretch height', 40, 250, 5, function () { return curS(1); }, function (v) { setScale(1, v); }, pct, done);
         var sD = slider('Stretch width', 40, 250, 5, function () { return curS(2); }, function (v) { setScale(2, v); }, pct, done);
-        var delBtn = el('button', { class: 'mm-btn', type: 'button', onclick: function () {
-          if (!sc8.sel) return;
-          sculptSnapshot();
-          var ed = sculptEdit(sc8.sel);
-          ed.del = !ed.del;
-          sculptCommit();
-        } });
+        var delBtn = el('button', { class: 'mm-btn', type: 'button', title: 'Delete key', onclick: sculptToggleDelete });
         var resetPiece = el('button', { class: 'mm-btn', type: 'button', text: 'Reset piece', onclick: function () {
           if (!sc8.sel || !sc8.edits[sc8.sel]) return;
           sculptSnapshot();
@@ -2170,8 +2305,8 @@
         } });
         var selName = el('p', { class: 'mm-note' });
         detail.appendChild(selName);
-        detail.appendChild(sW.node); detail.appendChild(sH.node); detail.appendChild(sD.node);
         detail.appendChild(el('div', { class: 'mm-export-row' }, [delBtn, resetPiece]));
+        detail.appendChild(sW.node); detail.appendChild(sH.node); detail.appendChild(sD.node);
         // Sculpt tool
         var brushes = [['grab', 'Grab', 'Drag to pull the surface.'], ['inflate', 'Inflate', 'Brush over the surface to puff it out.'], ['deflate', 'Deflate', 'Brush over the surface to press it in.'],
           ['smooth', 'Smooth', 'Brush over bumps to soften them.'], ['flatten', 'Flatten', 'Brush over the surface to level it.'], ['pinch', 'Pinch', 'Brush along a line to draw the surface together.']];
@@ -2231,7 +2366,7 @@
           sc8Ui.lastSel = sc8.sel;
           detail.hidden = !sc8.sel;
           if (sc8.sel) {
-            var info = cfg.sculpt.pieces.filter(function (p) { return p.id === sc8.sel; })[0], ed = sc8.edits[sc8.sel];
+            var info = cfg.sculpt.available().filter(function (p) { return p.id === sc8.sel; })[0], ed = sc8.edits[sc8.sel];
             selName.textContent = 'Selected: ' + (info ? info.label : sc8.sel);
             delBtn.textContent = ed && ed.del ? 'Restore' : 'Delete';
             sW.sync(); sH.sync(); sD.sync();
@@ -2279,6 +2414,16 @@
       var k = e.key.toLowerCase();
       if (k === 'z' && !e.shiftKey) { e.preventDefault(); sculptUndo(); }
       else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); sculptRedo(); }
+    });
+    // Delete or Backspace removes the selected piece (Restore or Undo brings it back).
+    window.addEventListener('keydown', function (e) {
+      if (!sculptOn() || sc8.tool !== 'select' || !sc8.sel || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+      var t = e.target;
+      if (t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && t.type !== 'range'))) return;
+      var cur = sc8.edits[sc8.sel];
+      if (cur && cur.del) return;
+      e.preventDefault();
+      sculptToggleDelete();
     });
   }
 
