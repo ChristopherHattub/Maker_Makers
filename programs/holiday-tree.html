@@ -7,8 +7,30 @@
   <link rel="stylesheet" href="shared/generator.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    body.mm-soft.holiday {
+      --s-bg: #3a2229; --s-panel: #fff8ee; --s-panel-a: rgba(255,248,238,0.97); --s-accent: #d6393f; --s-accent-dim: rgba(214,57,63,0.35);
+      --s-text: #3b2a2a; --s-muted: #8a6e6e; --s-amber: #e9892a; --s-green: #2f9e63; --s-edge: #ecd3b8;
+      --s-card: #fdf0dc; --s-card-a: rgba(255,248,238,0.9); --s-stage: linear-gradient(#2b1d24, #4a2c2a);
+      --s-font: ui-rounded, 'Arial Rounded MT Bold', 'Trebuchet MS', 'Segoe UI', sans-serif;
+      --s-bg-img: linear-gradient(#4a2530, #2b1a20);
+    }
+    .holiday .mm-gen-title { font-weight: 700; }
+    .ht-row { display: flex; flex-direction: column; gap: 0.15rem; margin: 0 0 0.5rem; }
+    .ht-label { font-size: 0.78rem; color: var(--s-muted); line-height: 1.1; }
+    .ht-tiles, .ht-tools { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .ht-tools { margin: 0.7rem 0 0.3rem; align-items: center; }
+    .ht-tile { width: 2.7rem; height: 2.7rem; padding: 0.22rem; border-radius: 12px; border: 2px solid var(--s-edge); background: #fff; cursor: pointer;
+      box-shadow: 0 2px 0 var(--s-edge); transition: transform .12s, box-shadow .12s; }
+    .ht-tile svg { width: 100%; height: 100%; display: block; }
+    .ht-tile:hover { transform: translateY(-2px); }
+    .ht-tile:active { transform: translateY(1px); box-shadow: none; }
+    .ht-tile[aria-pressed="true"] { border-color: var(--s-accent); background: #ffe9ec; transform: scale(1.08); }
+    .ht-tile:focus-visible { outline: 3px solid var(--s-accent); outline-offset: 2px; }
+    .ht-shape { margin-top: 0.8rem; }
+  </style>
 </head>
-<body class="mm-gen">
+<body class="mm-gen mm-soft holiday">
   <script>
     // Holiday Tree: parameters, presets, palette and geometry. The page layout, the viewport,
     // the Color tool and the exports come from shared/generator-core.js.
@@ -170,24 +192,6 @@
         if (text) node.textContent = text;
         return node;
       }
-      // Picture-card style picker for the "Styles" tab. cardSvg(values) draws a small icon.
-      function mountStyleCards(container, api, styles, cardSvg, defaults, heading, note) {
-        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
-        var grid = el('div', { class: 'mm-preset-cards' });
-        styles.forEach(function (s) {
-          var vals = {};
-          Object.keys(defaults).forEach(function (k) { vals[k] = defaults[k]; });
-          Object.keys(s.values).forEach(function (k) { vals[k] = s.values[k]; });
-          var card = el('button', { class: 'mm-preset-card', type: 'button', title: s.name, onclick: function () {
-            api.setParams(vals);
-            api.toast('Style: ' + s.name);
-          } });
-          card.innerHTML = cardSvg(vals) + '<span>' + s.name + '</span>';
-          grid.appendChild(card);
-        });
-        container.appendChild(grid);
-        container.appendChild(el('p', { class: 'mm-note' }, note));
-      }
       function withDefaults(defaults, over) {
         var values = {};
         Object.keys(defaults).forEach(function (k) { values[k] = defaults[k]; });
@@ -211,11 +215,35 @@
       }
 
 
-      // ---- Stamp library: flat shapes placed on the model surface by clicking ----
-      var STAMP_NAMES = { star: 'Star', snow: 'Snowflake', tree: 'Tree', heart: 'Heart', bell: 'Bell', cane: 'Candy cane', holly: 'Holly', gift: 'Gift', ball: 'Ball', diamond: 'Diamond' };
-      var stamps = []; // { type, size, rotation (degrees), point: [x, y, z], normal: [x, y, z] }
-      var stampType = 'star';
-      var refreshStampPanel = null;
+      // ---- Ornament library: shapes you pick, each in several colors, placed by clicking the tree ----
+      var COLORS = [
+        { id: 'red', name: 'Red', hex: '#e5484d' }, { id: 'gold', name: 'Gold', hex: '#f6b93b' },
+        { id: 'blue', name: 'Blue', hex: '#3b82f6' }, { id: 'purple', name: 'Purple', hex: '#a78bfa' },
+        { id: 'pink', name: 'Pink', hex: '#f472b6' }, { id: 'white', name: 'White', hex: '#f1f5f9' }
+      ];
+      var ITEMS = [
+        { id: 'ball', name: 'Ball' }, { id: 'star', name: 'Star' }, { id: 'heart', name: 'Heart' },
+        { id: 'bell', name: 'Bell' }, { id: 'cane', name: 'Candy cane' }, { id: 'snow', name: 'Snowflake' },
+        { id: 'gift', name: 'Present' }, { id: 'ginger', name: 'Gingerbread' }, { id: 'holly', name: 'Holly' }
+      ];
+      var ITEM_NAME = {};
+      ITEMS.forEach(function (d) { ITEM_NAME[d.id] = d.name; });
+      var PART_NAMES = { tree: 'Tree boughs', trunk: 'Trunk', base: 'Snow base', hook: 'Ornament hook', topper: 'Topper' };
+
+      var ornaments = []; // { id, type, color, size, rotation, point: [x, y, z], normal: [x, y, z], ref: { h, r } }
+      var nextId = 1;
+      var pick = { type: 'ball', color: COLORS[0].hex };   // type 'erase' removes ornaments
+      var refreshPanel = null;
+      var T3 = null;   // THREE from the engine api (the mesh check passes it the same way)
+
+      function colorName(hex) {
+        var c = COLORS.filter(function (k) { return k.hex === hex; })[0];
+        return c ? c.name : 'Custom';
+      }
+      function shadeHex(hex, f) {
+        var n = parseInt(hex.slice(1), 16);
+        return 'rgb(' + Math.round(((n >> 16) & 255) * f) + ',' + Math.round(((n >> 8) & 255) * f) + ',' + Math.round((n & 255) * f) + ')';
+      }
 
       function strokeOutline(pts, hw) {
         var left = [], right = [], i, a, b, dx, dy, l;
@@ -258,9 +286,6 @@
           for (i = 0; i < 6; i++) spec.forEach(function (sp) { var an = rad(90 + i * 60 + sp[0]); pts.push([Math.cos(an) * sp[1], Math.sin(an) * sp[1]]); });
           return [pts];
         }
-        if (type === 'tree') {
-          return [mirrorHalf([[0, 1], [0.42, 0.42], [0.2, 0.42], [0.68, -0.12], [0.3, -0.12], [0.86, -0.68], [0.14, -0.68], [0.14, -1]])];
-        }
         if (type === 'heart') {
           for (i = 0; i < 36; i++) {
             a = (i / 36) * TAU;
@@ -285,23 +310,33 @@
           for (i = 0; i < 16; i++) { a = (i / 16) * TAU; bowL.push([-0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); bowR.push([0.3 + 0.32 * Math.cos(a), 0.7 + 0.2 * Math.sin(a)]); }
           return [[[-0.72, -1], [0.72, -1], [0.72, 0.06], [-0.72, 0.06]], [[-0.84, 0.06], [0.84, 0.06], [0.84, 0.42], [-0.84, 0.42]], bowL, bowR];
         }
-        if (type === 'diamond') return [[[0, 1], [0.62, 0], [0, -1], [-0.62, 0]]];
+        if (type === 'ginger') {
+          return [disc(0, 0.62, 0.32, 20), [[-0.3, 0.4], [0.3, 0.4], [0.36, -0.3], [-0.36, -0.3]],
+            strokeOutline([[-0.85, 0.3], [0, 0.2], [0.85, 0.3]], 0.15),
+            strokeOutline([[-0.3, -0.2], [-0.42, -0.95]], 0.17), strokeOutline([[0.3, -0.2], [0.42, -0.95]], 0.17)];
+        }
         return [disc(0, 0, 1, 24)];
       }
 
-      function stampIcon(type) {
+      // Picker tile: the ornament drawn in its own color.
+      function tileIcon(type, hex) {
+        var dark = shadeHex(hex, 0.6), stroke = ' stroke="' + dark + '" stroke-width="0.07" stroke-linejoin="round"';
+        if (type === 'erase') return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><path d="M-0.7 0.35 L0.1 -0.65 L0.8 -0.1 L0 0.9 Z" fill="#f9a8b8" stroke="#b9546a" stroke-width="0.07" stroke-linejoin="round"/><path d="M-0.7 0.35 L0.1 -0.65" stroke="#b9546a" stroke-width="0.07"/><path d="M-0.2 0.95 H0.9" stroke="#b9546a" stroke-width="0.09" stroke-linecap="round"/></svg>';
+        if (type === 'ball') {
+          return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><rect x="-0.24" y="-1.02" width="0.48" height="0.32" rx="0.06" fill="#d9a441" stroke="#8a6420" stroke-width="0.06"/><circle cx="0" cy="0.14" r="0.82" fill="' + hex + '"' + stroke + '/><ellipse cx="-0.3" cy="-0.22" rx="0.17" ry="0.3" fill="#fff" opacity="0.5" transform="rotate(32 -0.3 -0.22)"/></svg>';
+        }
         return '<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true">' + stampPolys(type).map(function (poly) {
-          return '<polygon points="' + poly.map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ') + '"/>';
+          return '<polygon fill="' + hex + '"' + stroke + ' points="' + poly.map(function (pt) { return pt[0].toFixed(3) + ',' + (-pt[1]).toFixed(3); }).join(' ') + '"/>';
         }).join('') + '</svg>';
       }
 
-      // Stamp mesh in model space: sunk `embed` mm into the surface and standing `depth - embed` mm proud.
+      // Ornament mesh in model space: sunk `embed` mm into the surface and standing `depth - embed` mm proud.
       function stampPositions(stamp, depth, embed) {
         if (stamp.type === 'ball') {
           var br = stamp.size * 0.5, nb = vnorm(stamp.normal), c = vadd(stamp.point, vmul(nb, br * 0.3));
           return ball(c[0], c[1], c[2], br, br, br, 28, 14);
         }
-        var THREE = window.THREE, normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
+        var THREE = T3 || window.THREE, normal = new THREE.Vector3().fromArray(stamp.normal).normalize();
         var shapes = stampPolys(stamp.type).map(function (poly) {
           var shape = new THREE.Shape();
           poly.forEach(function (pt, i) { if (i === 0) shape.moveTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); else shape.lineTo(pt[0] * stamp.size * 0.5, pt[1] * stamp.size * 0.5); });
@@ -321,38 +356,17 @@
         return flat.attributes.position.array.slice();
       }
 
-      // Panel for a stamp tab: shape chips, undo and clear (plus optional extra buttons).
-      function mountStampPanel(container, api, types, heading, noun, extraButtons) {
-        container.appendChild(el('h3', { class: 'mm-group-title' }, heading));
-        var chips = el('div', { class: 'mm-icon-chips' }), buttons = {};
-        types.forEach(function (type) {
-          var btn = el('button', { class: 'mm-icon-chip', type: 'button', title: STAMP_NAMES[type], 'aria-pressed': String(type === stampType), onclick: function () {
-            stampType = type;
-            Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
-            api.toast('Selected ' + STAMP_NAMES[type] + '. Click the model to place it.');
-          } });
-          btn.innerHTML = stampIcon(type) + '<span>' + STAMP_NAMES[type] + '</span>';
-          buttons[type] = btn;
-          chips.appendChild(btn);
-        });
-        container.appendChild(chips);
-        var count = el('p', { class: 'mm-note' }, '0 ' + noun + 's placed');
-        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps.pop(); api.rebuild(); api.toast('Removed last ' + noun); } } }, 'Undo last');
-        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (stamps.length) { stamps = []; api.rebuild(); api.toast('Cleared all ' + noun + 's'); } } }, 'Clear all');
-        container.appendChild(count);
-        var row = el('div', { class: 'mm-export-row' });
-        row.appendChild(undo); row.appendChild(clear);
-        (extraButtons || []).forEach(function (b) { row.appendChild(el('button', { class: 'mm-btn', type: 'button', onclick: function () { b.run(api); } }, b.label)); });
-        container.appendChild(row);
-        refreshStampPanel = function () {
-          count.textContent = stamps.length + ' ' + noun + (stamps.length === 1 ? '' : 's') + ' placed';
-          undo.disabled = stamps.length === 0;
-          clear.disabled = stamps.length === 0;
-        };
-        refreshStampPanel();
+      // An ornament follows the tree when its height or width changes: scale its spot with the tree.
+      function placed(st, p) {
+        var ref = st.ref || { h: p.height, r: p.baseR };
+        var sx = p.baseR / ref.r, sy = p.height / ref.h;
+        if (Math.abs(sx - 1) < 1e-4 && Math.abs(sy - 1) < 1e-4) return st;
+        return { type: st.type, color: st.color, size: st.size, rotation: st.rotation,
+          point: [st.point[0] * sx, st.point[1] * sy, st.point[2] * sx],
+          normal: vnorm([st.normal[0] / sx, st.normal[1] / sy, st.normal[2] / sx]) };
       }
+
       var SEG = 96;
-      stampType = 'ball';
       var PARAMS = [
         { group: 'Tree', key: 'height', label: 'Total height', unit: ' mm', min: 60, max: 130, step: 1, value: 96 },
         { group: 'Tree', key: 'baseR', label: 'Bottom tier width (radius)', unit: ' mm', min: 16, max: 42, step: 1, value: 28 },
@@ -373,8 +387,8 @@
           format: function (v) { return v >= 1 ? 'On' : 'Off'; } },
         { group: 'Ornament hook', key: 'hookHole', label: 'Hook hole size', unit: ' mm', min: 1.6, max: 3.6, step: 0.1, value: 2.4 },
         { group: 'Ornament hook', key: 'hookTube', label: 'Hook ring thickness', unit: ' mm', min: 1.2, max: 2.4, step: 0.1, value: 1.6 },
-        { tab: 'ornaments', group: 'Ornament size & rotation', key: 'stampSize', label: 'Ornament size', unit: ' mm', min: 5, max: 20, step: 0.5, value: 8 },
-        { tab: 'ornaments', group: 'Ornament size & rotation', key: 'stampRotation', label: 'Ornament rotation (flat shapes)', unit: '°', min: 0, max: 355, step: 5, value: 0 }
+        { tab: 'decorate', group: 'Next ornament', key: 'stampSize', label: 'Size', unit: ' mm', min: 5, max: 20, step: 0.5, value: 8 },
+        { tab: 'decorate', group: 'Next ornament', key: 'stampRotation', label: 'Turn (flat shapes)', unit: '°', min: 0, max: 355, step: 5, value: 0 }
       ];
       var DEFAULTS = {};
       PARAMS.forEach(function (d) { DEFAULTS[d.key] = d.value; });
@@ -454,48 +468,56 @@
         return shell(rings, false);
       }
 
-      function build(p) {
+      function build(p, api) {
         var g = layout(p), out = [], N = g.N, lip = p.lipH;
-        out.push({ name: 'tree', positions: treeShell(p, g), singlePart: true });
+        out.push({ name: 'tree', color: '#2f9e5b', positions: treeShell(p, g), singlePart: true });
         var rtr = g.rtr;
-        out.push({ name: 'trunk', positions: lathe([[0, 0], [rtr - 0.8, 0], [rtr, 0.8], [rtr, g.roof + 2], [0, g.roof + 2]], 40), singlePart: true });
+        out.push({ name: 'trunk', color: '#8b5a2b', positions: lathe([[0, 0], [rtr - 0.8, 0], [rtr, 0.8], [rtr, g.roof + 2], [0, g.roof + 2]], 40), singlePart: true });
         if (p.basePct >= 40) {
           var Rb = Math.max(rtr + 6, g.tiers[0].R * p.basePct / 100), h0 = 1.4, top = h0 + (Rb - rtr) * 0.3;
-          out.push({ name: 'base', positions: lathe([[0, 0], [Rb - 0.6, 0], [Rb, 0.6], [Rb, h0], [rtr + 1, top], [0, top]], SEG), singlePart: true });
+          out.push({ name: 'base', color: '#f4f7fb', positions: lathe([[0, 0], [Rb - 0.6, 0], [Rb, 0.6], [Rb, h0], [rtr + 1, top], [0, top]], SEG), singlePart: true });
         }
         var H = p.height, topTop = H;
         if (p.topper >= 1) {
           var s = p.topperR, kind = p.hook >= 1 ? 1 : Math.round(p.topper);
-          if (kind === 1) { out.push({ name: 'topper', positions: ball(0, H + s * 0.35, 0, s, s, s, 40, 20), singlePart: true }); topTop = H + s * 1.35; }
+          if (kind === 1) { out.push({ name: 'topper', color: '#f6b93b', positions: ball(0, H + s * 0.35, 0, s, s, s, 40, 20), singlePart: true }); topTop = H + s * 1.35; }
           else {
             var yc = H + s * 0.45, pr = [[0, yc - 1.15 * s]], q;
             for (q = 1; q < 8; q++) pr.push([s * Math.pow(q / 8, 0.9), yc - 1.15 * s * (1 - q / 8)]);
             pr.push([s, yc]);
             for (q = 1; q < 10; q++) pr.push([s * Math.pow(1 - q / 10, 1.4), yc + 1.9 * s * (q / 10)]);
             pr.push([0, yc + 1.9 * s]);
-            out.push({ name: 'topper', positions: lathe(pr, 48), singlePart: true });
+            out.push({ name: 'topper', color: '#f6b93b', positions: lathe(pr, 48), singlePart: true });
           }
         }
-        if (p.hook >= 1) out.push({ name: 'hook', positions: hookRing(0, topTop, 0, p.hookHole, p.hookTube, 1.8), singlePart: true });
-        if (!seeded) { seeded = true; stamps = autoDecorate(p, g, 9); }
-        stamps.forEach(function (st) { out.push({ name: 'ornament', positions: stampPositions(st, 3.4, 1.4), singlePart: true }); });
-        if (refreshStampPanel) refreshStampPanel();
+        if (p.hook >= 1) out.push({ name: 'hook', color: '#f6b93b', positions: hookRing(0, topTop, 0, p.hookHole, p.hookTube, 1.8), singlePart: true });
+        if (!seeded) { seeded = true; seedBalls(p, g); }
+        ornaments.forEach(function (st) {
+          var name = 'orn_' + st.id, pos = stampPositions(placed(st, p), 3.8, 1.6);
+          PART_NAMES[name] = ITEM_NAME[st.type] + ' (' + colorName(st.color) + ')';
+          ornGeo[name] = pos;
+          out.push({ name: name, color: st.color, positions: pos, singlePart: true });
+        });
+        if (refreshPanel) refreshPanel();
         return out;
       }
 
       var seeded = false;
-      // Evenly spread balls over the tier surfaces for the current tree shape.
-      function autoDecorate(p, g, count) {
-        var list = [], N = g.N, i;
-        for (i = 0; i < count; i++) {
-          var ti = i % Math.max(1, N - 1), t = g.tiers[ti];
-          var u = (0.12 + 0.46 * (((i * 7) % 10) / 10)) * t.uX, a = i * 2.39996;
-          var w = lerp(1, 0.3, u / t.uX);
-          var r = lerp(t.R, t.rt, u) * wobble(p, w, ti * Math.PI / p.lobes, a), y = t.yl + p.lipH + t.h * u;
-          var nr = vnorm([t.h, t.R - t.rt, 0]);
-          list.push({ type: 'ball', size: 6.4, rotation: 0, point: [r * Math.cos(a), y, r * Math.sin(a)], normal: [nr[0] * Math.cos(a), nr[1], nr[0] * Math.sin(a)] });
+      // A few mixed-color balls so a fresh tree already looks dressed.
+      function seedBalls(p, g) {
+        var i, n = Math.max(1, g.N - 1);
+        for (i = 0; i < 9; i++) {
+          var sp = surfacePoint(p, g, i % n, (0.12 + 0.46 * (((i * 7) % 10) / 10)) * g.tiers[i % n].uX, i * 2.39996);
+          ornaments.push({ id: nextId++, type: 'ball', color: COLORS[i % COLORS.length].hex, size: 6.4, rotation: 0, point: sp.point, normal: sp.normal, ref: { h: p.height, r: p.baseR } });
         }
-        return list;
+      }
+
+      // A spot on the upper surface of tier `ti`, `u` of the way up its slope, at angle `a`.
+      function surfacePoint(p, g, ti, u, a) {
+        var t = g.tiers[ti], w = lerp(1, 0.3, u / t.uX);
+        var r = lerp(t.R, t.rt, u) * wobble(p, w, ti * Math.PI / p.lobes, a), y = t.yl + p.lipH + t.h * u;
+        var nr = vnorm([t.h, t.R - t.rt, 0]);
+        return { point: [r * Math.cos(a), y, r * Math.sin(a)], normal: [nr[0] * Math.cos(a), nr[1], nr[0] * Math.sin(a)] };
       }
 
       var STYLES = [
@@ -507,54 +529,466 @@
         { name: 'Mini 3-tier', values: { tiers: 3, height: 66, baseR: 22, topPct: 38, topperR: 4, trunkH: 5, trunkR: 7 } }
       ];
 
+      // ---- Animations (preview only: they move the meshes in the viewport, never the exported geometry) ----
+      var stage = null, apiRef = null, ornGeo = {};
+      var anims = [];      // { name, kind: 'in' | 'out', t0, delay, pivot, color, id, started }
+      var bursts = [];
+      var jiggleT0 = -1e9;
+      var CHEERS = ['Pretty!', 'Ooh, sparkly!', 'Looks great!', 'Ta-da!', 'So festive!'];
+      function clock() { return window.performance && performance.now ? performance.now() : Date.now(); }
+      function easeOutBack(t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+
+      function addOrnament(o, delay) {
+        var st = { id: nextId++, type: o.type, color: o.color, size: o.size, rotation: o.rotation || 0, point: o.point, normal: o.normal, ref: { h: o.h, r: o.r } };
+        ornaments.push(st);
+        anims.push({ name: 'orn_' + st.id, kind: 'in', t0: clock() + (delay || 0), pivot: st.point, color: st.color, started: false });
+        return st;
+      }
+      function removeOrnament(id) {
+        var st = ornaments.filter(function (o) { return o.id === id; })[0];
+        if (!st || anims.some(function (a) { return a.id === id && a.kind === 'out'; })) return;
+        anims.push({ name: 'orn_' + id, kind: 'out', t0: clock(), pivot: st.point, color: st.color, id: id, started: true });
+      }
+      function surprise(api) {
+        var p = api.params, g = layout(p), n = Math.max(1, g.N - 1), i;
+        for (i = 0; i < 12; i++) {
+          var sp = surfacePoint(p, g, Math.floor(Math.random() * n), (0.12 + 0.46 * Math.random()) * g.tiers[0].uX, Math.random() * TAU);
+          var item = ITEMS[Math.floor(Math.random() * ITEMS.length)], col = COLORS[Math.floor(Math.random() * COLORS.length)];
+          addOrnament({ type: item.id, color: col.hex, size: item.id === 'ball' ? 6.4 : p.stampSize, rotation: 0, point: sp.point, normal: sp.normal, h: p.height, r: p.baseR }, i * 110);
+        }
+        jiggleT0 = clock();
+        api.rebuild();
+        api.toast('Surprise! 12 new ornaments');
+      }
+      function spawnBurst(pivot, hex) {
+        if (!stage) return;
+        var T = stage.T, n = 18, pos = new Float32Array(n * 3), vel = [], i, a, b, sp;
+        for (i = 0; i < n; i++) {
+          a = Math.random() * TAU; b = (Math.random() - 0.3) * Math.PI; sp = 10 + Math.random() * 16;
+          vel.push([Math.cos(a) * Math.cos(b) * sp, Math.sin(b) * sp + 6, Math.sin(a) * Math.cos(b) * sp]);
+          pos[i * 3] = pivot[0]; pos[i * 3 + 1] = pivot[1]; pos[i * 3 + 2] = pivot[2];
+        }
+        var geo = new T.BufferGeometry();
+        geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+        var mat = new T.PointsMaterial({ size: 5, map: stage.spark, color: new T.Color(hex).lerp(new T.Color(0xffffff), 0.4), transparent: true, depthWrite: false, blending: T.AdditiveBlending });
+        var pts = new T.Points(geo, mat);
+        pts.frustumCulled = false;
+        stage.scene.add(pts);
+        bursts.push({ pts: pts, vel: vel, pivot: pivot, t0: clock() });
+      }
+      function findMesh(name) {
+        var kids = stage.modelGroup.children, i;
+        for (i = 0; i < kids.length; i++) if (kids[i].name === name) return kids[i];
+        return null;
+      }
+      function tick() {
+        if (!stage) return;
+        var t = clock(), i, jt = (t - jiggleT0) / 520, mg = stage.modelGroup;
+        if (jt >= 0 && jt < 1) { var w = Math.sin(jt * Math.PI * 3) * (1 - jt) * 0.025; mg.scale.set(1 + w, 1 - w * 1.4, 1 + w); }
+        else if (mg.scale.y !== 1) mg.scale.set(1, 1, 1);
+        for (i = anims.length - 1; i >= 0; i--) {
+          var an = anims[i], mesh = findMesh(an.name), k = (t - an.t0) / (an.kind === 'in' ? 650 : 220);
+          if (k < 0) { if (mesh) mesh.visible = false; continue; }
+          if (!an.started) { an.started = true; spawnBurst(an.pivot, an.color); }
+          if (k >= 1) {
+            if (mesh) { mesh.scale.set(1, 1, 1); mesh.position.set(0, 0, 0); mesh.visible = true; }
+            anims.splice(i, 1);
+            if (an.kind === 'out') {
+              ornaments = ornaments.filter(function (o) { return o.id !== an.id; });
+              if (apiRef) apiRef.rebuild();
+            }
+            continue;
+          }
+          if (!mesh) continue;
+          var s, drop = 0, pv = an.pivot;
+          if (an.kind === 'in') { s = Math.max(0.001, easeOutBack(k)); drop = (1 - k) * (1 - k) * 16; mesh.visible = true; }
+          else s = Math.max(0.001, 1 - k * k);
+          mesh.scale.setScalar(s);
+          mesh.position.set(pv[0] * (1 - s), pv[1] * (1 - s) + drop, pv[2] * (1 - s));
+        }
+        for (i = bursts.length - 1; i >= 0; i--) {
+          var b = bursts[i], bk = (t - b.t0) / 800, arr = b.pts.geometry.attributes.position.array, q;
+          if (bk >= 1) { stage.scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); bursts.splice(i, 1); continue; }
+          for (q = 0; q < b.vel.length; q++) {
+            arr[q * 3] = b.pivot[0] + b.vel[q][0] * bk;
+            arr[q * 3 + 1] = b.pivot[1] + b.vel[q][1] * bk - 14 * bk * bk;
+            arr[q * 3 + 2] = b.pivot[2] + b.vel[q][2] * bk;
+          }
+          b.pts.geometry.attributes.position.needsUpdate = true;
+          b.pts.material.opacity = 1 - bk;
+        }
+        if (fireTick) fireTick(t);
+      }
+
+      // ---- Living room: a preview-only backdrop (never part of the model or the export) ----
+      var fireTick = null;
+      function rnd(seed) { return function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+      function canvasTex(T, w, h, draw, rx, ry) {
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        draw(c.getContext('2d'), w, h);
+        var tex = new T.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = T.RepeatWrapping;
+        tex.repeat.set(rx || 1, ry || 1);
+        tex.anisotropy = 4;
+        return tex;
+      }
+
+      function buildRoom(T, scene) {
+        var HW = 170, H = 190, FX = -72, Z0 = -HW, DP = 20;
+        var group = new T.Group();
+        scene.add(group);
+        function std(o) { o.roughness = o.roughness === undefined ? 0.9 : o.roughness; o.metalness = 0; return new T.MeshStandardMaterial(o); }
+        function plane(w, h, mat, x, y, z, ry, rx) {
+          var m = new T.Mesh(new T.PlaneGeometry(w, h), mat);
+          m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0); m.receiveShadow = true; group.add(m); return m;
+        }
+        function box(w, h, d, mat, x, y, z) {
+          var m = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+          m.position.set(x, y, z); m.receiveShadow = true; group.add(m); return m;
+        }
+
+        var floorTex = canvasTex(T, 512, 512, function (g, w, h) {
+          var R = rnd(11), planks = 8, ph = h / planks, i, x, j;
+          for (i = 0; i < planks; i++) {
+            for (x = -R() * w * 0.6; x < w; x += w * 0.62) {
+              g.fillStyle = 'rgb(' + Math.round(176 + R() * 28) + ',' + Math.round(120 + R() * 22) + ',' + Math.round(78 + R() * 16) + ')';
+              g.fillRect(x, i * ph, w * 0.62, ph);
+              g.fillStyle = 'rgba(70,40,20,0.55)'; g.fillRect(x, i * ph, 2, ph);
+              g.strokeStyle = 'rgba(90,55,30,0.18)'; g.lineWidth = 1;
+              for (j = 0; j < 3; j++) { g.beginPath(); g.moveTo(x, i * ph + R() * ph); g.lineTo(x + w * 0.62, i * ph + R() * ph); g.stroke(); }
+            }
+            g.fillStyle = 'rgba(70,40,20,0.6)'; g.fillRect(0, i * ph, w, 2);
+          }
+        }, 4, 4);
+        plane(HW * 2, HW * 2, std({ map: floorTex }), 0, -0.5, 0, 0, -Math.PI / 2).name = 'floor';
+
+        var paperTex = canvasTex(T, 256, 256, function (g, w, h) {
+          var i;
+          g.fillStyle = '#f6e7cf'; g.fillRect(0, 0, w, h);
+          g.fillStyle = 'rgba(214,170,124,0.35)';
+          for (i = 0; i < w; i += 64) g.fillRect(i, 0, 22, h);
+          g.fillStyle = 'rgba(200,60,60,0.35)';
+          for (i = 0; i < w; i += 64) { g.beginPath(); g.arc(i + 11, 64, 4, 0, TAU); g.arc(i + 11, 192, 4, 0, TAU); g.fill(); }
+        }, 6, 3.4);
+        var paper = std({ map: paperTex });
+        plane(HW * 2, H, paper, 0, H / 2 - 0.5, -HW, 0);
+        plane(HW * 2, H, paper, -HW, H / 2 - 0.5, 0, Math.PI / 2);
+        plane(HW * 2, H, paper, HW, H / 2 - 0.5, 0, -Math.PI / 2);
+        plane(HW * 2, H, paper, 0, H / 2 - 0.5, HW, Math.PI);
+        plane(HW * 2, HW * 2, std({ color: 0xfaf1e2 }), 0, H - 0.5, 0, 0, Math.PI / 2);
+
+        var wood = std({ color: 0x8a5a3c });
+        box(HW * 2, 42, 1.4, wood, 0, 20.5, -HW + 0.7);
+        box(1.4, 42, HW * 2, wood, -HW + 0.7, 20.5, 0);
+        box(1.4, 42, HW * 2, wood, HW - 0.7, 20.5, 0);
+        box(HW * 2, 3, 2.4, std({ color: 0xa87650 }), 0, 43, -HW + 1.2);
+        box(2.4, 3, HW * 2, std({ color: 0xa87650 }), -HW + 1.2, 43, 0);
+        box(2.4, 3, HW * 2, std({ color: 0xa87650 }), HW - 1.2, 43, 0);
+
+        // Rug under the tree
+        var rugTex = canvasTex(T, 512, 512, function (g, s) {
+          var c = s / 2, i, a;
+          function ring(r, col) { g.fillStyle = col; g.beginPath(); g.arc(c, c, r * c, 0, TAU); g.fill(); }
+          ring(1, '#b3262e'); ring(0.93, '#f6ead3'); ring(0.88, '#2e7d4f'); ring(0.8, '#f6ead3'); ring(0.74, '#c93a43');
+          g.fillStyle = '#f6ead3';
+          for (i = 0; i < 28; i++) { a = (i / 28) * TAU; g.beginPath(); g.arc(c + Math.cos(a) * 0.62 * c, c + Math.sin(a) * 0.62 * c, 7, 0, TAU); g.fill(); }
+          ring(0.5, '#f6ead3'); ring(0.44, '#2e7d4f');
+          g.strokeStyle = '#f6ead3'; g.lineWidth = 7; g.lineCap = 'round';
+          for (i = 0; i < 6; i++) { a = (i / 6) * Math.PI; g.beginPath(); g.moveTo(c + Math.cos(a) * 0.38 * c, c + Math.sin(a) * 0.38 * c); g.lineTo(c - Math.cos(a) * 0.38 * c, c - Math.sin(a) * 0.38 * c); g.stroke(); }
+        });
+        rugTex.wrapS = rugTex.wrapT = T.ClampToEdgeWrapping;
+        var rug = new T.Mesh(new T.CylinderGeometry(72, 72, 0.7, 72), [std({ color: 0xb3262e }), std({ map: rugTex }), std({ color: 0x8a1c22 })]);
+        rug.scale.z = 0.82; rug.position.set(0, -0.25, 6); rug.receiveShadow = true; group.add(rug);
+
+        // Fireplace on the back wall
+        function brick(w, h) {
+          var tex = canvasTex(T, 320, 112, function (g, cw, ch) {
+            var R = rnd(5), r, x;
+            g.fillStyle = '#d9cbb6'; g.fillRect(0, 0, cw, ch);
+            for (r = 0; r < 4; r++) {
+              for (x = (r % 2 ? -40 : 0); x < cw; x += 80) {
+                g.fillStyle = 'rgb(' + Math.round(150 + R() * 30) + ',' + Math.round(66 + R() * 20) + ',' + Math.round(50 + R() * 14) + ')';
+                g.fillRect(x + 2, r * 28 + 2, 76, 24);
+              }
+            }
+          }, w / 80, h / 28);
+          return std({ map: tex });
+        }
+        var zf = Z0 + DP;
+        box(36, 64, DP, brick(36, 64), FX - 49, 32, Z0 + DP / 2);
+        box(36, 64, DP, brick(36, 64), FX + 49, 32, Z0 + DP / 2);
+        box(134, 12, DP, brick(134, 12), FX, 58, Z0 + DP / 2);
+        box(96, H - 70, 12, brick(96, H - 70), FX, 70 + (H - 70) / 2, Z0 + 6);
+        box(150, 6, DP + 8, std({ color: 0xa87650 }), FX, 67, Z0 + (DP + 8) / 2);
+        box(110, 3, 34, std({ color: 0x9a948c }), FX, 1, zf + 10);
+        plane(62, 52, std({ color: 0x15100d }), FX, 26, Z0 + 0.4, 0);
+        // logs and flames
+        var logMat = std({ color: 0x5b3a22 });
+        [[-2, 4, 9, 0.35], [3, 4, 14, -0.3]].forEach(function (l) {
+          var log = new T.Mesh(new T.CylinderGeometry(4, 4, 44, 10), logMat);
+          log.rotation.z = Math.PI / 2; log.rotation.y = l[3]; log.position.set(FX + l[0], l[1], Z0 + l[2]); group.add(log);
+        });
+        var flames = [];
+        [[-10, 0xff6a13, 22, 6.5], [0, 0xffa31a, 30, 8], [10, 0xff7a18, 24, 6.5], [-3, 0xffd75e, 18, 5], [4, 0xfff0a8, 12, 3.4]].forEach(function (f, i) {
+          var geo = new T.ConeGeometry(f[3], f[2], 12);
+          geo.translate(0, f[2] / 2, 0);
+          var m = new T.Mesh(geo, new T.MeshBasicMaterial({ color: f[1], transparent: true, opacity: 0.93 }));
+          m.position.set(FX + f[0], 6, Z0 + 12 + (i % 2));
+          group.add(m); flames.push(m);
+        });
+        var fireLight = new T.PointLight(0xff8a3d, 1.2, 380, 1.4);
+        fireLight.position.set(FX, 24, Z0 + 38);
+        group.add(fireLight);
+        // mantel dressing: garland, candles, wreath, stockings
+        var green = std({ color: 0x2f8f4e }), red = std({ color: 0xd63a40 }), gold = std({ color: 0xf2b53a, roughness: 0.4 });
+        var garland = new T.Mesh(new T.CylinderGeometry(2.6, 2.6, 146, 10), green);
+        garland.rotation.z = Math.PI / 2; garland.position.set(FX, 72.6, Z0 + 18); group.add(garland);
+        var gx;
+        for (gx = -66; gx <= 66; gx += 15) {
+          var bead = new T.Mesh(new T.SphereGeometry(2.6, 10, 8), Math.round(gx / 15) % 2 ? red : gold);
+          bead.position.set(FX + gx, 74, Z0 + 21); group.add(bead);
+        }
+        [-58, 58].forEach(function (cx) {
+          var candle = new T.Mesh(new T.CylinderGeometry(2.6, 2.6, 13, 10), std({ color: 0xfaf3df }));
+          candle.position.set(FX + cx, 76.5, Z0 + 16); group.add(candle);
+          var fl = new T.Mesh(new T.SphereGeometry(1.7, 8, 8), new T.MeshBasicMaterial({ color: 0xffd75e }));
+          fl.scale.y = 1.7; fl.position.set(FX + cx, 85, Z0 + 16); group.add(fl);
+        });
+        var wreath = new T.Mesh(new T.TorusGeometry(14, 3.6, 10, 28), green);
+        wreath.position.set(FX, 118, Z0 + 13); group.add(wreath);
+        [[-6, 4], [6, 4]].forEach(function (b) {
+          var wing = new T.Mesh(new T.SphereGeometry(4.5, 10, 8), red);
+          wing.scale.set(1.3, 0.8, 0.5); wing.position.set(FX + b[0], 104.5, Z0 + 17); wing.rotation.z = b[0] > 0 ? -0.5 : 0.5; group.add(wing);
+        });
+        var knot = new T.Mesh(new T.SphereGeometry(2.4, 8, 8), red);
+        knot.position.set(FX, 104.8, Z0 + 18); group.add(knot);
+        function stocking(x, col) {
+          var s = new T.Shape();
+          s.moveTo(-5, 0); s.lineTo(5, 0); s.lineTo(5, -15); s.lineTo(13, -17); s.lineTo(19, -21); s.lineTo(17, -26); s.lineTo(10, -26); s.lineTo(-3, -20); s.lineTo(-5, -14); s.closePath();
+          var m = new T.Mesh(new T.ExtrudeGeometry(s, { depth: 3, bevelEnabled: false }), std({ color: col }));
+          m.position.set(x, 68, Z0 + DP + 9.5); group.add(m);
+          var cuff = new T.Mesh(new T.BoxGeometry(11.6, 4.4, 3.8), std({ color: 0xf8f5ee }));
+          cuff.position.set(x, 66.4, Z0 + DP + 11); group.add(cuff);
+        }
+        stocking(FX - 50, 0xd63a40); stocking(FX, 0x2e8b57); stocking(FX + 50, 0xd63a40);
+
+        // Window with a snowy night outside
+        var nightTex = canvasTex(T, 128, 160, function (g, w, h) {
+          var R = rnd(3), i, grad = g.createLinearGradient(0, 0, 0, h);
+          grad.addColorStop(0, '#0f1b3d'); grad.addColorStop(1, '#3a5aa0');
+          g.fillStyle = grad; g.fillRect(0, 0, w, h);
+          g.fillStyle = '#f7f3d6'; g.beginPath(); g.arc(94, 34, 11, 0, TAU); g.fill();
+          g.fillStyle = '#0f1b3d'; g.beginPath(); g.arc(99, 31, 10, 0, TAU); g.fill();
+          g.fillStyle = '#ffffff';
+          for (i = 0; i < 40; i++) { g.globalAlpha = 0.4 + R() * 0.6; g.fillRect(R() * w, R() * h * 0.8, 2, 2); }
+          g.globalAlpha = 1; g.fillStyle = '#e8f1ff'; g.beginPath(); g.moveTo(0, h); g.lineTo(0, h - 26); g.quadraticCurveTo(w / 2, h - 44, w, h - 22); g.lineTo(w, h); g.fill();
+        });
+        nightTex.wrapS = nightTex.wrapT = T.ClampToEdgeWrapping;
+        var WX = 82, WY = 122, white = std({ color: 0xf8f4ec });
+        box(70, 86, 3, white, WX, WY, Z0 + 1.5);
+        plane(60, 76, new T.MeshBasicMaterial({ map: nightTex }), WX, WY, Z0 + 3.1, 0);
+        box(60, 1.8, 2, white, WX, WY, Z0 + 3.6); box(1.8, 76, 2, white, WX, WY, Z0 + 3.6);
+        box(78, 4, 8, white, WX, WY - 44, Z0 + 4);
+        box(10, 92, 4, red, WX - 40, WY, Z0 + 5); box(10, 92, 4, red, WX + 40, WY, Z0 + 5);
+
+        // Pictures on the side walls
+        function frame(x, y, z, ry, col) {
+          var pic = canvasTex(T, 64, 48, function (g, w, h) {
+            var grad = g.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, col[0]); grad.addColorStop(1, col[1]);
+            g.fillStyle = grad; g.fillRect(0, 0, w, h);
+            g.fillStyle = '#fff6c9'; g.beginPath(); g.arc(46, 14, 6, 0, TAU); g.fill();
+            g.fillStyle = col[2]; g.beginPath(); g.moveTo(0, h); g.lineTo(18, 20); g.lineTo(34, h); g.fill();
+            g.beginPath(); g.moveTo(22, h); g.lineTo(44, 26); g.lineTo(64, h); g.fill();
+          });
+          pic.wrapS = pic.wrapT = T.ClampToEdgeWrapping;
+          var fr = new T.Group();
+          var outer = new T.Mesh(new T.BoxGeometry(40, 30, 2.4), std({ color: 0x6d4328 }));
+          fr.add(outer);
+          var inner = new T.Mesh(new T.PlaneGeometry(34, 24), new T.MeshBasicMaterial({ map: pic }));
+          inner.position.z = 1.3; fr.add(inner);
+          fr.position.set(x, y, z); fr.rotation.y = ry; group.add(fr);
+        }
+        frame(HW - 1.3, 112, -35, -Math.PI / 2, ['#7ec3f0', '#d6ecff', '#5a7fa8']);
+        frame(HW - 1.3, 112, 45, -Math.PI / 2, ['#ffb67a', '#ffe3b8', '#8a5a6a']);
+        frame(-HW + 1.3, 112, 20, Math.PI / 2, ['#9ad0a0', '#e1f5dc', '#4f8a5a']);
+
+        // Presents on the rug
+        function present(x, z, w, h, d, col, rib, ry) {
+          var g = new T.Group();
+          var body = new T.Mesh(new T.BoxGeometry(w, h, d), std({ color: col }));
+          body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+          var r1 = new T.Mesh(new T.BoxGeometry(w + 0.5, h + 0.4, 2.4), std({ color: rib })); r1.position.y = h / 2; g.add(r1);
+          var r2 = new T.Mesh(new T.BoxGeometry(2.4, h + 0.4, d + 0.5), std({ color: rib })); r2.position.y = h / 2; g.add(r2);
+          var bow = new T.Mesh(new T.SphereGeometry(2.6, 10, 8), std({ color: rib })); bow.scale.y = 0.7; bow.position.y = h + 1.2; g.add(bow);
+          g.position.set(x, 0, z); g.rotation.y = ry; group.add(g);
+        }
+        present(-46, 22, 16, 13, 16, 0xd63a40, 0xf6e7a6, 0.4);
+        present(50, 18, 14, 10, 20, 0x3b82f6, 0xf8f5ee, -0.3);
+        present(-30, 50, 12, 9, 12, 0x2e8b57, 0xd63a40, 0.8);
+
+        fireTick = function (t) {
+          flames.forEach(function (f, i) {
+            f.scale.set(1 + 0.12 * Math.sin(t / 130 + i * 1.7), 1 + 0.2 * Math.sin(t / 105 + i * 2.3) + 0.1 * Math.sin(t / 47 + i), 1);
+            f.rotation.z = 0.08 * Math.sin(t / 170 + i * 1.3);
+          });
+          fireLight.intensity = 1.15 + 0.22 * Math.sin(t / 90) + 0.12 * Math.sin(t / 37);
+        };
+        return group;
+      }
+
+      // ---- The Decorate tab ----
+      function mountDecorate(container, api) {
+        apiRef = api;
+        container.appendChild(el('h2', { class: 'mm-section-title' }, 'Decorate your tree'));
+        container.appendChild(el('p', { class: 'mm-note' }, 'Tap a picture, then tap the tree to hang it. Keep tapping to add more!'));
+        var tiles = [];
+        function mark() {
+          tiles.forEach(function (t) { t.el.setAttribute('aria-pressed', String(t.type === pick.type && (t.type === 'erase' || t.color === pick.color))); });
+          var hint = document.getElementById('mm-hint');
+          if (hint) hint.textContent = pick.type === 'erase' ? 'Tap an ornament to take it off' : 'Tap the tree to hang a ' + colorName(pick.color).toLowerCase() + ' ' + ITEM_NAME[pick.type].toLowerCase();
+        }
+        function tile(parent, type, color, label) {
+          var b = el('button', { class: 'ht-tile', type: 'button', title: label, 'aria-label': label });
+          b.innerHTML = tileIcon(type, color || '#f9a8b8');
+          b.addEventListener('click', function () {
+            pick = { type: type, color: color || pick.color };
+            mark();
+            api.toast(type === 'erase' ? 'Eraser: tap an ornament to remove it' : label + ' picked');
+          });
+          tiles.push({ el: b, type: type, color: color });
+          parent.appendChild(b);
+        }
+        ITEMS.forEach(function (d) {
+          var row = el('div', { class: 'ht-row' });
+          row.appendChild(el('span', { class: 'ht-label' }, d.name));
+          var box = el('div', { class: 'ht-tiles' });
+          COLORS.forEach(function (c) { tile(box, d.id, c.hex, c.name + ' ' + d.name); });
+          row.appendChild(box);
+          container.appendChild(row);
+        });
+        var tools = el('div', { class: 'ht-tools' });
+        tile(tools, 'erase', null, 'Eraser');
+        var count = el('p', { class: 'mm-note' }, '');
+        var undo = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (ornaments.length) { ornaments.pop(); api.rebuild(); api.toast('Took one off'); } } }, 'Undo');
+        var clear = el('button', { class: 'mm-btn', type: 'button', onclick: function () { if (ornaments.length) { ornaments = []; anims = []; api.rebuild(); api.toast('Fresh tree!'); } } }, 'Clear all');
+        var sur = el('button', { class: 'mm-btn mm-btn--solid', type: 'button', onclick: function () { surprise(api); } }, 'Surprise me!');
+        tools.appendChild(undo); tools.appendChild(clear); tools.appendChild(sur);
+        container.appendChild(tools);
+        container.appendChild(count);
+        refreshPanel = function () {
+          count.textContent = ornaments.length + (ornaments.length === 1 ? ' ornament' : ' ornaments') + ' on your tree';
+          undo.disabled = clear.disabled = ornaments.length === 0;
+        };
+        mark();
+        refreshPanel();
+        container.appendChild(el('p', { class: 'mm-note' }, 'Everything is fused to the tree so it prints as one piece. The room is just for fun and is not printed. Paint any part in the Color tab.'));
+
+        // All the old Parametric controls (tree shape, topper, hook, styles) live here too, folded away.
+        var frag = api.takeParams();
+        if (frag.firstChild && frag.firstChild.tagName === 'H2') frag.removeChild(frag.firstChild);
+        var inner = el('div', {});
+        inner.appendChild(frag);
+        var acc = el('details', { class: 'mm-acc ht-shape' }, [el('summary', { class: 'mm-acc-title' }, 'Tree shape, topper & styles'), el('div', { class: 'mm-acc-body' }, [inner])]);
+        treeAcc = acc;
+        container.appendChild(acc);
+      }
+      var treeAcc = null;
+
       window.MM_GENERATOR = {
         code: 'MM-008',
         category: 'CHRISTMAS // TREES',
         title: 'Holiday Tree',
         fileName: 'Holiday_Tree',
         printerLink: '../index.html#map-screen',
-        defaultColor: '#86efac',
+        customStage: true,
+        hideModelTab: true,
+        tabsFirst: true,
+        coloredTabs: ['decorate'],
+        defaultColor: '#2f9e5b',
         palette: [
-          { name: 'Pine Green', color: '#86efac' },
+          { name: 'Pine Green', color: '#2f9e5b' },
           { name: 'Snow White', color: '#f1f5f9' },
-          { name: 'Candy Red', color: '#f87171' },
-          { name: 'Gold', color: '#fde047' },
-          { name: 'Bark Brown', color: '#d6a578' },
+          { name: 'Candy Red', color: '#e5484d' },
+          { name: 'Gold', color: '#f6b93b' },
+          { name: 'Bark Brown', color: '#8b5a2b' },
           { name: 'Ice Blue', color: '#93c5fd' },
-          { name: 'Berry Purple', color: '#d8b4fe' },
+          { name: 'Berry Purple', color: '#a78bfa' },
           { name: 'Midnight', color: '#334155' }
         ],
-        partNames: { tree: 'Tree boughs', trunk: 'Trunk', base: 'Snow base', ornament: 'Ornament', hook: 'Ornament hook', topper: 'Topper' },
+        partNames: PART_NAMES,
 
         parameters: PARAMS,
         presets: STYLES.map(function (s) { return { label: s.name === 'Classic' ? 'Default tree' : s.name, values: withDefaults(DEFAULTS, s.values) }; }),
 
         tabs: [{
-          id: 'ornaments',
-          label: 'Ornaments',
-          hint: 'Pick an ornament shape, then click the tree to hang it',
-          mount: function (container, api) {
-            mountStampPanel(container, api, ['ball', 'star', 'heart', 'diamond', 'bell', 'cane', 'snow'], 'Ornament shapes (click the tree to place)', 'ornament', [{
-              label: 'Auto-decorate',
-              run: function (a) { stamps = autoDecorate(a.params, layout(a.params), 12); a.rebuild(); a.toast('Added balls'); }
-            }]);
-            container.appendChild(el('p', { class: 'mm-note' }, 'Ornaments sit on the upper surface of the boughs. Each one is its own part you can paint. If you reshape the tree afterwards, clear and place them again.'));
-          },
+          id: 'decorate',
+          label: 'Decorate',
+          hint: 'Tap a picture, then tap the tree to hang it',
+          mount: mountDecorate,
           onHover: function (hit, api) {
-            if (!hit || hit.meshName !== 'tree' || hit.normal.y < 0.12) { api.setPreview(null); return; }
-            api.setPreview({ positions: stampPositions({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() }, 3.4, 1.4) });
+            if (!hit) { api.setPreview(null); return; }
+            if (pick.type === 'erase') { api.setPreview(hit.meshName.indexOf('orn_') === 0 && ornGeo[hit.meshName] ? { positions: ornGeo[hit.meshName] } : null); return; }
+            if (hit.meshName !== 'tree' || hit.normal.y < 0.12) { api.setPreview(null); return; }
+            api.setPreview({ positions: stampPositions({ type: pick.type, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() }, 3.8, 1.6) });
           },
           onPick: function (hit, api) {
-            if (hit.meshName !== 'tree') return;
-            if (hit.normal.y < 0.12) { api.toast('Tip: place ornaments on the top of the boughs, not underneath.'); return; }
-            stamps.push({ type: stampType, size: api.params.stampSize, rotation: api.params.stampRotation, point: hit.point.toArray(), normal: hit.normal.toArray() });
+            if (pick.type === 'erase') {
+              if (hit.meshName.indexOf('orn_') === 0) removeOrnament(parseInt(hit.meshName.slice(4), 10));
+              else api.toast('Tap an ornament to take it off');
+              return;
+            }
+            if (hit.meshName !== 'tree' || hit.normal.y < 0.12) { api.toast('Tap the green branches to hang it'); return; }
+            var p = api.params, local = stage ? stage.modelGroup.worldToLocal(hit.point.clone()) : hit.point;
+            addOrnament({ type: pick.type, color: pick.color, size: p.stampSize, rotation: p.stampRotation, point: local.toArray(), normal: hit.normal.toArray(), h: p.height, r: p.baseR }, 0);
+            jiggleT0 = clock();
             api.rebuild();
-            api.toast('Hung ' + STAMP_NAMES[stampType]);
+            api.toast(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
           }
         }],
 
-        embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
-        build: build
+        embedState: {
+          get: function () { return ornaments; },
+          set: function (v) {
+            ornaments = (v || []).map(function (o) { o.color = o.color || '#f6b93b'; if (!o.id) o.id = nextId; nextId = Math.max(nextId, o.id) + 1; return o; });
+            seeded = true;
+          }
+        },
+
+        onStage: function (env) {
+          if (/[?&]embed=workshop\b/.test(location.search)) return;
+          var T = env.THREE;
+          env.container.style.background = 'linear-gradient(#2b1d24, #4a2c2a)';
+          env.plateMesh.parent.visible = false;
+          env.controls.maxDistance = 300;
+          env.hemi.color.set(0xfff0dd); env.hemi.groundColor.set(0x8a5a44); env.hemi.intensity = 0.8;
+          env.key.color.set(0xffe9c9); env.key.intensity = 0.7;
+          env.rim.color.set(0xffb27a); env.rim.intensity = 0.25;
+          var spark = canvasTex(T, 64, 64, function (g) {
+            var grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.35, 'rgba(255,255,255,0.7)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+          });
+          spark.wrapS = spark.wrapT = T.ClampToEdgeWrapping;
+          stage = { T: T, scene: env.scene, modelGroup: env.modelGroup, spark: spark };
+          buildRoom(T, env.scene);
+          // Tree shape controls go after the ornament sliders.
+          var body = document.getElementById('mm-body-decorate');
+          if (body && treeAcc) body.appendChild(treeAcc);
+        },
+        onFrame: tick,
+
+        testSetup: function (p) {
+          var g = layout(p), n = Math.max(1, g.N - 1);
+          ornaments = [];
+          ITEMS.forEach(function (d, i) {
+            var sp = surfacePoint(p, g, i % n, 0.3, i * 1.1);
+            ornaments.push({ id: nextId++, type: d.id, color: COLORS[i % COLORS.length].hex, size: p.stampSize, rotation: 0, point: sp.point, normal: sp.normal, ref: { h: p.height, r: p.baseR } });
+          });
+          seeded = true;
+        },
+        build: function (p, api) { T3 = (api && api.THREE) || T3; return build(p, api); }
       };
     })();
   </script>

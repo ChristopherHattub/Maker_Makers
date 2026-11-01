@@ -58,6 +58,8 @@ The standalone download depends on those exact tags (see [Standalone download](#
 | `palette` | yes | `[{ name, color }]`. Shown as swatches in the Color tool. Eight entries lay out as two rows. |
 | `partNames` | no | Maps a mesh name to a label, for example `{ body: 'Ghost body', detail: 'Stamp' }`. |
 | `printMeshes(params, api, built)` | no | Returns the meshes that are really printed, when they differ from the display pose (see [Display pose and print plate](#display-pose-and-print-plate)). |
+| `coloredTabs` | no | Array of generator tab ids that show the part colors (mesh `color` fields and Color-tab paint) instead of the neutral Parametric grey. Holiday Tree's Decorate tab uses it. |
+| `hideModelTab` | no | Hides the Parametric tab. Move its controls into a generator tab with `api.takeParams()` (Holiday Tree does). |
 | `showcase` | no | Jewellery render for one tab (see [Showcase render](#showcase-render)). |
 | `minFrame` | no | Smallest model size in mm the camera frames (default 120). Set it for small models. |
 | `printSettings` | no | Only `material` is read (default `'PLA'`): the Print tab's starting material. |

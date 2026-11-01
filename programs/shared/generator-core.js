@@ -1410,7 +1410,7 @@
 
   // Writes the colors for the current tab. Parametric shows the neutral model; Color shows paint.
   function refreshColors() {
-    var colorTab = activeTab === 'color' || activeTab === 'print'; // Print preview shows the painted colors too
+    var colorTab = activeTab === 'color' || activeTab === 'print' || (cfg.coloredTabs || []).indexOf(activeTab) >= 0; // Print preview (and cfg.coloredTabs) show the painted colors too
     if (colorTab) ensureParts();
     modelMeshes.forEach(function (mesh, meshIndex) {
       var colorAttr = mesh.geometry.attributes.color;
@@ -1599,7 +1599,7 @@
       sculptRefresh();
     }
     updateCursor();
-    if (isColor || tab === 'print') ensureParts();
+    if (isColor || tab === 'print' || (cfg.coloredTabs || []).indexOf(tab) >= 0) ensureParts();
     applyModelMaterial();
     updatePrintLook();
     refreshColors();
