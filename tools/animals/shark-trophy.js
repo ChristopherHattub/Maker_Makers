@@ -2,14 +2,14 @@
       // Shark Fin Trophy: a shark's back breaking the surface, with its fin and tail tip, on a stepped plinth.
       // The back, fin and tail are sculpted as one surface, blended into rolling waves with white caps.
       // -----------------------------------------------------------------------
-      function buildSharkFin(p) {
-        var sc = new Scene(), S = new Sculpt(Math.max(1.35, p.base / 82)), R = p.base / 2, hP = p.plinth, square = Math.round(p.shape) === 1, A = p.waveH, W = p.waves, h = p.height, c = p.chord, fins = Math.round(p.fins), i;
+      function buildSharkFin(p, api) {
+        var sc = new Scene(), S = new Sculpt(Math.max(1.35, p.base / 82)).useEdits(api), R = p.base / 2, hP = p.plinth, square = Math.round(p.shape) === 1, A = p.waveH, W = p.waves, h = p.height, c = p.chord, fins = Math.round(p.fins), i;
         var rw = R - 3, zk = 0.72, blue = '#60a5fa', fin = '#93c5fd', foam = '#f8fafc', gold = '#fbbf24', sea = hP + A * 0.5, freq = (TAU * W) / (2 * rw);
         // plinth: a chamfered foot with a gold band and a top step
-        var pw = square ? 5 : 2;
+        var pw = square ? 5 : 2, steps = [];
         function step(r0, y0, y1, color, name) {
           var cm = Math.min(1.8, (y1 - y0) * 0.3);
-          sc.add(name, 'b', loft([{ y: y0, cx: 0, cz: 0, rx: r0, rz: r0 * zk }, { y: y1 - cm, cx: 0, cz: 0, rx: r0, rz: r0 * zk }, { y: y1, cx: 0, cz: 0, rx: r0 - cm, rz: (r0 - cm) * zk }], 96, { pow: pw, poleLift: 0 }).tris, color);
+          steps.push([name, loft([{ y: y0, cx: 0, cz: 0, rx: r0, rz: r0 * zk }, { y: y1 - cm, cx: 0, cz: 0, rx: r0, rz: r0 * zk }, { y: y1, cx: 0, cz: 0, rx: r0 - cm, rz: (r0 - cm) * zk }], 96, { pow: pw, poleLift: 0 }).tris, color]);
         }
         step(R + 3, 0, hP * 0.44, '#334155', 'plinth');
         step(R + 0.5, hP * 0.4, hP * 0.62, gold, 'band');
@@ -21,6 +21,7 @@
           return Math.max(hP + 1.2, hP + 1.2 + edge * (A * 0.55 + A * 0.34 * wv));
         }
         function shark(x0, z0, sc1, nm) {
+          S.piece(nm === 'fin' ? 'shark' : 'shark2');
           var H = h * sc1, C = c * sc1, sw = p.sweep * H, T = p.thick * sc1;
           S.path('back', [[x0 + C * 2.1, sea - 5, z0, 4], [x0 + C * 0.8, sea + 1.5, z0, 9 * sc1], [x0 - C * 0.7, sea + 2, z0, 9 * sc1], [x0 - C * 2.2, sea - 3, z0, 3.5]], fin, 3);
           S.paint('belly', [x0 + C * 0.6, sea - 2, z0 + 10 * sc1], [C * 3, 3.4, 4], foam);
@@ -35,18 +36,20 @@
         shark(rx0 + c * 0.2, fins === 2 ? -rw * zk * 0.3 : 0, 1, 'fin');
         if (fins === 2) shark(-rw * 0.08, rw * zk * 0.38, 0.62, 'fin2');
         S._name('waves', blue);
-        var waveOp = { name: 'waves', k: 2.2, lo: [-rw, 0, -rw * zk], hi: [rw, hP + A + 2, rw * zk], d: function (x, y, z) {
+        var waveOp = { piece: 'waves', name: 'waves', k: 2.2, lo: [-rw, 0, -rw * zk], hi: [rw, hP + A + 2, rw * zk], d: function (x, y, z) {
           var sd = square ? Math.pow(Math.pow(Math.abs(x / rw), pw) + Math.pow(Math.abs(z / (rw * zk)), pw), 1 / pw) : Math.hypot(x / rw, z / (rw * zk));
           return Math.max((y - top(x, z)) * 0.8, (sd - 1) * rw * zk);
         } };
         S.ops.push(waveOp);
         // white caps along the crests, and foam where the fin cuts the water
+        S.piece('waves');
         S.paint('foam', [rx0 + c * 1.5, sea + 1, fins === 2 ? -rw * zk * 0.3 : 0], [c * 0.9, 3, 12], foam);
         for (i = 0; i < 5; i++) { var fa = i * 2.5 + 0.7; S.paint('foam', [Math.cos(fa) * rw * 0.72, hP + A * 0.9, Math.sin(fa) * rw * zk * 0.72], [rw * 0.22, A * 0.42 + 0.6, rw * 0.1], foam); }
         S.reach = 0.72;
         S.run();
+        steps.forEach(function (st, si) { S.shell(sc, st[0] === 'band' ? 'band' : 'plinth' + si, st[0], 'b', st[1], st[2]); });
         S.addTo(sc);
-        var es = finishSculpt(sc);
+        var es = finishSculpt(sc, 1, S);
         return es;
       }
       var SHARKFIN_PARAMS = [
@@ -76,6 +79,10 @@
           ['Mini desk fin', { height: 44, chord: 14, thick: 2.5, base: 90, plinth: 9, waveH: 3, waves: 3 }],
           ['Circling pair', { fins: 2, base: 146, height: 70, chord: 20 }],
           ['Square plaque', { shape: 1, sweep: 0.4, plinth: 12 }]
+        ]),
+        sculpt: sculptModule([
+          { id: 'shark', label: 'Shark', section: 'Sea' }, { id: 'shark2', label: 'Second shark', section: 'Sea' }, { id: 'waves', label: 'Waves', section: 'Sea' },
+          { id: 'plinth0', label: 'Plinth foot', section: 'Base' }, { id: 'band', label: 'Gold band', section: 'Base' }, { id: 'plinth2', label: 'Plinth top', section: 'Base' }
         ]),
         build: buildSharkFin
       };

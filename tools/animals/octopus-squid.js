@@ -1,9 +1,10 @@
       // -----------------------------------------------------------------------
       // Octopus & Squid: a soft sculpted mantle, with tentacles and suckers that curl flat on the bed
       // -----------------------------------------------------------------------
-      function buildOcto(p) {
-        var sc = new Scene(), S = new Sculpt(1.25 + 0.2 * p.size * (p.length - 1)), sq = Math.round(p.kind) === 1, n = Math.round(p.arms), i, k;
+      function buildOcto(p, api) {
+        var sc = new Scene(), S = new Sculpt(1.25 + 0.2 * p.size * (p.length - 1)).useEdits(api), sq = Math.round(p.kind) === 1, n = Math.round(p.arms), i, k;
         var pink = sq ? '#fda4af' : '#c084fc', pale = sq ? '#ffe4e6' : '#f3e8ff', deep = sq ? '#fb7185' : '#a855f7', R = 17 * p.size, eyeY, eyeZ, eyeX;
+        S.piece('head');
         if (!sq) {
           S.ell('head', [0, R * 0.7, 0], [R * 1.08, R * 0.8, R * 1.08], pink, 5);    // skirt where the arms start
           S.ell('head', [-R * 0.16, R * 1.75, 0], [R * 1.02, R * 1.3, R * 0.98], pink, 7); // mantle
@@ -13,7 +14,8 @@
         } else {
           S.path('head', [[-R * 2.7, R * 0.42, 0, R * 0.36], [-R * 1.4, R * 0.72, 0, R * 0.86], [-R * 0.2, R * 0.74, 0, R * 0.92], [R * 0.7, R * 0.6, 0, R * 0.72]], pink, 3);
           S.ell('head', [R * 1.1, R * 0.62, 0], [R * 0.72, R * 0.66, R * 0.78], pink, 3);
-          [-1, 1].forEach(function (s) { S.ell('fins', [-R * 2.3, 1.7, s * R * 0.66], [R * 0.82, 1.9, R * 0.86], pale, 1.5); });
+          [-1, 1].forEach(function (s) { S.piece(s < 0 ? 'finL' : 'finR', 'head'); S.ell('fins', [-R * 2.3, 1.7, s * R * 0.66], [R * 0.82, 1.9, R * 0.86], pale, 1.5); });
+          S.piece('head');
           eyeY = R * 0.8; eyeZ = R * 0.5; eyeX = R * 1.1;
           for (i = 0; i < 5; i++) S.paint('spots', [-R * (0.4 + i * 0.42), R * 1.5, (i % 2 ? 1 : -1) * R * 0.3], [R * 0.17, R * 0.3, R * 0.17], deep);
         }
@@ -24,6 +26,7 @@
             var u = k / 7, ang = sq ? a * (1 - 0.25 * u) + sgn * 0.5 * u * u : a + sgn * 1.0 * Math.pow(u, 2), rad = base + len * (sq ? 0.8 : 1) * Math.pow(u, 0.9), r = r0 * (1 - 0.66 * u);
             pts.push([ox + Math.cos(ang) * rad, r * 0.62, Math.sin(ang) * rad, r]);
           }
+          S.piece('arm' + i);
           S.path('arms', pts, pink, 2.5, 4);
           for (k = 1; k < 7; k++) { // suckers along the top of each arm
             var q = pts[k], sr = q[3] * 0.56;
@@ -33,13 +36,17 @@
         S.reach = 0.72;
         S.run();
         [-1, 1].forEach(function (s) {
-          var e = S.hit([eyeX + R * 5, eyeY, s * eyeZ], [-1, 0, 0]), er = R * 0.3;
+          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [eyeX + R * 5, eyeY, s * eyeZ], [-1, 0, 0], 'head');
+          if (!e) return;
+          var er = R * 0.3 * e.k;
+          S.addon(id, e.p, er);
           sc.add('eyes', 'b', dome(e.p, e.n, er, { angle: 48, seg: 26 }), '#f8fafc');
           var rise = (er / Math.sin(deg(48))) * (1 - Math.cos(deg(48)));
-          sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, er * 0.56, { sink: 0.7 }), '#1e293b');
+          var pu = S.sub(s < 0 ? 'pupilL' : 'pupilR', id, vadd(e.p, vmul(e.n, rise * 0.7)), er * 0.56);
+          if (pu) sc.add('pupils', 'b', dome(pu.p, e.n, er * 0.56 * pu.k, { sink: 0.7 }), '#1e293b');
         });
         S.addTo(sc);
-        return finishSculpt(sc);
+        return finishSculpt(sc, 1, S);
       }
 
       var OCTO_PARAMS = [
@@ -65,6 +72,10 @@
           ['Baby octopus', { size: 0.75, arms: 6, length: 1.5 }],
           ['Squid', { kind: 1, arms: 8, length: 1.8, curl: 0.4 }],
           ['Long-armed squid', { kind: 1, arms: 10, length: 2.4, curl: 0.2 }]
+        ]),
+        sculpt: sculptModule([
+          { id: 'head', label: 'Body', section: 'Body' }, { id: 'eyeL', label: 'Left eye', section: 'Body' }, { id: 'pupilL', label: 'Left pupil', section: 'Body', parent: 'eyeL' }, { id: 'eyeR', label: 'Right eye', section: 'Body' }, { id: 'pupilR', label: 'Right pupil', section: 'Body', parent: 'eyeR' }, { id: 'finL', label: 'Left fin', section: 'Body' }, { id: 'finR', label: 'Right fin', section: 'Body' },
+          { id: 'arm0', label: 'Tentacle 1', section: 'Tentacles' }, { id: 'arm1', label: 'Tentacle 2', section: 'Tentacles' }, { id: 'arm2', label: 'Tentacle 3', section: 'Tentacles' }, { id: 'arm3', label: 'Tentacle 4', section: 'Tentacles' }, { id: 'arm4', label: 'Tentacle 5', section: 'Tentacles' }, { id: 'arm5', label: 'Tentacle 6', section: 'Tentacles' }, { id: 'arm6', label: 'Tentacle 7', section: 'Tentacles' }, { id: 'arm7', label: 'Tentacle 8', section: 'Tentacles' }, { id: 'arm8', label: 'Tentacle 9', section: 'Tentacles' }, { id: 'arm9', label: 'Tentacle 10', section: 'Tentacles' }
         ]),
         build: buildOcto
       };

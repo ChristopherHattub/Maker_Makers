@@ -891,12 +891,12 @@ const GENERATORS = [
   },
   {
     slot: 90,
-    title: 'Unicorn & Pegasus',
+    title: 'Horse Builder',
     bundle: 'animals',
-    category: 'ANIMALS // FANTASY',
-    thumbnailUrl: 'assets/thumbnails/unicorn-pegasus.svg',
-    programUrl: 'programs/unicorn-pegasus.html',
-    description: 'A kneeling unicorn, pegasus, winged unicorn or pony: tune neck, head, horn, mane, tail and wings. Prints with no supports. Paint parts in the Color tool and export .STL.'
+    category: 'ANIMALS // WILDLIFE',
+    thumbnailUrl: 'assets/thumbnails/horse-builder.svg',
+    programUrl: 'programs/horse-builder.html',
+    description: 'A horse, pony or unicorn, standing, kneeling or rearing: tune neck, head, legs, mane, tail and face markings. Prints with no supports. Paint parts in the Color tool and export .STL.'
   }
 ];
 

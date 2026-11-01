@@ -1,6 +1,6 @@
 # Animal generators (slots 76-90)
 
-Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Unicorn & Pegasus.
+Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Horse Builder.
 
 ## Files
 
@@ -15,6 +15,16 @@ Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculp
 ## Sculpted animals
 
 Every animal uses `Sculpt` in the kit, except that the Snake and Fish use it only for their heads and the Shark's plinth is lofted. Forms (`ell`, `path`, `plate`) melt into each other with a smooth blend; `carve` cuts grooves, `relief` presses patterns and `paint` recolours a region without changing its shape. `run()` samples them on a grid and works up from the bed, trimming anything not within 45 degrees of the solid below, so a form with nothing under it disappears rather than overhanging. `addTo()` meshes one closed surface, split into paintable entries with a shared `smoothGroup`. Eyes and noses are `dome`s placed afterward with `hit()`. These models are roughly 45,000 to 120,000 triangles and take roughly 0.3 to 2 seconds to rebuild in Node, so sliders on them respond more slowly than on other generators. Features thinner than about two grid cells break up.
+
+## Poses and sliders
+
+Dragon Maker (Sitting, Prowling, Rearing, Asleep), Dog Builder (Sitting, Standing, Lying down, Begging) and Horse Builder (Kneeling, Standing, Rearing) have a Pose option. Every pose has to reach the bed, because the support pass trims anything without solid below it: tails and feet carry raised bodies, and raised limbs climb steeply. Dino Builder shows a separate slider group per species through `showIf`. `reptileEye` gives dinosaurs and dragons small set-in eyes under a sculpted brow. Dragon wings, horns and back fins are smooth shells added with `S.shell`, not sculpted forms, so their edges are clean. While a slider moves, sculpted generators build a coarser mesh and refine it on release.
+
+Owl Stacker and Penguin Pals are built from smooth lofts (`profileLoft`) and shells, not `Sculpt` forms, so they stay crisp and have clean colour edges.
+
+## Sculpt tab
+
+All fifteen animals have the Sculpt tab ([generator-styling.md](generator-styling.md#sculpt-tab-experimental-cfgsculpt)). In a source file, `S.piece(id, parent)` names the forms that follow it, `S.face` and `S.sub` place eyes and other surface details as pieces, and `S.shell` adds a rigid shell (a fin, a bead, the Shark's plinth) as a piece. `sculptModule` lists the pieces with their section and parent. On the Snake and Fish, moving a bead or the head can break the print-in-place joint it belongs to.
 
 ## Staying support-free
 

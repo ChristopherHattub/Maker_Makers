@@ -289,6 +289,14 @@
       "overhang"
     ]
   },
+  "dog-builder": {
+    "Lying down": [
+      "overhang"
+    ],
+    "Begging": [
+      "overhang"
+    ]
+  },
   "egg-basket": {
     "defaults": [
       "overhang"
@@ -419,7 +427,7 @@
     ]
   },
   "flexi-fish": {
-    "Tiny fish": [
+    "Straight (easy print)": [
       "overhang"
     ]
   },
@@ -722,6 +730,29 @@
     ],
     "Mini 3-tier": [
       "floating",
+      "overhang"
+    ]
+  },
+  "horse-builder": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default horse": [
+      "overhang"
+    ],
+    "Rearing horse": [
+      "overhang"
+    ],
+    "Resting horse": [
+      "overhang"
+    ],
+    "Pony": [
+      "overhang"
+    ],
+    "Unicorn": [
+      "overhang"
+    ],
+    "Long-maned horse": [
       "overhang"
     ]
   },

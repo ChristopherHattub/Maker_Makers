@@ -4037,9 +4037,9 @@
       "source": "holo",
       "poster": "poster-monster-maker.webp"
     },
-    "unicorn-pegasus": {
+    "horse-builder": {
       "slot": 90,
-      "file": "holo-unicorn-pegasus.webp",
+      "file": "holo-horse-builder.webp",
       "width": 1728,
       "height": 1152,
       "cols": 6,
@@ -4074,7 +4074,7 @@
         23
       ],
       "source": "holo",
-      "poster": "poster-unicorn-pegasus.webp"
+      "poster": "poster-horse-builder.webp"
     }
   }
 }
