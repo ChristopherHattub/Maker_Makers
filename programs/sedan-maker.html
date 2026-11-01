@@ -271,8 +271,8 @@
 
       function lowerBody(m, p, lay) {
         var rings = [], xa = m.xa, Rw = m.Rw;
-        function run(a, b) {
-          stationsBetween(a, b, Math.max(4, Math.round((b - a) / 2.5))).forEach(function (x) { rings.push(bodySection(m, p, lay, x, null)); });
+        function run(a, b, min) {
+          stationsBetween(a, b, Math.max(min, Math.round((b - a) / 1.5))).forEach(function (x) { rings.push(bodySection(m, p, lay, x, null)); });
         }
         function arch(xc) {
           var i, t, dx;
@@ -282,7 +282,7 @@
             rings.push(bodySection(m, p, lay, xc + dx, { dx: dx }));
           }
         }
-        run(-m.xe, -xa - Rw); arch(-xa); run(-xa + Rw, xa - Rw); arch(xa); run(xa + Rw, m.xe);
+        run(-m.xe, -xa - Rw, 30); arch(-xa); run(-xa + Rw, xa - Rw, 4); arch(xa); run(xa + Rw, m.xe, 30);
         return loft(rings);
       }
 
@@ -343,12 +343,39 @@
         return list.length ? concat(list) : null;
       }
 
+      // Half-width of the body at height y at station x, or -1 above the deck. Same outline as bodySection (ignoring wells).
+      function bodyWidthAt(m, p, x, y) {
+        var hw = m.hw(x), y1 = m.D(x), cb = Math.min(1.2, hw * 0.45), rt = clamp(p.corner * 1.2, 0.25, Math.max(0.25, Math.min(hw * 0.45, y1 * 0.4)));
+        if (y > y1) return -1;
+        if (y < cb) return hw - cb + y;
+        if (y > y1 - rt) return hw - rt + Math.sqrt(Math.max(0, rt * rt - (y - y1 + rt) * (y - y1 + rt)));
+        return hw;
+      }
+      // Where a line along the car at (y, z), coming in from the end s (1 = front, -1 = rear), first meets the body.
+      function bodyEndX(m, p, s, y, z) {
+        var az = Math.abs(z), x = m.xe, step = 0.4, k;
+        while (x > 0 && bodyWidthAt(m, p, s * x, y) < az) x -= step;
+        var lo = x, hi = x + step;
+        for (k = 0; k < 12; k++) { var c = (lo + hi) / 2; if (bodyWidthAt(m, p, s * c, y) >= az) lo = c; else hi = c; }
+        return s * lo;
+      }
+      // Lights are domes moulded to the body: every point is measured from the surface, so they stay attached however
+      // the nose changes. The back ring is sunk into the body.
       function lightShells(m, p) {
-        var out = [], zs = m.W2 * 0.62, xFront = (m.L / 2) * Math.pow(Math.max(0, 1 - Math.pow(zs / m.W2, p.nose)), 1 / p.nose);
+        var rz = Math.min(3.6, m.W2 * 0.17), zOuter = m.hw(m.xa + m.Rw + 1.5) - 0.3; // stays ahead of the wheel well
+        var out = [], zs = Math.max(rz + 1, Math.min(m.W2 * 0.6, zOuter - rz)), LEVELS = [[1, -1.4], [1, 0.1], [0.72, 0.7], [0.38, 1], [0.08, 1.1]], N = 24;
         [1, -1].forEach(function (s) {
-          var y = Math.min(m.D(xFront) - 4, m.D(xFront) * 0.7);
-          out.push(ellipsoid(xFront - 0.2, y, s * zs, 1, 2.3, 3.6, 16, 8));
-          out.push(ellipsoid(-xFront + 0.2, y, s * zs, 1, 2.1, 3.4, 16, 8));
+          var x0 = bodyEndX(m, p, s, 2, zs), yc = Math.max(4.5, m.D(x0) * 0.55), ry = Math.min(2.3, yc - 2);
+          [1, -1].forEach(function (side) {
+            out.push(loft(LEVELS.map(function (lv) {
+              var ring = [], j, th, y, z;
+              for (j = 0; j < N; j++) {
+                th = (j / N) * TAU; y = yc + lv[0] * ry * Math.sin(th); z = side * zs + lv[0] * rz * Math.cos(th);
+                ring.push([bodyEndX(m, p, s, y, z) + s * lv[1], y, z]);
+              }
+              return ring;
+            })));
+          });
         });
         return concat(out);
       }

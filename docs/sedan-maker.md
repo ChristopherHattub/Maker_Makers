@@ -13,7 +13,7 @@ Y up, millimetres, +X is the front of the car, Z is across it. The body rests on
 | `body` | **One closed surface** (`bodySection`, `lowerBody`): rounded cross-sections lofted along X, with the wheel wells part of the section, so there are no seams between pieces. Also holds the four axle pins, which are hidden. The bottom edge is a 1.2 mm, 45 degree chamfer. |
 | `cabin` | The greenhouse: a second loft, narrower than the body, sunk 1.5 mm into it. |
 | `windows` | Thin proud skins: side windows, windshield and rear window. Each follows the cabin surface. One Windows switch controls them all. |
-| `lights` | Headlight and taillight ellipsoids, 2 each. |
+| `lights` | Headlight and taillight domes, 2 each, moulded to the body: each point is measured from the body surface (`bodyEndX`), the back is sunk 1.4 mm into it, and they are kept ahead of the wheel wells, so they stay attached at any setting. |
 | `tire`, `rim` | The four tires and hub caps. |
 | `stamp` | One entry per placed part. |
 
