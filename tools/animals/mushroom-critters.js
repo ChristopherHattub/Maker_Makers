@@ -4,16 +4,7 @@
       function buildCritter(p, api) {
         var sc = new Scene(), sp = Math.round(p.species), S = new Sculpt(1.2).useEdits(api), i, sz = p.size;
         function eyes(x, y, z, r0, white, parent) {
-          [-1, 1].forEach(function (s) {
-            var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [x + 200, y, s * z], [-1, 0, 0], parent);
-            if (!e) return;
-            var r = r0 * e.k;
-            S.addon(id, e.p, r);
-            sc.add('eyes', 'b', dome(e.p, e.n, r, { angle: 48 }), white ? '#f8fafc' : '#1e293b');
-            var rise = (r / Math.sin(deg(48))) * (1 - Math.cos(deg(48)));
-            if (white) sc.add('pupils', 'b', dome(vadd(e.p, vmul(e.n, rise * 0.7)), e.n, r * 0.56, { sink: 0.6 }), '#1e293b');
-            else sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, r * 0.36), [0, r * 0.3, 0])), e.n, r * 0.26, { sink: 0.4 }), '#1e293b');
-          });
+          [-1, 1].forEach(function (s) { softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [x + 200, y, s * z], [-1, 0, 0], parent, r0, '#5b8bb5'); });
         }
         S.reach = 0.72;
         if (sp === 0) { // mushroom gnome: stem body with a face, gilled cap, beard and boots
@@ -106,10 +97,7 @@
           });
           S.run();
           [-1, 1].forEach(function (s) {
-            var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [200, 50 * sz + 1.4, s * 8 * sz], [-1, 0, 0], s < 0 ? 'stalkL' : 'stalkR');
-            if (!e) return;
-            S.addon(id, e.p, 1.7 * e.k);
-            sc.add('eyes', 'b', dome(e.p, e.n, 1.7 * e.k, { angle: 52, sink: 0.8 }), '#1e293b');
+            softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [200, 50 * sz + 1.4, s * 8 * sz], [-1, 0, 0], s < 0 ? 'stalkL' : 'stalkR', 2.1, '#fbbf24');
           });
         }
         S.addTo(sc);
@@ -130,7 +118,7 @@
         fileName: 'Critter',
         defaultColor: '#fb7185',
         palette: ANIMAL_PALETTE,
-        partNames: { stem: 'Stem body', cap: 'Mushroom cap', gills: 'Gills', spots: 'Cap spots', nose: 'Nose', mouth: 'Mouth', beard: 'Beard', feet: 'Boots', body: 'Body', belly: 'Belly', cheeks: 'Cheeks', legs: 'Legs', toes: 'Toes', eyes: 'Eyes', pupils: 'Pupils', shell: 'Shell', swirl: 'Shell centre', stalks: 'Eye stalks' },
+        partNames: { stem: 'Stem body', cap: 'Mushroom cap', gills: 'Gills', spots: 'Cap spots', nose: 'Nose', mouth: 'Mouth', beard: 'Beard', feet: 'Boots', body: 'Body', belly: 'Belly', cheeks: 'Cheeks', legs: 'Legs', toes: 'Toes', eyes: 'Eyes', pupils: 'Pupils', glints: 'Eye glints', shell: 'Shell', swirl: 'Shell centre', stalks: 'Eye stalks' },
         parameters: CRIT_PARAMS,
         presets: makePresets(CRIT_PARAMS, [
           ['Default mushroom gnome', {}],

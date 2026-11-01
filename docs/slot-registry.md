@@ -106,7 +106,7 @@ Total built: 99 generators in 21 groups (2 groups are `planned` and empty: toys,
 | 87 | Shark Fin Trophy | animals | `shark-trophy.html` |
 | 88 | Elephant Builder | animals | `elephant-builder.html` |
 | 89 | Alien & Monster Maker | animals | `monster-maker.html` |
-| 90 | Unicorn & Pegasus | animals | `unicorn-pegasus.html` |
+| 90 | Horse Builder | animals | `horse-builder.html` |
 | 91 | Flexi Dragon | flexi | `flexi-dragon.html` |
 | 92 | Flexi Gecko | flexi | `flexi-gecko.html` |
 | 93 | Flexi Crocodile | flexi | `flexi-crocodile.html` |

@@ -54,12 +54,7 @@
         S.reach = 0.72;
         S.run();
         [-1, 1].forEach(function (s) {
-          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 200, hy + hr * 0.34, s * hr * 0.6], [-1, 0, 0], 'head');
-          if (!e) return;
-          var R = 3.3 * hs * e.k;
-          S.addon(id, e.p, R);
-          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 46 }), '#1e293b');
-          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.34), [0, R * 0.3, 0])), e.n, R * 0.26, { sink: 0.4 }), '#1e293b');
+          softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [hx + 200, hy + hr * 0.34, s * hr * 0.6], [-1, 0, 0], 'head', 3.1 * hs, '#57361d');
         });
         S.addTo(sc);
         return finishSculpt(sc, p.size, S);
@@ -81,7 +76,7 @@
         fileName: 'Elephant',
         defaultColor: '#cbd5e1',
         palette: ANIMAL_PALETTE,
-        partNames: { body: 'Body', legs: 'Legs', toes: 'Toenails', head: 'Head', jaw: 'Jaw', eyes: 'Eyes', ears: 'Ears', 'inner ears': 'Inner ears', tusks: 'Tusks', trunk: 'Trunk', tail: 'Tail' },
+        partNames: { body: 'Body', legs: 'Legs', toes: 'Toenails', head: 'Head', jaw: 'Jaw', eyes: 'Eyes', pupils: 'Pupils', glints: 'Eye glints', ears: 'Ears', 'inner ears': 'Inner ears', tusks: 'Tusks', trunk: 'Trunk', tail: 'Tail' },
         parameters: ELE_PARAMS,
         presets: makePresets(ELE_PARAMS, [
           ['Default elephant', {}],
@@ -90,7 +85,7 @@
           ['Big tusker', { size: 1.2, tusk: 1, ears: 1.05, bulk: 1.05, legs: 9.5 }]
         ]),
         sculpt: sculptModule([
-          { id: 'head', label: 'Head', section: 'Head' }, { id: 'trunk', label: 'Trunk', section: 'Head' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'tuskL', label: 'Left tusk', section: 'Head' }, { id: 'tuskR', label: 'Right tusk', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
+          { id: 'head', label: 'Head', section: 'Head' }, { id: 'trunk', label: 'Trunk', section: 'Head' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'tuskL', label: 'Left tusk', section: 'Head' }, { id: 'tuskR', label: 'Right tusk', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' },
           { id: 'torso', label: 'Body', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
           { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),

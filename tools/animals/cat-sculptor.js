@@ -3,7 +3,7 @@
       // -----------------------------------------------------------------------
       function buildCat(p, api) {
         var sc = new Scene(), S = new Sculpt(1.15).useEdits(api, p.size / 100), k = p.chunk, hs = p.headSize, pose = Math.round(p.pose), fur = '#fdba74', cream = '#fff1dc', dark = '#c2703d', pink = '#fda4af';
-        var hx, hy, hr = 13.5 * hs, sd, i;
+        var hx, hy, hr = 13.5 * hs, sd, i, ears = [];
         if (pose === 0) { // sitting
           S.piece('torso');
           S.ell('body', [-7, 15, 0], [21 * k, 19, 18 * k], fur, 5);
@@ -37,11 +37,8 @@
           S.ell('muzzle', [hx + hr * 0.78, hy - hr * 0.26, s * hr * 0.27], [hr * 0.3, hr * 0.26, hr * 0.33], cream, 2);
           S.ell('head', [hx + hr * 0.1, hy - hr * 0.2, s * hr * 0.86], [hr * 0.55, hr * 0.48, hr * 0.42], fur, 3); // cheek
           // ear: a rounded triangle facing forward, with a pink inside
-          S.piece(s < 0 ? 'earL' : 'earR', 'head');
-          var E = 13 * p.ear * hs, ez = s * hr * 0.58, ey = hy + hr * 0.42, W = 6.4 * p.ear * hs, side = s * 0.42;
-          var poly = [[-W, ey], [W, ey], [W * side + E * 0.22 * s, ey + E], [W * side - E * 0.06 * s, ey + E]];
-          S.plate('ears', poly, [hx - hr * 0.1, 0, ez], [0, 0, 1], 3.4, fur, 2.5, 1);
-          S.plate('inner ears', [[-W * 0.55, ey + 1.5], [W * 0.55, ey + 1.5], [W * side * 0.8 + E * 0.1 * s, ey + E * 0.66]], [hx - hr * 0.1 + 1.2, 0, ez], [0, 0, 1], 2.8, pink, 0.5, 0.8);
+          var earH = s < 0 ? p.earL : p.earR, E = 13 * p.ear * hs * earH, ez = s * hr * 0.58, ey = hy + hr * 0.36, W = 6.4 * p.ear * hs;
+          ears.push({ id: s < 0 ? 'earL' : 'earR', s: s, E: E, ez: ez, ey: ey, W: W });
         });
         S.piece('head');
         S.ell('muzzle', [hx + hr * 0.72, hy - hr * 0.5, 0], [hr * 0.24, hr * 0.17, hr * 0.26], cream, 2);
@@ -62,6 +59,12 @@
         var wantCollar = Math.round(p.collar) === 1 && pose === 0;
         S.parents.nose = 'head'; S.parents.eyeL = 'head'; S.parents.eyeR = 'head'; S.parents.pupilL = 'eyeL'; S.parents.pupilR = 'eyeR';
         S.run();
+        ears.forEach(function (q) { // mirrored smooth plates, so both ears match
+          var s = q.s, W = q.W, E = q.E, at = [hx - hr * 0.1 - 1.7, 0, q.ez];
+          function mir(list) { return list.map(function (c) { return [c[0] * s, c[1]]; }); }
+          S.shell(sc, q.id, 'ears', 'b', vslab(mir([[-W, q.ey], [W, q.ey], [W * 0.92, q.ey + E * 0.45], [W * 0.62, q.ey + E], [W * 0.34, q.ey + E * 1.04], [W * 0.06, q.ey + E * 0.92], [-W * 0.6, q.ey + E * 0.42]]), [at[0] + 1.7, 0, at[2]], [0, 0, 1], 3.4, 0.9), fur, 'head');
+          S.shell(sc, q.id, 'inner ears', 'b', vslab(mir([[-W * 0.52, q.ey + 2], [W * 0.56, q.ey + 2], [W * 0.52, q.ey + E * 0.5], [W * 0.34, q.ey + E * 0.78], [-W * 0.3, q.ey + E * 0.42]]), [at[0] + 2.8, 0, at[2]], [0, 0, 1], 1.5, 0.4), pink, 'head');
+        });
         if (wantCollar) S.shell(sc, 'collar', 'collar', 'b', collarBand(hx - 3, hy - hr * 0.76, 9.6 * k, 11.2 * k, 1.5, 1), '#fb7185');
         // mouth, nose and eyes go on the finished surface, and follow the head when it is edited
         if (!S.deleted('nose')) {
@@ -99,6 +102,8 @@
         { group: 'Pose', key: 'tail', label: 'Tail curl (tight ↔ loose)', unit: '×', min: 0.8, max: 1.3, step: 0.05, value: 1 },
         { group: 'Head', key: 'headSize', label: 'Head size', unit: '×', min: 0.85, max: 1.25, step: 0.05, value: 1 },
         { group: 'Head', key: 'ear', label: 'Ear size', unit: '×', min: 0.7, max: 1.5, step: 0.05, value: 1 },
+        { group: 'Head', key: 'earL', label: 'Left ear height', unit: '×', min: 0.5, max: 1.6, step: 0.05, value: 1 },
+        { group: 'Head', key: 'earR', label: 'Right ear height', unit: '×', min: 0.5, max: 1.6, step: 0.05, value: 1 },
         { group: 'Head', key: 'eye', label: 'Eye size', unit: ' mm', min: 2.4, max: 5, step: 0.1, value: 3.6 },
         { group: 'Head', key: 'closed', label: 'Eyes', unit: '', min: 0, max: 1, step: 1, value: 0, options: ['Open', 'Sleepy'] },
         { group: 'Coat', key: 'stripes', label: 'Tabby stripes', unit: '', min: 0, max: 6, step: 1, value: 4, slider: true },
@@ -118,7 +123,7 @@
           ['Default cat', {}],
           ['Chubby loaf', { pose: 1, chunk: 1.25, headSize: 1.1, stripes: 5 }],
           ['Sleeping curl', { pose: 2, chunk: 0.95, closed: 1, stripes: 3 }],
-          ['Kitten', { size: 70, headSize: 1.25, ear: 1.3, eye: 4.8, stripes: 2 }],
+          ['Kitten', { size: 70, headSize: 1.25, ear: 1.15, eye: 4.8, stripes: 2 }],
           ['Plain sitter', { stripes: 0, ear: 1.2, eye: 4.2 }]
         ]),
         sculpt: sculptModule([

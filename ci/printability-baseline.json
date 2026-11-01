@@ -733,6 +733,29 @@
       "overhang"
     ]
   },
+  "horse-builder": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default horse": [
+      "overhang"
+    ],
+    "Rearing horse": [
+      "overhang"
+    ],
+    "Resting horse": [
+      "overhang"
+    ],
+    "Pony": [
+      "overhang"
+    ],
+    "Unicorn": [
+      "overhang"
+    ],
+    "Long-maned horse": [
+      "overhang"
+    ]
+  },
   "image-clicker": {
     "defaults": [
       "overhang"

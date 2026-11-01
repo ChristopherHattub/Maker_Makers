@@ -106,12 +106,7 @@
         var nose = S.face('nose', [hx + 80, my + hr * 0.12, 0], [-1, 0, 0], 'muzzle');
         if (nose) { sc.add('nose', 'b', dome(nose.p, vnorm([nose.n[0] + 0.3, nose.n[1] + 0.25, 0]), hr * 0.21 * nose.k, { angle: 55 }), '#1e293b'); S.addon('nose', nose.p, hr * 0.21 * nose.k); }
         [-1, 1].forEach(function (s) {
-          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 80, hy + hr * 0.22, s * hr * 0.42], [-1, 0, 0], 'head');
-          if (!e) return;
-          var R = p.eye * hs * e.k;
-          S.addon(id, e.p, R);
-          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#3f2a1d');
-          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.36), [0, R * 0.32, s * -R * 0.2])), e.n, R * 0.28, { sink: 0.5 }), '#3f2a1d');
+          softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [hx + 80, hy + hr * 0.22, s * hr * 0.42], [-1, 0, 0], 'head', p.eye * hs, '#6b3f1d');
         });
         S.addTo(sc);
         return finishSculpt(sc, p.size / 100, S);
@@ -137,7 +132,7 @@
         fileName: 'Dog',
         defaultColor: '#d9a066',
         palette: ANIMAL_PALETTE,
-        partNames: { body: 'Body', chest: 'Chest', paws: 'Paws', head: 'Head', muzzle: 'Muzzle', patch: 'Eye patch', ears: 'Ears', collar: 'Collar', tag: 'Tag', tail: 'Tail', nose: 'Nose', eyes: 'Eyes' },
+        partNames: { body: 'Body', chest: 'Chest', paws: 'Paws', head: 'Head', muzzle: 'Muzzle', patch: 'Eye patch', ears: 'Ears', collar: 'Collar', tag: 'Tag', tail: 'Tail', nose: 'Nose', eyes: 'Eyes', pupils: 'Pupils', glints: 'Eye glints' },
         parameters: DOG_PARAMS,
         presets: makePresets(DOG_PARAMS, [
           ['Default dog', {}],
@@ -150,7 +145,7 @@
           ['Puppy', { size: 70, headSize: 1.25, earSize: 1.3, eye: 4.4, snout: 0.15 }]
         ]),
         sculpt: sculptModule([
-          { id: 'head', label: 'Head', section: 'Head' }, { id: 'muzzle', label: 'Muzzle', section: 'Head', parent: 'head' }, { id: 'nose', label: 'Nose', section: 'Head', parent: 'muzzle' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
+          { id: 'head', label: 'Head', section: 'Head' }, { id: 'muzzle', label: 'Muzzle', section: 'Head', parent: 'head' }, { id: 'nose', label: 'Nose', section: 'Head', parent: 'muzzle' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' },
           { id: 'torso', label: 'Body', section: 'Body' }, { id: 'collar', label: 'Collar', section: 'Body' }, { id: 'tag', label: 'Tag', section: 'Body', parent: 'collar' }, { id: 'tail', label: 'Tail', section: 'Body' },
           { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),

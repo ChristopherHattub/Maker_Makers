@@ -1,10 +1,9 @@
       // -----------------------------------------------------------------------
-      // Unicorn & Pegasus: a horse kneeling on the bed, legs folded, neck climbing to a head corbelled over the chest.
-      // Horn, ears and mane locks rise upward, the tail flows along the bed and the wings fold up in leaning plates.
+      // Horse Builder: a horse, pony or unicorn, standing, kneeling or rearing, sculpted as one seamless surface
       // -----------------------------------------------------------------------
-      function buildUnicorn(p, api) {
-        var sc = new Scene(), S = new Sculpt(1.6).useEdits(api, p.size), kind = Math.round(p.kind), coat = '#f8fafc', mane = '#d8b4fe', mane2 = '#f9a8d4', hoof_ = '#fde047', B = p.bulk, N = p.neck, hs = p.head, i;
-        var hasHorn = kind === 0 || kind === 2, hasWings = kind === 1 || kind === 2;
+      function buildHorse(p, api) {
+        var kind0 = Math.round(p.kind), sc = new Scene(), S = new Sculpt(1.35).useEdits(api, p.size), kind = kind0, coat = ['#8a5a33', '#a97142', '#f8fafc'][kind0], mane = ['#2b1d14', '#efe3cf', '#d8b4fe'][kind0], mane2 = ['#3a281b', '#dccbb0', '#f9a8d4'][kind0], hoof_ = ['#2f2620', '#3b2f26', '#fde047'][kind0], snoutC = ['#4a3020', '#6b4a2e', '#f3e1ea'][kind0], B = p.bulk, N = p.neck, hs = p.head, i;
+        var hasHorn = kind === 2, wx = p.bar;
         var pose = Math.round(p.pose), nb, nt, nm, manePts, tailStrands, wingY, wingX;
         S.piece('torso');
         if (pose === 0) { // kneeling, legs folded on the bed
@@ -32,11 +31,11 @@
           [-1, 1].forEach(function (s) {
             var fz = s * 9.5 * B;
             S.piece(s < 0 ? 'frontL' : 'frontR');
-            S.path('legs', [[21 * B, by - 4, fz, 7], [22 * B, 24, fz, 4.6], [22 * B, 11, fz, 3.8], [22 * B, 5, fz, 4.2]], coat, 2.5);
+            S.path('legs', [[21 * B, by - 4, fz, 6.4 * wx], [22 * B, 26, fz, 4 * wx], [22 * B, 22, fz, 4.4 * wx], [22 * B, 11, fz, 2.9 * wx], [22 * B, 5, fz, 3.6 * wx]], coat, 2);
             S.ell('hooves', [22.5 * B, 2.8, fz], [5.4, 3.4, 5.2], hoof_, 1);
             S.piece(s < 0 ? 'hindL' : 'hindR');
             S.ell('legs', [-23 * B, by - 8, fz], [10 * B, 14, 7], coat, 3);
-            S.path('legs', [[-25 * B, by - 16, fz, 6], [-29 * B, 20, fz, 4.4], [-25 * B, 11, fz, 3.8], [-25 * B, 5, fz, 4.2]], coat, 2.5);
+            S.path('legs', [[-25 * B, by - 16, fz, 5.6 * wx], [-29 * B, 22, fz, 3.9 * wx], [-25 * B, 11, fz, 2.9 * wx], [-25 * B, 5, fz, 3.6 * wx]], coat, 2);
             S.ell('hooves', [-24.5 * B, 2.8, fz], [5.4, 3.4, 5.2], hoof_, 1);
           });
           nb = [22 * B, by + 3, 0]; nt = [33 * B + 11 * N, by + 37 * N, 0];
@@ -68,23 +67,12 @@
         // head: skull, tapering nose and soft muzzle
         var hy = nt[1] + 7 * hs, hx = nt[0] + 7 * hs;
         S.piece('head', 'neck');
-        S.ell('head', [hx, hy, 0], [13 * hs, 10.5 * hs, 9.2 * hs], coat, 5);
-        S.path('head', [[hx + 4 * hs, hy - 0.5 * hs, 0, 8.2 * hs], [hx + 16 * hs, hy - 3.5 * hs, 0, 6.3 * hs]], coat, 3);
-        S.ell('muzzle', [hx + 19 * hs, hy - 4.5 * hs, 0], [6.8 * hs, 6 * hs, 6.8 * hs], '#fbcfe8', 1.6);
-        [-1, 1].forEach(function (s) {
+        S.ell('head', [hx, hy, 0], [12 * hs, 10 * hs, 8.2 * hs], coat, 5);
+                [-1, 1].forEach(function (s) {
           S.piece(s < 0 ? 'earL' : 'earR', 'head');
-          var ear = [hx - 7 * hs, hy + 6.5 * hs, s * 5 * hs];
-          S.path('ears', [ear.concat([3.4 * hs]), [ear[0] - 0.6, ear[1] + 6 * hs, ear[2] + s * 1.4, 2.5 * hs], [ear[0] - 0.8, ear[1] + 11.5 * hs, ear[2] + s * 2, 0.7]], coat, 1.2);
+          var ear = [hx - 7 * hs, hy + 6 * hs, s * 4.6 * hs];
+          S.path('ears', [ear.concat([3 * hs]), [ear[0] - 0.4, ear[1] + 5 * hs, ear[2] + s * 1, 2.4 * hs], [ear[0] - 0.2, ear[1] + 10.5 * hs, ear[2] + s * 1.4, 0.6]], coat, 1.2);
         });
-        if (hasHorn) { // spiral horn: bands pressed around a tapering cone
-          S.piece('horn', 'head');
-          var hb = [hx + 3 * hs, hy + 7.5 * hs, 0], hl = p.horn, ht = [hb[0] + hl * 0.46, hb[1] + hl, 0], hd = vnorm(vsub(ht, hb));
-          S.path('horn', [hb.concat([3.6 * hs]), ht.concat([0.7])], '#fde047', 0.8);
-          S.relief([Math.min(hb[0], ht[0]) - 5, hb[1] + 1, -5], [Math.max(hb[0], ht[0]) + 5, ht[1] + 2, 5], function (x, y, z) {
-            var q = vsub([x, y, z], hb), along = vdot(q, hd), rad = vsub(q, vmul(hd, along));
-            return Math.hypot(rad[0], rad[1], rad[2]) > 6 ? 0 : 0.55 * Math.pow(Math.abs(Math.sin(along * 0.62 + Math.atan2(z, rad[0] * hd[1] - rad[1] * hd[0]))), 3);
-          });
-        }
         // mane: flowing locks along the back of the neck, in two colours
         S.piece('mane', 'neck');
         var locks = Math.round(p.mane);
@@ -106,67 +94,70 @@
             S.path(name, [[rx + 6, ry, z * 0.25, 5], [rx - 6, ry - 12, z * 0.5, 5.4], [rx - 11 - tl * 0.1, ry - 30, z * 0.8, 4.8], [rx - 12 - tl * 0.14, 3.2, z, 4.2], [rx - 12 - tl * 0.14, 0.8, z, 4.2]], st[1], 1.4);
           }
         });
-        // wings: fan plates with stepped feather tips, ribbed down the feathers
-        if (hasWings) [-1, 1].forEach(function (s) {
-          S.piece(s < 0 ? 'wingL' : 'wingR');
-          var W = p.wing, y0 = wingY, a = deg(pose === 2 ? 44 : 26), d = [-Math.cos(a), 0, s * Math.sin(a)], root = [wingX, 0, s * 10 * B];
-          var fw = [[-4, y0], [W * 0.84, y0 + W * 0.98], [W * 1.02, y0 + W * 1.28], [W * 0.84, y0 + W * 1.26], [W * 0.88, y0 + W * 1.56], [W * 0.66, y0 + W * 1.48], [W * 0.66, y0 + W * 1.8], [W * 0.42, y0 + W * 1.64], [W * 0.36, y0 + W * 1.94], [W * 0.1, y0 + W * 1.56], [-4, y0 + W * 0.9]];
-          S.plate('wings', fw, root, d, 3.4, '#bae6fd', 1.8, 1.2);
-          [[0.92, 1.22], [0.78, 1.5], [0.58, 1.72], [0.32, 1.84]].forEach(function (e) {
-            S.path('feathers', [[root[0] + d[0] * 2, y0 + W * 0.28, root[2] + d[2] * 2, 2.2], [root[0] + d[0] * W * e[0], y0 + W * e[1], root[2] + d[2] * W * e[0], 1.5]], '#e0f2fe', 0.8);
-          });
-        });
         S.reach = pose === 2 ? 0.92 : 0.6;
         S.run();
+        // head: one smooth form sloping down from the poll, so it reads as a horse and prints without support
+        var skull = [hx + 1 * hs, hy + 1 * hs, 0], cheek = [hx + 6 * hs, hy - 5 * hs, 0], snout = [hx + 12 * hs, hy - 14 * hs, 0], nose = [hx + 15 * hs, hy - 21 * hs, 0];
+        S.shell(sc, 'head', 'head', 'b', sweep([skull.concat([8.6 * hs]), cheek.concat([8 * hs]), snout.concat([5.4 * hs]), nose.concat([4.9 * hs])], { seg: 28, per: 28, floor: null }), coat, 'neck');
+        S.shell(sc, 'head', 'muzzle', 'b', sweep([[snout[0] + 1.9 * hs, snout[1] - 4.2 * hs, 0, 5.45 * hs], [nose[0], nose[1], 0, 5.3 * hs], [nose[0] + 0.7 * hs, nose[1] - 2.2 * hs, 0, 3.4 * hs]], { seg: 16, per: 28, floor: null }), snoutC, 'neck');
+        if (Math.round(p.blaze) === 1) S.shell(sc, 'head', 'blaze', 'b', sweep([[hx + 8 * hs, hy + 3.5 * hs, 0, 1.6 * hs], [hx + 12.2 * hs, hy - 2.6 * hs, 0, 2.4 * hs], [hx + 16.3 * hs, hy - 11.2 * hs, 0, 1.5 * hs]], { seg: 14, per: 14, floor: null }), '#f8fafc', 'neck');
+        if (hasHorn) { // spiral horn: a smooth cone wrapped by one raised band
+          var hb = [hx + 6 * hs, hy + 6 * hs, 0], hl = p.horn, ht = [hb[0] + hl * 0.46, hb[1] + hl, 0], coil = [];
+          S.shell(sc, 'horn', 'horn', 'b', sweep([hb.concat([3.6 * hs]), ht.concat([0.6])], { seg: 28, per: 22, floor: null }), '#fde047', 'head');
+          for (i = 0; i <= 48; i++) {
+            var cu = i / 48, ca = cu * Math.PI * 8, cr = lerp(3.6 * hs, 0.6, cu) * 0.96;
+            coil.push([lerp(hb[0], ht[0], cu) + Math.cos(ca) * cr * 0.9, lerp(hb[1], ht[1], cu) - Math.cos(ca) * cr * 0.42, Math.sin(ca) * cr, lerp(0.75, 0.3, cu)]);
+          }
+          S.shell(sc, 'horn', 'horn band', 'b', sweep(coil, { seg: 96, per: 8, floor: null }), '#f59e0b', 'head');
+        }
         [-1, 1].forEach(function (s) {
-          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 2 * hs, hy + 3 * hs, s * 60], [0, 0, -s], 'head');
-          var nid = s < 0 ? 'nostrilL' : 'nostrilR', ns = S.face(nid, [hx + 80, hy - 3 * hs, s * 3.2 * hs], [-1, 0, 0], 'head');
-          if (ns) { sc.add('nostrils', 'b', dome(ns.p, ns.n, 1.3 * hs * ns.k), '#f472b6'); S.addon(nid, ns.p, 1.3 * hs * ns.k); }
-          if (!e) return;
-          var R = 3.3 * hs * e.k;
-          S.addon(id, e.p, R);
-          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 46, seg: 24 }), '#312e81');
-          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.34), [0.8, R * 0.34, 0])), e.n, R * 0.28, { sink: 0.4 }), '#312e81');
+          var n = vnorm([0.3, 0.3, s]), ep = vadd(cheek, vmul(n, 7.8 * hs));
+          softEyeOn(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', { surf: function () { return { p: ep, n: n }; } }, 0, 0, 'head', 2.7 * hs, kind === 2 ? '#4338ca' : '#3f2413');
+          var nid = s < 0 ? 'nostrilL' : 'nostrilR', nn = vnorm([0.85, -0.25, s * 0.5]), np = vadd([nose[0] + 0.8 * hs, nose[1] - 1 * hs, 0], vmul(nn, 4.2 * hs));
+          S.parents[nid] = 'head'; S.pivots[nid] = np;
+          if (!S.deleted(nid)) { var nq = S.xf(nid, np); S.addon(nid, nq, 1.2 * hs); sc.add('nostrils', 'b', dome(nq, nn, 1.2 * hs, { angle: 30, seg: 14 }), kind === 2 ? '#f472b6' : '#1c1410'); }
+        });
+        [-1, 1].forEach(function (s) {
         });
         S.addTo(sc);
         return finishSculpt(sc, p.size, S);
       }
       function s0(v) { return v; }
       var UNICORN_PARAMS = [
-        { group: 'Creature', key: 'kind', label: 'Type', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Unicorn', 'Pegasus', 'Winged unicorn', 'Pony'] },
-        { group: 'Creature', key: 'pose', label: 'Pose', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Kneeling', 'Standing', 'Rearing'] },
+        { group: 'Creature', key: 'kind', label: 'Type', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Horse', 'Pony', 'Unicorn'] },
+        { group: 'Creature', key: 'pose', label: 'Pose', unit: '', min: 0, max: 2, step: 1, value: 1, options: ['Kneeling', 'Standing', 'Rearing'] },
+        { group: 'Creature', key: 'bar', label: 'Leg thickness', unit: '×', min: 0.85, max: 1.3, step: 0.05, value: 1 },
         { group: 'Creature', key: 'size', label: 'Overall size', unit: '×', min: 0.6, max: 1.4, step: 0.05, value: 1 },
         { group: 'Creature', key: 'bulk', label: 'Body (slim ↔ stocky)', unit: '×', min: 0.85, max: 1.2, step: 0.05, value: 1 },
         { group: 'Head', key: 'neck', label: 'Neck length', unit: '×', min: 0.9, max: 1.25, step: 0.05, value: 1 },
         { group: 'Head', key: 'head', label: 'Head size', unit: '×', min: 0.85, max: 1.2, step: 0.05, value: 1 },
         { group: 'Head', key: 'horn', label: 'Horn length', unit: ' mm', min: 14, max: 40, step: 1, value: 26 },
+        { group: 'Markings', key: 'blaze', label: 'White blaze on the face', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
         { group: 'Hair', key: 'mane', label: 'Mane locks', unit: '', min: 3, max: 9, step: 1, value: 6 },
         { group: 'Hair', key: 'lock', label: 'Lock length', unit: ' mm', min: 8, max: 22, step: 1, value: 14 },
         { group: 'Hair', key: 'tail', label: 'Tail length', unit: ' mm', min: 16, max: 50, step: 1, value: 38 },
-        { group: 'Wings', key: 'wing', label: 'Wing size', unit: ' mm', min: 18, max: 36, step: 1, value: 28 }
       ];
       window.MM_GENERATOR = {
         code: 'MM-090',
-        category: 'ANIMALS // FANTASY',
-        title: 'Unicorn & Pegasus',
-        fileName: 'Unicorn',
-        defaultColor: '#f1f5f9',
+        category: 'ANIMALS // WILDLIFE',
+        title: 'Horse Builder',
+        fileName: 'Horse',
+        defaultColor: '#8a5a33',
         palette: ANIMAL_PALETTE,
-        partNames: { 'mane 2': 'Mane, second colour', feathers: 'Feathers', muzzle: 'Muzzle', body: 'Body', legs: 'Legs', hooves: 'Hooves', neck: 'Neck', head: 'Head', nostrils: 'Nostrils', eyes: 'Eyes', ears: 'Ears', horn: 'Horn', mane: 'Mane', tail: 'Tail', wings: 'Wings' },
+        partNames: { 'mane 2': 'Mane, second colour', muzzle: 'Muzzle', body: 'Body', legs: 'Legs', hooves: 'Hooves', neck: 'Neck', head: 'Head', nostrils: 'Nostrils', blaze: 'Blaze', eyes: 'Eyes', ears: 'Ears', horn: 'Horn', 'horn band': 'Horn spiral', mane: 'Mane', tail: 'Tail', wings: 'Wings' },
         parameters: UNICORN_PARAMS,
         presets: makePresets(UNICORN_PARAMS, [
-          ['Default unicorn', {}],
-          ['Pegasus', { kind: 1 }],
-          ['Winged unicorn', { kind: 2, wing: 32, horn: 30 }],
-          ['Little pony', { kind: 3, size: 0.75, head: 1.2, neck: 0.9, bulk: 1.1, mane: 8 }],
-          ['Standing unicorn', { pose: 1 }],
-          ['Rearing pegasus', { pose: 2, kind: 1 }],
-          ['Long-maned unicorn', { mane: 9, lock: 17, tail: 50, horn: 36 }]
+          ['Default horse', {}],
+          ['Rearing horse', { pose: 2 }],
+          ['Resting horse', { pose: 0 }],
+          ['Pony', { kind: 1, size: 0.8, head: 1.2, neck: 0.9, bulk: 1.1, mane: 8 }],
+          ['Unicorn', { kind: 2, blaze: 0, mane: 8, horn: 30 }],
+          ['Long-maned horse', { mane: 9, lock: 17, tail: 50 }]
         ]),
         sculpt: sculptModule([
-          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'horn', label: 'Horn', section: 'Head' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'nostrilL', label: 'Left nostril', section: 'Head' }, { id: 'nostrilR', label: 'Right nostril', section: 'Head' },
-          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'mane', label: 'Mane', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' }, { id: 'wingL', label: 'Left wing', section: 'Body' }, { id: 'wingR', label: 'Right wing', section: 'Body' },
+          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'horn', label: 'Horn', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' }, { id: 'earL', label: 'Left ear', section: 'Head' }, { id: 'earR', label: 'Right ear', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'nostrilL', label: 'Left nostril', section: 'Head' }, { id: 'nostrilR', label: 'Right nostril', section: 'Head' },
+          { id: 'torso', label: 'Body', section: 'Body' }, { id: 'mane', label: 'Mane', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
           { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'hindL', label: 'Left hind leg', section: 'Legs' }, { id: 'hindR', label: 'Right hind leg', section: 'Legs' }
         ]),
-        build: buildUnicorn
+        build: buildHorse
       };

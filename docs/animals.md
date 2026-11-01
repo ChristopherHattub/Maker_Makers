@@ -1,6 +1,6 @@
 # Animal generators (slots 76-90)
 
-Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Unicorn & Pegasus.
+Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Horse Builder.
 
 ## Files
 
@@ -18,7 +18,9 @@ Every animal uses `Sculpt` in the kit, except that the Snake and Fish use it onl
 
 ## Poses and sliders
 
-Dragon Maker (Sitting, Prowling, Rearing, Asleep), Dog Builder (Sitting, Standing, Lying down, Begging) and Unicorn & Pegasus (Kneeling, Standing, Rearing) have a Pose option. Every pose has to reach the bed, because the support pass trims anything without solid below it: tails and feet carry raised bodies, and raised limbs climb steeply. Dino Builder shows a separate slider group per species through `showIf`. `reptileEye` gives dinosaurs and dragons small set-in eyes under a sculpted brow. Dragon wings, horns and back fins are smooth shells added with `S.shell`, not sculpted forms, so their edges are clean. While a slider moves, sculpted generators build a coarser mesh and refine it on release.
+Dragon Maker (Sitting, Prowling, Rearing, Asleep), Dog Builder (Sitting, Standing, Lying down, Begging) and Horse Builder (Kneeling, Standing, Rearing) have a Pose option. Every pose has to reach the bed, because the support pass trims anything without solid below it: tails and feet carry raised bodies, and raised limbs climb steeply. Dino Builder shows a separate slider group per species through `showIf`. `reptileEye` gives dinosaurs and dragons small set-in eyes under a sculpted brow. Dragon wings, horns and back fins are smooth shells added with `S.shell`, not sculpted forms, so their edges are clean. While a slider moves, sculpted generators build a coarser mesh and refine it on release.
+
+Owl Stacker and Penguin Pals are built from smooth lofts (`profileLoft`) and shells, not `Sculpt` forms, so they stay crisp and have clean colour edges.
 
 ## Sculpt tab
 

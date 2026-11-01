@@ -47,12 +47,7 @@
         S.reach = 0.72;
         S.run();
         [-1, 1].forEach(function (s) {
-          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0], 'head');
-          if (!e) return;
-          var R = 2.5 * hs * e.k;
-          S.addon(id, e.p, R);
-          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#1e293b');
-          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.36), [0, R * 0.32, 0])), e.n, R * 0.25, { sink: 0.4 }), '#1e293b');
+          softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0], 'head', 2.7 * hs, '#a16207');
         });
         void dark;
         S.addTo(sc);
@@ -77,7 +72,7 @@
         fileName: 'Turtle',
         defaultColor: '#4ade80',
         palette: ANIMAL_PALETTE,
-        partNames: { shell: 'Shell', rim: 'Shell rim', skin: 'Neck', head: 'Head', eyes: 'Eyes', legs: 'Legs', claws: 'Claws', tail: 'Tail' },
+        partNames: { shell: 'Shell', rim: 'Shell rim', skin: 'Neck', head: 'Head', eyes: 'Eyes', pupils: 'Pupils', glints: 'Eye glints', legs: 'Legs', claws: 'Claws', tail: 'Tail' },
         parameters: TURTLE2_PARAMS,
         presets: makePresets(TURTLE2_PARAMS, [
           ['Default turtle', {}],
@@ -88,7 +83,7 @@
           ['Big trinket dish', { dish: 1, shellL: 92, shellW: 82, shellH: 40, plates: 3 }]
         ]),
         sculpt: sculptModule([
-          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
+          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' },
           { id: 'shell', label: 'Shell', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
           { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'backL', label: 'Left back leg', section: 'Legs' }, { id: 'backR', label: 'Right back leg', section: 'Legs' }
         ]),

@@ -1323,6 +1323,67 @@
         } else sc.add('pupils', 'b', dome(pu.p, e.n, R * 0.55 * pu.k, { sink: 0.5 }), '#0f172a');
         return e;
       }
+      // A soft round eye: iris, separate pupil and a small glint. The pupil is its own piece in the Sculpt tab.
+      function softEye(sc, S, id, pid, o, dir, parent, R0, iris) {
+        var e = S.face(id, o, dir, parent);
+        if (!e) return null;
+        var R = R0 * e.k, rise = (R / Math.sin(deg(46))) * (1 - Math.cos(deg(46)));
+        S.addon(id, e.p, R);
+        sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 46, seg: 24 }), iris);
+        var pu = S.sub(pid, id, vadd(e.p, vmul(e.n, rise * 0.72)), R * 0.62);
+        if (pu) {
+          var Rp = R * 0.62 * pu.k, rp = (Rp / Math.sin(deg(46))) * (1 - Math.cos(deg(46)));
+          sc.add('pupils', 'b', dome(pu.p, e.n, Rp, { angle: 46, seg: 20, sink: 0.6 }), '#0f172a');
+          sc.add('glints', 'b', dome(vadd(vadd(pu.p, vmul(e.n, rp * 0.82)), [0, Rp * 0.34, 0]), e.n, Rp * 0.28, { sink: 0.4, seg: 10 }), '#f8fafc');
+        }
+        return e;
+      }
+      // Eye on a loft (see softEye): th and y place it on the host's surface, and it follows its parent piece.
+      function softEyeOn(sc, S, id, pid, host, th, y, parent, R0, iris) {
+        if (parent) S.parents[id] = parent;
+        if (S.deleted(id)) return null;
+        var s0 = host.surf(th, y);
+        S.pivots[id] = s0.p;
+        var e = { p: S.xf(id, s0.p), n: s0.n }, R = R0 * S.scaleOf(id), rise = (R / Math.sin(deg(46))) * (1 - Math.cos(deg(46)));
+        S.addon(id, e.p, R);
+        sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 46, seg: 28 }), iris);
+        var pu = S.sub(pid, id, vadd(e.p, vmul(e.n, rise * 0.72)), R * 0.62);
+        if (pu) {
+          var Rp = R * 0.62 * pu.k, rp = (Rp / Math.sin(deg(46))) * (1 - Math.cos(deg(46)));
+          sc.add('pupils', 'b', dome(pu.p, e.n, Rp, { angle: 46, seg: 22, sink: 0.6 }), '#0f172a');
+          sc.add('glints', 'b', dome(vadd(vadd(pu.p, vmul(e.n, rp * 0.82)), [0, Rp * 0.34, 0]), e.n, Rp * 0.28, { sink: 0.4, seg: 10 }), '#f8fafc');
+        }
+        return e;
+      }
+      // Front panel for a profileLoft body (belly, chest): same outline, narrower and pushed forward, closing at topT.
+      function frontProfile(prof, topT, k, fwd) {
+        var out = [];
+        prof.forEach(function (q) { if (q[0] < topT * 0.9) out.push([q[0] / topT, q[1] * k, (q[2] || 0) + q[1] * fwd]); });
+        var l = prof.filter(function (q) { return q[0] < topT * 0.9; }).pop(), s = (l[2] || 0) + l[1] * (fwd + 0.08);
+        out.push([0.96, l[1] * k * 0.5, s], [1, 0.03, s]);
+        return out;
+      }
+      // Smooth closed body from a profile: pts [[t, radius factor, forward shift], ...], t from 0 at the bed to 1 at the crown.
+      function profileLoft(cx, y0, H, R, rzK, pts, seg, n) {
+        var rings = [], N = n || 56;
+        // Catmull-Rom through the keys, so the outline has no ribs at them
+        function at(t) {
+          var i = 0, L = pts.length;
+          while (i < L - 2 && t > pts[i + 1][0]) i++;
+          var a = pts[Math.max(0, i - 1)], b = pts[i], c = pts[i + 1], d = pts[Math.min(L - 1, i + 2)], u = (t - b[0]) / ((c[0] - b[0]) || 1);
+          function cr(k) {
+            var p0 = a[k] || 0, p1 = b[k] || 0, p2 = c[k] || 0, p3 = d[k] || 0, h = c[0] - b[0];
+            var m1 = (p2 - p0) / ((c[0] - a[0]) || 1) * h, m2 = (p3 - p1) / ((d[0] - b[0]) || 1) * h, u2 = u * u, u3 = u2 * u;
+            return (2 * u3 - 3 * u2 + 1) * p1 + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * m2;
+          }
+          return [cr(1), cr(2)];
+        }
+        for (var i = 0; i <= N; i++) {
+          var t = i / N, q = at(t), r = i === N ? 0.02 : q[0];
+          rings.push({ y: y0 + H * t, cx: cx + R * q[1], cz: 0, rx: R * r, rz: R * rzK * r });
+        }
+        return loft(rings, seg || 96, { poleLift: 0 });
+      }
 
       // -----------------------------------------------------------------------
       // Turtle & Tortoise: a shell with pressed-in plates over a sculpted body, or an open trinket dish in the shell
@@ -1373,12 +1434,7 @@
         S.reach = 0.72;
         S.run();
         [-1, 1].forEach(function (s) {
-          var id = s < 0 ? 'eyeL' : 'eyeR', e = S.face(id, [hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0], 'head');
-          if (!e) return;
-          var R = 2.5 * hs * e.k;
-          S.addon(id, e.p, R);
-          sc.add('eyes', 'b', dome(e.p, e.n, R, { angle: 48 }), '#1e293b');
-          sc.add('eyes', 'b', dome(vadd(e.p, vadd(vmul(e.n, R * 0.36), [0, R * 0.32, 0])), e.n, R * 0.25, { sink: 0.4 }), '#1e293b');
+          softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [hx + 90, hy + hr * 0.18, s * hr * 0.56], [-1, 0, 0], 'head', 2.7 * hs, '#a16207');
         });
         void dark;
         S.addTo(sc);
@@ -1403,7 +1459,7 @@
         fileName: 'Turtle',
         defaultColor: '#4ade80',
         palette: ANIMAL_PALETTE,
-        partNames: { shell: 'Shell', rim: 'Shell rim', skin: 'Neck', head: 'Head', eyes: 'Eyes', legs: 'Legs', claws: 'Claws', tail: 'Tail' },
+        partNames: { shell: 'Shell', rim: 'Shell rim', skin: 'Neck', head: 'Head', eyes: 'Eyes', pupils: 'Pupils', glints: 'Eye glints', legs: 'Legs', claws: 'Claws', tail: 'Tail' },
         parameters: TURTLE2_PARAMS,
         presets: makePresets(TURTLE2_PARAMS, [
           ['Default turtle', {}],
@@ -1414,7 +1470,7 @@
           ['Big trinket dish', { dish: 1, shellL: 92, shellW: 82, shellH: 40, plates: 3 }]
         ]),
         sculpt: sculptModule([
-          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' },
+          { id: 'neck', label: 'Neck', section: 'Head' }, { id: 'head', label: 'Head', section: 'Head' }, { id: 'eyeL', label: 'Left eye', section: 'Head' }, { id: 'eyeR', label: 'Right eye', section: 'Head' }, { id: 'pupilL', label: 'Left pupil', section: 'Head', parent: 'eyeL' }, { id: 'pupilR', label: 'Right pupil', section: 'Head', parent: 'eyeR' },
           { id: 'shell', label: 'Shell', section: 'Body' }, { id: 'tail', label: 'Tail', section: 'Body' },
           { id: 'frontL', label: 'Left front leg', section: 'Legs' }, { id: 'frontR', label: 'Right front leg', section: 'Legs' }, { id: 'backL', label: 'Left back leg', section: 'Legs' }, { id: 'backR', label: 'Right back leg', section: 'Legs' }
         ]),
