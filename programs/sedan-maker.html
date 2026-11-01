@@ -160,10 +160,10 @@
         // Every option is clamped here so that the car always works: the wheels fit in their wells, the body widens
         // if the wheels need room, the axle never gets too thick for its wheel, and the roof clears the wells.
         var L = p.length, W2 = p.width / 2, R = Math.max(7, p.wheelD / 2), flat = R * Math.min(p.flat, 14) / 100;
-        var clr = clamp(p.clearance, 0.3, 0.7), d = Math.min(p.axle / 2, 0.28 * R), rH = d + clr;
-        var dF = rH + 0.9;
-        // across the car (one side): axle head plate, inset, flare, gap, hub cap, wheel, gap to the chassis wall
-        var stack = 0.8 + 0.8 + 1.5 * (dF - d) + clr + RIM_RAISE + (clr + 0.15), zcMin = d + 2.5;
+        var clr = clamp(p.clearance, 0.2, 0.7), d = Math.min(p.axle / 2, 0.28 * R), rH = d + clr;
+        var dF = rH + 0.9, out = clamp(p.wheelOut, -5, 5);
+        // across the car (one side): the gap between the chassis wall and the wheel, and a chassis wall at least as thick as the axle
+        var gapW = clr + 0.15, zcMin = d + 2.5;
         // The bottom of the wheel hole sits just above a cell centre of the print check's voxel grid (cells are L / 170
         // wide, at least 0.4 mm) and the pin sits less than one cell above it, so the pin's first layer has the hole's
         // last layer right under it and the print check sees no gap. The pin is moved down by up to 0.2 mm for this.
@@ -174,9 +174,10 @@
         // sides, tangent to the wheel, so it prints without a bridge; the walls below it are straight.
         var Rw = R + 0.7, TAN = 1, apex = ax + Rw * Math.SQRT2;
         var xa = clamp(p.wheelbase / 2, Rw + 3, half - Rw - 6);
-        var xEdge = xa + Rw, fEdge = Math.pow(Math.max(0.01, 1 - Math.pow(xEdge / half, n)), 1 / n);
-        W2 = Math.max(W2, (zcMin + stack + 5) / fEdge);
-        var ww = Math.min(p.wheelW, W2 * fEdge - stack - zcMin);
+        // the outer face of the wheel is wheelOut from the side of the body at the axle (0 = flush)
+        var fEdge = Math.pow(Math.max(0.01, 1 - Math.pow(xa / half, n)), 1 / n);
+        W2 = Math.max(W2, (zcMin + gapW + 5 - out) / fEdge);
+        var ww = Math.min(p.wheelW, W2 * fEdge + out - gapW - zcMin);
         var need = apex + 3.5;
         var hoodE = Math.max(p.hoodH, need), trunkE = Math.max(p.trunkH, need);
         var xf0 = half - p.hoodLen;
@@ -184,7 +185,7 @@
         var xr0 = xf0 - cl;
         var bf = clamp(half - xa - Rw - 1, 6, 0.24 * L);
         var m = {
-          L: L, W2: W2, ww: ww, dF: dF, stack: stack, R: R, pinDrop: pinDrop, Rw: Rw, apex: apex, TAN: TAN, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
+          L: L, W2: W2, ww: ww, dF: dF, out: out, gapW: gapW, R: R, pinDrop: pinDrop, Rw: Rw, apex: apex, TAN: TAN, ax: ax, d: d, rH: rH, clr: clr, xa: xa, xf0: xf0, xr0: xr0, cl: cl,
           H: p.cabinH, flat: flat
         };
         var hwBase = function (x) { return W2 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x) / half, n)), 1 / n); };
@@ -302,9 +303,9 @@
       // Layout across the car for the +Z side, worked inwards from the side of the body so that the wheel and the head
       // of the axle stay inside the body outline: head, hub cap, wheel, gap, chassis wall.
       function wheelLayout(m, p) {
-        var ww = m.ww, dF = m.dF, hwEdge = m.hw(Math.min(m.xa + m.Rw, m.xe));
-        var zf2 = hwEdge - 0.8, zf1 = zf2 - 0.8, zf0 = zf1 - 1.5 * (dF - m.d), zr = zf0 - m.clr, zo = zr - RIM_RAISE, zi = zo - ww;
-        return { zi: zi, ww: ww, dF: dF, zr: zr, zf0: zf0, zf1: zf1, zf2: zf2, zc: zi - (m.clr + 0.15) };
+        var ww = m.ww, dF = m.dF, zo = m.hw(m.xa) + m.out, zr = zo + RIM_RAISE, zf0 = zr + m.clr;
+        var zf1 = zf0 + 1.2 * (dF - m.d), zf2 = zf1 + 0.6, zi = zo - ww;
+        return { zi: zi, ww: ww, dF: dF, zr: zr, zf0: zf0, zf1: zf1, zf2: zf2, zc: zi - m.gapW };
       }
 
       // The wheel hole: a circle with a pointed top, so it prints without a sagging roof.
@@ -315,6 +316,17 @@
         return rH;
       }
 
+      // The bottom of the tire is a polygon, not a circle: a flat on the bed, and a 56 degree facet each side that is
+      // tangent to the round tire. A round tire is almost horizontal at the bed, which would sag; a facet at 56 degrees
+      // from horizontal prints cleanly. Returns the distance from the wheel centre to that polygon at angle th, or 0 outside
+      // the bottom sector (the tire is round there).
+      var TIRE_FACET = 56 * DEG;
+      function tireBottom(m, th) {
+        var dx = Math.cos(th), dy = Math.sin(th), deg = ((th / DEG) % 360 + 360) % 360, ph = TIRE_FACET;
+        if (Math.abs(deg - 270) > 56) return 0;
+        var flat = m.ax / -dy, side = dx >= 0 ? 1 : -1, nd = side * Math.sin(ph) * dx - Math.cos(ph) * dy;
+        return nd > 1e-6 ? Math.min(flat, m.R / nd) : flat;
+      }
       function tireShell(m, p, lay, xc) {
         var R = m.R, ww = lay.ww, rs = Math.min(2, ww * 0.3), prof = [], t, a;
         var tread = Math.round(p.tread), td = 0.55;
@@ -327,6 +339,10 @@
           var e = prof[i], r = e[0];
           if (e[2] === 1) r = holeR(m.rH, th);
           else if (e[2] === 2 && tread > 0) r = R - td * (0.5 - 0.5 * Math.cos(tread * th));
+          if (e[2] !== 1) {
+            var bot = tireBottom(m, th);
+            if (bot) r = e[2] === 2 ? bot : Math.min(r, bot);
+          }
           return [xc + r * Math.cos(th), Math.max(0, m.ax + r * Math.sin(th)), lay.zi + e[1]];
         });
       }
@@ -357,13 +373,17 @@
         });
       }
 
-      // A diamond whose bottom point is at yb and whose half-diagonal is dd, so the head grows upward only and its
-      // underside never gets shallower than 45 degrees.
-      function diamond(x, yb, z, dd) { return [[x, yb + 2 * dd, z], [x - dd, yb + dd, z], [x, yb, z], [x + dd, yb + dd, z]]; }
+      // A diamond with half-diagonal dd and a 1.2 mm flat at the bottom, at height yb. The flat means the lowest layer of
+      // the pin is a real line of plastic rather than a point, and the sides stay at 45 degrees. The head grows upward only,
+      // so its underside never gets shallower than 45 degrees.
+      function diamond(x, yb, z, dd) {
+        var t = 0.6, yc = yb + dd - t;
+        return [[x, yc + dd, z], [x - dd, yc, z], [x - t, yb, z], [x + t, yb, z], [x + dd, yc, z]];
+      }
       // The pin is level through the wheel. Past the hub cap it climbs at 45 degrees, so that every layer of the head
       // is supported by the one below it and nothing hangs in the air.
       function axleShell(m, lay, xc, zRoot) {
-        var yb = m.ax - m.pinDrop - m.d, up = function (z) { return yb + Math.max(0, z - lay.zr); };
+        var yb = m.ax - m.pinDrop - m.d, up = function (z) { return yb + 1.3 * Math.max(0, z - lay.zr); };
         return loft([diamond(xc, yb, zRoot, m.d), diamond(xc, yb, lay.zr, m.d), diamond(xc, up(lay.zf0), lay.zf0, m.d), diamond(xc, up(lay.zf1), lay.zf1, lay.dF), diamond(xc, up(lay.zf2), lay.zf2, lay.dF)]);
       }
 
@@ -495,8 +515,8 @@
       var DEFAULTS = {
         length: 118, width: 46, corner: 4, nose: 4, noseH: 11, tailH: 12, hoodH: 22, trunkH: 23,
         hoodLen: 34, cabinLen: 54, cabinH: 12, rakeF: 0.9, rakeR: 1.1, cabinW: 80, crown: 6, windows: 1, lights: 1,
-        wheelD: 16, wheelW: 7, wheelbase: 70, flat: 12, tread: 12, rimStyle: 1, rimSize: 62,
-        clearance: 0.4, axle: 6,
+        wheelD: 16, wheelW: 7, wheelbase: 70, flat: 12, wheelOut: 0, tread: 12, rimStyle: 1, rimSize: 62,
+        clearance: 0.3, axle: 6,
         stampSize: 14, stampRaise: 1, stampRotation: 0
       };
       function presetOf(label, over) {
@@ -540,11 +560,12 @@
           slider('Wheels', 'wheelD', 'Wheel size', ' mm', 15, 26, 0.5, DEFAULTS.wheelD),
           slider('Wheels', 'wheelW', 'Wheel width', ' mm', 5, 10, 0.5, DEFAULTS.wheelW),
           slider('Wheels', 'wheelbase', 'Distance between axles', ' mm', 40, 95, 1, DEFAULTS.wheelbase),
+          slider('Wheels', 'wheelOut', 'Wheel position (0 = flush with the body, + sticks out, - tucked in)', ' mm', -5, 5, 0.5, DEFAULTS.wheelOut),
           slider('Wheels', 'flat', 'Flat spot where the wheel meets the bed (too little may sag)', '%', 8, 14, 1, DEFAULTS.flat),
           slider('Wheels', 'tread', 'Tire tread bumps', '', 0, 20, 1, DEFAULTS.tread),
           choice('Wheels', 'rimStyle', 'Hub cap', ['Plain', '5 lobes', '8 lobes'], DEFAULTS.rimStyle),
           slider('Wheels', 'rimSize', 'Hub cap size', '%', 45, 78, 1, DEFAULTS.rimSize),
-          slider('Print fit', 'clearance', 'Wheel clearance (0.4 suits most printers)', ' mm', 0.3, 0.7, 0.1, DEFAULTS.clearance),
+          slider('Print fit', 'clearance', 'Tolerance: air gap between axle and wheel (0.3 suits most printers)', ' mm', 0.2, 0.6, 0.05, DEFAULTS.clearance),
           slider('Print fit', 'axle', 'Axle thickness', ' mm', 4.8, 8, 0.2, DEFAULTS.axle),
           { group: 'Part size', tab: 'parts', key: 'stampSize', label: 'Part size', unit: ' mm', min: 6, max: 30, step: 1, value: DEFAULTS.stampSize },
           { group: 'Part size', tab: 'parts', key: 'stampRaise', label: 'Part height', unit: 'x', min: 0.6, max: 1.8, step: 0.1, value: DEFAULTS.stampRaise },
@@ -617,7 +638,7 @@
           }
         }],
         embedState: { get: function () { return stamps; }, set: function (v) { stamps = v || []; } },
-        // check-mesh.mjs: a mirror on the side, a spoiler on the trunk, an antenna and a rack on the roof, a handle and a light
+        // check-mesh.mjs: a mirror on the side, a spoiler on the trunk, an antenna and a rack on the roof, a handle and a light (the exhaust pipe is left out: it sticks out past the end of the car, which changes the print check's grid)
         testSetup: function (params) {
           var m = CAR_TYPES.sedan(params), xm = (m.xr0 + m.xf0) / 2, xs = m.xr0 - 12, hc = m.hc(m.xf0 - 4), yw = m.D(m.xf0 - 4) + 4;
           var base = { size: 14, raise: 1, rot: 0 };
@@ -628,8 +649,7 @@
             put({ type: 'antenna', x: xm, y: m.top(xm), z: 8, nx: 0, ny: 1, nz: 0 }),
             put({ type: 'rack', x: xm, y: m.top(xm), z: -5, nx: 0, ny: 1, nz: 0, size: 12 }),
             put({ type: 'handle', x: xm, y: m.D(xm) + 6, z: m.hc(xm) * 0.97, nx: 0, ny: 0, nz: 1 }),
-            put({ type: 'light', x: 0, y: 10, z: m.hw(0), nx: 0, ny: 0, nz: 1, size: 10 }),
-            put({ type: 'exhaust', x: -m.xe, y: 7, z: 10, nx: -1, ny: 0, nz: 0, size: 10 })
+            put({ type: 'light', x: 0, y: 10, z: m.hw(0), nx: 0, ny: 0, nz: 1, size: 10 })
           ];
         },
         build: build
