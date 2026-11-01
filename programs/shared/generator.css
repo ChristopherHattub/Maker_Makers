@@ -439,6 +439,9 @@ body.mm-gen.mm-framed .mm-main { margin: 0; }
 }
 
 .mm-view-buttons .mm-btn { padding: 0.4rem 0.6rem; font-size: 0.7rem; }
+.mm-view-buttons .mm-btn[hidden] { display: none; }
+.mm-view-buttons .mm-btn[aria-pressed="true"] { border-color: var(--bp-cyan); background: rgba(0, 229, 255, 0.2); }
+.mm-view-buttons .mm-btn[aria-pressed="false"] { opacity: 0.7; }
 
 .mm-toast {
   position: absolute;
