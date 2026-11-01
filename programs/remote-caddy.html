@@ -279,17 +279,18 @@
       }
 
       // Cable and Remote Caddy: upright pockets for remotes with a low front wall, floor cable holes and an optional cable comb.
-      var DEFAULTS = { slots: 3, sw: 50, sd: 26, hgt: 105, front: 30, wall: 2.4, floorT: 3, ext: 6, hole: 1, holeD: 12, comb: 1, combN: 4, cableD: 6, combH: 22 };
+      var DEFAULTS = { slots: 3, sw: 50, sd: 26, hgt: 105, front: 30, wall: 2.4, floorT: 3, ext: 6, hole: 1, holeD: 12, comb: 1, combN: 4, cableD: 6, combH: 22, scoop: 0, corner: 6 };
 
       function build(p, api) {
         var THREE = api.THREE, n = Math.round(p.slots), w = p.wall, pw = p.sw, pd = p.sd, i;
         var Wt = n * pw + (n + 1) * w, Dt = pd + 2 * w, H = p.hgt, fl = p.floorT, hf = Math.min(p.front, H);
         var x0 = -Wt / 2, parts = [], floorHoles = [];
-        var ext = p.ext, corner = 6;
+        var ext = p.ext, corner = p.corner;
         // floor, with a cable hole behind each pocket
         if (p.hole >= 1) for (i = 0; i < n; i++) {
           var xc = x0 + w + i * (pw + w) + pw / 2;
-          floorHoles.push(circlePts(xc, -pd / 2 + p.holeD / 2 + 3, Math.min(p.holeD / 2, pw / 2 - 4), 36));
+          var hr = Math.max(2, Math.min(p.holeD / 2, pw / 2 - 4, pd / 2 - 3));
+          floorHoles.push(circlePts(xc, -pd / 2 + hr + 3, hr, 36));
         }
         var floor = extrude(THREE, rrectPts(0, 0, Wt / 2 + ext, Dt / 2 + ext, corner + ext, 8), floorHoles, 0, fl);
         parts.push(floor);
@@ -297,7 +298,13 @@
         for (i = 0; i <= n; i++) parts.push(box(x0 + i * (pw + w), fl - 0.3, -Dt / 2, x0 + i * (pw + w) + w, H, Dt / 2)); // sides and dividers
         for (i = 0; i < n; i++) {                                                                                   // low front walls
           var fx = x0 + w + i * (pw + w);
-          parts.push(box(fx - 0.5, fl - 0.3, Dt / 2 - w, fx + pw + 0.5, hf, Dt / 2));
+          var sc = Math.min(p.scoop, hf - fl - 6);
+          if (sc >= 3) { // finger scoop: the top edge dips in a smooth arc so a remote is easy to lift out
+            var fo = [[fx - 0.5, fl - 0.3], [fx + pw + 0.5, fl - 0.3], [fx + pw + 0.5, hf]], sa = Math.min(pw / 2 - 2, sc * 1.6), cxm = fx + pw / 2, q, ang;
+            for (q = 0; q <= 16; q++) { ang = (q / 16) * Math.PI; fo.push([cxm + sa * Math.cos(ang), hf - sc * Math.sin(ang)]); }
+            fo.push([fx - 0.5, hf]);
+            parts.push(extrudeXY(THREE, fo, null, Dt / 2 - w, Dt / 2));
+          } else parts.push(box(fx - 0.5, fl - 0.3, Dt / 2 - w, fx + pw + 0.5, hf, Dt / 2));
         }
         var out = [];
         pushMesh(out, mesh('caddy', parts));
@@ -331,10 +338,12 @@
           slider('Pockets', 'slots', 'Pockets', '', 1, 6, 1, DEFAULTS.slots),
           slider('Pockets', 'sw', 'Pocket width (remote width + 3)', ' mm', 25, 100, 1, DEFAULTS.sw),
           slider('Pockets', 'sd', 'Pocket depth (remote thickness + 3)', ' mm', 12, 50, 1, DEFAULTS.sd),
+          slider('Pockets', 'scoop', 'Finger scoop in the front wall (0 = none)', ' mm', 0, 30, 1, DEFAULTS.scoop),
           slider('Pockets', 'hgt', 'Back height', ' mm', 50, 180, 1, DEFAULTS.hgt),
           slider('Pockets', 'front', 'Front wall height', ' mm', 10, 100, 1, DEFAULTS.front),
           slider('Body', 'wall', 'Wall thickness', ' mm', 1.6, 4, 0.2, DEFAULTS.wall),
           slider('Body', 'floorT', 'Floor thickness', ' mm', 2, 6, 0.5, DEFAULTS.floorT),
+          slider('Body', 'corner', 'Foot corner roundness', ' mm', 2, 20, 1, DEFAULTS.corner),
           slider('Body', 'ext', 'Wider foot for stability', ' mm', 0, 30, 1, DEFAULTS.ext),
           choice('Cables', 'hole', 'Floor cable holes', ['None', 'One per pocket'], DEFAULTS.hole),
           slider('Cables', 'holeD', 'Cable hole width', ' mm', 6, 30, 1, DEFAULTS.holeD),
@@ -348,6 +357,7 @@
           presetOf(DEFAULTS, 'Single remote with cables', { slots: 1, sw: 54, comb: 1, combN: 5 }),
           presetOf(DEFAULTS, 'Slim pair', { slots: 2, sw: 44, sd: 20, hgt: 90, comb: 0 }),
           presetOf(DEFAULTS, 'Game controller dock', { slots: 2, sw: 100, sd: 44, hgt: 80, front: 36, holeD: 20 }),
+          presetOf(DEFAULTS, 'Scooped trio', { slots: 3, scoop: 14, front: 36 }),
           presetOf(DEFAULTS, 'Stable couch tray', { ext: 28, slots: 4, sw: 46, floorT: 4 })
         ],
         build: build

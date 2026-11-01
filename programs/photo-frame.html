@@ -279,9 +279,9 @@
       }
 
       // Photo Frame Maker: a frame lofted from a sectional profile, with a back pocket for the photo and glass.
-      var DEFAULTS = { photoW: 102, photoH: 152, border: 20, depth: 12, shape: 1, corner: 14, profile: 1, lip: 3, pocket: 4.5, hanger: 1 };
+      var DEFAULTS = { photoW: 102, photoH: 152, border: 20, depth: 12, shape: 1, corner: 14, profile: 1, lip: 3, pocket: 4.5, hanger: 1, loopR: 8, legW: 18, legLen: 70 };
       var SHAPES = ['Square corners', 'Rounded corners', 'Oval', 'Cut corners'];
-      var PROFILES = ['Flat', 'Bevel', 'Rounded bead', 'Stepped', 'Cove groove'];
+      var PROFILES = ['Flat', 'Bevel', 'Rounded bead', 'Stepped', 'Cove groove', 'Ogee swell', 'Double bead'];
       // [fraction across the border (outer to inner), fraction of depth]
       function profilePts(k) {
         var pts = [], i;
@@ -289,6 +289,8 @@
         if (k === 1) return [[0, 0.45], [0.6, 1], [1, 1]];
         if (k === 2) { for (i = 0; i <= 12; i++) pts.push([i / 12, 0.55 + 0.45 * Math.sin(Math.PI * i / 12)]); return pts; }
         if (k === 3) return [[0, 0.4], [0.34, 0.4], [0.34, 0.7], [0.67, 0.7], [0.67, 1], [1, 1]];
+        if (k === 5) { for (i = 0; i <= 14; i++) { var u = i / 14; pts.push([u, 0.35 + 0.65 * u * u * (3 - 2 * u)]); } return pts; }
+        if (k === 6) { for (i = 0; i <= 16; i++) pts.push([i / 16, 0.5 + 0.5 * Math.abs(Math.sin(Math.PI * 2 * i / 16)) * (0.55 + 0.45 * (1 - i / 16)) + 0.0]); return pts; }
         return [[0, 1], [0.16, 1], [0.36, 0.75], [0.64, 0.75], [0.84, 1], [1, 1]];
       }
       function heightAt(pts, f) { // fraction of depth at border fraction f
@@ -324,10 +326,10 @@
         var out = [];
         pushMesh(out, mesh('frame', [frame]));
         if (p.hanger === 1) {
-          var thick = Math.min(D, 4), cz = -(outHD + 6);
-          pushMesh(out, mesh('hanger', [ringPrism(circlePts(0, cz, 8, 48), circlePts(0, cz, 4, 48), 0, thick)]));
+          var thick = Math.min(D, 4), cz = -(outHD + p.loopR - 2);
+          pushMesh(out, mesh('hanger', [ringPrism(circlePts(0, cz, p.loopR, 48), circlePts(0, cz, Math.max(2, p.loopR / 2), 48), 0, thick)]));
         } else if (p.hanger === 2) {
-          var legL = outHD * 1.4, legW = 18, lx = outHW + 20 + legW / 2;
+          var legL = outHD * 2 * p.legLen / 100, legW = p.legW, lx = outHW + 20 + legW / 2;
           pushMesh(out, mesh('hanger', [extrude(THREE, rrectPts(lx, 0, legW / 2, legL / 2, 5, 6), [circlePts(lx, -legL / 2 + 8, 2.4, 24)], 0, 3.2)]));
         }
         return out;
@@ -356,13 +358,18 @@
           choice('Frame', 'profile', 'Edge style', PROFILES, DEFAULTS.profile),
           slider('Frame', 'border', 'Border width', ' mm', 10, 50, 1, DEFAULTS.border),
           slider('Frame', 'depth', 'Frame depth', ' mm', 8, 30, 1, DEFAULTS.depth),
-          choice('Hanging', 'hanger', 'Hanging', ['None', 'Hang loop', 'Easel leg (prints beside)'], DEFAULTS.hanger)
+          choice('Hanging', 'hanger', 'Hanging', ['None', 'Hang loop', 'Easel leg (prints beside)'], DEFAULTS.hanger),
+          { group: 'Hanging', key: 'loopR', label: 'Hang loop size', unit: ' mm', min: 5, max: 14, step: 0.5, value: DEFAULTS.loopR, showIf: function (q) { return Math.round(q.hanger) === 1; } },
+          { group: 'Hanging', key: 'legW', label: 'Easel leg width', unit: ' mm', min: 10, max: 40, step: 1, value: DEFAULTS.legW, showIf: function (q) { return Math.round(q.hanger) === 2; } },
+          { group: 'Hanging', key: 'legLen', label: 'Easel leg length (% of frame height)', unit: '%', min: 50, max: 90, step: 1, value: DEFAULTS.legLen, showIf: function (q) { return Math.round(q.hanger) === 2; } }
         ],
         presets: [
           presetOf(DEFAULTS, 'Default 4x6 frame', {}),
           presetOf(DEFAULTS, 'Square gallery', { photoW: 120, photoH: 120, shape: 0, profile: 3, border: 26, depth: 14 }),
           presetOf(DEFAULTS, 'Oval portrait', { photoW: 100, photoH: 140, shape: 2, profile: 2, border: 24, hanger: 1 }),
           presetOf(DEFAULTS, 'Cut corner cove', { shape: 3, profile: 4, corner: 20, border: 28 }),
+          presetOf(DEFAULTS, 'Ogee gallery', { profile: 5, shape: 1, corner: 18, border: 30, depth: 16 }),
+          presetOf(DEFAULTS, 'Double bead square', { photoW: 130, photoH: 130, profile: 6, shape: 0, border: 26, depth: 14, hanger: 1, loopR: 10 }),
           presetOf(DEFAULTS, 'Slim desk frame', { photoW: 127, photoH: 178, border: 14, depth: 9, profile: 0, hanger: 2 })
         ],
         build: build

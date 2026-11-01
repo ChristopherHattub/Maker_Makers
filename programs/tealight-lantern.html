@@ -293,7 +293,7 @@
         } else if (kind === 2) { // circle
           for (i = 0; i < 36; i++) pts.push([cx + R * Math.cos((i / 36) * TAU), cy + R * Math.sin((i / 36) * TAU)]);
         } else if (kind === 3) { // tall slot with round ends
-          var w = clamp(s * 0.14, 1.0, s * 0.3), h = R * 0.98;
+          var w = Math.min(clamp(s * 0.14, 1.0, s * 0.3), R * 0.45), h = R * 0.98;
           for (i = 0; i <= 10; i++) { a = (i / 10) * Math.PI; pts.push([cx + w * Math.cos(a), cy + h - w + w * Math.sin(a)]); }
           for (i = 0; i <= 10; i++) { a = Math.PI + (i / 10) * Math.PI; pts.push([cx + w * Math.cos(a), cy - h + w + w * Math.sin(a)]); }
         } else if (kind === 4) { // leaf (slanted ellipse)
@@ -481,7 +481,7 @@
         var cols = Math.round(p.cols), rows = Math.round(p.rows), cw = zoneW / cols, ch = (zoneY1 - zoneY0) / rows;
         var size = Math.min(cw, ch) * (p.fill / 100);
         var holes = [], cc, r;
-        for (cc = 0; cc < cols; cc++) for (r = 0; r < rows; r++) {
+        if (size >= 2) for (cc = 0; cc < cols; cc++) for (r = 0; r < rows; r++) {
           var hx = -zoneW / 2 + (cc + 0.5) * cw, hy = zoneY0 + (r + 0.5) * ch;
           holes.push({ pts: motif(Math.round(p.pattern), hx, hy, size, r + cc), x: hx, y: hy });
         }

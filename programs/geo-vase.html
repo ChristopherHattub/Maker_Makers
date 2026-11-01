@@ -279,18 +279,27 @@
       }
 
       // Geo Vase: a hollow lathe vase with flutes, twist, or a low-poly faceted body. Prints in vase-friendly solid mode.
-      var DEFAULTS = { height: 140, base: 36, belly: 52, neck: 30, bellyAt: 45, lip: 4, wall: 2.4, floor: 3, ribs: 12, ribDepth: 8, twist: 90, shape: 0, sides: 8, foot: 0 };
+      var DEFAULTS = { height: 140, base: 36, belly: 52, neck: 30, bellyAt: 45, lip: 4, wall: 2.4, floor: 3, ribs: 12, ribDepth: 8, twist: 90, shape: 0, sides: 8, foot: 0, ribStyle: 0, ribFade: 0, belly2: 100 };
 
+      // Blend between a straight line (0) and a full S-curve (100) so the swell can be gentle or round.
+      function easeBlend(s, k) { return lerp(s, easeIO(s), k / 100); }
+      // One flute around the vase at angle a (-1..1): rounded, sharp ridges or scallops.
+      function fluteWave(a, style) {
+        if (style === 1) { var u = (a / TAU) - Math.floor(a / TAU); return 1 - 4 * Math.abs(u - 0.5); }
+        if (style === 2) return 2 * Math.abs(Math.cos(a / 2)) - 1;
+        return Math.cos(a);
+      }
       function easeIO(s) { return s * s * (3 - 2 * s); }
       function radiusAt(p, t) {
         var tb = p.bellyAt / 100, rb = p.base / 2, rm = p.belly / 2, rn = p.neck / 2, r;
-        if (t < tb) r = lerp(rb, rm, easeIO(t / tb));
-        else r = lerp(rm, rn, easeIO((t - tb) / (1 - tb)));
+        if (t < tb) r = lerp(rb, rm, easeBlend(t / tb, p.belly2));
+        else r = lerp(rm, rn, easeBlend((t - tb) / (1 - tb), p.belly2));
         return r + p.lip * smoothstep(0.88, 1, t);
       }
 
       function build(p) {
         var H = p.height, ROWS = 64, seg = p.shape >= 1 ? Math.round(p.sides) : 120, i, y, r, prof = [];
+        var fadeAmt = p.ribFade / 100, fade = function (u) { return 1 - fadeAmt * (1 - Math.min(smoothstep(0, 0.3, u), 1 - smoothstep(0.7, 1, u))); };
         var w = p.wall, tw = p.twist * DEG, d = p.ribDepth / 100, ribs = Math.round(p.ribs);
         if (p.shape >= 1) { d = 0; }
         prof.push([0, 0]);
@@ -305,7 +314,7 @@
         var body = surface(prof, seg, function (i, j, th) {
           var r = prof[i][0], y = prof[i][1];
           if (r < 1e-6) return [0, y, 0];
-          var a = th + tw * (y / H), m = d > 0 && ribs > 0 ? 1 + d * Math.cos(ribs * a) : 1;
+          var a = th + tw * (y / H), m = d > 0 && ribs > 0 ? 1 + d * fade(y / H) * fluteWave(ribs * a, Math.round(p.ribStyle)) : 1;
           return [r * m * Math.cos(a), y, r * m * Math.sin(a)];
         }, false);
         var out = [];
@@ -337,10 +346,13 @@
           slider('Shape', 'neck', 'Neck width', ' mm', 16, 90, 1, DEFAULTS.neck),
           slider('Shape', 'bellyAt', 'Belly height', '%', 15, 80, 1, DEFAULTS.bellyAt),
           slider('Shape', 'lip', 'Lip flare', ' mm', 0, 14, 0.5, DEFAULTS.lip),
+          slider('Shape', 'belly2', 'Belly roundness (straight to round)', '%', 0, 100, 5, DEFAULTS.belly2),
           choice('Surface', 'shape', 'Body', ['Smooth round', 'Low-poly facets'], DEFAULTS.shape),
           slider('Surface', 'sides', 'Facets (low-poly)', '', 5, 16, 1, DEFAULTS.sides),
           slider('Surface', 'ribs', 'Flutes (round)', '', 0, 24, 1, DEFAULTS.ribs),
           slider('Surface', 'ribDepth', 'Flute depth', '%', 0, 18, 1, DEFAULTS.ribDepth),
+          choice('Surface', 'ribStyle', 'Flute style', ['Rounded', 'Sharp ridges', 'Scallops'], DEFAULTS.ribStyle),
+          slider('Surface', 'ribFade', 'Flutes fade at top and bottom', '%', 0, 100, 5, DEFAULTS.ribFade),
           slider('Surface', 'twist', 'Twist', '°', -360, 360, 5, DEFAULTS.twist),
           slider('Walls', 'wall', 'Wall thickness', ' mm', 1.6, 6, 0.2, DEFAULTS.wall),
           slider('Walls', 'floor', 'Floor thickness', ' mm', 2, 8, 0.5, DEFAULTS.floor),
@@ -351,6 +363,8 @@
           presetOf(DEFAULTS, 'Twisted tower', { height: 190, base: 40, belly: 48, neck: 40, bellyAt: 50, ribs: 8, ribDepth: 14, twist: 270, lip: 0 }),
           presetOf(DEFAULTS, 'Low-poly gem', { shape: 1, sides: 6, twist: 60, ribs: 0, belly: 60, neck: 36 }),
           presetOf(DEFAULTS, 'Bud vase', { height: 100, base: 34, belly: 40, neck: 18, bellyAt: 35, ribs: 0, twist: 0, lip: 2 }),
+          presetOf(DEFAULTS, 'Sharp ridge vase', { ribStyle: 1, ribs: 10, ribDepth: 10, ribFade: 40, twist: 0 }),
+          presetOf(DEFAULTS, 'Scalloped bowl vase', { height: 100, base: 50, belly: 90, neck: 70, bellyAt: 35, ribStyle: 2, ribs: 14, ribDepth: 6, twist: 0, lip: 0 }),
           presetOf(DEFAULTS, 'Smooth urn', { height: 150, belly: 70, neck: 44, ribs: 0, twist: 0, lip: 8, foot: 1 })
         ],
         build: build

@@ -279,7 +279,7 @@
       }
 
       // Floating Shelf Bracket: a screw-on back plate with one or two standing webs that carry a shelf board. Prints on its back.
-      var DEFAULTS = { depth: 130, hgt: 100, arm: 12, web: 8, webs: 2, plateW: 60, plateT: 6, style: 0, curve: 55, holes: 3, screwD: 4.5, pair: 1 };
+      var DEFAULTS = { depth: 130, hgt: 100, arm: 12, web: 8, webs: 2, plateW: 60, plateT: 6, style: 0, curve: 55, holes: 3, screwD: 4.5, pair: 1, corner: 6, bar: 70, nh: 4, holeSize: 100 };
       var STYLES = ['Wedge', 'Curved swoosh', 'Open frame', 'Lattice holes'];
 
       function bracketOne(p, THREE, ox) {
@@ -296,19 +296,19 @@
         for (i = 0; i <= n; i++) { var u = D - (D * i) / n; poly.push([u, under(u)]); }
         poly = poly.map(function (q) { return [ys + q[0], zTop + q[1]]; });
         if (style === 2) {
-          var b = Math.max(5, a * 0.7), m = (Hh - a) / D, kk = Math.sqrt(1 + m * m);
+          var b = Math.max(5, a * p.bar / 100), m = (Hh - a) / D, kk = Math.sqrt(1 + m * m);
           var u2 = D * (Hh - a - b * kk) / (Hh - a), v3 = Hh - m * b - b * kk;
           if (u2 > b + 6 && v3 > a + b + 6) holes.push([[ys + b, zTop + a + b * 0.8], [ys + u2, zTop + a + b * 0.8], [ys + b, zTop + v3]]);
         } else if (style === 3) {
-          var nh = 4;
+          var nh = Math.round(p.nh);
           for (i = 0; i < nh; i++) {
-            var uc = D * (0.18 + (0.58 * (i + 0.5)) / nh), room = under(uc) - a, rr = Math.min(room * 0.34, D * 0.58 / nh * 0.38);
+            var uc = D * (0.18 + (0.58 * (i + 0.5)) / nh), room = under(uc) - a, rr = Math.min(Math.min(room * 0.34, D * 0.58 / nh * 0.38) * p.holeSize / 100, room * 0.45 / (1 + (Hh - a) / D), D * 0.58 / nh * 0.45);
             if (rr >= 3) { var h = []; for (k = 0; k < 28; k++) h.push([ys + uc + rr * Math.cos((k / 28) * TAU), zTop + a + room * 0.5 + rr * Math.sin((k / 28) * TAU)]); holes.push(h); }
           }
         }
         var xs = webs === 1 ? [0] : [-(W / 2 - wt / 2 - 3), W / 2 - wt / 2 - 3];
         var webParts = xs.map(function (x) { return extrudeYZ(THREE, poly, holes, ox + x - wt / 2, ox + x + wt / 2); });
-        var rc = Math.min(6, W / 2 - 1, Hh / 2 - 1), outline = rrectPts(ox, 0, W / 2, Hh / 2, rc, 6);
+        var rc = Math.min(p.corner, W / 2 - 1, Hh / 2 - 1), outline = rrectPts(ox, 0, W / 2, Hh / 2, rc, 6);
         var hs = [], hz, hr0 = p.screwD + 1.2, nH = Math.max(1, Math.min(Math.round(p.holes), Math.floor((Hh - 32) / (2 * hr0 + 3)) + 1));
         var cols = webs === 1 ? [-(W / 2 - 9) , (W / 2 - 9)] : [0];
         cols.forEach(function (cx) {
@@ -356,8 +356,12 @@
           choice('Shape', 'style', 'Style', STYLES, DEFAULTS.style),
           slider('Shape', 'curve', 'Swoosh curve', '%', 0, 100, 1, DEFAULTS.curve),
           slider('Web', 'web', 'Web thickness', ' mm', 4, 16, 0.5, DEFAULTS.web),
+          { group: 'Web', key: 'bar', label: 'Frame bar width (open frame)', unit: '%', min: 40, max: 120, step: 5, value: DEFAULTS.bar, showIf: function (q) { return Math.round(q.style) === 2; } },
+          { group: 'Web', key: 'nh', label: 'Lattice holes', unit: '', min: 2, max: 7, step: 1, value: DEFAULTS.nh, showIf: function (q) { return Math.round(q.style) === 3; } },
+          { group: 'Web', key: 'holeSize', label: 'Lattice hole size', unit: '%', min: 50, max: 130, step: 5, value: DEFAULTS.holeSize, showIf: function (q) { return Math.round(q.style) === 3; } },
           slider('Web', 'webs', 'Webs per bracket', '', 1, 2, 1, DEFAULTS.webs),
           slider('Plate', 'plateW', 'Plate width', ' mm', 30, 120, 1, DEFAULTS.plateW),
+          slider('Plate', 'corner', 'Plate corner roundness', ' mm', 1, 20, 1, DEFAULTS.corner),
           slider('Plate', 'plateT', 'Plate thickness', ' mm', 5, 12, 0.5, DEFAULTS.plateT),
           slider('Plate', 'holes', 'Screw holes per column', '', 1, 5, 1, DEFAULTS.holes),
           slider('Plate', 'screwD', 'Screw width', ' mm', 3, 6, 0.1, DEFAULTS.screwD),

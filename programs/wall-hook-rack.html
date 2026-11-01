@@ -279,7 +279,7 @@
       }
 
       // Wall Hook Rack: a back plate with counterbored screw holes, N pegs in four styles, and optional shelf. Prints on its back.
-      var DEFAULTS = { len: 190, hgt: 56, thick: 6.5, corner: 10, pegs: 4, style: 0, plen: 46, pdia: 11, tilt: 12, bend: 35, screws: 3, screwD: 4.2, shelf: 1, sdepth: 80, sthick: 6, gussets: 3 };
+      var DEFAULTS = { len: 190, hgt: 56, thick: 6.5, corner: 10, pegs: 4, style: 0, plen: 46, pdia: 11, tilt: 12, bend: 35, screws: 3, screwD: 4.2, shelf: 1, sdepth: 80, sthick: 6, gussets: 3, margin: 18, lift: 0 };
       var STYLES = ['Straight peg', 'Tip bend (hook)', 'Ball knob', 'Wide cap'];
       var SHELVES = ['No shelf', 'Plain shelf', 'Shelf with gussets', 'Shelf with arched gussets'];
 
@@ -307,12 +307,12 @@
 
       function build(p, api) {
         var THREE = api.THREE, T = p.thick, L = p.len, H = p.hgt, out = [], r = p.pdia / 2, i;
-        var shelf = Math.round(p.shelf), margin = 18, nPeg = Math.round(p.pegs);
+        var shelf = Math.round(p.shelf), margin = Math.min(p.margin, L / 2 - 17), nPeg = Math.round(p.pegs);
         var pitchMin = p.pdia * 1.9, avail = L - 2 * margin;
         nPeg = Math.max(1, Math.min(nPeg, Math.floor(avail / pitchMin)));
         var pitch = avail / nPeg, px = [], k;
         for (k = 0; k < nPeg; k++) px.push(-L / 2 + margin + (k + 0.5) * pitch);
-        var pz = shelf > 0 ? H / 2 - r - 7 : 0;
+        var pz = clamp((shelf > 0 ? H / 2 - r - 7 : 0) + p.lift, -(H / 2 - r - 3), H / 2 - r - 3);
         // screw holes sit between the pegs
         var ns = Math.max(2, Math.min(Math.round(p.screws), nPeg + 1)), sx = [], hd = Math.min(3, T * 0.45);
         for (k = 0; k < ns; k++) sx.push(ns === 1 ? 0 : -L / 2 + margin + (k * avail) / (ns - 1));
@@ -320,7 +320,15 @@
         var sd = p.screwD / 2, hr = p.screwD * 1.0 + 0.8;
         var rc = Math.min(p.corner, H / 2 - 1), outline = rrectPts(0, 0, L / 2, H / 2, rc, 8);
         // when a shelf is present the holes go on the lower band, in line with the pegs
-        var holeZ = shelf > 0 ? pz : 0;
+        var holeZ = clamp(shelf > 0 ? pz : 0, -(H / 2 - hr - 2), H / 2 - hr - 2);
+        // slide the screw holes toward the middle until every one sits inside the rounded corners with some wall around it
+        function holeFits(z) {
+          return sx.every(function (x) {
+            var dx = Math.abs(x) - (L / 2 - rc), dz = Math.abs(z) - (H / 2 - rc);
+            return dx > 0 && dz > 0 ? Math.sqrt(dx * dx + dz * dz) <= rc - hr - 1.5 : Math.abs(x) <= L / 2 - hr - 1.5 && Math.abs(z) <= H / 2 - hr - 1.5;
+          });
+        }
+        while (Math.abs(holeZ) > 0.01 && !holeFits(holeZ)) holeZ -= Math.sign(holeZ) * Math.min(0.5, Math.abs(holeZ));
         function holeSet(rad) { return sx.map(function (x) { return circlePts(x, holeZ, rad, 28); }); }
         var plate = [extrude(THREE, outline, holeSet(sd), 0, T - hd), extrude(THREE, outline, holeSet(hr), T - hd - 0.2, T)];
         pushMesh(out, mesh('plate', plate));
@@ -367,11 +375,13 @@
           slider('Back plate', 'len', 'Length', ' mm', 70, 400, 1, DEFAULTS.len),
           slider('Back plate', 'hgt', 'Height', ' mm', 30, 90, 1, DEFAULTS.hgt),
           slider('Back plate', 'thick', 'Thickness', ' mm', 5, 12, 0.5, DEFAULTS.thick),
+          slider('Back plate', 'margin', 'End margin (space before the first peg)', ' mm', 10, 40, 1, DEFAULTS.margin),
           slider('Back plate', 'corner', 'Corner roundness', ' mm', 2, 30, 1, DEFAULTS.corner),
           slider('Pegs', 'pegs', 'Number of pegs', '', 1, 8, 1, DEFAULTS.pegs),
           choice('Pegs', 'style', 'Style', STYLES, DEFAULTS.style),
           slider('Pegs', 'plen', 'Peg length', ' mm', 25, 90, 1, DEFAULTS.plen),
           slider('Pegs', 'pdia', 'Peg width', ' mm', 7, 20, 0.5, DEFAULTS.pdia),
+          slider('Pegs', 'lift', 'Peg height on the plate (up or down)', ' mm', -20, 20, 1, DEFAULTS.lift),
           slider('Pegs', 'tilt', 'Tilt up the wall (higher = lean, less slip)', '°', 0, 25, 1, DEFAULTS.tilt),
           slider('Pegs', 'bend', 'Tip bend (hook style, supports above about 35)', '°', 0, 60, 1, DEFAULTS.bend),
           slider('Screws', 'screws', 'Screw holes', '', 2, 6, 1, DEFAULTS.screws),

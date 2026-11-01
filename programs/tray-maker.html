@@ -279,7 +279,7 @@
       }
 
       // Tray Maker: a rectangular tray with a grid of compartments, or a round tray with pie sections, plus ear handles.
-      var DEFAULTS = { shape: 0, width: 210, depth: 140, hgt: 28, wall: 2.4, floorT: 3, corner: 18, cols: 3, rows: 2, div: 2, divH: 100, sections: 4, hub: 14, handle: 1, tabL: 32, tabW: 44, tabH: 8, hole: 20 };
+      var DEFAULTS = { shape: 0, width: 210, depth: 140, hgt: 28, wall: 2.4, floorT: 3, corner: 18, cols: 3, rows: 2, div: 2, divH: 100, sections: 4, hub: 14, handle: 1, tabL: 32, tabW: 44, tabH: 8, hole: 20, colBias: 0, rowBias: 0 };
 
       function sectorHole(R, rin, a0, a1, h) { // sector between two straight dividers of thickness 2h
         var pts = [], i, n = 14, ro = R;
@@ -290,6 +290,17 @@
         return outer.concat(pts.reverse());
       }
 
+      // Split `total` into n compartment sizes; the first is (1 + bias%) times the others.
+      function sizes(total, n, bias) {
+        var f = Math.max(0.4, 1 + bias / 100), unit = total / (n - 1 + f), out = [], i;
+        for (i = 0; i < n; i++) out.push(i === 0 ? unit * f : unit);
+        return out;
+      }
+      // Centre post radius for the round tray: never bigger than half the bowl, never so small that the dividers meet.
+      function roundHub(p, R) {
+        var ns = Math.max(1, Math.round(p.sections)), minHub = Math.max(p.div + 2, (ns * (p.div + 3)) / TAU);
+        return Math.max(minHub, Math.min(p.hub, R * 0.5));
+      }
       function build(p, api) {
         var THREE = api.THREE, W = p.width, w = p.wall, fl = p.floorT, H = p.hgt, out = [], parts = [], walls = [], i, j;
         var round = Math.round(p.shape) === 1, dh = Math.max(fl + 4, H * p.divH / 100);
@@ -297,17 +308,24 @@
         if (round) {
           var R = W / 2;
           outline = circlePts(0, 0, R, 120); innerHole = circlePts(0, 0, R - w, 120);
-          var ns = Math.round(p.sections), hub = Math.max(p.hub, p.div + 2);
+          var ns = Math.round(p.sections), hub = roundHub(p, R);
           if (ns <= 1) cells.push(circlePts(0, 0, R - w, 120));
           else for (i = 0; i < ns; i++) cells.push(sectorHole(R - w, hub, (i / ns) * TAU, ((i + 1) / ns) * TAU, p.div / 2));
         } else {
           var D = p.depth, cols = Math.round(p.cols), rows = Math.round(p.rows);
-          var cw = (W - 2 * w - (cols - 1) * p.div) / cols, ch = (D - 2 * w - (rows - 1) * p.div) / rows;
-          var cr = Math.min(p.corner, W / 2 - 2, D / 2 - 2, w + Math.min(cw, ch) / 2.2), rc = Math.max(2, cr - w);
+          // the first column / row can be wider or narrower than the rest; the others share what is left equally
+          var cws = sizes(W - 2 * w - (cols - 1) * p.div, cols, p.colBias), chs = sizes(D - 2 * w - (rows - 1) * p.div, rows, p.rowBias);
+          var cr = Math.min(p.corner, W / 2 - 2, D / 2 - 2, w + Math.min(Math.min.apply(null, cws), Math.min.apply(null, chs)) / 2.2), rc = Math.max(2, cr - w);
           outline = rrectPts(0, 0, W / 2, D / 2, cr, 8);
           innerHole = rrectPts(0, 0, W / 2 - w, D / 2 - w, rc, 8);
-          for (i = 0; i < cols; i++) for (j = 0; j < rows; j++) {
-            cells.push(rrectPts(-W / 2 + w + cw / 2 + i * (cw + p.div), -D / 2 + w + ch / 2 + j * (ch + p.div), cw / 2, ch / 2, rc, 5));
+          var cx0 = -W / 2 + w, cz0;
+          for (i = 0; i < cols; i++) {
+            cz0 = -D / 2 + w;
+            for (j = 0; j < rows; j++) {
+              cells.push(rrectPts(cx0 + cws[i] / 2, cz0 + chs[j] / 2, cws[i] / 2, chs[j] / 2, rc, 5));
+              cz0 += chs[j] + p.div;
+            }
+            cx0 += cws[i] + p.div;
           }
         }
         parts.push(extrude(THREE, outline, null, 0, fl));
@@ -317,7 +335,7 @@
           parts.push(extrude(THREE, outline, cells, fl - 0.3, dh));
           parts.push(extrude(THREE, outline, [innerHole], dh - 0.3, H));
         }
-        if (round && Math.round(p.sections) > 1) parts.push(extrude(THREE, circlePts(0, 0, Math.max(p.hub, p.div + 2) + 0.01, 48), null, dh - 0.3, H));
+        if (round && Math.round(p.sections) > 1) parts.push(extrude(THREE, circlePts(0, 0, roundHub(p, W / 2) + 0.01, 48), null, dh - 0.3, H));
         pushMesh(out, mesh('tray', parts));
         if (p.handle >= 1) {
           var tabs = [], half = round ? W / 2 : W / 2, L = p.tabL, tw = Math.min(p.tabW, (round ? W : p.depth) - 20), hd = Math.min(p.hole / 2, L / 2 - 3, tw / 2 - 3);
@@ -354,6 +372,8 @@
           slider('Shape', 'floorT', 'Floor thickness', ' mm', 2, 6, 0.5, DEFAULTS.floorT),
           slider('Compartments', 'cols', 'Columns (rectangle)', '', 1, 6, 1, DEFAULTS.cols),
           slider('Compartments', 'rows', 'Rows (rectangle)', '', 1, 5, 1, DEFAULTS.rows),
+          slider('Compartments', 'colBias', 'First column size (smaller ↔ larger)', '%', -50, 100, 5, DEFAULTS.colBias),
+          slider('Compartments', 'rowBias', 'First row size (smaller ↔ larger)', '%', -50, 100, 5, DEFAULTS.rowBias),
           slider('Compartments', 'sections', 'Sections (round)', '', 1, 8, 1, DEFAULTS.sections),
           slider('Compartments', 'hub', 'Centre post width (round)', ' mm', 6, 40, 1, DEFAULTS.hub),
           slider('Compartments', 'div', 'Divider thickness', ' mm', 1.2, 4, 0.2, DEFAULTS.div),
@@ -369,6 +389,7 @@
           presetOf(DEFAULTS, 'Serving tray, one pocket', { cols: 1, rows: 1, hgt: 22, depth: 150, corner: 30 }),
           presetOf(DEFAULTS, 'Round snack tray', { shape: 1, width: 220, sections: 5, hub: 18, hgt: 30 }),
           presetOf(DEFAULTS, 'Desk tidy', { cols: 4, rows: 2, width: 240, depth: 130, divH: 70, handle: 0 }),
+          presetOf(DEFAULTS, 'Big bin and small pockets', { cols: 3, rows: 2, colBias: 100, rowBias: -20, width: 230, depth: 140 }),
           presetOf(DEFAULTS, 'Jewellery dish', { cols: 2, rows: 2, width: 130, depth: 100, hgt: 18, corner: 25, handle: 0 })
         ],
         build: build

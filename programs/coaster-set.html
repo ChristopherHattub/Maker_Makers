@@ -279,9 +279,9 @@
       }
 
       // Coaster Set: a set of coasters in many outlines with a rim and a raised pattern, plus a matching holder.
-      var DEFAULTS = { shape: 0, size: 92, corner: 55, lobes: 10, lobeDepth: 6, thick: 4, rimW: 3, rimH: 2, pattern: 1, pat: 8, patH: 1.2, count: 4, gap: 10, holder: 1, holderH: 34, holderWall: 2.4, tol: 0.8, notch: 40 };
+      var DEFAULTS = { shape: 0, size: 92, corner: 55, lobes: 10, lobeDepth: 6, thick: 4, rimW: 3, rimH: 2, pattern: 1, pat: 8, patH: 1.2, count: 4, gap: 10, holder: 1, holderH: 34, holderWall: 2.4, tol: 0.8, notch: 40, patAngle: 0 };
       var SHAPES = ['Round', 'Square', 'Hexagon', 'Octagon', 'Triangle', 'Scallop', 'Flower'];
-      var PATTERNS = ['None', 'Rings', 'Dots', 'Honeycomb', 'Spokes'];
+      var PATTERNS = ['None', 'Rings', 'Dots', 'Honeycomb', 'Spokes', 'Stripes', 'Crosshatch'];
       var NPT = 160;
 
       // Outline radius at angle th for the chosen shape. `a` = flat-to-centre distance (or radius).
@@ -333,6 +333,14 @@
             out.push(stroke(r0 * Math.cos(an), r0 * Math.sin(an), (rin - 0.5) * Math.cos(an), (rin - 0.5) * Math.sin(an), Math.max(1.4, s * 0.2), y0, y1));
           }
           out.push(fanPrism(circlePts(0, 0, r0 * 0.7, 28), y0, y1, [0, 0]));
+        } else if (k === 5 || k === 6) {
+          var wl = Math.max(1.2, s * 0.18), pl = s * 0.9, zl, hl;
+          for (zl = -rin + wl; zl <= rin - wl + 1e-6; zl += pl) {
+            hl = Math.sqrt(Math.max(0, rin * rin - (Math.abs(zl) + wl / 2) * (Math.abs(zl) + wl / 2))) - wl * 0.2 - 0.4;
+            if (hl < 2) continue;
+            out.push(stroke(-hl, zl, hl, zl, wl, y0, y1));
+            if (k === 6) out.push(stroke(zl, -hl, zl, hl, wl, y0, y1));
+          }
         }
         return out;
       }
@@ -361,7 +369,7 @@
         var slab = [fanPrism(outer, 0, t, [0, 0])];
         var rim = [], pat = [];
         if (p.rimH > 0 && rimW > 0) rim.push(ringPrism(outer, rimInner, t - 0.3, t + p.rimH));
-        if (Math.round(p.pattern) > 0) pat = patternShapes(p, inner - 1.2, t - 0.3, t + p.patH);
+        if (Math.round(p.pattern) > 0) pat = patternShapes(p, inner - 1.2, t - 0.3, t + p.patH).map(function (m) { return p.patAngle ? xform(m, { ry: p.patAngle * DEG }) : m; });
         var slabs = [], rims = [], pats = [];
         for (i = 0; i < n; i++) {
           var cx = (i % cols - (cols - 1) / 2) * pitch, cz = (Math.floor(i / cols) - (rowsN - 1) / 2) * pitch, tr = { t: [cx, 0, cz] };
@@ -405,6 +413,7 @@
           choice('Pattern', 'pattern', 'Pattern', PATTERNS, DEFAULTS.pattern),
           slider('Pattern', 'pat', 'Pattern size', ' mm', 4, 18, 0.5, DEFAULTS.pat),
           slider('Pattern', 'patH', 'Pattern height', ' mm', 0.6, 3, 0.2, DEFAULTS.patH),
+          slider('Pattern', 'patAngle', 'Pattern turn (spin the pattern)', '°', 0, 90, 5, DEFAULTS.patAngle),
           slider('Set', 'count', 'Coasters in the set', '', 1, 8, 1, DEFAULTS.count),
           slider('Set', 'gap', 'Space between coasters', ' mm', 4, 30, 1, DEFAULTS.gap),
           choice('Holder', 'holder', 'Holder', ['No holder', 'With holder'], DEFAULTS.holder),
@@ -418,6 +427,8 @@
           presetOf(DEFAULTS, 'Honeycomb hexagons', { shape: 2, corner: 60, pattern: 3, pat: 9, rimH: 1.5 }),
           presetOf(DEFAULTS, 'Flower coasters', { shape: 6, lobes: 8, lobeDepth: 8, pattern: 4, pat: 7 }),
           presetOf(DEFAULTS, 'Soft squares', { shape: 1, corner: 85, pattern: 2, pat: 8, size: 90 }),
+          presetOf(DEFAULTS, 'Striped squares', { shape: 1, corner: 70, pattern: 5, pat: 8, patAngle: 45, size: 90 }),
+          presetOf(DEFAULTS, 'Crosshatch octagons', { shape: 3, corner: 55, pattern: 6, pat: 9, rimH: 1.5 }),
           presetOf(DEFAULTS, 'Scalloped, plain', { shape: 5, lobes: 12, lobeDepth: 5, pattern: 0, rimH: 0, rimW: 0 })
         ],
         build: build
