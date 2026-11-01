@@ -273,7 +273,8 @@
       ]),
       el('div', { class: 'mm-view-buttons' }, [
         el('button', { class: 'mm-btn', type: 'button', text: 'Front', onclick: function () { centerCamera('front'); } }),
-        el('button', { class: 'mm-btn', type: 'button', text: 'Iso', onclick: function () { centerCamera('iso'); } })
+        el('button', { class: 'mm-btn', type: 'button', text: 'Iso', onclick: function () { centerCamera('iso'); } }),
+        el('button', { class: 'mm-btn', type: 'button', id: 'mm-colors-toggle', 'aria-pressed': 'true', text: 'Colors', title: 'Show or hide colors in the Parametric view', onclick: function () { toggleColors(); } })
       ])
     ]);
 
@@ -1444,9 +1445,16 @@
     return label + ' · ' + triangleCount.toLocaleString() + ' tris';
   }
 
+  var colorsHidden = false; // Parametric view only: the Colors button in the viewport turns part colors off
+  function toggleColors() {
+    colorsHidden = !colorsHidden;
+    $('mm-colors-toggle').setAttribute('aria-pressed', String(!colorsHidden));
+    refreshColors();
+  }
+
   // Writes the colors for the current tab. Parametric, Color and Print show the part colors and paint; other tabs show the neutral model.
   function refreshColors() {
-    var colorTab = activeTab === 'model' || activeTab === 'color' || activeTab === 'print' || (cfg.coloredTabs || []).indexOf(activeTab) >= 0; // Print preview (and cfg.coloredTabs) show the painted colors too
+    var colorTab = (activeTab === 'model' && !colorsHidden) || activeTab === 'color' || activeTab === 'print' || (cfg.coloredTabs || []).indexOf(activeTab) >= 0; // Print preview (and cfg.coloredTabs) show the painted colors too
     if (colorTab) ensureParts();
     modelMeshes.forEach(function (mesh, meshIndex) {
       var colorAttr = mesh.geometry.attributes.color;
@@ -1634,6 +1642,7 @@
       if (tab === 'sculpt' || wasSculpt) schedulePrintCheck();
       sculptRefresh();
     }
+    $('mm-colors-toggle').hidden = tab !== 'model';
     updateCursor();
     if (isColor || tab === 'model' || tab === 'print' || (cfg.coloredTabs || []).indexOf(tab) >= 0) ensureParts();
     applyModelMaterial();
