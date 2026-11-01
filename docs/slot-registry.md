@@ -74,12 +74,12 @@ Total built: 99 generators in 21 groups (2 groups are `planned` and empty: toys,
 | 55 | Firework Burst | july4 | `firework-burst.html` |
 | 56 | Star-Spangled Star | july4 | `star-spangled-star.html` |
 | 57 | Geo Vase | decor | `geo-vase.html` |
-| 58 | Tea Light Lantern | decor | `tealight-lantern.html` |
+| 58 | Tea Light Lantern | decor | `tealight-lantern.html` (body shapes Straight, Tapered, Flared, Round drum; Stamps tab; fire warning is a second export modal) |
 | 59 | Coaster Set | decor | `coaster-set.html` |
 | 60 | Photo Frame Maker | decor | `photo-frame.html` |
 | 61 | Wall Hook Rack | organization | `wall-hook-rack.html` |
 | 62 | Floating Shelf Bracket | decor | `shelf-bracket.html` |
-| 63 | Bookend Builder | decor | `bookend-builder.html` |
+| 63 | Bookend Builder | decor | `bookend-builder.html` (each style has its own sliders) |
 | 64 | Cable and Remote Caddy | organization | `remote-caddy.html` |
 | 65 | Tray Maker | organization | `tray-maker.html` |
 | 66 | Dice Tower | tabletop | `dice-tower.html` |

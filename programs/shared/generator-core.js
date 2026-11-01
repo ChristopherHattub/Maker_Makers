@@ -87,7 +87,11 @@
     }
     function onKey(e) { if (e.key === 'Escape') close(); }
     agree.addEventListener('change', function () { go.disabled = !agree.checked; });
-    go.addEventListener('click', function () { if (!agree.checked) return; close(); proceed(); });
+    go.addEventListener('click', function () {
+      if (!agree.checked) return;
+      close();
+      if (cfg.exportWarning) confirmExtraWarning(cfg.exportWarning, proceed); else proceed();
+    });
     var items = [
       el('p', {}, [el('strong', { text: 'Safety Warning: ' }), document.createTextNode('3D printed objects can shatter or break into small, sharp pieces. Items generated with this tool (such as articulated lanyard links, figures, or small accessories) are a severe choking hazard and are strictly not intended for young children.')]),
       el('p', { text: 'Additionally, if you are generating custom lamp shades or lighting fixtures, do not use them with incandescent bulbs or high-heat sockets. Materials like Matte PLA and Silk PETG will warp, melt, and pose a severe fire hazard.' })
@@ -97,6 +101,38 @@
         el('h2', { id: 'mm-consent-title', class: 'mm-modal-title', text: 'Before you download' }),
         el('div', { class: 'mm-modal-body' }, items),
         el('label', { class: 'mm-check mm-modal-agree' }, [agree, el('span', { text: 'I understand and accept these safety risks.' })]),
+        el('div', { class: 'mm-modal-actions' }, [
+          el('button', { class: 'mm-btn', type: 'button', text: 'Cancel', onclick: close }),
+          go
+        ])
+      ])
+    ]);
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(modal);
+    agree.focus();
+  }
+
+  // Optional second warning for models with a specific hazard (cfg.exportWarning = { title, paragraphs, agree }).
+  // Shown after the standard consent is accepted; the download only starts once this one is accepted too.
+  function confirmExtraWarning(w, proceed) {
+    if (document.getElementById('mm-consent2')) return;
+    var agree = el('input', { type: 'checkbox', id: 'mm-consent2-agree' });
+    var go = el('button', { class: 'mm-btn mm-btn--solid', type: 'button', text: 'Confirm & Download', disabled: 'disabled' });
+    function close() {
+      document.removeEventListener('keydown', onKey, true);
+      var m = document.getElementById('mm-consent2');
+      if (m) m.remove();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    agree.addEventListener('change', function () { go.disabled = !agree.checked; });
+    go.addEventListener('click', function () { if (!agree.checked) return; close(); proceed(); });
+    var items = (w.paragraphs || []).map(function (t) { return el('p', { text: t }); });
+    var modal = el('div', { class: 'mm-modal', id: 'mm-consent2', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mm-consent2-title' }, [
+      el('div', { class: 'mm-modal-box' }, [
+        el('h2', { id: 'mm-consent2-title', class: 'mm-modal-title', text: w.title || 'One more safety warning' }),
+        el('div', { class: 'mm-modal-body' }, items),
+        el('label', { class: 'mm-check mm-modal-agree' }, [agree, el('span', { text: w.agree || 'I understand and accept these safety risks.' })]),
         el('div', { class: 'mm-modal-actions' }, [
           el('button', { class: 'mm-btn', type: 'button', text: 'Cancel', onclick: close }),
           go
@@ -1599,7 +1635,7 @@
       sculptRefresh();
     }
     updateCursor();
-    if (isColor || tab === 'print' || (cfg.coloredTabs || []).indexOf(tab) >= 0) ensureParts();
+    if (isColor || tab === 'model' || tab === 'print' || (cfg.coloredTabs || []).indexOf(tab) >= 0) ensureParts();
     applyModelMaterial();
     updatePrintLook();
     refreshColors();
