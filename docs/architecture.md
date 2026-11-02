@@ -38,7 +38,7 @@ Only one screen is visible at a time. Navigation sets `location.hash`; `renderRo
 
 ## Viewer
 
-The viewer's top bar shows the code, category and title, plus three buttons:
+The viewer's top bar shows the code, category and title, plus three buttons. On phones they collapse into a closed-by-default **Menu** button (`toggleViewerMenu()`, the `menu-open` class on `.viewer-topbar`):
 
 - **Save STL** clicks the generator's own Export .STL button inside the iframe (`saveGeneratorStl()`), so its consent prompt still runs.
 - **Send to Workshop** reads the model, settings and extras from the generator (`window.MM_STAGE.getEmbed()`, exposed by the engine), puts them in `window.MM_WORKSHOP_INBOX`, and opens `#/workshop` (`sendToWorkshop()`).

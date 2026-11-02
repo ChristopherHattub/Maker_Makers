@@ -11,7 +11,7 @@
 
 The print check fails a job **only for a new error**: `ci/printability-baseline.json` lists, per generator and variant, the print-check error kinds (`floating`, `overhang`) that are known and not fixed yet. Those show as warning annotations and in the job summary. An error kind that is not in the baseline fails the job. Many generators were not designed support-free, so a hard fail on day one would be noise; the baseline makes it a ratchet. After you fix a generator, run `node scripts/ci/check-generator.mjs <name> --update-baseline` and commit the smaller baseline. Warnings (thin walls) never fail.
 
-Three.js: generators that call `api.THREE` (bookend-builder, image-clicker, key-clicker, remote-caddy, shelf-bracket, tealight-lantern, tray-maker, wall-hook-rack) need r128. `check-mesh.mjs` loads it from `$THREE_PATH` or `node_modules/three/build/three.min.js`; the workflow runs `npm install --no-save three@0.128.0` (nothing is added to `package.json`; the site stays dependency-free). Locally: `npm install --no-save three@0.128.0`.
+Three.js: generators that call `api.THREE` (bookend-builder, image-clicker, key-clicker, photo-frame, remote-caddy, shelf-bracket, tealight-lantern, tray-maker, wall-hook-rack) need r128. `check-mesh.mjs` loads it from `$THREE_PATH` or `node_modules/three/build/three.min.js`; the workflow runs `npm install --no-save three@0.128.0` (nothing is added to `package.json`; the site stays dependency-free). Locally: `npm install --no-save three@0.128.0`.
 
 ## When a generator is checked
 

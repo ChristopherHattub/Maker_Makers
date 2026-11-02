@@ -153,4 +153,4 @@ A generator in no group lands in an automatic "More" region, so a missing `bundl
 
 ## Regenerating this table
 
-Evaluate `js/programs.js` (swap `const` for `var` so `PROGRAMS` and `BUNDLES` become globals), then list `PROGRAMS.filter(p => p.programUrl)` with `slot`, `title`, `bundles` and `programUrl`. The tables above were produced that way.
+Evaluate `js/programs.js` (swap `const` for `var` so `PROGRAMS` and `BUNDLES` become globals; a group's members are its `generators` ids plus every entry whose `bundle` names it), then list `PROGRAMS.filter(p => p.programUrl)` with `slot`, `title`, `bundles` and `programUrl`. The tables above were produced that way.

@@ -103,7 +103,7 @@ So, to make a feature independently paintable:
 - Give split-surface entries the same `smoothGroup` so lighting has no seam.
 - A feature on the same mesh only becomes its own part if there is a sharp (>50°) edge and at least 200 triangles. Use a finer mesh or a separate entry otherwise.
 - Largest part of a mesh takes the `partNames` label, the rest are `Part 2`, `Part 3`... Verify the list in the Color tab reads sensibly and that no tiny parts appear.
-- Paint is stored by part centre and re-matched within 40 mm when sliders change; it resets on reload (by design). Parametric tab is always neutral matte; colors show only in the Color tab.
+- Paint is stored by part centre and re-matched within 40 mm when sliders change; it resets on reload (by design). The Parametric tab also shows the part colors and Color-tab paint; its **Colors** button (bottom right of the viewport) hides them for a neutral grey view.
 
 ## Exports and printability
 
@@ -185,7 +185,7 @@ Start the dev server with the preview tool (`maker-makers`, port 5173, from `.cl
 - [ ] Open from the homepage map: the tile shows its hologram on hover, the details panel shows the thumbnail, the viewer iframe loads the generator, Save STL and Send to Workshop work, no placeholder "NO GENERATOR LOADED".
 - [ ] Every slider and preset rebuilds the model with no gaps, spikes or inside-out faces; try min and max of each. Triangle count stays reasonable.
 - [ ] `check-mesh.mjs` passes for defaults and each preset.
-- [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, Parametric tab stays neutral.
+- [ ] Color tab: palette shows 8 swatches, part list is sensible with readable names, painting by click and from the list works, paint survives a slider change, the Parametric tab shows the same colors and its Colors button toggles them off.
 - [ ] Parametric tab View switch: Solid / Wireframe / Solid + edges all render, sliders rebuild in each, Color tab shows solid.
 - [ ] Sculpt tab: pieces are listed with readable names, a selected piece turns yellow, move, stretch, delete, brush, undo and Reset all work, and the flag appears after an edit.
 - [ ] Print tab shows the realistic render (colors kept, changing Material updates it live) and has no other options.
