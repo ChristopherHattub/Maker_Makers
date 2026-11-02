@@ -14,6 +14,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 
 | Document | What it covers |
 | --- | --- |
+| [HANDOFF.md](HANDOFF.md) | Agent handoff: workflow rules, open threads, loose ends |
 | [architecture.md](architecture.md) | How the page, scripts and screens fit together, state, and external services |
 | [file-structure.md](file-structure.md) | Every file in the repo and what it is for |
 | [generator-registry.md](generator-registry.md) | The `PROGRAMS` slot registry, the generator contract, and how to add a generator |
