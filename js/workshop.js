@@ -5,10 +5,10 @@
 // The scene is Z-up like a slicer: the bed is the XY plane, so what you see matches what you export.
 
 const WS_LIBS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
-  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
-  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js',
-  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js'
+  'vendor/three/three.min.js',
+  'vendor/three/OrbitControls.js',
+  'vendor/three/TransformControls.js',
+  'vendor/three/BufferGeometryUtils.js'
 ];
 const WS_SAVE_KEY = 'mm-workshop-v1';
 
@@ -827,16 +827,12 @@ function wsVisualAction(a, keep) {
 
 // ---------------------------------------------------------------- boolean merge / cut
 
-// CSG comes from three-bvh-csg, loaded on first use from its own module build (it needs a newer three than the editor,
+// CSG comes from three-bvh-csg, loaded on first use from a local bundle in vendor/three-csg (it needs a newer three than the editor,
 // so shapes are passed across as plain vertex arrays). Works best on closed shapes; open or self-overlapping meshes may
 // give rough results.
 let wsCsgLib = null;
 function wsCsg() {
-  if (!wsCsgLib) wsCsgLib = Promise.all([
-    import('https://esm.sh/three@0.160.0'),
-    import('https://esm.sh/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js'),
-    import('https://esm.sh/three-bvh-csg@0.0.16?deps=three@0.160.0,three-mesh-bvh@0.7.3')
-  ]).then(([three, utils, csg]) => ({ three, utils, csg }));
+  if (!wsCsgLib) wsCsgLib = import('../vendor/three-csg/three-csg.bundle.js');
   return wsCsgLib;
 }
 

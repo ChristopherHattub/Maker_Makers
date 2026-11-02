@@ -23,7 +23,7 @@ Script load order at the bottom of `index.html`:
 3. `js/workshop.js` holds the Workshop editor. It loads three.js itself the first time the Workshop opens.
 4. `js/app.js` holds the router, viewer, idea queue and printer map. At the end of the file it starts loading the printer data, runs `initSplash()`, then renders the current route.
 
-Leaflet 1.9.4 is loaded from unpkg in the `<head>` (CSS) and before the local scripts (JS).
+Leaflet 1.9.4 is served from `vendor/leaflet/` (CSS in the `<head>`, JS before the local scripts).
 
 ## Screens
 
@@ -74,15 +74,16 @@ All persisted state is in `localStorage` only. Every read and write is wrapped i
 
 `handleIdeaSubmit()` adds `{ title, desc, date }` to the front of the stored array. The log shows the five newest entries. `exportIdeasJSON()` downloads the full array as `maker-makers-generator-ideas.json`.
 
+## Vendored libraries
+
+`vendor/` holds everything third-party so visitors contact no CDN: `three/` (r128, OrbitControls, TransformControls, BufferGeometryUtils), `leaflet/` (1.9.4 with images), `fonts/` (Fredoka and Nunito, latin and latin-ext woff2 plus `fonts.css`) and `three-csg/three-csg.bundle.js` (three 0.160 + three-bvh-csg 0.0.16 + BufferGeometryUtils, bundled with esbuild, loaded on first Workshop Merge / Cut). Generator pages reference `../vendor/three/...`. To rebuild the CSG bundle: install `three@0.160.0 three-bvh-csg@0.0.16 three-mesh-bvh@0.7.3 esbuild` in a scratch folder and bundle an entry that re-exports `three`, `three/examples/jsm/utils/BufferGeometryUtils.js` and `three-bvh-csg` as the named namespaces `three`, `utils`, `csg`.
+
 ## External services
 
 The site calls no first-party backend. Everything else is a public, keyless service.
 
 | Service | Used for | Where in code |
 | --- | --- | --- |
-| unpkg.com (Leaflet 1.9.4) | Map library and CSS | `index.html` |
-| cdnjs / jsDelivr (three.js r128 and its example controls) | Generators and the Workshop | generator pages, `js/workshop.js` |
-| esm.sh (three 0.160, three-bvh-csg 0.0.16) | Workshop Merge / Cut / Intersect, loaded on first use | `js/workshop.js` |
 | Local `data/public-printers.json` | Verified printer listings | `loadPublicPrinters()` |
 | Esri ArcGIS World Street Map tiles | Map tiles | `initLeafletMap()` |
 | OpenStreetMap Nominatim | Worldwide place search (geocoding) | `searchLocationWorldwide()` |

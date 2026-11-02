@@ -33,8 +33,8 @@ for (const [name, code, title] of CREATURES) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${code} ${title} // Maker Makers</title>
   <link rel="stylesheet" href="shared/generator.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
 </head>
 <body class="mm-gen">
   <script>
