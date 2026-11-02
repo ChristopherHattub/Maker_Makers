@@ -42,7 +42,9 @@ Opening the Print tab automatically switches the viewport to a realistic render 
 ## Page rules (the standalone bundler depends on these)
 
 - `<body class="mm-gen">`.
-- Exactly `<link rel="stylesheet" href="shared/generator.css">` and exactly `<script src="shared/generator-core.js"></script>`; the config `<script>` comes **before** the engine tag.
+- Exactly `<link rel="stylesheet" href="shared/generator.css">` and exactly `<script src="shared/export-utils.js"></script>
+<script src="shared/mesh-utils.js"></script>
+<script src="shared/generator-core.js"></script>`; the config `<script>` comes **before** the engine tag.
 - three.js r128 and OrbitControls from the CDN tags in the Ghost Builder, nothing else. No other `src`/stylesheet tags, no fonts, no libraries.
 - Never write a literal `</script>` inside the config (write `<\/script>`).
 - Relative paths only (`programs/x.html`, `assets/thumbnails/x.svg`), never a leading `/`.

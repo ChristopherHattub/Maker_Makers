@@ -10,6 +10,8 @@ This page covers the file layout, the generator contract, the Color tool, export
 | --- | --- |
 | `programs/shared/generator.css` | Layout and styling for every generator. Uses the same colors and fonts as the site. |
 | `programs/shared/generator-core.js` | The engine: page shell, 3D viewport, Parametric and Color tabs, picking, parts, exports, standalone download. |
+| `programs/shared/export-utils.js` | Pure helpers split out of the engine: `escapeXml`, `utf8`, `saveBlob`, `makeZip` (global `MMExport`). Loaded before the engine. |
+| `programs/shared/mesh-utils.js` | Pure mesh helpers: `faceNormalAt`, `weldIds`, `weldCount` (global `MMMesh`). Loaded before the engine. |
 | `programs/shared/print-check.js` | The printability check behind the live chip (floating parts, overhangs, thin walls). Also used by `check-mesh.mjs`. |
 | `programs/<name>.html` | One generator. It holds `window.MM_GENERATOR` (the config) and loads the two shared files. |
 
@@ -30,6 +32,8 @@ A generator page looks like this:
   <script>
     window.MM_GENERATOR = { /* config, see below */ };
   </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
   <script src="shared/generator-core.js"></script>
 </body>
 </html>
@@ -39,7 +43,7 @@ Rules for these lines:
 
 - The `<body>` must have `class="mm-gen"`. The engine builds everything inside it.
 - The stylesheet link must be exactly `<link rel="stylesheet" href="shared/generator.css">`.
-- The engine script tag must be exactly `<script src="shared/generator-core.js"></script>`.
+- The three engine script tags (`export-utils.js`, `mesh-utils.js`, `generator-core.js`) must be exactly as in the template, in that order, directly after the config script: the checkers and the standalone download match them. The engine itself is still one large closure; the Sculpt tab (about 750 lines) shares too much state to split without a rewrite.
 - The config script comes **before** the engine script.
 - Use three.js r128 with OrbitControls (the versions the site already uses). Do not add other libraries.
 
@@ -216,7 +220,7 @@ Without any setup, each separate closed shell of the model becomes a piece, name
 
 ## Standalone download
 
-The standalone button fetches the generator's own HTML, then inlines `shared/generator.css` and `shared/generator-core.js` in place of the two shared tags. The result runs with no server, apart from the three.js CDN.
+The standalone button fetches the generator's own HTML, then inlines `shared/generator.css`, the three engine scripts, `print-check.js` and the vendored three.js and OrbitControls, so the result runs with no server and no network.
 
 The download needs the page served over `http(s)`, so it works on the dev server and on GitHub Pages. Opening the file directly from disk (`file://`) shows "Open the generator through the site to download it".
 

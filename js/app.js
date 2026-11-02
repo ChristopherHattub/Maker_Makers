@@ -228,13 +228,21 @@ async function downloadStandaloneHTML() {
   if (!activeProgram.programUrl) return;
   const pageUrl = new URL(activeProgram.programUrl, location.href);
   const page = await fetch(pageUrl).then(r => r.text());
-  const [css, core] = await Promise.all([
-    fetch(new URL('shared/generator.css', pageUrl)).then(r => r.text()),
-    fetch(new URL('shared/generator-core.js', pageUrl)).then(r => r.text())
+  const text = u => fetch(u).then(r => r.ok ? r.text() : '').catch(() => '');
+  const [css, printCheck, three, orbit, ...shared] = await Promise.all([
+    text(new URL('shared/generator.css', pageUrl)),
+    text(new URL('shared/print-check.js', pageUrl)),
+    text(new URL('../vendor/three/three.min.js', pageUrl)),
+    text(new URL('../vendor/three/OrbitControls.js', pageUrl)),
+    ...['export-utils.js', 'mesh-utils.js', 'generator-core.js'].map(f => text(new URL('shared/' + f, pageUrl)))
   ]);
   const inlined = page
     .replace(/<link rel="stylesheet" href="shared\/generator\.css"\s*\/?>/, () => `<style>\n${css}\n</style>`)
-    .replace(/<script src="shared\/generator-core\.js"><\/script>/, () => `<script>\n${core}\n</script>`);
+    .replace(/<link rel="stylesheet" href="\.\.\/vendor\/fonts\/fonts\.css">\s*/, '')
+    .replace(/<script src="\.\.\/vendor\/three\/three\.min\.js"><\/script>/, () => `<script>\n${three}\n</script>`)
+    .replace(/<script src="\.\.\/vendor\/three\/OrbitControls\.js"><\/script>/, () => `<script>\n${orbit}\n</script>`)
+    .replace(/<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*<script src="shared\/generator-core\.js"><\/script>/,
+      () => `<script>\n${printCheck}\n${shared.join('\n')}\n</script>`);
   const url = URL.createObjectURL(new Blob([inlined], { type: 'text/html' }));
   const a = document.createElement('a');
   a.href = url;

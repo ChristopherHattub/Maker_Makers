@@ -21,7 +21,7 @@
 │                            loaded on hover / tap / idle), base-tile.webp, manifest-v2.json
 │                            (obj-*.webp, sheet-*.webp and manifest.json are the older Gemini frames)
 ├── programs/                Generator pages, one per slot (ghost-builder.html, ...)
-│   └── shared/              Shared generator engine and styles (generator-core.js, generator.css)
+│   └── shared/              Shared generator engine and styles (generator-core.js, export-utils.js, mesh-utils.js, print-check.js, generator.css)
 ├── tools/
 │   ├── hologram.html        Renders a generator's real model as a 24-frame hologram atlas
 │   ├── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)

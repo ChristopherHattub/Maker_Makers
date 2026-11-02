@@ -56,6 +56,8 @@ ${kit}
 ${body}
     })();
   </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
   <script src="shared/generator-core.js"></script>
 </body>
 </html>
