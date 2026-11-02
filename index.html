@@ -4,16 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>MAKER MAKERS // Parametric CAD, STL Foundry & Public Printer Radar</title>
+  <meta name="description" content="Free parametric 3D-print generators (STL and OBJ), a Workshop 3D editor and a map of public 3D printers. Runs in your browser; nothing is collected.">
+  <meta name="theme-color" content="#0a2246">
+  <meta property="og:title" content="Maker Makers: parametric 3D-print generators">
+  <meta property="og:description" content="Customize and download print-ready STL and OBJ models in your browser. No accounts, no tracking.">
+  <meta property="og:type" content="website">
   <!-- Leaflet Map CSS (Free & Open Source, No API Key) -->
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/workshop.css">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
 
   <!-- TOP BLUEPRINT BAR -->
   <header>
-    <div class="brand-block" onclick="showSplashScreen()">
+    <div class="brand-block" role="button" tabindex="0" aria-label="Maker Makers, go to the generators home" onclick="showSplashScreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showSplashScreen();}">
       <div class="brand-logo"><span>MM</span></div>
       <div class="brand-title">
         <h1>Maker Makers</h1>
@@ -34,7 +40,7 @@
     </div>
   </header>
 
-  <main class="container">
+  <main class="container" id="main-content" tabindex="-1">
     
     <!-- ==================== 1. SPLASH SCREEN (ALL BLANK SLOTS) ==================== -->
     <section id="splash-screen">
@@ -126,7 +132,7 @@
               Ready for your standalone HTML STL generator program. Set <code>programUrl</code> and <code>thumbnailUrl</code> in the <code>PROGRAMS</code> array to activate this bay.
             </p>
           </div>
-          <iframe id="external-program-iframe" title="Custom HTML Generator"></iframe>
+          <iframe id="external-program-iframe" title="Generator"></iframe>
         </div>
       </div>
     </section>
@@ -174,13 +180,13 @@
 
   <!-- ==================== 4. SUBMIT GENERATOR IDEA MODAL ==================== -->
   <div class="modal-backdrop" id="idea-modal" onclick="if(event.target===this) toggleIdeaModal(false)">
-    <div class="modal-box">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="idea-modal-title">
       <div class="modal-header">
         <div>
           <span style="font-size: 0.7rem; color: var(--bp-amber);">FORM DWG // REQ-GEN-IDEA</span>
-          <h3 style="letter-spacing: 1px;">SUBMIT NEW STL GENERATOR IDEA</h3>
+          <h3 id="idea-modal-title" style="letter-spacing: 1px;">SUBMIT NEW STL GENERATOR IDEA</h3>
         </div>
-        <button class="btn" onclick="toggleIdeaModal(false)">&#10006;</button>
+        <button class="btn" aria-label="Close" onclick="toggleIdeaModal(false)">&#10006;</button>
       </div>
 
       <form id="idea-form" onsubmit="handleIdeaSubmit(event)">

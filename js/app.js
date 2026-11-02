@@ -15,9 +15,22 @@ function getSavedIdeas() {
   }
 }
 
+var ideaModalReturnFocus = null;
 function toggleIdeaModal(show) {
-  document.getElementById('idea-modal').classList.toggle('open', show);
+  const modal = document.getElementById('idea-modal');
+  modal.classList.toggle('open', show);
+  if (show) {
+    ideaModalReturnFocus = document.activeElement;
+    const first = modal.querySelector('input, textarea, button');
+    if (first) first.focus();
+  } else if (ideaModalReturnFocus && ideaModalReturnFocus.focus) {
+    ideaModalReturnFocus.focus();
+  }
 }
+document.addEventListener('keydown', function (e) {
+  const modal = document.getElementById('idea-modal');
+  if (e.key === 'Escape' && modal && modal.classList.contains('open')) toggleIdeaModal(false);
+});
 
 function handleIdeaSubmit(e) {
   e.preventDefault();
