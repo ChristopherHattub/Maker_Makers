@@ -20,6 +20,8 @@ Every animal uses `Sculpt` in the kit, except that the Snake and Fish use it onl
 
 Dragon Maker (Sitting, Prowling, Rearing, Asleep), Dog Builder (Sitting, Standing, Lying down, Begging) and Horse Builder (Kneeling, Standing, Rearing) have a Pose option. Every pose has to reach the bed, because the support pass trims anything without solid below it: tails and feet carry raised bodies, and raised limbs climb steeply. Dino Builder shows a separate slider group per species through `showIf`. `reptileEye` gives dinosaurs and dragons small set-in eyes under a sculpted brow. Dragon wings, horns and back fins are smooth shells added with `S.shell`, not sculpted forms, so their edges are clean. While a slider moves, sculpted generators build a coarser mesh and refine it on release.
 
+Alien & Monster Maker has seven archetypes, each a separate builder in `tools/animals/monster-maker.js` with its own slider group (shown through `showIf`): Gumdrop buddy (the original egg-shaped alien, still the default), Classic grey, Saucer pilot, Cyclops brute, Slime blob, Bug alien and Yeti beast. The Saucer pilot's hull, rim, deck and cockpit ring are smooth lofts added with `S.shell`; the pilot is sculpted and stands on a post hidden inside the hull, so the support pass sees it reach the bed. Its rim lights sit on the upward-facing deck, and open mouths (Slime, Yeti) are cut with a pointed 45 degree roof so they print.
+
 Owl Stacker and Penguin Pals are built from smooth lofts (`profileLoft`) and shells, not `Sculpt` forms, so they stay crisp and have clean colour edges.
 
 ## Sculpt tab

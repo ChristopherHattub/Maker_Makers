@@ -914,7 +914,7 @@ const GENERATORS = [
     category: 'ANIMALS // CREATURES',
     thumbnailUrl: 'assets/thumbnails/monster-maker.svg',
     programUrl: 'programs/monster-maker.html',
-    description: 'An alien, cyclops, horned beast or tentacle blob: choose eyes, mouth, fangs, arms, horns, antennae and spots. Prints with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'Seven creature archetypes, each its own model with its own sliders: a gumdrop buddy, a classic grey with almond eyes, a pilot in a flying saucer, a one-eyed brute on its knuckles, a melting slime with eye stalks, a bug alien and a horned yeti. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 90,
