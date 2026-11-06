@@ -806,7 +806,7 @@ const GENERATORS = [
     category: 'ANIMALS // FANTASY',
     thumbnailUrl: 'assets/thumbnails/dragon-maker.svg',
     programUrl: 'programs/dragon-maker.html',
-    description: 'A sitting dragon with folded wings, horns, back spikes and a tail on the bed. Prints with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'A heraldic dragon in four poses (sitting, prowling, rearing with a roar, asleep): a wedge head with horns and fangs, raised bat wings with finger bones, belly plates, back blades and a spade tail wrapped round its feet. Set size, head, horns, wing size and spread, blades and tail. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 78,
