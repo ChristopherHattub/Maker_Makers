@@ -792,12 +792,12 @@ const GENERATORS = [
   },
   {
     slot: 112,
-    title: 'Pet Bowl Maker',
+    title: 'Pet Bowl Housing',
     bundle: 'organization',
     category: 'HOME // PET CARE',
-    thumbnailUrl: 'assets/thumbnails/pet-bowl.svg',
-    programUrl: 'programs/pet-bowl.html',
-    description: 'A custom pet bowl, single or double. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, flat or rounded rims with an outer lip and scallops, and a flat, anti-tip flange or raised pedestal base. Double sets can have different sizes and join with a link bar or a spill tray. Prints with no supports; walls lean out at most about 30 degrees. Paint the inside, outside and rim in the Color tool and export .STL.'
+    thumbnailUrl: 'assets/thumbnails/pet-bowl-housing.svg',
+    programUrl: 'programs/pet-bowl-housing.html',
+    description: 'A housing that holds your own pet bowl, single or double. Enter the bowl rim, body, bottom and height and it makes a snug pocket with a rim seat. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, an outer lip, and a flat, anti-tip flange or raised pedestal base. Double sets can have different sizes and join with a link bar, a spill tray or a raised platform. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,

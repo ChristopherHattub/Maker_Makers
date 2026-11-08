@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MM-112 Pet Bowl Maker // Maker Makers</title>
+  <title>MM-112 Pet Bowl Housing // Maker Makers</title>
   <link rel="stylesheet" href="shared/generator.css">
   <script src="../vendor/three/three.min.js"></script>
   <script src="../vendor/three/OrbitControls.js"></script>
@@ -12,8 +12,8 @@
   <script>
     (function () {
       'use strict';
-      // Pet Bowl Maker: one bowl or two, in seven outlines, four profiles, five wall patterns, rim, base and tray styles.
-      // Every bowl is ONE lathe-style surface (outside, rim, inside, floor) so it is watertight by construction.
+      // Pet Bowl Housing: a holder with a pocket for your own pet bowl (or two). Seven outlines, four profiles, five wall patterns, base, tray and platform styles.
+      // Every housing is ONE lathe-style surface (outside, rim, pocket, floor) so it is watertight by construction.
       // Walls never lean out more than ~35 degrees from vertical, so the defaults and presets print with no supports.
       var TAU = Math.PI * 2;
       var SEG = 144;              // segments around every bowl
@@ -31,7 +31,7 @@
       var PROFILES = ['Classic curve', 'Straight taper', 'Trumpet flare', 'S-curve'];
       var PATTERNS = ['Smooth', 'Fluted', 'Twisted', 'Rings', 'Quilted'];
       var BASES = ['Flat', 'Anti-tip flange', 'Pedestal'];
-      var JOINS = ['None', 'Link bar', 'Spill tray'];
+      var JOINS = ['None', 'Link bar', 'Spill tray', 'Raised platform'];
 
       function polygonRaw(n, th) {
         var seg = TAU / n, phi = ((((th + Math.PI / n) % seg) + seg) % seg) - Math.PI / n;
@@ -65,6 +65,8 @@
         return soft;
       }
       var HEART = heartTable();
+      var HEART_MEAN = 0;
+      (function () { for (var i = 0; i < SEG; i++) HEART_MEAN += HEART[i]; HEART_MEAN /= SEG; })();
 
       function outlineTable(p) {
         var o = Math.round(p.outline), tab = new Float64Array(SEG), j, th, k, w, sum = 0, v;
@@ -84,7 +86,7 @@
             v = 1 / Math.sqrt(Math.pow(Math.cos(th), 2) / (st * st) + Math.pow(Math.sin(th), 2));
           } else if (o === 5) {
             v = 1 + 0.1 * Math.cos(Math.round(p.petals) * th);
-          } else v = HEART[j];
+          } else v = 0.55 * HEART[j] / HEART_MEAN + 0.45;
           tab[j] = v; sum += v;
         }
         var mean = sum / SEG;
@@ -112,25 +114,43 @@
         return Math.sin(t * Math.PI / 2);
       }
 
-      function makeBowl(q, R, H, tab) {
-        var wall = q.wall, floorT = q.floorT, N = 40, k, i, smax = 1;
-        for (k = 0; k < SEG; k++) smax = Math.max(smax, tab[k]);
-        lip = Math.min(lip, 0.4 * H / smax / 1.2);
-        var tanW = TAN_WALL / smax;   // a wide outline stretches the slope, so lean less
-        var lip = clamp(q.lip, 0, 0.4 * H);
-        var baseStyle = Math.round(q.baseStyle);
+      // The housing: a thick sleeve with a pocket for the visitor's own bowl (rim seat + tapered pocket + floor).
+      function makeHousing(q, tab, lift) {
+        var c = q.clear, wall = q.wall, floorT = q.floorT, N = 40, k, i, smax = 1, smin = 10;
+        for (k = 0; k < SEG; k++) { smax = Math.max(smax, tab[k]); smin = Math.min(smin, tab[k]); }
+        var rimR = q.bowlRim / 2, bodyR = Math.min(q.bowlBody, q.bowlRim) / 2, botR = Math.min(q.bowlBottom / 2, bodyR);
+        var seat = (rimR - bodyR > 2) ? q.seat : 0;
+        var rLedge = (seat > 0 ? rimR : bodyR) + c, aTop = bodyR + c, bBot = botR + c;
+        var pd = q.bowlDepth - seat + 1;
+        var H = floorT + pd + seat;
+        var baseStyle = lift > 0 ? 0 : Math.round(q.baseStyle);
+        var lip = Math.min(clamp(q.lip, 0, 0.4 * H), 0.4 * H / smax / 1.2);
+        var tanW = TAN_WALL / smax;
+        var R = rLedge + wall;
         var rbTop = R * clamp(q.baseW, 40, 100) / 100;
-        // body radius table (before the lip), steepness-limited from the top down
-        var rs = [], dy = H / N;
+        var dy = H / N;
+        // pedestal / platform lift decides where the housing starts
+        var y0 = lift, pedPts = null, rs0 = 0;
+        // pocket radius (0 below the floor)
+        function pocketR(yb, yfloorAbs, ySeatAbs, y) {
+          if (y < yfloorAbs) return 0;
+          if (seat > 0 && y >= ySeatAbs - 1e-9) return rLedge;
+          return bBot + (aTop - bBot) * clamp((y - yfloorAbs) / Math.max(1e-9, ySeatAbs - yfloorAbs), 0, 1);
+        }
+        // outer radius table (before the lip): shape, then room for the pocket, then steepness-limited from the top
+        var rs = [];
         for (k = 0; k <= N; k++) rs.push(rbTop + (R - rbTop) * profileF(Math.round(q.profile), k / N));
+        var yfRel = floorT, ySeatRel = H - seat;
+        for (k = 0; k <= N; k++) {
+          var yr = H * k / N, need = (pocketR(0, yfRel, ySeatRel, yr) + wall) / smin;
+          rs[k] = Math.max(rs[k], need);
+        }
         for (k = N; k > 0; k--) rs[k - 1] = Math.max(rs[k - 1], rs[k] - dy * tanW);
         var rb0 = rs[0];
-        function bodyR(yb) {
+        function bodyR_(yb) {
           var f = clamp(yb / dy, 0, N), a = Math.floor(f), b = Math.min(N, a + 1);
           return rs[a] + (rs[b] - rs[a]) * (f - a);
         }
-        // pedestal
-        var y0 = 0, pedPts = null, rs0 = 0;
         if (baseStyle === 2) {
           rs0 = clamp(q.stemD / 2, 6, rb0 - 4);
           var tanF = 0.9 / smax;
@@ -148,27 +168,26 @@
           }
           return pedPts[pedPts.length - 1][1];
         }
-        // flange
-        var fl = baseStyle === 1 ? q.flange : 0, fh = Math.max(2.5, floorT - 0.5);
+        var fl = baseStyle === 1 ? q.flange : 0, fh = Math.max(2.5, Math.min(floorT, 8) - 0.5);
         function flangeR(y) {
           if (fl <= 0 || y >= fh) return 0;
           return rb0 + fl * (y <= 1.2 ? 1 : 1 - (y - 1.2) / (fh - 1.2));
         }
-        var yTop = y0 + H, yf = y0 + floorT;
+        var yTop = y0 + H, yf = y0 + floorT, ySeat = yTop - seat;
         function lipX(yb) { return lip > 0 ? lip * clamp(1 - (H - yb) / (3 * lip * smax), 0, 1) : 0; }
         function rOutFn(y) {
           if (pedPts && y < y0) return pedR(y);
           var yb = Math.max(0, y - y0);
-          return Math.max(bodyR(yb) + lipX(yb), flangeR(y));
+          return Math.max(bodyR_(yb) + lipX(yb), flangeR(y));
         }
-        function rInFn(y) { return bodyR(Math.max(0, y - y0)) - wall; }
-        var rMax = Math.max(R + lip, rb0 + fl, pedPts ? pedPts[0][1] : 0);
+        var rMax = Math.max(R + lip, rb0 + fl, rb0, pedPts ? pedPts[0][1] : 0);
 
-        // wall pattern
+        // surface pattern (grooves cut into the outside only)
         var pat = Math.round(q.pattern), depth = 0, period = clamp(q.ringSpace, 4, 20);
         if (pat > 0) {
-          depth = Math.min(q.patDepth, wall - 1.2);
+          depth = Math.min(q.patDepth, wall - 3);
           if (pat >= 3) depth = Math.min(depth, period * 0.11);
+          depth = Math.max(0, depth);
         }
         var patN = Math.round(q.patCount), twist = q.twist * TAU / H;
         var texTopEnd = yTop - Math.max(0.08 * H, 3 * lip * smax + 2), texTopStart = texTopEnd - 0.18 * H;
@@ -180,70 +199,37 @@
           var b = 0.5 - 0.5 * Math.cos(TAU * (y - y0) / period);
           return pat === 3 ? b : a * b;
         }
-        // rim scallops (the rim dips; the wall follows the same profile curve)
-        var scal = clamp(q.scalAmp, 0, 8), scalN = Math.round(q.scalCount);
-        var band = Math.min(Math.max(10, scal * 3), Math.max(4, (H - floorT) * 0.8));
-        scal = Math.min(scal, band / 3);
-        function shiftAt(th, y) { return scal > 0 ? scal * (0.5 - 0.5 * Math.cos(scalN * th)) * smoothstep(yTop - band, yTop, y) : 0; }
 
-        // fillet where the floor meets the inside wall
-        var rcIn = rInFn(yf + 3);
-        var fr = clamp(Math.min(rcIn - 4, 4, floorT), 0, 4); if (fr < 0.6) fr = 0;
-        var rIn0 = rInFn(yf + fr);
-
-        // ring list
-        var rings = [], ys = [], yy;
-        function addY(y) { if (y > CHAMFER + 0.05 && y < yTop - 0.01) ys.push(y); }
+        // ring list: bottom pole, outside up, top rim, ledge, pocket, floor pole
+        var rings = [], ys = [], yy, bot = lift > 0 ? lift - 0.8 : 0;
+        function addY(y) { if (y > bot + CHAMFER + 0.05 && y < yTop - 0.01) ys.push(y); }
         for (k = 1; k < N; k++) addY(y0 + H * k / N);
         if (fl > 0) { addY(1.2); addY(fh); }
         if (pedPts) for (i = 0; i < pedPts.length; i++) addY(pedPts[i][0]);
         ys.sort(function (a, b) { return a - b; });
         var uy = [];
         for (i = 0; i < ys.length; i++) if (!uy.length || ys[i] - uy[uy.length - 1] > 0.08) uy.push(ys[i]);
-        var rounded = Math.round(q.rimEdge) === 1;
-        var hv = rounded ? Math.min(4, (wall + lip) / 2) : 0;
-
-        rings.push({ k: 'ax', y: 0, g: 'out' });
-        rings.push({ k: 'o', y: 0, dr: -0.6, g: 'out' });
-        rings.push({ k: 'o', y: CHAMFER, dr: 0, g: 'out' });
-        for (i = 0; i < uy.length; i++) if (uy[i] < yTop - hv - 0.3) rings.push({ k: 'o', y: uy[i], dr: 0, g: 'out' });
-        if (rounded) {
-          rings.push({ k: 'o', y: yTop - hv, dr: 0, g: 'rim' });
-          for (i = 1; i < 8; i++) rings.push({ k: 'a', y: yTop - hv, a: (i / 8) * Math.PI, g: 'rim' });
-          rings.push({ k: 'i', y: yTop - hv, g: 'in' });
-        } else {
-          rings.push({ k: 'o', y: yTop, dr: 0, g: 'rim' });
-          rings.push({ k: 'i', y: yTop, g: 'in' });
+        rings.push({ k: 'ax', y: bot, g: 'out' });
+        if (lift > 0) rings.push({ k: 'o', y: bot, dr: 0, g: 'out' });
+        else { rings.push({ k: 'o', y: 0, dr: -0.6, g: 'out' }); rings.push({ k: 'o', y: CHAMFER, dr: 0, g: 'out' }); }
+        for (i = 0; i < uy.length; i++) rings.push({ k: 'o', y: uy[i], dr: 0, g: 'out' });
+        rings.push({ k: 'o', y: yTop, dr: 0, g: 'rim' });
+        rings.push({ k: 'x', y: yTop, r: rLedge, g: 'in' });
+        if (seat > 0) {
+          rings.push({ k: 'x', y: ySeat, r: rLedge, g: 'in' });
+          rings.push({ k: 'x', y: ySeat, r: aTop, g: 'in' });
         }
-        var innerYs = [];
-        for (k = N - 1; k >= 1; k--) {
-          yy = y0 + H * k / N;
-          if (yy > yf + fr + 0.2 && yy < yTop - hv - 0.3) innerYs.push(yy);
-        }
-        for (i = 0; i < innerYs.length; i++) rings.push({ k: 'i', y: innerYs[i], g: 'in' });
-        if (fr > 0) {
-          rings.push({ k: 'i', y: yf + fr, g: 'in' });
-          for (i = 1; i <= 5; i++) rings.push({ k: 'f', a: (Math.PI / 2) * (1 - i / 5), g: 'in' });
-        } else rings.push({ k: 'i', y: yf, g: 'in' });
+        rings.push({ k: 'x', y: yf, r: bBot, g: 'in' });
         rings.push({ k: 'ax', y: yf, g: 'in' });
         rings.forEach(function (r) { r.pole = r.k === 'ax'; });
 
         function pointOf(ring, j) {
-          var th = (j / SEG) * TAU, s = tab[j], y, r, yc, ro, ri, hw;
+          var th = (j / SEG) * TAU, s = tab[j], r;
           if (ring.k === 'ax') return [0, ring.y, 0];
-          if (ring.k === 'f') { r = rIn0 - fr + fr * Math.sin(ring.a); y = yf + fr - fr * Math.cos(ring.a); }
-          else {
-            yc = ring.y - shiftAt(th, ring.y);
-            if (ring.k === 'o') {
-              r = rOutFn(yc) + ring.dr; y = yc;
-              if (depth > 0) r -= depth * texG(th, yc) * texW(yc);
-            } else if (ring.k === 'i') { r = rInFn(yc); y = yc; }
-            else {
-              ro = rOutFn(yc); ri = rInFn(yc); hw = (ro - ri) / 2;
-              r = (ro + ri) / 2 + hw * Math.cos(ring.a); y = yc + hv * Math.sin(ring.a);
-            }
-          }
-          return [r * s * Math.cos(th), y, r * s * Math.sin(th)];
+          if (ring.k === 'x') return [ring.r * Math.cos(th), ring.y, ring.r * Math.sin(th)];
+          r = rOutFn(ring.y) + ring.dr;
+          if (depth > 0) r -= depth * texG(th, ring.y) * texW(ring.y);
+          return [r * s * Math.cos(th), ring.y, r * s * Math.sin(th)];
         }
         return { rings: rings, pointOf: pointOf, rMax: rMax, y0: y0, yTop: yTop, rb0: rb0 };
       }
@@ -328,32 +314,36 @@
       // ---------------------------------------------------------------------
       function build(p) {
         var double = Math.round(p.layout) === 1;
-        var R1 = p.diam / 2, H1 = p.height, R2 = R1 * p.d2 / 100, H2 = H1 * p.h2 / 100;
-        var tab = outlineTable(p);
-        var b1 = makeBowl(p, R1, H1, tab), b2 = double ? makeBowl(p, R2, H2, tab) : null;
-        var e1 = xExtents(tab, b1.rMax), e2 = b2 ? xExtents(tab, b2.rMax) : null;
-        var cx1, cx2, xMin, xMax;
+        var join = Math.round(p.join);
+        var lift = join === 3 ? p.platH : 0;
+        var q2 = null;
         if (double) {
-          cx1 = 0; cx2 = e1[0] + p.gap + e2[1];
-          xMin = cx1 - e1[1]; xMax = cx2 + e2[0];
-        } else { cx1 = 0; xMin = -e1[1]; xMax = e1[0]; }
+          q2 = {};
+          Object.keys(p).forEach(function (k) { q2[k] = p[k]; });
+          q2.bowlRim = p.bowlRim * p.d2 / 100; q2.bowlBody = p.bowlBody * p.d2 / 100; q2.bowlBottom = p.bowlBottom * p.d2 / 100;
+          q2.bowlDepth = p.bowlDepth * p.h2 / 100;
+        }
+        var tab = outlineTable(p);
+        var b1 = makeHousing(p, tab, lift), b2 = double ? makeHousing(q2, tab, lift) : null;
+        var e1 = xExtents(tab, b1.rMax), e2 = b2 ? xExtents(tab, b2.rMax) : null;
+        var cx1 = 0, cx2 = 0, xMin, xMax;
+        if (double) { cx2 = e1[0] + p.gap + e2[1]; xMin = cx1 - e1[1]; xMax = cx2 + e2[0]; }
+        else { xMin = -e1[1]; xMax = e1[0]; }
         var shiftX = -(xMin + xMax) / 2;
-        cx1 += shiftX; if (double) cx2 += shiftX;
-        xMin += shiftX; xMax += shiftX;
+        cx1 += shiftX; cx2 += shiftX; xMin += shiftX; xMax += shiftX;
 
         var meshes = [];
-        function addBowl(b, cx, suffix, grp) {
+        function addPart(b, cx, suffix, grp) {
           var t = ringTris(b.rings, b.pointOf, cx, 0);
           ['out', 'rim', 'in'].forEach(function (g) {
             if (t[g] && t[g].length) meshes.push({ name: g + suffix, positions: t[g], smoothGroup: grp });
           });
         }
-        addBowl(b1, cx1, '', 'bowl1');
-        if (double) addBowl(b2, cx2, '2', 'bowl2');
+        addPart(b1, cx1, '', 'house1');
+        if (double) addPart(b2, cx2, '2', 'house2');
 
-        var join = Math.round(p.join);
-        if (join === 2) {
-          var margin = p.trayMargin, pts = [], j, th, s, bb, cc, rr;
+        if (join >= 2) {
+          var margin = p.trayMargin, pts = [], j, th, bb, cc, rr;
           [[b1, cx1], [b2, cx2]].forEach(function (pair) {
             bb = pair[0]; cc = pair[1];
             if (!bb) return;
@@ -375,11 +365,19 @@
             if (need + margin <= rho + 0.01) break;
             rho = need + margin;
           }
-          var rimH = Math.max(3.5, p.trayRim), tF = 2.4, rw = 2.4;
-          meshes.push({ name: 'tray', smoothGroup: 'tray', positions: stadiumSolid([
-            { k: 'ax', y: 0, g: 'a' }, { k: 'to', y: 0, off: -0.6, g: 'a' }, { k: 'to', y: CHAMFER, off: 0, g: 'a' },
-            { k: 'to', y: rimH, off: 0, g: 'a' }, { k: 'ti', y: rimH, g: 'a' }, { k: 'ti', y: tF, g: 'a' }, { k: 'ax', y: tF, g: 'a' }
-          ], L, rho, rw, mid) });
+          if (join === 2) {
+            var rimH = Math.max(3.5, p.trayRim), tF = 2.4, rw = 2.4;
+            meshes.push({ name: 'tray', smoothGroup: 'tray', positions: stadiumSolid([
+              { k: 'ax', y: 0, g: 'a' }, { k: 'to', y: 0, off: -0.6, g: 'a' }, { k: 'to', y: CHAMFER, off: 0, g: 'a' },
+              { k: 'to', y: rimH, off: 0, g: 'a' }, { k: 'ti', y: rimH, g: 'a' }, { k: 'ti', y: tF, g: 'a' }, { k: 'ax', y: tF, g: 'a' }
+            ], L, rho, rw, mid) });
+          } else {
+            var ph = lift, ch = Math.min(4, ph * 0.4);
+            meshes.push({ name: 'tray', smoothGroup: 'tray', positions: stadiumSolid([
+              { k: 'ax', y: 0, g: 'a' }, { k: 'to', y: 0, off: -0.6, g: 'a' }, { k: 'to', y: CHAMFER, off: 0, g: 'a' },
+              { k: 'to', y: ph - ch, off: 0, g: 'a' }, { k: 'to', y: ph, off: -ch, g: 'a' }, { k: 'ax', y: ph, g: 'a' }
+            ], L, rho, 0, mid) });
+          }
         } else if (join === 1 && double) {
           var barH = Math.min(p.floorT - 0.6, 3.5), half = (cx2 - cx1) / 2;
           meshes.push({ name: 'tray', smoothGroup: 'tray', positions: stadiumSolid([
@@ -404,11 +402,11 @@
       function dbl(q) { return Math.round(q.layout) === 1; }
 
       var DEFAULTS = {
-        layout: 0, diam: 140, height: 50, d2: 100, h2: 100, gap: 14, join: 0, trayMargin: 10, trayRim: 10, barW: 20,
-        outline: 0, corner: 45, petals: 8, oval: 140, profile: 0, baseW: 62,
-        wall: 3.2, floorT: 4, pattern: 0, patDepth: 1.6, patCount: 16, ringSpace: 8, twist: 0.5,
-        rimEdge: 1, lip: 0, scalAmp: 0, scalCount: 8,
-        baseStyle: 0, flange: 10, standH: 40, stemD: 34
+        layout: 0, bowlRim: 150, bowlBody: 130, bowlBottom: 90, bowlDepth: 50, seat: 4, clear: 1.5, d2: 100, h2: 100, gap: 14,
+        wall: 12, floorT: 8, join: 0, trayMargin: 10, trayRim: 10, barW: 20, platH: 20,
+        outline: 0, corner: 45, petals: 8, oval: 140, profile: 0, baseW: 75,
+        pattern: 0, patDepth: 2, patCount: 16, ringSpace: 8, twist: 0.5,
+        lip: 0, baseStyle: 0, flange: 10, standH: 40, stemD: 50
       };
       function presetOf(label, over) {
         var values = {};
@@ -419,43 +417,45 @@
 
       var parameters = [
         choice('Bowls', 'layout', 'Setup', ['Single', 'Double'], DEFAULTS.layout),
-        slider('Bowls', 'diam', 'Bowl width across the top', ' mm', 70, 240, 1, DEFAULTS.diam),
-        slider('Bowls', 'height', 'Bowl height (tall + steep = more material)', ' mm', 25, 110, 1, DEFAULTS.height),
-        sh(slider('Bowls', 'd2', 'Second bowl width (% of the first)', '%', 50, 130, 5, DEFAULTS.d2), dbl),
+        slider('Bowls', 'bowlRim', 'Your bowl: width across the rim', ' mm', 70, 260, 1, DEFAULTS.bowlRim),
+        slider('Bowls', 'bowlBody', 'Your bowl: width just under the rim', ' mm', 50, 250, 1, DEFAULTS.bowlBody),
+        slider('Bowls', 'bowlBottom', 'Your bowl: width of the bottom', ' mm', 40, 240, 1, DEFAULTS.bowlBottom),
+        slider('Bowls', 'bowlDepth', 'Your bowl: height', ' mm', 25, 120, 1, DEFAULTS.bowlDepth),
+        slider('Bowls', 'seat', 'Rim seat depth (bowls with a flared rim)', ' mm', 0, 10, 0.5, DEFAULTS.seat),
+        slider('Bowls', 'clear', 'Fit clearance around the bowl', ' mm', 0.5, 4, 0.1, DEFAULTS.clear),
+        sh(slider('Bowls', 'd2', 'Second bowl size (% of the first)', '%', 50, 130, 5, DEFAULTS.d2), dbl),
         sh(slider('Bowls', 'h2', 'Second bowl height (% of the first)', '%', 50, 140, 5, DEFAULTS.h2), dbl),
-        sh(slider('Bowls', 'gap', 'Gap between the two bowls', ' mm', 4, 60, 1, DEFAULTS.gap), dbl),
-        choice('Bowls', 'join', 'Joined with (a link bar needs Double)', JOINS, DEFAULTS.join),
-        sh(slider('Bowls', 'trayMargin', 'Tray: border around the bowls', ' mm', 6, 30, 1, DEFAULTS.trayMargin), is('join', 2)),
-        sh(slider('Bowls', 'trayRim', 'Tray: rim height (catches spills)', ' mm', 4, 24, 1, DEFAULTS.trayRim), is('join', 2)),
-        sh(slider('Bowls', 'barW', 'Link bar width', ' mm', 10, 40, 1, DEFAULTS.barW), function (q) { return dbl(q) && Math.round(q.join) === 1; }),
+        sh(slider('Bowls', 'gap', 'Gap between the two housings', ' mm', 4, 60, 1, DEFAULTS.gap), dbl),
+        slider('Housing', 'wall', 'Wall around the pocket', ' mm', 6, 30, 1, DEFAULTS.wall),
+        slider('Housing', 'floorT', 'Floor under the bowl', ' mm', 4, 30, 1, DEFAULTS.floorT),
+        choice('Housing', 'join', 'Joined with (link bar needs Double)', JOINS, DEFAULTS.join),
+        sh(slider('Housing', 'platH', 'Platform height (raises the housings)', ' mm', 8, 50, 1, DEFAULTS.platH), is('join', 3)),
+        sh(slider('Housing', 'trayMargin', 'Tray or platform: border', ' mm', 6, 30, 1, DEFAULTS.trayMargin), function (q) { return Math.round(q.join) >= 2; }),
+        sh(slider('Housing', 'trayRim', 'Tray: rim height (catches spills)', ' mm', 4, 24, 1, DEFAULTS.trayRim), is('join', 2)),
+        sh(slider('Housing', 'barW', 'Link bar width', ' mm', 10, 40, 1, DEFAULTS.barW), function (q) { return dbl(q) && Math.round(q.join) === 1; }),
         choice('Shape', 'outline', 'Outline from above', OUTLINES, DEFAULTS.outline),
         sh(slider('Shape', 'corner', 'Corner roundness (0 = sharp)', '%', 0, 100, 5, DEFAULTS.corner), function (q) { var o = Math.round(q.outline); return o >= 1 && o <= 3; }),
         sh(slider('Shape', 'oval', 'Oval length (% of width)', '%', 110, 200, 5, DEFAULTS.oval), is('outline', 4)),
         sh(slider('Shape', 'petals', 'Number of petals', '', 4, 12, 1, DEFAULTS.petals), is('outline', 5)),
         choice('Shape', 'profile', 'Side profile', PROFILES, DEFAULTS.profile),
         slider('Shape', 'baseW', 'Base width (% of the top; small = steep sides)', '%', 40, 100, 1, DEFAULTS.baseW),
-        slider('Walls', 'wall', 'Wall thickness', ' mm', 2.4, 6, 0.2, DEFAULTS.wall),
-        slider('Walls', 'floorT', 'Floor thickness', ' mm', 3, 10, 0.5, DEFAULTS.floorT),
-        choice('Walls', 'pattern', 'Wall pattern', PATTERNS, DEFAULTS.pattern),
-        sh(slider('Walls', 'patDepth', 'Pattern depth (grooves cut into the wall)', ' mm', 0.4, 3, 0.1, DEFAULTS.patDepth), function (q) { return Math.round(q.pattern) > 0; }),
-        sh(slider('Walls', 'patCount', 'Flutes or dimples around', '', 6, 32, 1, DEFAULTS.patCount), function (q) { var o = Math.round(q.pattern); return o === 1 || o === 2 || o === 4; }),
-        sh(slider('Walls', 'ringSpace', 'Ring spacing up the wall', ' mm', 5, 16, 0.5, DEFAULTS.ringSpace), function (q) { return Math.round(q.pattern) >= 3; }),
-        sh(slider('Walls', 'twist', 'Twist (turns up the bowl)', '', 0.1, 1.5, 0.05, DEFAULTS.twist), is('pattern', 2)),
-        choice('Rim', 'rimEdge', 'Rim edge', ['Flat', 'Rounded'], DEFAULTS.rimEdge),
-        slider('Rim', 'lip', 'Outer lip for a better grip (0 = none)', ' mm', 0, 14, 1, DEFAULTS.lip),
-        slider('Rim', 'scalAmp', 'Scalloped rim depth (0 = smooth)', ' mm', 0, 8, 0.5, DEFAULTS.scalAmp),
-        sh(slider('Rim', 'scalCount', 'Number of scallops', '', 3, 16, 1, DEFAULTS.scalCount), function (q) { return q.scalAmp > 0; }),
-        choice('Base', 'baseStyle', 'Base style', BASES, DEFAULTS.baseStyle),
-        sh(slider('Base', 'flange', 'Flange width (stops tipping)', ' mm', 4, 30, 1, DEFAULTS.flange), is('baseStyle', 1)),
-        sh(slider('Base', 'standH', 'Stand height (raised feeder for cats)', ' mm', 20, 80, 1, DEFAULTS.standH), is('baseStyle', 2)),
-        sh(slider('Base', 'stemD', 'Stem width', ' mm', 14, 70, 1, DEFAULTS.stemD), is('baseStyle', 2))
+        slider('Shape', 'lip', 'Outer lip for grip (0 = none)', ' mm', 0, 14, 1, DEFAULTS.lip),
+        choice('Surface', 'pattern', 'Wall pattern', PATTERNS, DEFAULTS.pattern),
+        sh(slider('Surface', 'patDepth', 'Pattern depth (grooves cut into the wall)', ' mm', 0.4, 4, 0.1, DEFAULTS.patDepth), function (q) { return Math.round(q.pattern) > 0; }),
+        sh(slider('Surface', 'patCount', 'Flutes or dimples around', '', 6, 32, 1, DEFAULTS.patCount), function (q) { var o = Math.round(q.pattern); return o === 1 || o === 2 || o === 4; }),
+        sh(slider('Surface', 'ringSpace', 'Ring spacing up the wall', ' mm', 5, 16, 0.5, DEFAULTS.ringSpace), function (q) { return Math.round(q.pattern) >= 3; }),
+        sh(slider('Surface', 'twist', 'Twist (turns up the housing)', '', 0.1, 1.5, 0.05, DEFAULTS.twist), is('pattern', 2)),
+        choice('Base', 'baseStyle', 'Base style (flat with a platform)', BASES, DEFAULTS.baseStyle),
+        sh(slider('Base', 'flange', 'Flange width (stops tipping)', ' mm', 4, 30, 1, DEFAULTS.flange), function (q) { return Math.round(q.baseStyle) === 1 && Math.round(q.join) !== 3; }),
+        sh(slider('Base', 'standH', 'Stand height (raised feeder)', ' mm', 20, 90, 1, DEFAULTS.standH), function (q) { return Math.round(q.baseStyle) === 2 && Math.round(q.join) !== 3; }),
+        sh(slider('Base', 'stemD', 'Stem width', ' mm', 30, 120, 1, DEFAULTS.stemD), function (q) { return Math.round(q.baseStyle) === 2 && Math.round(q.join) !== 3; })
       ];
 
       window.MM_GENERATOR = {
         code: 'MM-112',
         category: 'HOME // PET CARE',
-        title: 'Pet Bowl Maker',
-        fileName: 'Pet_Bowl',
+        title: 'Pet Bowl Housing',
+        fileName: 'Pet_Bowl_Housing',
         palette: [
           { name: 'Bone White', color: '#f1f5f9' }, { name: 'Mint Biscuit', color: '#a7e3c8' },
           { name: 'Peach Treat', color: '#fdba9a' }, { name: 'Lilac Paw', color: '#d8b4fe' },
@@ -464,21 +464,21 @@
         ],
         defaultColor: '#f1f5f9',
         partNames: {
-          out: 'Bowl outside', rim: 'Bowl rim', 'in': 'Bowl inside',
-          out2: 'Bowl 2 outside', rim2: 'Bowl 2 rim', in2: 'Bowl 2 inside', tray: 'Tray or link bar'
+          out: 'Housing outside', rim: 'Housing rim', 'in': 'Bowl pocket',
+          out2: 'Housing 2 outside', rim2: 'Housing 2 rim', in2: 'Bowl 2 pocket', tray: 'Tray, platform or link bar'
         },
         openGroups: ['Bowls'],
         parameters: parameters,
         presets: [
-          presetOf('Default single bowl', {}),
-          presetOf('Small dog, fluted', { diam: 120, height: 45, pattern: 1, patCount: 14, rimEdge: 1, lip: 4 }),
-          presetOf('Food + water set', { layout: 1, diam: 105, height: 42, d2: 100, h2: 110, gap: 10, join: 2, trayMargin: 8, trayRim: 10 }),
-          presetOf('Cat dish, raised', { diam: 120, height: 28, baseW: 72, profile: 3, baseStyle: 2, standH: 30, stemD: 44, rimEdge: 1, wall: 2.8 }),
-          presetOf('Flower pair on a link bar', { layout: 1, outline: 5, petals: 8, diam: 120, height: 40, d2: 90, h2: 100, gap: 12, join: 1, barW: 24, scalAmp: 3, scalCount: 8, profile: 1, baseW: 70 }),
-          presetOf('Hexagon twist, anti-tip', { outline: 2, corner: 30, diam: 150, height: 55, pattern: 2, patCount: 12, twist: 0.4, baseStyle: 1, flange: 12, profile: 1, baseW: 68 }),
-          presetOf('Heart bowl', { outline: 6, diam: 130, height: 38, profile: 3, baseW: 66, pattern: 3, ringSpace: 9, patDepth: 1, rimEdge: 1 }),
-          presetOf('Big dog double with tray', { layout: 1, diam: 190, height: 80, d2: 100, h2: 100, gap: 16, join: 2, trayMargin: 14, trayRim: 12, wall: 4, floorT: 5, baseStyle: 1, flange: 14, profile: 2, baseW: 62 }),
-          presetOf('Quilted oval slow-sipper', { outline: 4, oval: 130, diam: 150, height: 42, pattern: 4, patCount: 16, ringSpace: 9, patDepth: 1.2, lip: 6, profile: 1, baseW: 66 })
+          presetOf('Default single housing', {}),
+          presetOf('Small dog bowl holder', { bowlRim: 125, bowlBody: 112, bowlBottom: 75, bowlDepth: 42, wall: 10, pattern: 1, patCount: 14, lip: 4 }),
+          presetOf('Food + water platform', { layout: 1, bowlRim: 100, bowlBody: 90, bowlBottom: 64, bowlDepth: 40, d2: 100, h2: 110, gap: 6, join: 3, platH: 22, trayMargin: 6, wall: 7 }),
+          presetOf('Cat feeder, raised', { bowlRim: 110, bowlBody: 100, bowlBottom: 70, bowlDepth: 30, wall: 8, profile: 3, baseStyle: 2, standH: 50, stemD: 56 }),
+          presetOf('Flower pair on a link bar', { layout: 1, outline: 5, petals: 8, bowlRim: 110, bowlBody: 98, bowlBottom: 70, bowlDepth: 40, d2: 90, gap: 10, join: 1, barW: 24, profile: 1, baseW: 80, wall: 10 }),
+          presetOf('Hexagon twist, anti-tip', { outline: 2, corner: 30, pattern: 2, patCount: 12, twist: 0.4, baseStyle: 1, flange: 12, profile: 1, baseW: 80 }),
+          presetOf('Heart holder', { outline: 6, bowlRim: 120, bowlBody: 106, bowlBottom: 76, bowlDepth: 38, wall: 8, profile: 3, baseW: 80, pattern: 3, ringSpace: 9, patDepth: 1.2 }),
+          presetOf('Big dog double on a tray', { layout: 1, bowlRim: 200, bowlBody: 180, bowlBottom: 130, bowlDepth: 75, gap: 14, join: 2, trayMargin: 12, trayRim: 12, wall: 14, floorT: 10, baseStyle: 1, flange: 14, profile: 2, baseW: 72 }),
+          presetOf('Quilted oval holder', { outline: 4, oval: 125, bowlRim: 140, bowlBody: 126, bowlBottom: 90, bowlDepth: 42, pattern: 4, patCount: 16, ringSpace: 9, patDepth: 1.5, lip: 6, profile: 1, baseW: 78 })
         ],
         build: build
       };

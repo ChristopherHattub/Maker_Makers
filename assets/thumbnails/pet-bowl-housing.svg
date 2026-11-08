@@ -16,17 +16,18 @@
   <ellipse cx="200" cy="248" rx="128" ry="19" fill="url(#plate)" stroke="#00e5ff" stroke-opacity="0.5"/>
   <ellipse cx="200" cy="248" rx="104" ry="14" fill="none" stroke="#00e5ff" stroke-opacity="0.18"/>
   <ellipse cx="200" cy="249" rx="82" ry="11" fill="url(#shadow)"/>
-  <!-- Pet bowl: round bowl with a purple trim band and a second small bowl -->
-  <path d="M96 150H304L270 232A70 14 0 0 1 130 232Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
-  <ellipse cx="200" cy="150" rx="104" ry="24" fill="url(#mat)" stroke="#00e5ff" stroke-width="2"/>
-  <ellipse cx="200" cy="152" rx="92" ry="19" fill="#0a2246" stroke="#00e5ff" stroke-width="1.2"/>
-  <ellipse cx="200" cy="158" rx="70" ry="12" fill="#06152d"/>
-  <path d="M104 170Q200 214 296 170" fill="none" stroke="#c084fc" stroke-width="3.5" stroke-linecap="round"/>
-  <path d="M112 160Q130 200 150 222" stroke="url(#gloss)" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <!-- Pet bowl housing: a thick sleeve with a bowl seated in its pocket -->
+  <path d="M84 168H316L292 236A92 15 0 0 1 108 236Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <ellipse cx="200" cy="168" rx="116" ry="24" fill="url(#mat)" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M150 164L164 204A36 9 0 0 0 236 204L250 164Z" fill="url(#warm)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <ellipse cx="200" cy="164" rx="50" ry="11" fill="#0a2246" stroke="#00e5ff" stroke-width="1.5"/>
+  <ellipse cx="200" cy="166" rx="41" ry="7" fill="#06152d"/>
+  <path d="M92 190Q200 238 308 190" fill="none" stroke="#c084fc" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M96 176Q108 210 126 230" stroke="url(#gloss)" stroke-width="6" stroke-linecap="round" fill="none"/>
   <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
     <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
   </g>
   <rect x="30" y="26" width="52" height="16" rx="3" fill="#06152d" fill-opacity="0.7" stroke="#00e5ff" stroke-opacity="0.5"/>
   <text x="56" y="38" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#00e5ff" letter-spacing="1.5">MM-112</text>
-  <text x="200" y="285" text-anchor="middle" font-family="Courier New, monospace" font-size="12" fill="#eef7ff" fill-opacity="0.9" letter-spacing="3">PET BOWL MAKER</text>
+  <text x="200" y="285" text-anchor="middle" font-family="Courier New, monospace" font-size="12" fill="#eef7ff" fill-opacity="0.9" letter-spacing="3">PET BOWL HOUSING</text>
 </svg>
