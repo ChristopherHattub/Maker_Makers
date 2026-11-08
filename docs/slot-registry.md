@@ -13,9 +13,11 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
-| 106-116 | Taken by threads in flight; see their PRs. |
+| 106 | Built: Console Faceplate. |
+| 108 | Built: Nutcracker (print-in-place jaw). |
+| 109-116 | Taken by threads in flight; see their PRs. |
 | 117 | Built: Cable Organizer. |
-| 118+ | Free. Any number works. |
+| 118+ | Free (check open PRs first). Any number works. |
 
 Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -126,6 +128,8 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
+| 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
 | 117 | Cable Organizer | organization | `cable-organizer.html` (desk edge clip, under-desk tray, clip strip; slot count and cable thickness) |
 
 ## Groups (BUNDLES)
