@@ -1,6 +1,6 @@
 # Nutcracker (slot 108)
 
-`programs/nutcracker.html`, code `MM-108`, group Christmas. A toy soldier on a plinth with a working jaw that prints in place. Hat choices: shako, crown, spike helmet. Unprinted: the clearances below are checked in software only.
+`programs/nutcracker.html`, code `MM-108`, group Christmas. A toy soldier on a plinth with a working jaw that prints in place, built from about 40 mix-and-match options (see below). Unprinted: the clearances below are checked in software only.
 
 ## How the jaw works
 
@@ -15,9 +15,23 @@ The lower jaw is a **quarter disc** (radius `mouth`) that hangs from the mouth l
 
 Models are built in design millimetres (112 mm tall) and scaled by `height / 112`; the tolerance is divided by the scale first, so it stays true millimetres.
 
+## Mix and match (Parametric tab, groups)
+
+- **Size**: height, head width, mouth size, face height.
+- **Hat**: style (shako, crown, spike helmet, top hat, bearskin, pointed cap), height, brim (none, flat, fur), band (none, low, high), topper (none, pom-pom, feather, spike).
+- **Face**: eyes (round, wide oval, slits, googly), eye size and gap, brows (none, straight, angry, raised), nose style and size, moustache (none, classic, walrus, handlebar), jaw colour.
+- **Coat**: flare, waist, chest and shoulder width (shoulders are capped at 1.25x the waist so a narrow waist never flares too steeply), collar, buttons (count and diamond or round), belt, buckle, sash, hem trim, shoulder pads, medals, arm thickness, boots.
+- **Base**: plinth shape (rounded square, round, octagon), height, stepped or plain.
+- **Props**: none, spear, flag, sword, crystal staff, which side, and height. Planted props stand on the plinth; the sword is held in the hand.
+- **Colours**: 8 colour schemes (the Color tool still repaints every part).
+- **Print fit**: tolerance, jaw pose.
+- **Mix tab**: "Surprise me" picks a random style for every piece (sizes and print fit stay put) and "Back to the default nutcracker" resets. Ten presets sit above the sliders.
+
+Design rules that keep every mix printable: studs and medals are diamond or corner-down octagon sections (45° slopes), trim chamfers are shallower than 45°, studs embed 1.6 mm in the coat, arms start inside the coat, round and octagon plinths are scaled up so corners never poke out, sword quillons rise from the guard. Random sweeps of all options (160 mixes, extremes included) pass the print check in about 98% of cases; the rest are 3 mm² overhang flags on pads, medals or arm tops at slider extremes (tell users to nudge the slider if the chip turns red). Defaults and all ten presets are clean in CI.
+
 ## Parts (Color tool)
 
-`base` plinth, `coat`, `trim` (hem, belt, collar), `jewel` (buttons, buckle), `boots`, `arms`, `hands`, `head`, `cheeks` (side-hair plates), `jaw`, `eyes`, `brows`, `nose`, `mustache`, `hat`, `hatTrim`, `plume` (plume, crown points or helmet spike). The jaw is its own shell, so Sculpt can move or delete it.
+`base` plinth, `coat`, `trim` (hem, belt, collar), `jewel` (buttons, buckle, medals), `sash`, `boots`, `arms`, `hands`, `pads`, `prop`, `propHead`, `flag`, `head`, `cheeks` (side-hair plates), `jaw`, `eyes`, `pupils`, `brows`, `nose`, `mustache`, `hat`, `hatBrim`, `hatTrim`, `crownPoints`, `topper`. The jaw is its own shell, so Sculpt can move or delete it.
 
 ## Checking it
 
@@ -30,4 +44,4 @@ Models are built in design millimetres (112 mm tall) and scaled by `height / 112
 - Print upright with no supports. The first layers of the chin, the pins and the mouth ceiling bridge a 0.35 mm gap, which most slicers handle; if the jaw welds, raise the tolerance.
 - The shared print check (`programs/shared/print-check.js`) now also counts solid two layers straight below as support (see [generator-styling.md](generator-styling.md#print-check-live-warning-chip)), because a one-layer gap otherwise reads as empty or full depending on where the voxel layers fall.
 - Unprinted: the tolerance, the 30° opening, the thin side-hair plates, and the hands tucked into the coat.
-- The face is simple (ball eyes, ball nose, bar brows and moustache). Teeth, a sword and a lever are not modelled.
+- Teeth and a lever are not modelled.

@@ -72,7 +72,7 @@
       // Circle / ellipse loop in the XZ plane at height y. o: { cx, cz, sx, sz, rot }.
       function loopXZ(r, y, seg, o) {
         o = o || {};
-        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
+        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot === undefined ? 0.2 : o.rot;   // seams off the axes, so a slicer grid never lines a ray up with one
         var cr = Math.cos(rot), sr = Math.sin(rot), out = [], j, a, x, z;
         for (j = 0; j < seg; j++) {
           a = (j / seg) * TAU;
@@ -219,13 +219,14 @@
       }
 
       // ---- Layout: everything the build needs, in design millimetres (1 unit = 1 mm at 112 mm tall) ----
-      var BASE_H = 4, COAT_TOP = 54, PHI_MAX = 30, PIN_R = 2.2, CHEEK_T = 4.6, HOLE_DEPTH = 2.7;
+      var COAT_TOP = 54, PHI_MAX = 30, PIN_R = 2.2, CHEEK_T = 4.6, HOLE_DEPTH = 2.7;
       function layout(p) {
         var L = {};
         L.s = p.height / 112;
         L.clr = p.tolerance / L.s;
         L.R = p.mouth; L.Rb = L.R + L.clr;
         L.W = p.headWidth;
+        L.baseH = p.baseH;
         L.Wu = L.W / 2 - CHEEK_T; L.Wj = L.Wu - L.clr;
         L.hdg = Math.SQRT2 * (PIN_R + L.clr);
         var c = Math.cos(rad(PHI_MAX)), sn = Math.sin(rad(PHI_MAX));
@@ -241,60 +242,145 @@
         L.czH = (L.zr + L.zU) / 2;
         L.hzT = (L.zU - L.zr) / 2 + 1.6;
         L.hxT = L.W / 2 + 2.2;
-        var kx = L.hxT, kz = L.hzT;
+        var kx = L.hxT, kz = L.hzT, fl = p.flare, wa = p.waist, sh = Math.min(p.shoulder, p.waist * 1.25);   // a very narrow waist under very wide shoulders would flare too steeply to print
         L.table = [
-          [BASE_H - 0.5, kx * 1.12, kz * 1.15, 0],
-          [12, kx * 1.02, kz * 1.08, 0.04],
-          [24, kx * 0.86, kz * 0.97, 0.2],
-          [34, kx * 0.85, kz * 0.95, 0.4],
-          [44, kx * 0.95, kz * 1.0, 0.7],
+          [L.baseH - 0.5, kx * 1.12 * fl, kz * 1.15 * fl, 0],
+          [12, kx * (1 + 0.02 * fl), kz * (1 + 0.08 * fl), 0.04],
+          [24, kx * 0.86 * wa, kz * 0.97 * wa, 0.2],
+          [34, kx * 0.85 * wa, kz * 0.95 * wa, 0.4],
+          [44, kx * 0.95 * sh, kz * 1.0, 0.7],
           [COAT_TOP, kx, kz, 1]
         ];
         L.body = function (y) { var r = sample(L.table, y); return { hx: r[0], hz: r[1], cz: r[2] * L.czH }; };
         return L;
       }
 
+      // ---- Colour schemes: a default colour for every part (the Color tool still repaints any of them) ----
+      var SCHEMES = [
+        { name: 'Classic red', coat: '#f87171', trim: '#fde047', hat: '#60a5fa', hatTrim: '#fde047', topper: '#f1f5f9', skin: '#fdd5b1', hair: '#c08457', jaw: '#f1f5f9', boots: '#334155', base: '#c08457', sash: '#60a5fa', nose: '#f4b393' },
+        { name: 'Royal blue', coat: '#60a5fa', trim: '#fde047', hat: '#f87171', hatTrim: '#fde047', topper: '#fde047', skin: '#fdd5b1', hair: '#334155', jaw: '#f1f5f9', boots: '#334155', base: '#334155', sash: '#f87171', nose: '#f4b393' },
+        { name: 'Forest green', coat: '#6fd39a', trim: '#fde047', hat: '#2f8a5c', hatTrim: '#fde047', topper: '#f87171', skin: '#fdd5b1', hair: '#c08457', jaw: '#f1f5f9', boots: '#334155', base: '#c08457', sash: '#f87171', nose: '#f4b393' },
+        { name: 'Winter white', coat: '#f1f5f9', trim: '#93c5fd', hat: '#93c5fd', hatTrim: '#f1f5f9', topper: '#f1f5f9', skin: '#fdd5b1', hair: '#94a3b8', jaw: '#e2e8f0', boots: '#475569', base: '#cbd5e1', sash: '#60a5fa', nose: '#f4b393' },
+        { name: 'Candy', coat: '#f9a8d4', trim: '#f1f5f9', hat: '#fde047', hatTrim: '#f9a8d4', topper: '#c084fc', skin: '#fdd5b1', hair: '#c08457', jaw: '#f1f5f9', boots: '#334155', base: '#c084fc', sash: '#c084fc', nose: '#f4a3a3' },
+        { name: 'Midnight', coat: '#475569', trim: '#fde047', hat: '#334155', hatTrim: '#fde047', topper: '#fde047', skin: '#fdd5b1', hair: '#1e293b', jaw: '#e2e8f0', boots: '#1e293b', base: '#334155', sash: '#f87171', nose: '#f4b393' },
+        { name: 'Gold & ivory', coat: '#f1f5f9', trim: '#fde047', hat: '#fde047', hatTrim: '#f1f5f9', topper: '#f87171', skin: '#fdd5b1', hair: '#c08457', jaw: '#f1f5f9', boots: '#c08457', base: '#fde047', sash: '#f87171', nose: '#f4b393' },
+        { name: 'Berry', coat: '#d8b4fe', trim: '#fde047', hat: '#a78bfa', hatTrim: '#fde047', topper: '#f87171', skin: '#fdd5b1', hair: '#c08457', jaw: '#f1f5f9', boots: '#334155', base: '#a78bfa', sash: '#f1f5f9', nose: '#f4b393' }
+      ];
+      var JAW_LOOKS = ['#f1f5f9', null, '#fde047', '#334155'];
+
       // ---- Build ------------------------------------------------------------------------------------
       function build(p, api) {
         var THREE = api.THREE, L = layout(p), s = L.s, list = [], i, k;
-        var AN = 4, Py = L.Py, Wu = L.Wu, Wj = L.Wj, clr = L.clr;
+        var AN = 4, Py = L.Py, Wu = L.Wu, Wj = L.Wj, clr = L.clr, baseH = L.baseH, C = SCHEMES[Math.round(p.scheme)] || SCHEMES[0];
         function add(name, color, parts, fixed) { list.push({ name: name, color: color, positions: Array.isArray(parts) ? cat(parts) : parts, fixed: fixed !== false }); }
         function rr(hx, hz, y, cz) { return rrect(hx, hz, 0.45 * Math.min(hx, hz), y, AN, 0, cz); }
-        function bandAt(y0, y1, grow, depth) {
+        function bandAt(y0, y1, grow) {
           // a chamfered band hugging the coat from y0 to y1, `grow` mm proud of it
-          var loops = [], ys = [y0, y0 + grow, y1 - grow, y1];
+          var loops = [], ys = [y0, y0 + grow * 1.5, y1 - grow, y1];   // lower chamfer shallower than 45° so it prints clean
           ys.forEach(function (y, j) { var b = L.body(y), g = (j === 1 || j === 2) ? grow : 0; loops.push(rr(b.hx + g, b.hz + g, y, b.cz)); });
           return loftCapped(loops);
         }
+        function zFront(yy) { var q = L.body(yy); return q.cz + q.hz; }
+        // a stud pointing +z with n corners (4 = diamond, 8 = octagon with a corner down: 45 degree slopes, no overhang)
+        function studN(cx, cy, z0, len, r, n) {
+          function ring(z, rr2) { var out = [], j, a; for (j = 0; j < n; j++) { a = (j / n) * TAU; out.push([cx + rr2 * Math.cos(a), cy + rr2 * Math.sin(a), z]); } return out; }
+          return loftCapped([ring(z0 - 1.6, r), ring(z0, r), ring(z0 + len, r * 0.35)]);
+        }
+        var rounded = Math.round(p.buttonStyle) === 1;
 
-        // Plinth
-        var b0 = L.body(BASE_H - 0.5), hxP = b0.hx + 5, hzP = b0.hz + 6;
-        add('base', '#c08457', loftCapped([rr(hxP - 0.9, hzP - 0.9, 0, 0), rr(hxP, hzP, 0.9, 0), rr(hxP, hzP, BASE_H - 0.9, 0), rr(hxP - 0.9, hzP - 0.9, BASE_H, 0)]));
+        // ---- Plinth ----
+        var bs = Math.round(p.baseShape), b0 = L.body(baseH - 0.5), bsc = bs === 0 ? 1 : (bs === 1 ? 1.22 : 1.32), hxP = (b0.hx + 5) * bsc, hzP = (b0.hz + 6) * bsc, tiers = [];
+        function baseLoop(hx, hz, y) {
+          if (bs === 0) return rr(hx, hz, y, 0);
+          return loopXZ(1, y, bs === 1 ? 44 : 8, { sx: hx, sz: hz, rot: bs === 2 ? Math.PI / 8 : 0 });
+        }
+        function tierLoft(hx, hz, y0, y1) { return loftCapped([baseLoop(hx - 0.9, hz - 0.9, y0), baseLoop(hx, hz, y0 + 0.9), baseLoop(hx, hz, y1 - 0.9), baseLoop(hx - 0.9, hz - 0.9, y1)]); }
+        if (Math.round(p.baseStep) === 1) { tiers.push(tierLoft(hxP + 3.5, hzP + 3.5, 0, baseH * 0.5 + 0.4)); tiers.push(tierLoft(hxP, hzP, baseH * 0.5 - 0.4, baseH)); }
+        else tiers.push(tierLoft(hxP, hzP, 0, baseH));
+        add('base', C.base, tiers);
 
-        // Coat (long, standing on the plinth)
+        // ---- Coat ----
         var loops = [], y, N = 18;
-        for (k = 0; k <= N; k++) { y = lerp(BASE_H - 0.5, COAT_TOP, k / N); var bb = L.body(y); loops.push(rr(bb.hx, bb.hz, y, bb.cz)); }
-        add('coat', '#f87171', loftCapped(loops));
-        add('trim', '#fde047', [bandAt(BASE_H - 0.5, BASE_H + 4.5, 0.9), bandAt(22, 26.5, 0.8), bandAt(COAT_TOP - 4.5, COAT_TOP, 0.8)]);
-        var studs = [], zf = function (yy) { var q = L.body(yy); return q.cz + q.hz; };
-        [31, 37, 43].forEach(function (yy) { studs.push(stud(0, yy, zf(yy) + 0.2, 1.7, 1.8)); });
-        studs.push(stud(0, 24.2, zf(24.2) + 0.9, 2.0, 2.6));
-        add('jewel', '#93c5fd', studs);
+        for (k = 0; k <= N; k++) { y = lerp(baseH - 0.5, COAT_TOP, k / N); var bb = L.body(y); loops.push(rr(bb.hx, bb.hz, y, bb.cz)); }
+        add('coat', C.coat, loftCapped(loops));
+        var trimParts = [], beltY = [[0, 0], [23.4, 25.2], [21, 27.4]][Math.round(p.belt)];
+        if (Math.round(p.hem) === 1) trimParts.push(bandAt(baseH - 0.5, baseH + 4.5, 0.9));
+        if (Math.round(p.belt) > 0) trimParts.push(bandAt(beltY[0], beltY[1], Math.round(p.belt) === 2 ? 1.0 : 0.8));
+        var collar = Math.round(p.collar);
+        if (collar === 1) trimParts.push(bandAt(COAT_TOP - 4.5, COAT_TOP, 0.8));
+        else if (collar === 2) trimParts.push(bandAt(COAT_TOP - 9, COAT_TOP, 1.4));
+        if (trimParts.length) add('trim', C.trim, trimParts);
+        var studs = [], nb = Math.round(p.buttons), bn = rounded ? 8 : 4;
+        for (k = 0; k < nb; k++) { var by = nb === 1 ? 38 : lerp(29.5, 47, k / (nb - 1)); studs.push(studN(0, by, zFront(by) + 0.2, 1.7, 1.8, bn)); }
+        var bk = Math.round(p.buckle);
+        if (bk > 0 && Math.round(p.belt) > 0) { var byy = (beltY[0] + beltY[1]) / 2; studs.push(studN(0, byy, zFront(byy) + 0.9, 2.0, Math.round(p.belt) === 2 ? 3.2 : 2.6, bk === 1 ? 4 : 8)); }
+        var md = Math.round(p.medals);
+        for (k = 0; k < md; k++) { var my = 42 - k * 5.2, mx = -6.5 - (k % 2) * 0.0; studs.push(studN(mx, my, zFront(my) + 0.3, 1.2, 2.1, 8)); }
+        if (studs.length) add('jewel', '#93c5fd', studs);
 
-        // Boots peeking out of the hem
-        var bh = L.body(BASE_H + 1), boots = [];
-        [-1, 1].forEach(function (sg) { boots.push(footBall(sg * 6.2, BASE_H + 3.0, bh.cz + bh.hz - 1.0, 4.8, 3.6, 6.2, BASE_H)); });
-        add('boots', '#334155', boots);
+        // Sash: a flat diagonal band across the chest, embedded in the coat so it prints flat against it
+        var ss = Math.round(p.sash);
+        if (ss > 0) {
+          var sg2 = ss === 1 ? 1 : -1, pts2 = [], j2, tt2, cxs, cys, tx, ty, nl, w2 = 1.9, rings2 = [];
+          for (j2 = 0; j2 <= 10; j2++) {
+            tt2 = j2 / 10; cxs = sg2 * lerp(8.2, -8.2, tt2); cys = lerp(49.5, 25, tt2);
+            pts2.push([cxs, cys]);
+          }
+          pts2.forEach(function (q, idx) {
+            var a = pts2[Math.max(0, idx - 1)], b2 = pts2[Math.min(pts2.length - 1, idx + 1)];
+            tx = b2[0] - a[0]; ty = b2[1] - a[1]; nl = Math.sqrt(tx * tx + ty * ty); var nx = -ty / nl, ny = tx / nl, zf2 = zFront(q[1]);
+            rings2.push([[q[0] + nx * w2, q[1] + ny * w2, zf2 - 1.6], [q[0] + nx * w2, q[1] + ny * w2, zf2 + 0.9], [q[0] - nx * w2, q[1] - ny * w2, zf2 + 0.9], [q[0] - nx * w2, q[1] - ny * w2, zf2 - 1.6]]);
+          });
+          add('sash', C.sash, loftCapped(rings2));
+        }
 
-        // Arms: hang down the sides, hands tucked into the coat so they are supported
-        var arms = [], hands = [];
+        // ---- Boots, arms, hands, shoulder pads ----
+        if (Math.round(p.boots) === 1) {
+          var bh = L.body(baseH + 1), boots = [];
+          [-1, 1].forEach(function (sg) { boots.push(footBall(sg * 6.2, baseH + 3.0, bh.cz + bh.hz - 1.0, 4.8, 3.6, 6.2, baseH)); });
+          add('boots', C.boots, boots);
+        }
+        var arms = [], hands = [], pads = [], ar = p.armThick, handPos = {};
         [-1, 1].forEach(function (sg) {
           var yS = COAT_TOP - 5, yE = 38, yH = 27, bS = L.body(yS), bE = L.body(yE), bH = L.body(yH);
-          var S = [sg * (bS.hx + 0.2), yS, bS.cz], E = [sg * (bE.hx + 1.4), yE, bE.cz + 1.5], H = [sg * (bH.hx - 0.8), yH, bH.cz + 3];
-          arms.push(capsule(S, E, 3.5, 3.1, 14, 5), capsule(E, H, 3.1, 3.0, 14, 5));
-          hands.push(ball(H[0], H[1] - 0.8, H[2] + 0.8, 3.5, 3.4, 3.5, 16, 10));
+          var S = [sg * (bS.hx - 1.2), yS, bS.cz], E = [sg * (bE.hx + 1.4), yE, bE.cz + 1.5], H = [sg * (bH.hx - 0.8), yH, bH.cz + 3];
+          arms.push(capsule(S, E, 3.5 * ar, 3.1 * ar, 14, 5), capsule(E, H, 3.1 * ar, 3.0 * ar, 14, 5));
+          hands.push(ball(H[0], H[1] - 0.8, H[2] + 0.8, 3.5 * ar, 3.4 * ar, 3.5 * ar, 16, 10));
+          handPos[sg] = H;
+          if (Math.round(p.pads) === 1) pads.push(footBall(S[0] + sg * 0.2, yS + 1.0, S[2], 4.4, 3.4, 4.8, yS - 2.4));
         });
-        add('arms', '#f87171', arms); add('hands', '#f1f5f9', hands);
+        add('arms', C.coat, arms); add('hands', '#f1f5f9', hands);
+        if (pads.length) add('pads', C.trim, pads);
+
+        // ---- Props: planted on the plinth (no floating parts) or held in a hand ----
+        var pr = Math.round(p.prop), pside = Math.round(p.propSide);
+        if (pr > 0) {
+          var sides = pside === 2 ? [1, -1] : (pside === 0 ? [1] : [-1]), pole = [], head = [], flag = [], propH = p.propH;
+          sides.forEach(function (sg) {
+            var H = handPos[sg], px = sg * (Math.abs(H[0]) + 3.2), pz = H[2], top = baseH + propH;
+            if (pr === 3) {      // sword held in the hand, leaning outward
+              var ang = rad(26), dir = [sg * Math.sin(ang), Math.cos(ang), 0], S0 = [H[0] + sg * 1.0, H[1] + 1, H[2] + 0.5], len = Math.min(propH * 0.55, 46);
+              var tip = [S0[0] + dir[0] * len, S0[1] + dir[1] * len, S0[2]];
+              pole.push(capsule(S0, tip, 1.5, 0.9, 8, 3));
+              var gm = [S0[0] + dir[0] * 7, S0[1] + dir[1] * 7, S0[2]];
+              var qg = [], u2;
+              for (u2 = 0; u2 <= 8; u2++) { var tq = u2 / 8, du = (tq * 2 - 1); qg.push(diamondRing(gm[0] + du * 5.5, gm[1] - 1.5 + Math.abs(du) * 5.5, gm[2], 1.5 * (0.5 + 0.5 * Math.cos(du * 1.2)))); }
+              head.push(loftCapped(qg), ball(S0[0] - dir[0] * 0.5, S0[1] - 0.2, S0[2], 2.3, 2.3, 2.3, 12, 8));
+              return;
+            }
+            pole.push(capsule([px, baseH + 1.2, pz], [px, top, pz], 1.5, 1.5, 8, 3));
+            if (pr === 1) head.push(lathe([[0, top - 0.6], [1.7, top - 0.6], [3.1, top + 3], [0, top + 14]], 8, { cx: px, cz: pz }));
+            else if (pr === 4) head.push(lathe([[0, top - 0.4], [4.0, top + 3.6], [0, top + 7.6]], 8, { cx: px, cz: pz }));
+            else if (pr === 2) {
+              var tri2 = [[pz, top - 0.5], [pz, top - 14.5], [pz + 7.2, top - 7.2]];
+              flag.push(extrude(THREE, tri2, null, px - 1.1, px + 1.1));
+              head.push(ball(px, top + 1.2, pz, 2.0, 2.0, 2.0, 12, 8));
+            }
+          });
+          add('prop', '#c08457', pole);
+          if (head.length) add('propHead', C.trim, head);
+          if (flag.length) add('flag', C.sash, flag);
+        }
 
         // ---- Head: cup + upper head (centre block), cheek plates with blind diamond pin holes ----
         var pts = [], th, thE = Math.atan2(L.E[1], L.E[0]) * 180 / Math.PI + 360;
@@ -306,65 +392,100 @@
         pts.push([L.zU, L.yc], [L.zU, L.yTop], [L.zr, L.yTop]);
         var head = [extrude(THREE, pts, null, -(Wu + 0.3), Wu + 0.3)];
         var cheek = [[L.zr, COAT_TOP - 0.5], [L.zU, COAT_TOP - 0.5], [L.zU, L.yTop], [L.zr, L.yTop]];
-        var hole = [[0, Py + L.hdg], [-L.hdg, Py], [0, Py - L.hdg], [L.hdg, Py]];
+        var hole = [[0, Py + L.hdg], [-L.hdg, Py], [0, Py - L.hdg], [L.hdg, Py]], cheeks = [];
         [-1, 1].forEach(function (sg) {
           var a = sg * Wu, b = sg * (Wu + HOLE_DEPTH), c2 = sg * (Wu + HOLE_DEPTH - 0.1), d = sg * (L.W / 2);
-          head.push(extrude(THREE, cheek, [hole], Math.min(a, b), Math.max(a, b)));
-          head.push(extrude(THREE, cheek, null, Math.min(c2, d), Math.max(c2, d)));
+          cheeks.push(extrude(THREE, cheek, [hole], Math.min(a, b), Math.max(a, b)));
+          cheeks.push(extrude(THREE, cheek, null, Math.min(c2, d), Math.max(c2, d)));
         });
-        add('head', '#fdd5b1', head.slice(0, 1));
-        add('cheeks', '#c08457', head.slice(1));
+        add('head', C.skin, head);
+        add('cheeks', C.hair, cheeks);
 
         // ---- Jaw: quarter disc in the bowl, pinned at the pivot ----
         var thT = Math.asin(PIN_R / L.R) * 180 / Math.PI;
         var jp = [[-PIN_R, Py], [-PIN_R, Py - Math.sqrt(L.R * L.R - PIN_R * PIN_R)]];
         for (k = 1; k <= 22; k++) { th = lerp(270, 360 + thT, k / 22); jp.push([L.R * Math.cos(rad(th)), Py + L.R * Math.sin(rad(th))]); }
         for (k = 0; k < 8; k++) { th = lerp(90, 180, k / 8); jp.push([PIN_R * Math.cos(rad(th)), Py + PIN_R * Math.sin(rad(th))]); }   // back of the jaw is a quarter circle round the pivot, so it never lifts into the ceiling
-        jp[2] = [L.R * Math.cos(rad(270 + (360 + thT - 270) / 22)), Py + L.R * Math.sin(rad(270 + (360 + thT - 270) / 22))];
         var jaw = [extrude(THREE, jp, null, -Wj, Wj)];
         [-1, 1].forEach(function (sg) {
           var xa = sg * (Wj - 1.0), xb = sg * (Wu + HOLE_DEPTH - 0.7);
           jaw.push(loftCapped([diamondRing(xa, Py, 0, PIN_R), diamondRing(xb, Py, 0, PIN_R)]));
         });
-        var jawPos = swing(cat(jaw), Py, p.pose);
+        var jawPos = swing(cat(jaw), Py, p.pose), jawColor = JAW_LOOKS[Math.round(p.jawLook)] || C.skin;
 
         // ---- Face ----
         var zFace = L.zU, fy = function (f) { return L.yc + f * p.faceH; };
-        var ex = Math.min(6.2, L.W * 0.2);
-        add('eyes', '#334155', [ball(-ex, fy(0.58), zFace - 0.2, 1.7, 1.7, 1.5, 14, 8), ball(ex, fy(0.58), zFace - 0.2, 1.7, 1.7, 1.5, 14, 8)]);
-        add('brows', '#f1f5f9', [barX(-ex - 2.8, -ex + 2.8, fy(0.86), fy(0.8), zFace - 0.3, 1.1), barX(ex - 2.8, ex + 2.8, fy(0.8), fy(0.86), zFace - 0.3, 1.1)]);
-        add('nose', '#f4b393', ball(0, fy(0.42), zFace - 0.4, p.nose * 0.85, p.nose * 1.15, p.nose, 16, 10));
-        if (p.mustache >= 1) add('mustache', '#f1f5f9', barX(-L.Wu * 0.8, L.Wu * 0.8, fy(0.15), fy(0.15), zFace - 0.2, 1.9));
-
-        // ---- Hat ----
-        var hx0 = L.W / 2, hz0 = (L.zU - L.zr) / 2, yH0 = L.yTop - 0.4, hH = p.hatH, hatLoops = [], trim = [], plume = null;
-        function hl(sc, y, g) { g = g || 0; return rrect(hx0 * sc + g, hz0 * sc + g, 0.4 * Math.min(hx0, hz0) * sc + g, y, AN, 0, L.czH); }
-        if (p.hat === 0) {            // shako
-          hatLoops = [hl(1, yH0), hl(0.97, yH0 + hH * 0.5), hl(0.8, yH0 + hH)];
-          trim.push(loftCapped([hl(0.8, yH0 + hH - 3.2), hl(0.8, yH0 + hH - 2, 1.2), hl(0.8, yH0 + hH - 0.8, 1.2), hl(0.8, yH0 + hH + 0.4)]));
-          plume = ball(L.hxT * 0 , yH0 + hH + 2.4, L.czH, 4.2, 4.6, 4.2, 18, 12);
-        } else if (p.hat === 1) {     // crown
-          var ch = Math.min(hH * 0.42, 11);
-          hatLoops = [hl(1, yH0), hl(1.0, yH0 + ch * 0.5), hl(1.0, yH0 + ch)];
-          trim.push(loftCapped([hl(1.0, yH0 + ch * 0.9), hl(1.0, yH0 + ch + 0.2)].map(function (lp) { return lp; })));
-          var spikes = [], sy = yH0 + ch - 0.4, sh = Math.min(hH * 0.4, 10), rim = [[hx0 - 4.5, hz0 - 4.5], [-hx0 + 4.5, hz0 - 4.5], [hx0 - 4.5, -hz0 + 4.5], [-hx0 + 4.5, -hz0 + 4.5], [0, hz0 - 3.2], [0, -hz0 + 3.2], [hx0 - 3.2, 0], [-hx0 + 3.2, 0]];
-          rim.forEach(function (q) { spikes.push(lathe([[0, sy - 0.6], [2.7, sy - 0.6], [2.7, sy], [0, sy + sh]], 10, { cx: q[0], cz: L.czH + q[1] })); });
-          plume = cat(spikes);
-        } else {                      // spike helmet
-          for (k = 0; k <= 7; k++) { var tt = k / 7; hatLoops.push(hl(0.45 + 0.55 * Math.sqrt(1 - tt * tt * 0.97), yH0 + hH * tt)); }
-          trim.push(loftCapped([hl(1, yH0), hl(1, yH0 + 1.0, 1.0), hl(1, yH0 + 3.2, 1.0), hl(1, yH0 + 4.2)]));
-          plume = lathe([[0, yH0 + hH - 0.8], [3.0, yH0 + hH - 0.8], [3.0, yH0 + hH], [1.6, yH0 + hH + 4], [0, yH0 + hH + 9]], 12, { cx: 0, cz: L.czH });
+        var ex = p.eyeGap, es = p.eyeSize, estyle = Math.round(p.eyes), eyes = [], pupils = [];
+        [-1, 1].forEach(function (sg) {
+          var ey = fy(0.58);
+          if (estyle === 0) eyes.push(ball(sg * ex, ey, zFace - 0.2, 1.7 * es, 1.7 * es, 1.5, 14, 8));
+          else if (estyle === 1) eyes.push(ball(sg * ex, ey, zFace - 0.2, 2.5 * es, 1.5 * es, 1.4, 14, 8));
+          else if (estyle === 2) eyes.push(barX(sg * ex - 2.2 * es, sg * ex + 2.2 * es, ey, ey, zFace - 0.3, 1.0 * es));
+          else { eyes.push(ball(sg * ex, ey, zFace - 0.2, 2.5 * es, 2.5 * es, 1.6, 14, 8)); pupils.push(ball(sg * ex + sg * 0.5, ey - 0.6, zFace + 0.9, 1.2 * es, 1.2 * es, 1.0, 10, 6)); }
+        });
+        add('eyes', estyle === 3 ? '#f1f5f9' : '#334155', eyes);
+        if (pupils.length) add('pupils', '#334155', pupils);
+        var bw = Math.round(p.brows);
+        if (bw > 0) {
+          var bY = bw === 3 ? [fy(0.8), fy(0.9)] : bw === 2 ? [fy(0.9), fy(0.8)] : [fy(0.84), fy(0.84)];
+          add('brows', C.hair === '#c08457' ? '#f1f5f9' : '#e2e8f0', [barX(-ex - 2.8, -ex + 2.8, bY[0], bY[1], zFace - 0.3, 1.1), barX(ex - 2.8, ex + 2.8, bY[1], bY[0], zFace - 0.3, 1.1)]);
         }
-        add('hat', p.hat === 1 ? '#fde047' : '#60a5fa', loftCapped(hatLoops));
-        if (p.hat !== 1) add('hatTrim', '#fde047', trim); else add('hatTrim', '#f87171', trim);
-        add('plume', p.hat === 2 ? '#fde047' : (p.hat === 1 ? '#fde047' : '#f1f5f9'), plume);
+        var ns = Math.round(p.noseStyle), nz = p.nose;
+        add('nose', C.nose, ns === 1 ? ball(0, fy(0.42), zFace - 0.4, nz * 0.7, nz * 1.5, nz * 0.9, 16, 10) : ns === 2 ? ball(0, fy(0.44), zFace - 0.4, nz * 1.25, nz * 1.25, nz * 1.1, 16, 10) : ball(0, fy(0.42), zFace - 0.4, nz * 0.85, nz * 1.15, nz, 16, 10));
+        var mu = Math.round(p.mustache);
+        if (mu > 0) {
+          var mw = mu === 2 ? Wu * 0.95 : Wu * 0.8, mr = mu === 2 ? 2.5 : 1.9, curl = mu === 3 ? 2.6 : 0, mloops = [], t3, taper;
+          for (k = 0; k <= 10; k++) {
+            t3 = k / 10; taper = 0.45 + 0.55 * Math.sin(Math.PI * t3);
+            mloops.push(diamondRing(lerp(-mw, mw, t3), fy(0.15) + curl * Math.pow(Math.abs(2 * t3 - 1), 3) + (mu === 2 ? -0.4 : 0), zFace - 0.2, mr * taper));
+          }
+          add('mustache', C.hair === '#c08457' ? '#f1f5f9' : '#e2e8f0', loftCapped(mloops));
+        }
+
+        // ---- Hat: profile by style, optional brim, band and topper ----
+        var hx0 = L.W / 2, hz0 = (L.zU - L.zr) / 2, yH0 = L.yTop - 0.4, hStyle = Math.round(p.hat), hH = p.hatH;
+        function hl(sc, y, g) { g = g || 0; return rrect(hx0 * sc + g, hz0 * sc + g, 0.4 * Math.min(hx0, hz0) * sc + g, y, AN, 0, L.czH); }
+        var hatH2 = hStyle === 1 ? Math.min(hH * 0.42, 11) : hH;   // crown: a band plus points
+        function sc(t) {
+          if (hStyle === 0) return t < 0.5 ? lerp(1, 0.97, t / 0.5) : lerp(0.97, 0.8, (t - 0.5) / 0.5);
+          if (hStyle === 1) return 1;
+          if (hStyle === 2) return 0.45 + 0.55 * Math.sqrt(1 - t * t * 0.97);
+          if (hStyle === 3) return 0.86;
+          if (hStyle === 4) return t < 0.35 ? lerp(1, 1.1, t / 0.35) : t < 0.7 ? 1.1 : 1.1 * (0.5 + 0.5 * Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.7) / 0.3, 2) * 0.99)));
+          return 1 - 0.7 * Math.pow(t, 0.85);
+        }
+        var hatLoops = [], nSt = hStyle === 1 ? 3 : 9;
+        for (k = 0; k <= nSt - 1; k++) { var tk = k / (nSt - 1); hatLoops.push(hl(sc(tk), yH0 + hatH2 * tk)); }
+        add('hat', hStyle === 1 ? C.trim : C.hat, loftCapped(hatLoops));
+        var topY = yH0 + hatH2, topSc = sc(1), s0 = sc(0);
+        var brimM = Math.round(p.brim), bandM = Math.round(p.band);
+        if (brimM > 0) {
+          var bg = brimM === 1 ? 2.4 : 1.6, bh2 = brimM === 1 ? 2.2 : 4.4;
+          add('hatBrim', brimM === 2 ? '#f1f5f9' : C.hatTrim, loftCapped([hl(s0, yH0, 0), hl(s0, yH0 + bg, bg), hl(s0, yH0 + bh2, bg), hl(s0, yH0 + bh2 + 0.2, 0)]));
+        }
+        if (bandM > 0) {
+          var tb = bandM === 1 ? (brimM > 0 ? 0.26 : 0.05) : 0.78, ys0 = yH0 + hatH2 * tb, sb = sc(tb);
+          if (hStyle === 1 && bandM === 2) { ys0 = yH0 + hatH2 * 0.3; sb = 1; }
+          add('hatTrim', C.hatTrim, loftCapped([hl(sb, ys0, 0), hl(sb, ys0 + 1.0, 1.0), hl(sb, ys0 + 3.0, 1.0), hl(sb, ys0 + 4.0, 0)]));
+        }
+        if (hStyle === 1) {
+          var spikes = [], sy = yH0 + hatH2 - 0.4, spH = Math.min(hH * 0.4, 10);
+          [[hx0 - 4.5, hz0 - 4.5], [-hx0 + 4.5, hz0 - 4.5], [hx0 - 4.5, -hz0 + 4.5], [-hx0 + 4.5, -hz0 + 4.5], [0, hz0 - 3.2], [0, -hz0 + 3.2], [hx0 - 3.2, 0], [-hx0 + 3.2, 0]].forEach(function (q) {
+            spikes.push(lathe([[0, sy - 0.6], [2.7, sy - 0.6], [2.7, sy], [0, sy + spH]], 10, { cx: q[0], cz: L.czH + q[1] }));
+          });
+          add('crownPoints', C.trim, spikes);
+        }
+        var tp = Math.round(p.topper), tr = clamp(Math.min(hx0 * topSc, hz0 * topSc) * 0.5, 2.4, 4.4);
+        if (tp === 1) add('topper', C.topper, ball(0, topY + tr * 0.55, L.czH, tr, tr * 1.1, tr, 18, 12));
+        else if (tp === 2) add('topper', C.topper, ball(0, topY + 3.5, L.czH, 1.8, 9.5, tr, 16, 12));
+        else if (tp === 3) add('topper', C.topper, lathe([[0, topY - 0.8], [3.0, topY - 0.8], [3.0, topY], [1.6, topY + 4], [0, topY + 9]], 12, { cx: 0, cz: L.czH }));
 
         // Jaw last so the Color tool lists it with the head
         var fixed = list.filter(function (m) { return m.fixed; });
         var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
         fixed.forEach(function (m) { for (i = 0; i < m.positions.length; i += 3) for (k = 0; k < 3; k++) { var v = m.positions[i + k]; if (v < lo[k]) lo[k] = v; if (v > hi[k]) hi[k] = v; } });
         var cx = (lo[0] + hi[0]) / 2, cz = (lo[2] + hi[2]) / 2, y0 = lo[1];
-        list.push({ name: 'jaw', color: '#f1f5f9', positions: jawPos, fixed: false });
+        list.push({ name: 'jaw', color: jawColor, positions: jawPos, fixed: false });
         return list.map(function (m) {
           var a = m.positions, o = new Float32Array(a.length);
           for (i = 0; i < a.length; i += 3) { o[i] = (a[i] - cx) * s; o[i + 1] = (a[i + 1] - y0) * s; o[i + 2] = (a[i + 2] - cz) * s; }
@@ -374,17 +495,59 @@
 
       // ---- Parameters -----------------------------------------------------------------------------
       function slider(group, key, label, unit, min, max, step, value) { return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value }; }
-      var HATS = ['Shako', 'Crown', 'Spike helmet'];
-      var DEFAULTS = { height: 120, headWidth: 30, mouth: 10, faceH: 14, hatH: 24, hat: 0, mustache: 1, nose: 3.2, tolerance: 0.35, pose: 0 };
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value, format: function (v) { return names[Math.round(v)]; } };
+      }
+      function toggle(group, key, label, off, on, value) { return { group: group, key: key, label: label, unit: '', min: 0, max: 1, step: 1, value: value, options: [off, on] }; }
+      var HATS = ['Shako', 'Crown', 'Spike helmet', 'Top hat', 'Bearskin', 'Pointed cap'];
+      var DEFAULTS = {
+        height: 120, headWidth: 30, mouth: 10, faceH: 14,
+        hat: 0, hatH: 24, brim: 0, band: 1, topper: 1,
+        eyes: 0, eyeSize: 1, eyeGap: 6.2, brows: 1, noseStyle: 0, nose: 3.2, mustache: 1, jawLook: 0,
+        flare: 1, waist: 1, shoulder: 1, collar: 1, buttons: 3, buttonStyle: 0, belt: 1, buckle: 1, sash: 0, hem: 1, pads: 0, medals: 0, armThick: 1, boots: 1,
+        baseShape: 0, baseH: 4, baseStep: 0,
+        prop: 0, propSide: 0, propH: 70,
+        scheme: 0, tolerance: 0.35, pose: 0
+      };
       var PARAMS = [
         slider('Size', 'height', 'Figure height (about)', ' mm', 90, 150, 1, DEFAULTS.height),
         slider('Size', 'headWidth', 'Head width', ' mm', 26, 38, 1, DEFAULTS.headWidth),
         slider('Size', 'mouth', 'Mouth size (chin radius)', ' mm', 9, 14, 0.5, DEFAULTS.mouth),
         slider('Size', 'faceH', 'Face height above the mouth', ' mm', 12, 20, 1, DEFAULTS.faceH),
-        { group: 'Hat', key: 'hat', label: 'Hat', unit: '', min: 0, max: 2, step: 1, value: DEFAULTS.hat, format: function (v) { return HATS[Math.round(v)]; } },
-        slider('Hat', 'hatH', 'Hat height', ' mm', 14, 34, 1, DEFAULTS.hatH),
-        { group: 'Face', key: 'mustache', label: 'Moustache', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.mustache, options: ['Off', 'On'] },
+        choice('Hat', 'hat', 'Hat', HATS, DEFAULTS.hat),
+        slider('Hat', 'hatH', 'Hat height', ' mm', 14, 36, 1, DEFAULTS.hatH),
+        choice('Hat', 'brim', 'Brim', ['None', 'Flat brim', 'Fur trim'], DEFAULTS.brim),
+        choice('Hat', 'band', 'Hat band', ['None', 'Low band', 'High band'], DEFAULTS.band),
+        choice('Hat', 'topper', 'Hat topper', ['None', 'Pom-pom', 'Feather', 'Spike'], DEFAULTS.topper),
+        choice('Face', 'eyes', 'Eyes', ['Round', 'Wide oval', 'Slits', 'Googly'], DEFAULTS.eyes),
+        slider('Face', 'eyeSize', 'Eye size', '×', 0.7, 1.5, 0.05, DEFAULTS.eyeSize),
+        slider('Face', 'eyeGap', 'Eye spacing', ' mm', 4, 8, 0.2, DEFAULTS.eyeGap),
+        choice('Face', 'brows', 'Eyebrows', ['None', 'Straight', 'Angry', 'Raised'], DEFAULTS.brows),
+        choice('Face', 'noseStyle', 'Nose', ['Round', 'Long', 'Big round'], DEFAULTS.noseStyle),
         slider('Face', 'nose', 'Nose size', ' mm', 2, 4.5, 0.1, DEFAULTS.nose),
+        choice('Face', 'mustache', 'Moustache', ['None', 'Classic', 'Walrus', 'Handlebar'], DEFAULTS.mustache),
+        choice('Face', 'jawLook', 'Jaw colour (moving jaw)', ['White beard', 'Skin tone', 'Gold', 'Dark'], DEFAULTS.jawLook),
+        slider('Coat', 'flare', 'Skirt flare', '×', 0.85, 1.25, 0.05, DEFAULTS.flare),
+        slider('Coat', 'waist', 'Waist width', '×', 0.8, 1.1, 0.02, DEFAULTS.waist),
+        slider('Coat', 'shoulder', 'Chest and shoulder width', '×', 0.9, 1.2, 0.02, DEFAULTS.shoulder),
+        choice('Coat', 'collar', 'Collar', ['None', 'Band', 'High collar'], DEFAULTS.collar),
+        slider('Coat', 'buttons', 'Buttons', '', 0, 6, 1, DEFAULTS.buttons),
+        toggle('Coat', 'buttonStyle', 'Button shape', 'Diamond', 'Round', DEFAULTS.buttonStyle),
+        choice('Coat', 'belt', 'Belt', ['None', 'Thin', 'Wide'], DEFAULTS.belt),
+        choice('Coat', 'buckle', 'Buckle', ['None', 'Diamond', 'Round'], DEFAULTS.buckle),
+        choice('Coat', 'sash', 'Sash', ['None', 'Right shoulder', 'Left shoulder'], DEFAULTS.sash),
+        toggle('Coat', 'hem', 'Hem trim', 'Off', 'On', DEFAULTS.hem),
+        toggle('Coat', 'pads', 'Shoulder pads', 'Off', 'On', DEFAULTS.pads),
+        slider('Coat', 'medals', 'Medals', '', 0, 3, 1, DEFAULTS.medals),
+        slider('Coat', 'armThick', 'Arm thickness', '×', 0.8, 1.3, 0.05, DEFAULTS.armThick),
+        toggle('Coat', 'boots', 'Boots', 'Off', 'On', DEFAULTS.boots),
+        choice('Base', 'baseShape', 'Plinth shape', ['Rounded square', 'Round', 'Octagon'], DEFAULTS.baseShape),
+        slider('Base', 'baseH', 'Plinth height', ' mm', 3, 10, 0.5, DEFAULTS.baseH),
+        toggle('Base', 'baseStep', 'Plinth tiers', 'Plain', 'Stepped', DEFAULTS.baseStep),
+        choice('Props', 'prop', 'Prop', ['None', 'Spear', 'Flag', 'Sword', 'Crystal staff'], DEFAULTS.prop),
+        choice('Props', 'propSide', 'Prop side', ['Right', 'Left', 'Both'], DEFAULTS.propSide),
+        slider('Props', 'propH', 'Prop height (planted ones)', ' mm', 50, 100, 1, DEFAULTS.propH),
+        choice('Colours', 'scheme', 'Colour scheme (repaint parts in the Color tool)', SCHEMES.map(function (x) { return x.name; }), DEFAULTS.scheme),
         slider('Print fit', 'tolerance', 'Jaw tolerance: air gap round the jaw and pins (0.35 suits most printers)', ' mm', 0.25, 0.6, 0.05, DEFAULTS.tolerance),
         slider('Print fit', 'pose', 'Jaw pose (leave at 0 to print in place; above 0 is a display pose)', '°', 0, 30, 1, DEFAULTS.pose)
       ];
@@ -392,6 +555,18 @@
         var v = {}; Object.keys(DEFAULTS).forEach(function (k) { v[k] = DEFAULTS[k]; });
         Object.keys(over).forEach(function (k) { v[k] = over[k]; });
         return { label: label, values: v };
+      }
+      // "Surprise me": random picks for every style option (sizes and print fit are left alone)
+      var STYLE_KEYS = ['hat', 'brim', 'band', 'topper', 'eyes', 'brows', 'noseStyle', 'mustache', 'jawLook', 'collar', 'buttons', 'buttonStyle', 'belt', 'buckle', 'sash', 'hem', 'pads', 'medals', 'boots', 'baseShape', 'baseStep', 'prop', 'propSide', 'scheme'];
+      function surprise() {
+        var v = {};
+        PARAMS.forEach(function (q) { if (STYLE_KEYS.indexOf(q.key) >= 0) v[q.key] = q.min + Math.floor(Math.random() * (q.max - q.min + 1)); });
+        v.hatH = 16 + Math.floor(Math.random() * 18);
+        v.eyeSize = 0.8 + Math.round(Math.random() * 10) / 20;
+        v.flare = 0.9 + Math.round(Math.random() * 6) / 20;
+        v.nose = 2.4 + Math.round(Math.random() * 14) / 10;
+        v.mustache = Math.random() < 0.3 ? 0 : v.mustache;
+        return v;
       }
 
       window.MM_GENERATOR = {
@@ -407,16 +582,35 @@
           { name: 'Peach Skin', color: '#fdd5b1' }, { name: 'Coal Black', color: '#334155' },
           { name: 'Pine Green', color: '#86efac' }, { name: 'Wood Brown', color: '#c08457' }
         ],
-        partNames: { base: 'Plinth', coat: 'Coat', trim: 'Gold trim', jewel: 'Buttons & buckle', boots: 'Boots', arms: 'Arms', hands: 'Hands', head: 'Head', cheeks: 'Side hair (cheek plates)', jaw: 'Moving jaw', eyes: 'Eyes', brows: 'Eyebrows', nose: 'Nose', mustache: 'Moustache', hat: 'Hat', hatTrim: 'Hat band', plume: 'Plume / spike / crown points' },
+        partNames: { base: 'Plinth', coat: 'Coat', trim: 'Gold trim', jewel: 'Buttons, buckle & medals', sash: 'Sash', boots: 'Boots', arms: 'Arms', hands: 'Hands', pads: 'Shoulder pads', prop: 'Prop pole / blade', propHead: 'Prop head', flag: 'Flag', head: 'Head', cheeks: 'Side hair (cheek plates)', jaw: 'Moving jaw', eyes: 'Eyes', pupils: 'Pupils', brows: 'Eyebrows', nose: 'Nose', mustache: 'Moustache', hat: 'Hat', hatBrim: 'Hat brim', hatTrim: 'Hat band', crownPoints: 'Crown points', topper: 'Hat topper' },
         parameters: PARAMS,
         presets: [
           presetOf('Default nutcracker', {}),
-          presetOf('Royal king', { hat: 1, hatH: 22, mustache: 1 }),
-          presetOf('Spiked guard', { hat: 2, hatH: 20, mustache: 0 }),
-          presetOf('Tall drummer', { height: 138, hatH: 32, faceH: 17 }),
-          presetOf('Small stocking filler', { height: 92, headWidth: 27, mouth: 9, faceH: 12, hatH: 16 }),
-          presetOf('Big chomper', { mouth: 13.5, headWidth: 36, faceH: 16, nose: 3.8 })
+          presetOf('Royal king', { hat: 1, hatH: 22, mustache: 3, scheme: 1, sash: 1, medals: 2, collar: 2, brim: 0, band: 2, topper: 0, brows: 2 }),
+          presetOf('Spiked guard', { hat: 2, hatH: 20, mustache: 0, topper: 3, scheme: 5, belt: 2, pads: 1, prop: 1, band: 1, brows: 2, eyes: 1 }),
+          presetOf('Tall drummer', { height: 138, hatH: 32, faceH: 17, hat: 0, brim: 0, scheme: 2, buttons: 6, topper: 2, buttonStyle: 1 }),
+          presetOf('Small stocking filler', { height: 92, headWidth: 27, mouth: 9, faceH: 12, hatH: 16, hat: 5, topper: 1, scheme: 4, eyes: 3, noseStyle: 2, mustache: 0, baseShape: 1 }),
+          presetOf('Big chomper', { mouth: 13.5, headWidth: 36, faceH: 16, nose: 3.8, eyes: 1, brows: 3, mustache: 2, scheme: 6 }),
+          presetOf('Winter guard', { hat: 4, hatH: 30, brim: 2, band: 0, topper: 0, scheme: 3, collar: 2, sash: 2, prop: 2, propSide: 1, baseShape: 2, baseStep: 1, baseH: 7 }),
+          presetOf('Top hat gent', { hat: 3, hatH: 30, brim: 1, band: 1, topper: 0, scheme: 5, mustache: 3, eyes: 2, buttons: 5, belt: 0, buckle: 0, medals: 1, prop: 4, propSide: 2 }),
+          presetOf('Sword fighter', { hat: 5, hatH: 28, topper: 1, scheme: 7, prop: 3, propSide: 2, sash: 1, pads: 1, belt: 2, buckle: 2, boots: 1 }),
+          presetOf('Chunky mini', { height: 100, flare: 1.2, waist: 1.05, shoulder: 1.15, armThick: 1.25, baseStep: 1, baseShape: 1, baseH: 6, eyes: 3, eyeSize: 1.3 })
         ],
+        tabs: [{
+          id: 'mix',
+          label: 'Mix',
+          hint: 'Mix and match every piece, or press Surprise me',
+          mount: function (container, api) {
+            var h = document.createElement('h3'); h.className = 'mm-group-title'; h.textContent = 'Random nutcracker';
+            var note = document.createElement('p'); note.className = 'mm-note';
+            note.textContent = 'Picks a random hat, face, coat, accessories, prop, base and colour scheme. Sizes and print fit stay as they are. Press again for another one, and change any option in the Parametric tab afterwards.';
+            var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'mm-btn mm-btn--green mm-btn--block'; btn.textContent = 'Surprise me';
+            btn.addEventListener('click', function () { api.setParams(surprise()); api.toast('New random nutcracker'); });
+            var reset = document.createElement('button'); reset.type = 'button'; reset.className = 'mm-btn mm-btn--block'; reset.textContent = 'Back to the default nutcracker';
+            reset.addEventListener('click', function () { api.setParams(presetOf('d', {}).values); api.toast('Default nutcracker'); });
+            container.appendChild(h); container.appendChild(note); container.appendChild(btn); container.appendChild(reset);
+          }
+        }],
         build: build
       };
     })();
