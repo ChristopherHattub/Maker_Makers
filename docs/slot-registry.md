@@ -20,6 +20,11 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 106+ | Free. Any number works. |
 | 107 | Built: Holiday Tree Topper. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
+| 109-122 | Free (check open PRs first); other generator branches are claiming slots here. |
+| 123 | Built: Bird Feeder (three-part kit, no supports). |
+| 124+ | Free. Any number works. |
+
+Total built: 101 generators in 21 groups (garden holds the Bird Feeder). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 | 109+ | Free except 119 (check open PRs first). Any number works. |
 | 116 | Built: Wall Panel Maker. |
 | 109+ | Free (check open PRs first). Any number works. |
@@ -152,6 +157,7 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | 119 | Headphone & Controller Stand | organization | `headphone-controller-stand.html` (desk and wall headphone stands, controller rack and shelf; Console Faceplate designs) |
 | 114 | Fidget Spinner | fidgets | `fidget-spinner.html` (six styles; print-in-place hub or 608 bearing; arm pockets; raised name) |
 | 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
+| 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 107 | Holiday Tree Topper | christmas | `holiday-tree-topper.html` (faceted star, heart or gem on a print-in-place spinning fluted bell and socket) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
@@ -184,6 +190,8 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | decor | Home & Decor | 6 |
 | organization | Organisation | 4 |
 | organization | Organisation | 3 |
+| toys | Toys & Games | 1 |
+| garden | Garden | 1 |
 | toys | Toys & Games | 3 |
 | toys | Toys & Games | 2 |
 | garden | Garden | planned (empty) |

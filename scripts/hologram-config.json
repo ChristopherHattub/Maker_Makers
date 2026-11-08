@@ -509,5 +509,10 @@
       "strip",
       "pictures"
     ]
+  },
+  "bird-feeder": {
+    "hue": 110,
+    "sat": 65,
+    "light": 78
   }
 }
