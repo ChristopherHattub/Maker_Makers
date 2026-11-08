@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 116,
+    title: 'Wall Panel Maker',
+    bundle: 'decor',
+    category: 'WALL // DECOR',
+    thumbnailUrl: 'assets/thumbnails/wall-panel.svg',
+    programUrl: 'programs/wall-panel.html',
+    description: 'A flat typography panel to hang on the wall, with real moving parts for to-do lists and progress tracking. Set the panel size, corners, border and hanging holes, then drag elements onto it from the Elements tab: text in seven fonts, sliding checkboxes, sliders, progress bars with scale marks, turning dials, dividers and icons. Move them freely on the panel, or start from a to-do list, habit tracker, goals board or dial dashboard. The moving parts print in place, flat on the bed, with no supports; the clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',

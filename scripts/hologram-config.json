@@ -470,5 +470,11 @@
     "sat": 70,
     "light": 80,
     "stand": true
+  },
+  "wall-panel": {
+    "hue": 200,
+    "sat": 70,
+    "light": 75,
+    "stand": true
   }
 }

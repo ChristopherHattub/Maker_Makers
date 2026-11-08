@@ -13,7 +13,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
-| 106+ | Free. Any number works. |
+| 116 | Built: Wall Panel Maker. |
+| 106+ | Free (106-115 are claimed by other open branches). Any number works. |
 
 Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -124,6 +125,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 116 | Wall Panel Maker | decor | `wall-panel.html` (text panel; Elements tab with drag-and-drop print-in-place checkboxes, sliders, progress bars, dials) |
 
 ## Groups (BUNDLES)
 
