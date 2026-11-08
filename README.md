@@ -14,7 +14,8 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 │   ├── programs.js       # Slot registry: GENERATORS and BUNDLES (map regions)
 │   ├── worldmap.js       # Homepage world map
 │   ├── workshop.js       # Workshop 3D editor
-│   └── app.js            # Router, viewer, idea queue, printer map
+│   ├── guides.js         # Printing guides list and search
+│   └── app.js            # Router, viewer, printer map
 ├── data/                 # Printer listings (verified) and OSM candidates
 ├── assets/thumbnails/    # Slot thumbnails; sprites/ holds the hologram hover tiles
 ├── programs/             # Generator pages; shared/ is the engine every generator uses
