@@ -27,6 +27,8 @@
       var TAU = Math.PI * 2, DEG = Math.PI / 180;
       var SEG = 96;          // points around every tube
       var FLOOR = 4;         // mm of solid hilt under the blade tubes
+      var HILT_COLOR = '#3b3f4a', TUBE_COLORS = ['#7fb6e8', '#dbe9f7'], TIP_COLOR = '#f1f5f9';
+      var PART_COLORS = { band: '#c3a6e8', flange: '#f4a259', ribs: '#f6d365', fins: '#ef6f6c', studs: '#f1f5f9', gem: '#a7e3c4' };
       var parts = [], partType = 'band', lastCtx = null, refreshUI = null;
       var MAX_SLOPE = 0.9;   // hilt outline may widen by at most this per mm of height (about 42 degrees from vertical)
 
@@ -273,13 +275,14 @@
       function build(p) {
         var L = layout(p), meshes = [], k, outline = hiltOutline(L, p);
         lastCtx = { outline: outline, b0: L.b0, Hh: L.hiltH };
-        meshes.push({ name: 'hilt', positions: revolve(hiltLoop(L, p, outline)), smoothGroup: 'hilt' });
+        meshes.push({ name: 'hilt', positions: revolve(hiltLoop(L, p, outline)), smoothGroup: 'hilt', color: HILT_COLOR, singlePart: true });
         parts.forEach(function (st) {
           var shells = partShells(st, lastCtx);
-          if (shells.length) meshes.push({ name: st.type, positions: concat(shells) });
+          if (shells.length) meshes.push({ name: st.type, positions: concat(shells), color: PART_COLORS[st.type], singlePart: true });
         });
         for (k = 1; k <= L.n; k++) {
-          meshes.push({ name: k === L.n ? 'tip' : 'seg' + k, positions: revolve(tubeLoop(L, k, p)), smoothGroup: k === L.n ? 'tip' : 'seg' + k });
+          meshes.push({ name: k === L.n ? 'tip' : 'seg' + k, positions: revolve(tubeLoop(L, k, p)), smoothGroup: k === L.n ? 'tip' : 'seg' + k,
+            color: k === L.n ? TIP_COLOR : TUBE_COLORS[(k - 1) % 2], singlePart: true });
         }
         if (refreshUI) refreshUI();
         return meshes;
@@ -316,7 +319,7 @@
           { name: 'Violet Haze', color: '#c3a6e8' }, { name: 'Cherry Red', color: '#ef6f6c' },
           { name: 'Charcoal', color: '#3b3f4a' }, { name: 'Sunny Yellow', color: '#f6d365' }
         ],
-        defaultColor: '#f1f5f9',
+        defaultColor: '#7fb6e8',
         // The tubes hover a deliberate 0.2 to 0.5 mm over the hilt floor (print in place); the voxel check cannot resolve that gap.
         printCheckOptions: { bridgeGap: 0.8 },
         partNames: { hilt: 'Hilt', seg1: 'Blade tube 1', seg2: 'Blade tube 2', seg3: 'Blade tube 3', seg4: 'Blade tube 4', tip: 'Blade tip tube',
