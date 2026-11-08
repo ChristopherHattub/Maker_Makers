@@ -470,5 +470,10 @@
     "sat": 70,
     "light": 80,
     "stand": true
+  },
+  "gingerbread-house": {
+    "hue": 28,
+    "sat": 75,
+    "light": 70
   }
 }

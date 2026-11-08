@@ -13,9 +13,11 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
-| 106+ | Free. Any number works. |
+| 106-112 | Free on this branch (being added on other branches). |
+| 113 | Built: Gingerbread House. |
+| 114+ | Free. Any number works. |
 
-Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 102 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -124,13 +126,14 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
 
 ## Groups (BUNDLES)
 
 | id | Name | Members |
 | --- | --- | --- |
 | halloween | Halloween | 5 |
-| christmas | Christmas | 6 |
+| christmas | Christmas | 7 |
 | easter | Easter & Spring | 6 |
 | valentines | Valentine's | 2 |
 | thanksgiving | Thanksgiving & Fall | 7 |

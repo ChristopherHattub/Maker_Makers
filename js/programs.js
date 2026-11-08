@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 113,
+    title: 'Gingerbread House',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // HOUSES',
+    thumbnailUrl: 'assets/thumbnails/gingerbread-house.svg',
+    programUrl: 'programs/gingerbread-house.html',
+    description: 'A gingerbread house that prints as one piece with nothing to assemble. Set the length, depth, wall height and roof pitch, pick a raised door or open doorway, pointed, diamond or teardrop windows (with a centre bar), tile rows on the roof, a chimney, gumdrops and a snow base with a scalloped edge. It is hollow and open underneath, so it stands over an LED tea light. The eaves sit on 45 degree corbels and every window top is pointed, so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',

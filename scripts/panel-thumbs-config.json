@@ -717,5 +717,19 @@
   },
   "yaw": 35,
   "elev": 22
+ },
+ "gingerbread-house": {
+  "colors": {
+   "walls": "#c98a55",
+   "roof": "#f6f1e7",
+   "door": "#6b4430",
+   "knob": "#f2c94c",
+   "chimney": "#e0525a",
+   "candy": "#e0525a",
+   "candy2": "#9fd8b4",
+   "base": "#f6f1e7"
+  },
+  "yaw": 30,
+  "elev": 24
  }
 }
