@@ -800,6 +800,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 109,
+    title: 'Marble Run',
+    bundle: 'toys',
+    category: 'TOYS // KINETIC',
+    thumbnailUrl: 'assets/thumbnails/marble-run.svg',
+    programUrl: 'programs/marble-run.html',
+    description: 'A zigzag marble tower: balls roll down sloped tracks, drop through a gap onto the next track and collect in a ramp at the base. Set the marble size (steel or glass), the number of tracks, the width, the slope and the front lip, then open the Simulate tab to drop balls and watch the run work, or click a track to drop one there. Every track has a 45 degree underside, so the tower prints upright with no supports; the rolling is only simulated and untested on a real printer. Paint each track in the Color tool and export .STL.'
+  },
+  {
     slot: 106,
     title: 'Console Faceplate',
     bundle: 'toys',

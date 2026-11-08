@@ -746,5 +746,20 @@
   },
   "yaw": 30,
   "elev": 24
+ },
+ "marble-run": {
+  "colors": {
+   "frame": "#f1e7d0",
+   "base": "#3b3f4a",
+   "collector": "#2f9e8f",
+   "level": [
+    "#ef5b5b",
+    "#f6b73c",
+    "#4aa3e8",
+    "#4cc07a",
+    "#a874e8",
+    "#f08a3c"
+   ]
+  }
  }
 }
