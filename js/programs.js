@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 107,
+    title: 'Holiday Tree Topper',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // TREE DECOR',
+    thumbnailUrl: 'assets/thumbnails/holiday-tree-topper.svg',
+    programUrl: 'programs/holiday-tree-topper.html',
+    description: 'A faceted crystal star, sparkle burst or heart that sits on a socket for the tree tip. Set the number of points, size, pointiness and puff, and the tip width and depth of the socket. The star and its cone are printed in place on a captured post, so the topper spins on its socket with a 0.4 mm clearance you can change, or print it fixed. Prints upright with no supports on the default settings. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',
