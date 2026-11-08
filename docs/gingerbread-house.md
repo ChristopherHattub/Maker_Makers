@@ -12,8 +12,10 @@ Y up, millimetres, long side along X, the front door on +Z. The model sits on th
 | --- | --- |
 | `walls` | Four plates: front and back (extruded along Z, with the window holes and, for an open doorway, a notch) and two gable ends (extruded along X, pentagon outline). The gable plates stop inside the long walls so no two shells share an edge. |
 | `roof` | **One profile extruded along X**: a thick inverted V. The underside is the ceiling (rises at the roof pitch, so 40 degrees from vertical or better), the top is the roof, and the eaves are 45 degree corbels (below). Tile rows are steps cut into the profile. |
-| `door`, `knob` | A raised pointed panel on the front wall (only for *Raised door*), and a 40 degree frustum knob. |
-| `chimney` | A box on the front slope. Its bottom edge is cut parallel to the roof and sunk into the middle of the roof thickness, so it never pokes into the room. |
+| `door`, `knob` | A raised pointed panel with a smaller raised inset panel on the front wall (only for *Raised door*), and a 40 degree frustum knob. |
+| `trim` | Icing and trim, one mesh: window frames and 37 degree sills (also on the gable ends), the door frame and a step, four corner posts, and a raised icing bead along both gable edges of the roof (it follows the tile steps). One switch, *Frames, sills, corner posts and icing trim*. |
+| `drips` | Icicles: narrow cones (about 17 degrees off vertical) half sunk into the wall face under the eave corbel, skipped where a window or door is. |
+| `chimney` | A box on the front slope, with a 45 degree flared cap when trim is on. Its bottom edge is cut parallel to the roof and sunk into the middle of the roof thickness, so it never pokes into the room. |
 | `candy`, `candy2` | Gumdrops: low domes sitting on the tiles, alternating between two meshes so they can be two colours. |
 | `base` | Optional snow plate (plain or scalloped), open in the middle so the light still fits. |
 
@@ -23,6 +25,7 @@ Y up, millimetres, long side along X, the front door on +Z. The model sits on th
 - **Eaves on corbels.** A roof that slopes down past the wall would start in mid-air at its lowest point. Instead the overhang is carried by a 45 degree chamfer that starts on the wall face and rises outward (*Wall height under the eaves* is where it starts), and the roof top meets it at a 1.6 mm blunt tip. A thicker roof or a longer overhang makes the wedge bigger, never longer than *Eave overhang* asks (a very thick roof grows the overhang a little so the wall still reaches it).
 - **Every opening has a pointed top.** Windows are pointed (45 degree sides), diamond, or teardrop (a circle with a 45 degree point). The open doorway is pointed too. The centre bar splits a pointed window in two, each half still has a sloped top.
 - **Tiles** are vertical steps on the top face, which are not overhangs. Gumdrops are domes below 70 degrees on a sloping roof, which keeps them under 40 degrees of lean.
+- Every added detail follows the same rule: frames are flat extrusions, sills have a 37 degree underside, icicles are cones, the chimney cap flares at 45 degrees.
 - Windows and the door stay 4 mm under the start of the corbel (they shrink to fit a low wall).
 
 ## Three.js and the hole quirk

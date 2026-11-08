@@ -120,6 +120,19 @@
         }
         return pts;
       }
+      // Stack of square rings [[y, half-width], ...] about (cx, cz), closed with flat caps.
+      function stackBox(cx, cz, levels) {
+        var o = [], i, k, n = levels.length;
+        function ring(l) { var h = l[1], y = l[0]; return [[cx - h, y, cz - h], [cx + h, y, cz - h], [cx + h, y, cz + h], [cx - h, y, cz + h]]; }
+        for (i = 0; i < n - 1; i++) {
+          var A = ring(levels[i]), B = ring(levels[i + 1]);
+          for (k = 0; k < 4; k++) { var k2 = (k + 1) % 4; tri(o, A[k], A[k2], B[k2]); tri(o, A[k], B[k2], B[k]); }
+        }
+        var F = ring(levels[0]), T = ring(levels[n - 1]);
+        tri(o, F[0], F[2], F[1]); tri(o, F[0], F[3], F[2]);
+        tri(o, T[0], T[1], T[2]); tri(o, T[0], T[2], T[3]);
+        return orient(new Float32Array(o));
+      }
       // Rounded rectangle whose edge bulges outward in soft scallops, like a drift of icing.
       function scallopPts(hw, hd, r, amp, wave) {
         var base = rrectPts(hw, hd, r, 10), dense = [], cum = [0], i, k, a, b, steps, n, per, cnt;
@@ -189,6 +202,7 @@
         door: 0, doorW: 16, doorH: 26, doorX: 0,
         shape: 0, nWin: 2, winW: 12, winH: 18, winY: 14, bar: 0, gable: 1,
         chim: 1, chimW: 10, chimH: 9, chimX: -22,
+        trim: 1, drips: 1, dripL: 7,
         candyRows: 1, candyN: 6, candyR: 3.2,
         snow: 2, snowM: 12, snowT: 3
       };
@@ -225,7 +239,7 @@
 
         // window geometry, kept under the eave corbel and above the snow
         var ww = nWin > 0 ? Math.min(p.winW, L / nWin - 8) : p.winW;
-        var lo = bt + 4, room = yc0 - 4 - lo;           // window tops must stay under the eave corbel
+        var lo = bt + 6, room = yc0 - 4 - lo;           // window tops must stay under the eave corbel
         if (shape === 2) ww = Math.min(ww, (room * 2) / (1 + Math.SQRT2));
         else if (shape === 1) ww = Math.min(ww, room);
         else ww = Math.min(ww, (room - 3) * 2);
@@ -234,13 +248,20 @@
         if (wy + wh > yc0 - 4) wy = Math.max(lo, yc0 - 4 - wh);
         var dw = p.doorW, dh = clamp(p.doorH, dw / 2 + 2, yc0 - 4);
         var dlim = Math.max(0, L / 2 - dw / 2 - t - 3), dx = clamp(p.doorX, -dlim, dlim);
-        function sideHoles(front) {
-          var holes = [], i, cx;
+        function winCenters(front) {
+          var list = [], i, cx;
           for (i = 0; i < nWin; i++) {
             cx = -L / 2 + (L * (i + 0.5)) / nWin;
             if (front && doorType < 2 && Math.abs(cx - dx) < dw / 2 + ww / 2 + 3) continue;
-            windowLoops(shape, ww, winH, bar).forEach(function (lp) { holes.push(place(lp, cx, wy)); });
+            list.push(cx);
           }
+          return list;
+        }
+        function sideHoles(front) {
+          var holes = [];
+          winCenters(front).forEach(function (cx) {
+            windowLoops(shape, ww, winH, bar).forEach(function (lp) { holes.push(place(lp, cx, wy)); });
+          });
           return holes;
         }
 
@@ -286,10 +307,16 @@
         // --- door ---
         if (doorType === 0) {
           var panel = [[dx - dw / 2, 0], [dx + dw / 2, 0], [dx + dw / 2, dh - dw / 2], [dx, dh], [dx - dw / 2, dh - dw / 2]];
-          pushMesh(out, mesh('door', [extrudeXY(THREE, panel, null, a - 0.8, a + 1.2)]));
+          var doorList = [extrudeXY(THREE, panel, null, a - 0.8, a + 1.2)], kz = a + 1.2;
+          var w2 = dw - 4.4, h2 = dh - 5.3;
+          if (fix(p.trim) >= 1 && h2 >= w2 / 2 + 2) {
+            doorList.push(extrudeXY(THREE, pointedPts(w2, h2).map(function (q) { return [q[0] + dx, q[1] + 2.2]; }), null, a + 0.8, a + 1.9));
+            kz = a + 1.9;
+          }
+          pushMesh(out, mesh('door', doorList));
           // a short 40 degree frustum: a round knob with an overhang that needs no support
           var knob = lathe([[0, -0.9], [2.1, -0.9], [2.1, 0.3], [1.1, 1.5], [0, 1.5]], 24);
-          pushMesh(out, mesh('knob', [xform(knob, { rx: Math.PI / 2, t: [dx + dw / 2 - 3.6, dh * 0.42, a + 1.2] })]));
+          pushMesh(out, mesh('knob', [xform(knob, { rx: Math.PI / 2, t: [dx + dw / 2 - 3.6, dh * 0.42, kz] })]));
         }
 
         // --- chimney on the front slope ---
@@ -300,7 +327,80 @@
           var cx = clamp(p.chimX, -L / 2 + t + cw / 2 + 3, L / 2 - t - cw / 2 - 3);
           var yb1 = plane(z1) - rv / 2, yb2 = plane(z2) - rv / 2, yTop = topY(z1) + p.chimH;
           chim = { x: cx, z1: z1, z2: z2, w: cw };
-          pushMesh(out, mesh('chimney', [extrudeYZ(THREE, [[yb1, z1], [yb2, z2], [yTop, z2], [yTop, z1]], null, cx - cw / 2, cx + cw / 2)]));
+          var chimList = [extrudeYZ(THREE, [[yb1, z1], [yb2, z2], [yTop, z2], [yTop, z1]], null, cx - cw / 2, cx + cw / 2)];
+          if (fix(p.trim) >= 1) chimList.push(stackBox(cx, (z1 + z2) / 2, [[yTop - 0.4, cw / 2 - 0.2], [yTop - 0.4 + 0.01, cw / 2 - 0.2], [yTop + 0.9, cw / 2 + 0.7], [yTop + 1.9, cw / 2 + 0.7]]));
+          pushMesh(out, mesh('chimney', chimList));
+        }
+
+        // --- detail: window frames and sills, door frame and step, corner posts, gable-edge icing, chimney cap, icicles ---
+        var trimOn = fix(p.trim) >= 1, trimList = [], fr = 2.0, k2 = Math.SQRT2;
+        if (trimOn) {
+          var hh = winHeight(shape, ww, winH);
+          var outerWin = shape === 1 ? diamondPts(ww + 2.6 * fr, hh + 2.6 * fr).map(function (q) { return [q[0], q[1] - 1.3 * fr]; })
+            : shape === 2 ? dropPts(ww + 2 * fr).map(function (q) { return [q[0], q[1] - fr]; })
+            : pointedPts(ww + 2 * fr, hh + fr + fr * k2).map(function (q) { return [q[0], q[1] - fr]; });
+          var gHolesOuter = nWin > 0 || fix(p.gable) >= 1;
+          [[1, true], [-1, false]].forEach(function (sd) {
+            winCenters(sd[1]).forEach(function (cx) {
+              var holes = windowLoops(shape, ww, winH, bar).map(function (lp) { return place(lp, cx, wy); });
+              var z0 = sd[0] > 0 ? a - 0.3 : -a - 0.9, z1 = sd[0] > 0 ? a + 0.9 : -a + 0.3;
+              trimList.push(extrudeXY(THREE, place(outerWin, cx, wy), holes, z0, z1));
+              // sill: a wedge with a 37 degree underside, so it needs no support
+              var ys = wy - fr - 3.6, zs = sd[0];
+              var prof = [[ys, zs * (a - 0.5)], [ys + 3.0, zs * (a + 1.8)], [ys + 4.0, zs * (a + 1.8)], [ys + 4.0, zs * (a - 0.5)]];
+              trimList.push(extrudeYZ(THREE, prof, null, cx - ww / 2 - 3, cx + ww / 2 + 3));
+            });
+          });
+          if (fix(p.gable) >= 1 && gHolesOuter) {
+            var gl = windowLoops(shape, ww, winH, bar).map(function (lp) { return place(lp, 0, wy).map(function (q) { return [q[1], q[0]]; }); });
+            var go = place(outerWin, 0, wy).map(function (q) { return [q[1], q[0]]; });
+            trimList.push(extrudeYZ(THREE, go, gl, hl - 0.3, hl + 0.9));
+            trimList.push(extrudeYZ(THREE, go, gl, -hl - 0.9, -hl + 0.3));
+            var yg = wy - fr - 3.6;
+            [1, -1].forEach(function (sx) {
+              trimList.push(extrudeXY(THREE, [[sx * (hl - 0.5), yg], [sx * (hl + 1.8), yg + 3.0], [sx * (hl + 1.8), yg + 4.0], [sx * (hl - 0.5), yg + 4.0]], null, -ww / 2 - 3, ww / 2 + 3));
+            });
+          }
+          // door frame and a step
+          if (doorType < 2) {
+            var fd = 2.4, oh = dh + fd * k2, ow = dw / 2 + fd, sh0 = oh - ow;
+            var ring;
+            if (doorType === 0) {
+              ring = [[-ow, 0], [ow, 0], [ow, sh0], [0, oh], [-ow, sh0]].map(function (q) { return [q[0] + dx, q[1]]; });
+            } else {
+              ring = [[-ow, 0], [-dw / 2, 0], [-dw / 2, dh - dw / 2], [0, dh], [dw / 2, dh - dw / 2], [dw / 2, 0], [ow, 0], [ow, sh0], [0, oh], [-ow, sh0]].map(function (q) { return [q[0] + dx, q[1]]; });
+            }
+            trimList.push(extrudeXY(THREE, ring, null, a - 0.4, a + 0.7));
+            var stepH = bt + 2.0;
+            trimList.push(extrudePlan(THREE, [[dx - dw / 2 - 4, a - 0.4], [dx + dw / 2 + 4, a - 0.4], [dx + dw / 2 + 4, a + 5], [dx - dw / 2 - 4, a + 5]], null, 0, stepH));
+          }
+          // corner posts, tucked under the eave corbel
+          [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (c) {
+            var cx0 = c[0] * hl, cz0 = c[1] * a;
+            trimList.push(extrudePlan(THREE, [[cx0 - 1.6, cz0 - 1.6], [cx0 + 1.6, cz0 - 1.6], [cx0 + 1.6, cz0 + 1.6], [cx0 - 1.6, cz0 + 1.6]], null, 0, yc0 + 1.8));
+          });
+          // icing along both gable edges of the roof, following the tile steps
+          var full = topR.concat(left), upper = full.map(function (q) { return [q[1] + 1.4, q[0]]; }), lower = full.slice().reverse().map(function (q) { return [q[1] - 0.8, q[0]]; });
+          var bead = upper.concat(lower);
+          trimList.push(extrudeYZ(THREE, bead, null, L / 2 - 2.4, L / 2 + 0.6));
+          trimList.push(extrudeYZ(THREE, bead, null, -L / 2 - 0.6, -L / 2 + 2.4));
+          pushMesh(out, mesh('trim', trimList));
+        }
+
+        // icicles: narrow cones (17 degrees off vertical) half sunk into the wall face under the eave corbel
+        if (fix(p.drips) >= 1) {
+          var dl = [], di, dxp, len, rr, nD = Math.max(3, Math.round(L / 7)), clear;
+          for (di = 0; di < nD; di++) {
+            dxp = -L / 2 + (L * (di + 0.5)) / nD;
+            len = p.dripL * (0.55 + 0.9 * ((di * 37 % 11) / 10)); rr = 1.8 + 0.6 * ((di * 17 % 5) / 4);
+            [[1, true], [-1, false]].forEach(function (sd) {
+              clear = winCenters(sd[1]).some(function (cx) { return Math.abs(cx - dxp) < ww / 2 + 4; }) ||
+                (sd[1] && doorType < 2 && Math.abs(dxp - dx) < dw / 2 + 6);
+              if (clear) return;
+              dl.push(xform(lathe([[0, -len], [rr, 0], [rr, 1.2], [0, 1.2]], 16), { t: [dxp, yc0 + 0.9, sd[0] * (a + 0.3)] }));
+            });
+          }
+          pushMesh(out, mesh('drips', dl));
         }
 
         // --- gumdrops ---
@@ -356,7 +456,7 @@
           { name: 'Cocoa', color: '#6b4430' }, { name: 'Licorice', color: '#33343d' }
         ],
         defaultColor: '#c98a55',
-        partNames: { walls: 'Walls', roof: 'Roof', door: 'Door', knob: 'Door knob', chimney: 'Chimney', candy: 'Gumdrops', candy2: 'Gumdrops (second colour)', base: 'Snow base' },
+        partNames: { walls: 'Walls', roof: 'Roof', trim: 'Icing trim', drips: 'Icicle drips', door: 'Door', knob: 'Door knob', chimney: 'Chimney', candy: 'Gumdrops', candy2: 'Gumdrops (second colour)', base: 'Snow base' },
         parameters: [
           slider('House', 'len', 'Length', ' mm', 60, 120, 1, DEFAULTS.len),
           slider('House', 'dep', 'Depth (inside must stay wide enough for a tea light)', ' mm', 50, 90, 1, DEFAULTS.dep),
@@ -378,6 +478,9 @@
           slider('Windows', 'winY', 'Window height above the ground', ' mm', 8, 30, 1, DEFAULTS.winY),
           sh(choice('Windows', 'bar', 'Window bar (pointed windows)', BARS, DEFAULTS.bar), function (q) { return fix(q.shape) === 0; }),
           choice('Windows', 'gable', 'Windows in the gable ends', ['None', 'Both ends'], DEFAULTS.gable),
+          choice('Detail', 'trim', 'Frames, sills, corner posts and icing trim', ONOFF, DEFAULTS.trim),
+          choice('Detail', 'drips', 'Icicle drips under the eaves', ONOFF, DEFAULTS.drips),
+          sh(slider('Detail', 'dripL', 'Icicle length', ' mm', 4, 12, 1, DEFAULTS.dripL), function (q) { return fix(q.drips) >= 1; }),
           choice('Chimney', 'chim', 'Chimney', ONOFF, DEFAULTS.chim),
           sh(slider('Chimney', 'chimW', 'Chimney width', ' mm', 8, 16, 1, DEFAULTS.chimW), function (q) { return fix(q.chim) >= 1; }),
           sh(slider('Chimney', 'chimH', 'Chimney height above the roof', ' mm', 4, 20, 1, DEFAULTS.chimH), function (q) { return fix(q.chim) >= 1; }),

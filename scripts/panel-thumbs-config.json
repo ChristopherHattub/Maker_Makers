@@ -727,7 +727,9 @@
    "chimney": "#e0525a",
    "candy": "#e0525a",
    "candy2": "#9fd8b4",
-   "base": "#f6f1e7"
+   "base": "#f6f1e7",
+   "trim": "#fffdf7",
+   "drips": "#fffdf7"
   },
   "yaw": 30,
   "elev": 24
