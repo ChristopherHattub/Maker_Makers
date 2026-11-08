@@ -46,7 +46,7 @@ Higher stacks make the block taller (about 125 mm for 8, 180 mm for 12). The 184
 
 ## Parametric and move in one tab (experiment)
 
-This is the first generator with `partEdit: true` ([generator-styling.md](generator-styling.md#part-edit-parametric-plus-move-in-one-tab-experimental-cfgpartedit)). There is no Sculpt tab. Tap the Battery body, Sleeve, Top band, Terminal nub, AA label or AAA label to highlight it and drag it around; a mini window shows just that part's sliders (`part` tags on the parameters, `sculptLink` joins the shells). The page classifies shells in `sculptLink` by mesh name, height (the band sits above `lastH - 12.3`) and z side (AA front, AAA back). A moved part is not print-checked as a design, so the flag shows.
+This is the first generator with `partEdit: true` ([generator-styling.md](generator-styling.md#part-edit-parametric-plus-move-in-one-tab-experimental-cfgpartedit)). The Sculpt tab is kept for the brushes only (no move tool there). On the Parametric tab, tap the Battery body, Sleeve, Top band, Terminal nub, AA label or AAA label to highlight it and drag it around; a mini window shows just that part's sliders (`part` tags on the parameters, `sculptLink` joins the shells). The page classifies shells in `sculptLink` by mesh name, height (the band sits above `lastH - 12.3`) and z side (AA front, AAA back). A moved part is not print-checked as a design, so the flag shows.
 
 ## Known open items
 

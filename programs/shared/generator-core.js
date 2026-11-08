@@ -244,8 +244,8 @@
     // Every generator gets the Sculpt tab unless it opts out with sculpt: false. Models that print differently from what they show cannot use it.
     if (cfg.sculpt === false || (cfg.printMeshes && typeof cfg.printActive !== 'function') || /[?&]embed=workshop\b/.test(location.search)) cfg.sculpt = null;
     else if (!cfg.sculpt) cfg.sculpt = sculptGeneric();
-    // cfg.partEdit: the Parametric tab itself selects and moves pieces, and shows a mini settings window for the selected one, so there is no separate Sculpt tab.
-    if (cfg.sculpt && !cfg.partEdit) { if (cfg.tabsFirst) tabDefs.push(sculptTabConfig()); else tabDefs.unshift(sculptTabConfig()); }
+    // cfg.partEdit: the Parametric tab itself selects and moves pieces and shows a mini settings window; the Sculpt tab then has only the sculpt brushes.
+    if (cfg.sculpt) { if (cfg.tabsFirst) tabDefs.push(sculptTabConfig()); else tabDefs.unshift(sculptTabConfig()); }
     var extraTabs = tabDefs.map(function (t) {
       return {
         id: t.id, cfg: t,
@@ -1650,6 +1650,7 @@
   function setTab(tab) {
     var wasPrint = activeTab === 'print', wasSculpt = activeTab === 'sculpt';
     activeTab = tab;
+    if (cfg.partEdit && sc8) { sc8.tool = tab === 'sculpt' ? 'sculpt' : 'select'; sc8.sel = null; if (sc8Brush) sc8Brush.visible = false; }
     var isColor = tab === 'color';
     dom.tabModel.setAttribute('aria-selected', String(tab === 'model'));
     dom.tabColor.setAttribute('aria-selected', String(isColor));
@@ -2444,7 +2445,9 @@
           toolBtns[id] = el('button', { class: 'mm-chip', type: 'button', text: label, onclick: function () { sc8.tool = id; sculptBrushAt(null); sculptRefresh(); } });
           return toolBtns[id];
         }
-        box.appendChild(el('div', { class: 'mm-chips' }, [toolChip('select', 'Select'), toolChip('sculpt', 'Sculpt')]));
+        var toolRow = el('div', { class: 'mm-chips' }, [toolChip('select', 'Select'), toolChip('sculpt', 'Sculpt')]);
+        if (cfg.partEdit) toolRow.style.display = 'none'; // moving parts lives on the Parametric tab
+        box.appendChild(toolRow);
         var note = el('p', { class: 'mm-note' });
         var selectBox = el('div', {}), sculptBox = el('div', {});
         box.appendChild(note); box.appendChild(selectBox); box.appendChild(sculptBox);
