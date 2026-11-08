@@ -13,9 +13,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
-| 106 | Reserved by another open branch (Console Faceplate). |
+| 106 | Built: Console Faceplate. |
 | 107 | Built: Holiday Tree Topper. |
-| 108+ | Free. Any number works. |
+| 108 | Built: Nutcracker (print-in-place jaw). |
+| 109+ | Free (check open PRs first). Any number works. |
 
 Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -126,7 +127,9 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
 | 107 | Holiday Tree Topper | christmas | `holiday-tree-topper.html` (faceted star, heart or gem on a print-in-place spinning fluted bell and socket) |
+| 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
 
 ## Groups (BUNDLES)
 
