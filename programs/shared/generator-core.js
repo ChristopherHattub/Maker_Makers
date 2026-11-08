@@ -244,7 +244,8 @@
     // Every generator gets the Sculpt tab unless it opts out with sculpt: false. Models that print differently from what they show cannot use it.
     if (cfg.sculpt === false || (cfg.printMeshes && typeof cfg.printActive !== 'function') || /[?&]embed=workshop\b/.test(location.search)) cfg.sculpt = null;
     else if (!cfg.sculpt) cfg.sculpt = sculptGeneric();
-    if (cfg.sculpt) { if (cfg.tabsFirst) tabDefs.push(sculptTabConfig()); else tabDefs.unshift(sculptTabConfig()); }
+    // cfg.partEdit: the Parametric tab itself selects and moves pieces, and shows a mini settings window for the selected one, so there is no separate Sculpt tab.
+    if (cfg.sculpt && !cfg.partEdit) { if (cfg.tabsFirst) tabDefs.push(sculptTabConfig()); else tabDefs.unshift(sculptTabConfig()); }
     var extraTabs = tabDefs.map(function (t) {
       return {
         id: t.id, cfg: t,
@@ -514,9 +515,20 @@
     ]);
   }
 
+  // Sliders in the part-edit mini window (cfg.partEdit) are the same parameters again; they are kept in a second map so the Parametric panel keeps its own.
+  var miniRefs = {};
+  function sliderForMini(p) {
+    var saved = sliderRefs[p.key], node = sliderFor(p);
+    miniRefs[p.key] = sliderRefs[p.key];
+    if (saved) sliderRefs[p.key] = saved; else delete sliderRefs[p.key];
+    return node;
+  }
   function syncSliders() {
-    Object.keys(sliderRefs).forEach(function (key) {
-      var ref = sliderRefs[key];
+    syncRefMap(sliderRefs); syncRefMap(miniRefs);
+  }
+  function syncRefMap(refs) {
+    Object.keys(refs).forEach(function (key) {
+      var ref = refs[key];
       if (ref.choices) { ref.sync(); return; }
       ref.input.value = String(params[key]);
       ref.output.textContent = formatParam(ref.def, params[key]);
@@ -1652,7 +1664,7 @@
     var current = tabHandlers();
     $('mm-hint').textContent = isColor
       ? 'Click a part to paint it'
-      : (current && current.hint) || 'Drag or touch-swipe to orbit 3D mesh';
+      : (current && current.hint) || (cfg.partEdit && tab === 'model' ? 'Tap a part to edit it, drag it to move it. Empty space orbits' : 'Drag or touch-swipe to orbit 3D mesh');
     // Placement tools (stamps, carving) belong to their own tab: clear their preview and cursor here.
     if (tab !== 'model' && typeof cfg.onHover === 'function') cfg.onHover(null, api);
     dom.extraTabs.forEach(function (t) { if (t.id !== tab && typeof t.cfg.onHover === 'function') t.cfg.onHover(null, api); });
@@ -1852,7 +1864,7 @@
   var sc8Drag = null, sc8Box = null, sc8Brush = null, sc8Ui = null, sc8Mark = null;
   var sc8MarkMat = new T.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
-  function sculptOn() { return !!cfg.sculpt && activeTab === 'sculpt'; }
+  function sculptOn() { return !!cfg.sculpt && (activeTab === 'sculpt' || (!!cfg.partEdit && activeTab === 'model')); }
   function sculptEdited() { return Object.keys(sc8.edits).length > 0 || sc8.strokes.length > 0; }
   function sculptState() { return { edits: JSON.stringify(sc8.edits), strokes: sc8.strokes.slice() }; }
   function sculptSnapshot() { sc8.undo.push(sculptState()); sc8.redo = []; if (sc8.undo.length > 40) sc8.undo.shift(); }
@@ -2103,7 +2115,51 @@
     if (b) { sc8Box.box.min.set(b.lo[0], b.lo[1], b.lo[2]); sc8Box.box.max.set(b.hi[0], b.hi[1], b.hi[2]); }
     sculptHighlight();
     if (sc8Ui) sc8Ui();
+    if (cfg.partEdit) partEditRefresh();
   }
+  // Part-edit mini window (cfg.partEdit): the settings of the selected piece, over the 3D view.
+  // A parameter belongs to a piece when its `part` (a label or a list of labels) matches the piece's label from cfg.sculptLink / partNames.
+  var peBox = null, peKey = '';
+  function partEditRefresh() {
+    var id = sculptOn() ? sc8.sel : null, piece = null;
+    if (id) sculptPieces().forEach(function (q) { if (q.id === id) piece = q; });
+    if (!peBox) {
+      peBox = el('div', { class: 'mm-pe', id: 'mm-pe', role: 'dialog', 'aria-label': 'Part settings', hidden: '' });
+      renderer.domElement.parentNode.appendChild(peBox);
+    }
+    if (!piece || (sc8.edits[id] && sc8.edits[id].del)) { peBox.hidden = true; peKey = ''; return; }
+    var mine = (cfg.parameters || []).filter(function (p) {
+      var w = [].concat(p.part || []);
+      return (w.indexOf(piece.base) >= 0 || w.indexOf(piece.label) >= 0) && (!p.showIf || p.showIf(params));
+    });
+    var key = id + '|' + mine.map(function (p) { return p.key; }).join(',');
+    var moved = !!(sc8.edits[id] && (sc8.edits[id].m[0] || sc8.edits[id].m[1] || sc8.edits[id].m[2]));
+    if (key !== peKey) {
+      peKey = key; miniRefs = {};
+      peBox.innerHTML = '';
+      peBox.appendChild(el('div', { class: 'mm-pe-head' }, [
+        el('strong', { text: piece.label }),
+        el('button', { type: 'button', class: 'mm-pe-x', 'aria-label': 'Close part settings', text: '\u00d7', onclick: function () { sc8.sel = null; sculptRefresh(); } })
+      ]));
+      var body = el('div', { class: 'mm-pe-body' });
+      if (mine.length) mine.forEach(function (p) { body.appendChild(sliderForMini(p)); });
+      else body.appendChild(el('p', { class: 'mm-note', text: 'No settings for this part. Drag it to move it.' }));
+      peBox.appendChild(body);
+      peBox.appendChild(el('div', { class: 'mm-pe-foot' }, [
+        el('button', { type: 'button', class: 'mm-btn', id: 'mm-pe-undo', text: 'Undo', onclick: function () { sculptUndo(); } }),
+        el('button', { type: 'button', class: 'mm-btn', id: 'mm-pe-reset', text: 'Reset position', onclick: function () {
+          var ed = sc8.edits[sc8.sel]; if (!ed) return;
+          sculptSnapshot(); ed.m = [0, 0, 0]; if (!ed.del && ed.s[0] === 1 && ed.s[1] === 1 && ed.s[2] === 1) delete sc8.edits[sc8.sel];
+          sculptCommit();
+        } })
+      ]));
+    } else syncRefMap(miniRefs);
+    var rb = $('mm-pe-reset'); if (rb) rb.hidden = !moved;
+    var ub = $('mm-pe-undo'); if (ub) ub.hidden = !sc8.undo.length;
+    syncRefMap(sliderRefs);
+    peBox.hidden = false;
+  }
+
   function sculptCommit() { sc8.draft = false; rebuild(); }
   function sculptDraft() { sc8.draft = true; scheduleRebuild(); }
 
@@ -2283,8 +2339,10 @@
       });
       // cfg.sculptLink(meshName, lo, hi) can return { key, label }: shells with the same key are one piece (a wheel and its axle).
       if (cfg.sculptLink) {
+        var mlo = [1e9, 1e9, 1e9], mhi = [-1e9, -1e9, -1e9];
+        pieces.forEach(function (P) { for (var a = 0; a < 3; a++) { mlo[a] = Math.min(mlo[a], P.lo[a]); mhi[a] = Math.max(mhi[a], P.hi[a]); } });
         var keyTo = {}, kept = [], remap = pieces.map(function (P) {
-          var top = Object.keys(P.tris)[0], link = cfg.sculptLink(top, P.lo, P.hi), into = link && keyTo[link.key];
+          var top = Object.keys(P.tris)[0], link = cfg.sculptLink(top, P.lo, P.hi, { lo: mlo, hi: mhi }), into = link && keyTo[link.key];
           if (!into) { kept.push(P); if (link) { keyTo[link.key] = P; P.linkLabel = link.label; } return kept.length - 1; }
           Object.keys(P.tris).forEach(function (n) { into.tris[n] = (into.tris[n] || 0) + P.tris[n]; });
           for (var a = 0; a < 3; a++) { into.lo[a] = Math.min(into.lo[a], P.lo[a]); into.hi[a] = Math.max(into.hi[a], P.hi[a]); }
@@ -2554,7 +2612,7 @@
     });
     // Delete or Backspace removes the selected piece (Restore or Undo brings it back).
     window.addEventListener('keydown', function (e) {
-      if (!sculptOn() || sc8.tool !== 'select' || !sc8.sel || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+      if (!sculptOn() || cfg.partEdit || sc8.tool !== 'select' || !sc8.sel || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
       var t = e.target;
       if (t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && t.type !== 'range'))) return;
       var cur = sc8.edits[sc8.sel];

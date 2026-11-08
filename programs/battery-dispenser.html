@@ -259,6 +259,7 @@
         return out;
       }
 
+      var lastH = 0;
       function buildBody(p) {
         var L = layout(p), out = [], H = L.H, D = L.D, A = L.A, zf = L.zf, zb = L.zb, rho = L.rho, round = L.round;
         var yLo = p.floor, O = L.outline;
@@ -336,6 +337,7 @@
           var nw = Math.max(D - 1.6, 2.4), nl = 22;
           trim.push(yPrism(roundRect(-nl / 2, nl / 2, -nw / 2, nw / 2, nw / 2 - 0.05, 8), H - 0.9, H + p.nub));
         }
+        lastH = H;
         var meshes = [{ name: 'body', positions: body, smoothGroup: 'body' }];
         if (wraps.length) meshes.push({ name: 'sleeve', positions: concat(wraps), smoothGroup: 'sleeve' });
         if (trim.length) meshes.push({ name: 'terminal', positions: concat(trim), smoothGroup: 'terminal' });
@@ -362,22 +364,30 @@
           { name: 'Lavender Mist', color: '#d8b4fe' }, { name: 'Sunny Yellow', color: '#fde047' },
           { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Shadow Black', color: '#334155' }
         ],
-        sculpt: false,
-        partNames: { body: 'Battery body', sleeve: 'Sleeve and bands', terminal: 'Terminal nub', label: 'AA / AAA labels' },
+        // Tap a part on the Parametric tab to highlight and move it; its own settings (the `part` tags below) open over the 3D view.
+        partEdit: true,
+        partNames: { body: 'Battery body', sleeve: 'Sleeve', terminal: 'Terminal nub', label: 'Labels' },
+        sculptLink: function (name, lo, hi, ctx) {
+          if (name === 'body') return { key: 'body', label: 'Battery body' };
+          if (name === 'terminal') return { key: 'terminal', label: 'Terminal nub' };
+          if (name === 'sleeve') return lo[1] > lastH - 12.3 ? { key: 'band', label: 'Top band' } : { key: 'sleeve', label: 'Sleeve' };
+          if (name === 'label') return (lo[2] + hi[2]) / 2 > (ctx.lo[2] + ctx.hi[2]) / 2 ? { key: 'lab1', label: 'AA label' } : { key: 'lab2', label: 'AAA label' };
+          return null;
+        },
         parameters: [
-          { group: 'Capacity', key: 'stack', label: 'Batteries per stack (AA, AAA fit more)', unit: '', min: 4, max: 14, step: 1, value: DEFAULTS.stack },
-          { group: 'Fit', key: 'clear', label: 'Battery clearance (snug ↔ roomy)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: DEFAULTS.clear },
-          { group: 'Fit', key: 'lip', label: 'Lip height (holds the battery in)', unit: ' mm', min: 3.0, max: 4.5, step: 0.1, value: DEFAULTS.lip },
-          { group: 'Fit', key: 'shelf', label: 'Pull-out shelf depth', unit: ' mm', min: 5, max: 16, step: 0.5, value: DEFAULTS.shelf },
-          { group: 'Body', key: 'shape', label: 'Body shape', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.shape, options: ['Block', 'Round'] },
-          { group: 'Body', key: 'wall', label: 'Side wall', unit: ' mm', min: 3, max: 12, step: 0.5, value: DEFAULTS.wall },
-          { group: 'Body', key: 'divider', label: 'Divider between slots', unit: ' mm', min: 6, max: 16, step: 0.5, value: DEFAULTS.divider },
-          { group: 'Body', key: 'floor', label: 'Floor thickness', unit: ' mm', min: 1.6, max: 5, step: 0.2, value: DEFAULTS.floor },
-          { group: 'Body', key: 'corner', label: 'Corner rounding (max = side wall)', unit: ' mm', min: 0.5, max: 12, step: 0.5, value: DEFAULTS.corner, showIf: function (p) { return p.shape === 0; } },
-          { group: 'Look', key: 'sleeve', label: 'Battery sleeve (raised wrap)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.sleeve, options: ['Off', 'On'] },
-          { group: 'Look', key: 'labels', label: 'Top labels (AA / AAA letters)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.labels, options: ['Off', 'On'] },
-          { group: 'Look', key: 'band', label: 'Top sleeve band', unit: ' mm', min: 0, max: 2, step: 0.25, value: DEFAULTS.band },
-          { group: 'Look', key: 'nub', label: 'Terminal nub height', unit: ' mm', min: 0, max: 6, step: 0.5, value: DEFAULTS.nub }
+          { group: 'Capacity', key: 'stack', part: 'Battery body', label: 'Batteries per stack (AA, AAA fit more)', unit: '', min: 4, max: 14, step: 1, value: DEFAULTS.stack },
+          { group: 'Fit', key: 'clear', part: 'Battery body', label: 'Battery clearance (snug ↔ roomy)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: DEFAULTS.clear },
+          { group: 'Fit', key: 'lip', part: 'Battery body', label: 'Lip height (holds the battery in)', unit: ' mm', min: 3.0, max: 4.5, step: 0.1, value: DEFAULTS.lip },
+          { group: 'Fit', key: 'shelf', part: 'Battery body', label: 'Pull-out shelf depth', unit: ' mm', min: 5, max: 16, step: 0.5, value: DEFAULTS.shelf },
+          { group: 'Body', key: 'shape', part: 'Battery body', label: 'Body shape', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.shape, options: ['Block', 'Round'] },
+          { group: 'Body', key: 'wall', part: 'Battery body', label: 'Side wall', unit: ' mm', min: 3, max: 12, step: 0.5, value: DEFAULTS.wall },
+          { group: 'Body', key: 'divider', part: 'Battery body', label: 'Divider between slots', unit: ' mm', min: 6, max: 16, step: 0.5, value: DEFAULTS.divider },
+          { group: 'Body', key: 'floor', part: 'Battery body', label: 'Floor thickness', unit: ' mm', min: 1.6, max: 5, step: 0.2, value: DEFAULTS.floor },
+          { group: 'Body', key: 'corner', part: 'Battery body', label: 'Corner rounding (max = side wall)', unit: ' mm', min: 0.5, max: 12, step: 0.5, value: DEFAULTS.corner, showIf: function (p) { return p.shape === 0; } },
+          { group: 'Look', key: 'sleeve', part: 'Sleeve', label: 'Battery sleeve (raised wrap)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.sleeve, options: ['Off', 'On'] },
+          { group: 'Look', key: 'labels', part: ['AA label', 'AAA label'], label: 'Top labels (AA / AAA letters)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.labels, options: ['Off', 'On'] },
+          { group: 'Look', key: 'band', part: 'Top band', label: 'Top sleeve band', unit: ' mm', min: 0, max: 2, step: 0.25, value: DEFAULTS.band },
+          { group: 'Look', key: 'nub', part: 'Terminal nub', label: 'Terminal nub height', unit: ' mm', min: 0, max: 6, step: 0.5, value: DEFAULTS.nub }
         ],
         presets: [
           presetOf('Default dispenser', {}),
