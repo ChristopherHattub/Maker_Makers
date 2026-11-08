@@ -19,7 +19,7 @@ GitHub Pages serves the repo root straight from `main` (no workflow, `.nojekyll`
 
 - `index.html` holds four screens shown one at a time: `#splash-screen` (homepage world map), `#viewer-screen` (generator iframe), `#workshop-screen` and `#map-screen` (printer radar). URL hash: none = homepage, `#/generator/SLOT-NN`, `#/workshop`, `#/map`. See [docs/architecture.md](docs/architecture.md).
 - `js/programs.js` is the data: `GENERATORS` (slots) and `BUNDLES` (groups). Everything on the homepage is built from it. [docs/generator-registry.md](docs/generator-registry.md), [docs/slot-registry.md](docs/slot-registry.md).
-- `js/worldmap.js` lays out and renders the homepage; `js/workshop.js` is the Workshop editor; `js/app.js` is navigation, viewer, idea queue and printer map. [docs/homepage.md](docs/homepage.md), [docs/workshop.md](docs/workshop.md).
+- `js/worldmap.js` lays out and renders the homepage; `js/workshop.js` is the Workshop editor; `js/app.js` is navigation, viewer and printer map; `js/guides.js` is the printing guides page. [docs/homepage.md](docs/homepage.md), [docs/workshop.md](docs/workshop.md).
 - Each generator is one page in `programs/` holding only config + `build()`. The shared engine `programs/shared/generator-core.js` + `generator.css` supplies the UI, Color tool, exports and phone layout. **Never restyle a generator page or write per-generator mobile CSS**; fix it in the engine for everyone. [docs/generator-styling.md](docs/generator-styling.md).
 - `programs/shared/print-check.js` is the printability check (floating parts, overhangs over ~50°, thin walls). The engine shows it as a live chip over the 3D view and `check-mesh.mjs` prints it. Treat a red chip on a default or preset as a bug. [docs/generator-styling.md](docs/generator-styling.md#print-check-live-warning-chip).
 - Skill for making generators: `.claude/skills/makermakers-generator/` (template, `check-mesh.mjs` printability check, thumbnail template).
@@ -28,7 +28,7 @@ GitHub Pages serves the repo root straight from `main` (no workflow, `.nojekyll`
 
 ## Slots
 
-Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker. Next free slot: 106. Full list: [docs/slot-registry.md](docs/slot-registry.md).
+Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker, 106 is the Console Faceplate, 108 is the Nutcracker. Next free slot: 107 (check open PRs first). Full list: [docs/slot-registry.md](docs/slot-registry.md).
 
 ## Adding a generator (checklist)
 
@@ -47,7 +47,7 @@ Defaults and presets should print with no supports. Say in a slider label which 
 
 ## Privacy rule (hard rule): no data collection
 
-The site collects nothing and sends nothing about visitors anywhere. No analytics, trackers, cookies, accounts, telemetry, ad or font beacons, or server calls of our own. Do not add any. `localStorage` is allowed only for the visitor's own convenience (idea queue `mm_generator_ideas`, homepage layout `mm-home-layout`, Workshop autosave) and every use is wrapped in `try/catch`. The printer map never requests the visitor's location; the only text sent out is a place search the visitor types, to OpenStreetMap Nominatim and Overpass, with coordinates rounded. Models and files stay in the browser. All third-party code and fonts are self-hosted in `vendor/` (three.js r128 + controls, Leaflet 1.9.4, the Workshop CSG bundle, Fredoka and Nunito); no CDN is contacted. The only outside requests are map tiles (Esri) and the place search. See [docs/architecture.md](docs/architecture.md).
+The site collects nothing and sends nothing about visitors anywhere. No analytics, trackers, cookies, accounts, telemetry, ad or font beacons, or server calls of our own. Do not add any. `localStorage` is allowed only for the visitor's own convenience (homepage layout `mm-home-layout`, Workshop autosave) and every use is wrapped in `try/catch`. The printer map never requests the visitor's location; the only text sent out is a place search the visitor types, to OpenStreetMap Nominatim and Overpass, with coordinates rounded. Models and files stay in the browser. All third-party code and fonts are self-hosted in `vendor/` (three.js r128 + controls, Leaflet 1.9.4, the Workshop CSG bundle, Fredoka and Nunito); no CDN is contacted. The only outside requests are map tiles (Esri) and the place search. See [docs/architecture.md](docs/architecture.md).
 
 ## Printer map: verified vs unverified
 
@@ -67,6 +67,8 @@ JS: single quotes, semicolons, 2-space indent, `var`/function style inside gener
 - **Fancy Ring** (slot 102): prints as two halves glued around the stone. Unprinted; the glue seam and fit of the stone are unproven. [docs/fancy-ring.md](docs/fancy-ring.md).
 - **Pin Maker** (slot 103): a picture traced into a badge pin, in the browser only. Unprinted; it has a flat back for a glued pin-back, no printed pin-back. [docs/pin-maker.md](docs/pin-maker.md).
 - **Sedan Maker** (slot 105): a toy sedan with print-in-place wheels in round wheel wells, on hidden diamond-section axle pins, plus a Car parts stamp tab. Unprinted; the tolerance, the hidden axle heads and the tire flats are unproven. The round arches read "needs supports" in the print check (a short bridge, recorded in the baseline). [docs/sedan-maker.md](docs/sedan-maker.md).
+- **Console Faceplate** (slot 106): flat decorative covers for Switch / Switch 2 dock, PS5 panel and Xbox Series X front, at fixed sizes. The plate sizes are estimates, not measured on hardware, and nothing is printed. No hologram tile or side-panel render yet. [docs/console-faceplate.md](docs/console-faceplate.md).
+- **Nutcracker** (slot 108): working jaw prints in place (quarter-disc chin in a concentric bowl, diamond pins, 0.35 mm default gap). Unprinted; the gap, the 30° opening and the thin side-hair plates are unproven. [docs/nutcracker.md](docs/nutcracker.md).
 - **Infinity Cube** was dropped from the plan and has no slot; do not look for it.
 - **Hologram tiles are weak for some generators** (thin, flat or low-contrast models read poorly). Retune with `scripts/hologram-config.json` or re-render.
 - Workshop: generator shapes are single-colour and not autosaved. Overpass scan errors are swallowed (a failed scan looks empty). See "Known issues" in [docs/architecture.md](docs/architecture.md).

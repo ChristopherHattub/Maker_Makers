@@ -34,8 +34,8 @@
       <button class="btn btn-green" onclick="showPrinterMapScreen()">
         &#8982; Local 3D Printers Map
       </button>
-      <button class="btn btn-amber" onclick="toggleIdeaModal(true)">
-        &#10010; Submit Generator Idea
+      <button class="btn btn-amber" onclick="showGuidesScreen()">
+        &#9776; Printing Guides
       </button>
     </div>
   </header>
@@ -176,40 +176,22 @@
       </div>
     </section>
 
+    <!-- ==================== 4. 3D PRINTING GUIDES (js/guides.js) ==================== -->
+    <section id="guides-screen">
+      <div class="section-banner">
+        <h2><span>[04]</span> 3D Printing Guides</h2>
+        <span class="meta-tag" id="guides-count"></span>
+      </div>
+      <p class="meta-tag guides-note">Links to guides on other sites. They open in a new tab and we collect nothing about what you click.</p>
+      <div class="guides-bar">
+        <input type="search" id="guides-search" class="bp-input" placeholder="Search guides (e.g. bambu, calibration, klipper)..." aria-label="Search printing guides" autocomplete="off">
+        <button class="btn" type="button" onclick="showSplashScreen()">&#10006; Back to Generators</button>
+      </div>
+      <div class="guides-filters" id="guides-filters" role="group" aria-label="Filter by topic"></div>
+      <div class="guides-list" id="guides-list" aria-live="polite"></div>
+    </section>
+
   </main>
-
-  <!-- ==================== 4. SUBMIT GENERATOR IDEA MODAL ==================== -->
-  <div class="modal-backdrop" id="idea-modal" onclick="if(event.target===this) toggleIdeaModal(false)">
-    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="idea-modal-title">
-      <div class="modal-header">
-        <div>
-          <span style="font-size: 0.7rem; color: var(--bp-amber);">FORM DWG // REQ-GEN-IDEA</span>
-          <h3 id="idea-modal-title" style="letter-spacing: 1px;">SUBMIT NEW STL GENERATOR IDEA</h3>
-        </div>
-        <button class="btn" aria-label="Close" onclick="toggleIdeaModal(false)">&#10006;</button>
-      </div>
-
-      <form id="idea-form" onsubmit="handleIdeaSubmit(event)">
-        <div class="form-field">
-          <label for="idea-title">GENERATOR TITLE *</label>
-          <input type="text" id="idea-title" required placeholder="e.g., Parametric Honeycomb Wall Storage Hook">
-        </div>
-        <div class="form-field">
-          <label for="idea-desc">DESCRIPTION & CUSTOMIZABLE PARAMETERS *</label>
-          <textarea id="idea-desc" required placeholder="Describe what the STL program should generate and which dimensions users should be able to customize..."></textarea>
-        </div>
-        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap;">
-          <button type="button" class="btn" onclick="exportIdeasJSON()">&#11015; Export Queue (.JSON)</button>
-          <button type="submit" class="btn btn-primary">&#10004; Submit Blueprint Spec</button>
-        </div>
-      </form>
-
-      <div class="submitted-ideas-log">
-        <strong style="font-size: 0.75rem; color: var(--bp-cyan);">SUBMITTED GENERATOR REQUEST QUEUE:</strong>
-        <div id="ideas-log-container"></div>
-      </div>
-    </div>
-  </div>
 
   <footer>
     MAKER MAKERS // 100% FREE KEYLESS MAP & BLUEPRINT CAD FOUNDRY // US & CANADA
@@ -234,6 +216,7 @@
   <script src="js/programs.js"></script>
   <script src="js/worldmap.js"></script>
   <script src="js/workshop.js"></script>
+  <script src="js/guides.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
