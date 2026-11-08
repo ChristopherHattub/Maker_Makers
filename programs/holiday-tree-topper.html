@@ -60,27 +60,45 @@
       }
 
       // ---- Outline of the topper head, counter-clockwise, centred, y up, star-shaped about the origin ----
+      // Per shape and point count: a half-turn and a minimum pointiness found with the print check (see docs), so the
+      // lower arms either hang inside the cone or have steep undersides. Keys are style * 100 + points.
+      var FIT = { 3: [0, 36], 4: [1, 36], 5: [0, 36], 6: [0, 36], 7: [1, 48], 8: [1, 36], 9: [0, 56], 10: [0, 44],
+        103: [0, 36], 104: [1, 48], 105: [1, 36], 106: [0, 46], 107: [0, 36], 108: [1, 62], 109: [1, 36] };
+      function fit(p) { return FIT[p.style * 100 + count(p)] || [0, 0]; }
+      function count(p) { return p.style === 1 ? Math.min(p.points, 9) : p.points; }
       function outline(p) {
-        var R = p.size, pts = [], i, a, r, n = p.points;
+        var R = p.size, pts = [], i, a, r, n = count(p), ft = fit(p), turn = ft[0] ? Math.PI / n : 0, pt = Math.max(p.pointy, ft[1]);
         if (p.style === 0) {
           for (i = 0; i < 2 * n; i++) {
-            a = Math.PI / 2 + (i * Math.PI) / n; r = i % 2 === 0 ? R : R * p.pointy / 100;
+            a = Math.PI / 2 + turn + (i * Math.PI) / n; r = i % 2 === 0 ? R : R * pt / 100;
             pts.push([r * Math.cos(a), r * Math.sin(a)]);
           }
         } else if (p.style === 1) {
-          var per = TAU / n, rv = R * p.pointy / 100 * 0.75, rs = R * 0.56, rr = [R, rv, rs, rv];
+          var per = TAU / n, rv = R * pt / 100 * 0.75, rs = R * 0.56, rr = [R, rv, rs, rv];
           for (i = 0; i < 4 * n; i++) {
-            a = Math.PI / 2 + (Math.floor(i / 4) * per) + (i % 4) * per / 4;
+            a = Math.PI / 2 + turn + (Math.floor(i / 4) * per) + (i % 4) * per / 4;
             pts.push([rr[i % 4] * Math.cos(a), rr[i % 4] * Math.sin(a)]);
           }
-        } else {
-          var s = R / 16.5, t, c = [];
+        } else if (p.style === 2) {
+          var s = R / 16.5, t;
           for (i = 0; i < 72; i++) {
             t = -(i / 72) * TAU;
-            c.push([s * 16 * Math.pow(Math.sin(t), 3),
+            pts.push([s * 16 * Math.pow(Math.sin(t), 3),
               s * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t) + 2.5)]);
           }
-          pts = c;
+        } else if (p.style === 3) {
+          // brilliant-cut gem silhouette: flat table, crown, girdle, pointed pavilion (all undersides steeper than 50 degrees)
+          [[0, -1], [0.95, 0.2], [0.5, 0.78], [-0.5, 0.78], [-0.95, 0.2]].forEach(function (q) { pts.push([q[0] * R * 0.92, q[1] * R]); });
+        } else if (p.style === 4) {
+          // drop: round top, pointed bottom (tangent lines from the point are about 60 degrees)
+          var rho = 0.62 * R, cy = 0.28 * R, b = Math.acos(rho / (cy + R)), a0 = -Math.PI / 2 + b, a1 = 3 * Math.PI / 2 - b;
+          pts.push([0, -R]);
+          for (i = 0; i <= 56; i++) { a = a0 + (a1 - a0) * i / 56; pts.push([rho * Math.cos(a), cy + rho * Math.sin(a)]); }
+        } else if (p.style === 5) {
+          // crest: shield with a dipped top and a pointed bottom
+          [[0, -1], [0.8, 0.1], [0.8, 0.85], [0, 0.68], [-0.8, 0.85], [-0.8, 0.1]].forEach(function (q) { pts.push([q[0] * R, q[1] * R]); });
+        } else {
+          [[0, -1], [0.62, 0], [0, 1], [-0.62, 0]].forEach(function (q) { pts.push([q[0] * R, q[1] * R]); });
         }
         return pts;
       }
@@ -188,11 +206,11 @@
         defaultColor: '#fcd34d',
         partNames: { star: 'Star', cap: 'Spinning cone', base: 'Socket base' },
         parameters: [
-          { group: 'Topper', key: 'style', label: 'Shape', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Star', 'Sparkle', 'Heart'] },
-          { group: 'Topper', key: 'points', label: 'Points (5, 6, 10 print clean)', unit: '', min: 4, max: 10, step: 1, value: 5, showIf: function (p) { return p.style !== 2; } },
+          { group: 'Topper', key: 'style', label: 'Shape', unit: '', min: 0, max: 6, step: 1, value: 0, options: ['Star', 'Sparkle', 'Heart', 'Gem', 'Drop', 'Crest', 'Diamond'] },
+          { group: 'Topper', key: 'points', label: 'Points (sparkle up to 9)', unit: '', min: 3, max: 10, step: 1, value: 5, showIf: function (p) { return p.style <= 1; } },
           { group: 'Topper', key: 'size', label: 'Size (radius)', unit: ' mm', min: 28, max: 55, step: 1, value: 38 },
-          { group: 'Topper', key: 'pointy', label: 'Pointiness (higher = blunter, fewer overhangs)', unit: '%', min: 36, max: 62, step: 1, value: 42, showIf: function (p) { return p.style !== 2; } },
-          { group: 'Topper', key: 'puff', label: 'Puff (faceted thickness)', unit: '%', min: 20, max: 50, step: 1, value: 28 },
+          { group: 'Topper', key: 'pointy', label: 'Pointiness (high = blunt; some counts are blunted for you)', unit: '%', min: 36, max: 70, step: 1, value: 42, showIf: function (p) { return p.style <= 1; } },
+          { group: 'Topper', key: 'puff', label: 'Puff (faceted thickness)', unit: '%', min: 20, max: 40, step: 1, value: 28 },
           { group: 'Socket', key: 'tipD', label: 'Tree tip width', unit: ' mm', min: 10, max: 30, step: 1, value: 20 },
           { group: 'Socket', key: 'depth', label: 'Socket depth', unit: ' mm', min: 30, max: 70, step: 1, value: 45 },
           { group: 'Spinner', key: 'spin', label: 'Spins on its socket', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Fixed', 'Spins'] },
@@ -200,9 +218,14 @@
         ],
         presets: [
           { label: 'Default star', values: { style: 0, points: 5, size: 38, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
-          { label: 'Four-point twinkle', values: { style: 0, points: 4, size: 40, pointy: 56, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
+          { label: 'Eight-point star', values: { style: 0, points: 8, size: 38, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
+          { label: 'Four-point twinkle', values: { style: 0, points: 4, size: 40, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
           { label: 'Sparkle burst', values: { style: 1, points: 6, size: 40, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
           { label: 'Heart topper', values: { style: 2, points: 5, size: 36, pointy: 42, puff: 32, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
+          { label: 'Crystal gem', values: { style: 3, points: 5, size: 36, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
+          { label: 'Teardrop drop', values: { style: 4, points: 5, size: 36, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
+          { label: 'Royal crest', values: { style: 5, points: 5, size: 36, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
+          { label: 'Diamond', values: { style: 6, points: 5, size: 38, pointy: 42, puff: 28, tipD: 20, depth: 45, spin: 1, clr: 0.4 } },
           { label: 'Small fixed star', values: { style: 0, points: 5, size: 30, pointy: 42, puff: 28, tipD: 14, depth: 36, spin: 0, clr: 0.4 } }
         ],
         build: function (p) {

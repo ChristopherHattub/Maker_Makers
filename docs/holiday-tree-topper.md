@@ -22,9 +22,13 @@ Clearance (`clr`, 0.3 to 0.6, default 0.4) is the perpendicular gap on every 45 
 
 The print check voxelises at `max(0.4, longest side / 170)`. `layout` lowers the ledge by less than one cell (`dY`, the ledge gets narrower) so the cone's underside lands in the cell right above the ledge's top cell. Nothing else moves, so the cell size does not change. A clearance above about the cell size can still read as "overhang" in the check chip.
 
+## Shapes
+
+Star (3 to 10 points), Sparkle (alternating long and short points, 3 to 9), Heart, Gem (brilliant-cut silhouette), Drop, Crest and Diamond. Every outline is star-shaped about the centre and joined to a front and back apex, so each edge becomes a facet.
+
 ## Support-free status
 
-Defaults and every preset pass `check-generator.mjs` except the Sparkle burst, which carries a 3 mm warning. Slider extremes: points 4, 7, 8 and 9 (at low pointiness), sparkle with 4, 5 or 8 arms, and the biggest sizes make lower arms with shallow undersides and read "needs supports". Thinner puff helps; a 3D-faceted face tilted less than 45 degrees from flat does not print clean.
+Lower edges of the outline that run shallower than about 35 degrees from flat print as overhangs. The Gem, Drop, Crest, Diamond and Heart have undersides steeper than 50 degrees. For Star and Sparkle, `FIT` holds, per shape and point count, a half-turn and a minimum pointiness found with the print check at sizes 28, 38 and 55 mm (puff 24): `outline` applies them automatically, so the Pointiness slider is raised for a count that needs it. Regenerate `FIT` by looping over turn and pointiness and keeping the first combination with no error. Puff is capped at 40 percent because thicker sparkles fail again. Defaults, all presets and the socket and clearance extremes pass; the Small fixed star and a few Fixed variants carry a 3 to 4 mm warning.
 
 ## Known limits
 
