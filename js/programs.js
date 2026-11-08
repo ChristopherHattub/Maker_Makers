@@ -1061,6 +1061,15 @@ const GENERATORS = [
     description: 'A toy-soldier nutcracker standing on a plinth, with a working jaw that prints in place: the chin swings on two pins inside a bowl with a tolerance gap you set, no supports and no gluing. Pick a shako, crown or spike helmet, size the head, mouth, face and hat, and set the moustache and nose. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 120,
+    title: 'Kalimba Maker',
+    bundle: 'toys',
+    category: 'MUSIC // INSTRUMENTS',
+    thumbnailUrl: 'assets/thumbnails/kalimba-maker.svg',
+    programUrl: 'programs/kalimba-maker.html',
+    description: 'A thumb piano that prints in place as one piece: the tines are cut into the playing board and each one is worked out from the beam formula so it rings at its note. Pick the key and scale (major, minor, pentatonic or chromatic), up to 21 tines, the order, and the tine width, slit and thickness, and engrave note names on the board. The resonator walls lean in at 42 degrees and close into a roof with an open sound hole, so it prints with no supports. Click the board to hear each note. Tines are unprinted: calibrate the pitch with the stiffness slider. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 118,
     title: 'Self-Watering Planter',
     bundle: 'garden',

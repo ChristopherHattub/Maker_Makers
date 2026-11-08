@@ -54,8 +54,10 @@
         if (ny_ === 0) continue;
         var wdir = ny_ > 0 ? -1 : 1;
         var minx = Math.min(ax, bx, cx), maxx = Math.max(ax, bx, cx), minz = Math.min(az, bz, cz), maxz = Math.max(az, bz, cz);
-        var ix0 = Math.max(0, Math.ceil((minx - x0) / c - 0.5)), ix1 = Math.min(nx - 1, Math.floor((maxx - x0) / c - 0.5));
-        var iz0 = Math.max(0, Math.ceil((minz - z0) / c - 0.5)), iz1 = Math.min(nz - 1, Math.floor((maxz - z0) / c - 0.5));
+        // the ray of a column sits EPSX / EPSZ past the cell centre, so the bounds must include that offset (an edge that falls
+        // between the centre and the ray would otherwise leave a one-cell pinhole that reads as a false overhang)
+        var ix0 = Math.max(0, Math.ceil((minx - EPSX - x0) / c - 0.5)), ix1 = Math.min(nx - 1, Math.floor((maxx - EPSX - x0) / c - 0.5));
+        var iz0 = Math.max(0, Math.ceil((minz - EPSZ - z0) / c - 0.5)), iz1 = Math.min(nz - 1, Math.floor((maxz - EPSZ - z0) / c - 0.5));
         for (var iz = iz0; iz <= iz1; iz++) {
           var pz = z0 + (iz + 0.5) * c + EPSZ;
           for (var ix = ix0; ix <= ix1; ix++) {

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#14407f"/><stop offset="0.6" stop-color="#0d2b59"/><stop offset="1" stop-color="#06152d"/></radialGradient>
+    <radialGradient id="plate" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#1b4c92"/><stop offset="1" stop-color="#081c3b"/></radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="mat" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffffff"/><stop offset="0.3" stop-color="#e3ecf9"/><stop offset="0.7" stop-color="#a9bcdc"/><stop offset="1" stop-color="#667fa8"/></radialGradient>
+    <radialGradient id="warm" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffe9cc"/><stop offset="0.3" stop-color="#fdba74"/><stop offset="0.7" stop-color="#e08a33"/><stop offset="1" stop-color="#9c5412"/></radialGradient>
+    <radialGradient id="green" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#e6ffef"/><stop offset="0.3" stop-color="#bbf7d0"/><stop offset="0.7" stop-color="#6fd39a"/><stop offset="1" stop-color="#2f8a5c"/></radialGradient>
+    <pattern id="gridMinor" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#00e5ff" stroke-opacity="0.05"/></pattern>
+    <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#00e5ff" stroke-opacity="0.12"/></pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect width="400" height="300" fill="url(#gridMinor)"/>
+  <rect width="400" height="300" fill="url(#gridMajor)"/>
+  <ellipse cx="200" cy="248" rx="128" ry="19" fill="url(#plate)" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <ellipse cx="200" cy="248" rx="104" ry="14" fill="none" stroke="#00e5ff" stroke-opacity="0.18"/>
+  <ellipse cx="200" cy="249" rx="82" ry="11" fill="url(#shadow)"/>
+
+  <!-- resonator body, seen from the front: the playing board sits on top -->
+  <path d="M70 176H330V214Q330 222 322 222H78Q70 222 70 214Z" fill="url(#warm)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M86 180V210" stroke="url(#gloss)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M118 104H282L330 176H70Z" fill="url(#warm)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M132.2 118.4L267.8 118.4L295.1 173.8L104.9 173.8Z" fill="#0a2246" stroke="#06152d" stroke-width="1"/>
+  <path d="M135.8 118.4L146.9 118.4L137.0 144.2L123.7 144.2Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M150.5 118.4L161.6 118.4L153.1 148.7L139.5 148.7Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M165.1 118.4L176.3 118.4L170.2 153.2L156.3 153.2Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M179.8 118.4L190.9 118.4L188.3 157.7L174.0 157.7Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M194.4 118.4L205.6 118.4L207.3 162.2L192.7 162.2Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M209.1 118.4L220.2 118.4L226.0 157.7L211.7 157.7Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M223.7 118.4L234.9 118.4L243.7 153.2L229.8 153.2Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M238.4 118.4L249.5 118.4L260.5 148.7L246.9 148.7Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M253.1 118.4L264.2 118.4L276.3 144.2L263.0 144.2Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M119.3 112.6L280.7 112.6" stroke="#c084fc" stroke-width="5" stroke-linecap="round"/>
+  <path d="M119.3 112.6L280.7 112.6" stroke="#fff" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.8" fill="none"/>
+  <path d="M140 108L112 150" stroke="url(#gloss)" stroke-width="5" stroke-linecap="round"/>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
+    <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
+  </g>
+  <rect x="30" y="26" width="52" height="16" rx="3" fill="#06152d" fill-opacity="0.7" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <text x="56" y="38" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#00e5ff" letter-spacing="1.5">MM-120</text>
+  <text x="200" y="285" text-anchor="middle" font-family="Courier New, monospace" font-size="12" fill="#eef7ff" fill-opacity="0.9" letter-spacing="3">KALIMBA MAKER</text>
+</svg>

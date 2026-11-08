@@ -514,5 +514,11 @@
     "hue": 110,
     "sat": 65,
     "light": 78
+  },
+  "kalimba-maker": {
+    "hue": 30,
+    "sat": 70,
+    "light": 78,
+    "stand": true
   }
 }

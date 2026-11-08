@@ -833,5 +833,14 @@
   },
   "yaw": 30,
   "elev": 18
+ },
+ "kalimba-maker": {
+  "colors": {
+   "board": "#e3b978",
+   "body": "#8a5a3b",
+   "bridge": "#6b4329"
+  },
+  "yaw": 25,
+  "elev": 38
  }
 }

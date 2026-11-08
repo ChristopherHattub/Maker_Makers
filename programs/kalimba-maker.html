@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-120 Kalimba Maker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Kalimba Maker: a thumb piano whose tines are cut into the playing board itself, so the whole instrument prints
+      // in place as one piece with no supports. Y up, millimetres.
+      //
+      // Print pose (what is exported): the playing face lies on the bed. Its first layers are the tines, each one a flat
+      // cantilever cut free of the board by a slit. The resonator walls grow straight up from the board and then lean
+      // inward at 42 degrees from vertical, closing into a roof with an open sound hole, so nothing needs a support.
+      // Display pose (what the viewport shows): the same model turned over, playing face up.
+      //
+      // Plan coordinates: x across the board, z along the tines. The tines root at z = 0 and run toward -z (toward the
+      // player); the root bar and the rear wall are at z > 0. Loops are [[x, z], ...].
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      // ---------- 2D loops ----------
+      function loopArea(L) {
+        var a = 0, i, p, q;
+        for (i = 0; i < L.length; i++) { p = L[i]; q = L[(i + 1) % L.length]; a += p[0] * q[1] - q[0] * p[1]; }
+        return a;
+      }
+      // Drop repeated and collinear points, so the cap triangulation and the walls share exactly the same vertices.
+      function clean(L) {
+        var out = L.slice(), again = true, i, n, a, b, c;
+        while (again && out.length > 3) {
+          again = false;
+          for (i = 0; i < out.length; i++) {
+            n = out.length; a = out[(i + n - 1) % n]; b = out[i]; c = out[(i + 1) % n];
+            if ((Math.abs(b[0] - a[0]) < 1e-7 && Math.abs(b[1] - a[1]) < 1e-7) ||
+                Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) < 1e-7) {
+              out.splice(i, 1); again = true; break;
+            }
+          }
+        }
+        return out;
+      }
+      function inside(pt, L) {
+        var c = false, i, j, a, b;
+        for (i = 0, j = L.length - 1; i < L.length; j = i++) {
+          a = L[i]; b = L[j];
+          if ((a[1] > pt[1]) !== (b[1] > pt[1]) && pt[0] < (b[0] - a[0]) * (pt[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+        }
+        return c;
+      }
+      // Rounded rectangle about (cx, cz): n + 1 points per corner, counter-clockwise, so the point count never changes with r.
+      function rrectPts(cx, cz, hw, hd, r, n) {
+        r = Math.max(0.05, Math.min(r, hw - 0.01, hd - 0.01));
+        var cs = [[hw - r, hd - r, 0], [-(hw - r), hd - r, 90], [-(hw - r), -(hd - r), 180], [hw - r, -(hd - r), 270]];
+        var pts = [], i, k, a;
+        for (i = 0; i < 4; i++) {
+          for (k = 0; k <= n; k++) {
+            a = (cs[i][2] + (90 * k) / n) * DEG;
+            pts.push([cx + cs[i][0] + r * Math.cos(a), cz + cs[i][1] + r * Math.sin(a)]);
+          }
+        }
+        return pts;
+      }
+
+      // ---------- flat caps and vertical walls ----------
+      // A flat region (outer loop minus holes) at height y. up = true faces +Y.
+      function cap(THREE, o, outer, holes, y, up) {
+        var flat = outer.slice(), i, f, a, b, c, ny;
+        holes.forEach(function (h) { flat = flat.concat(h); });
+        function V(q) { return new THREE.Vector2(q[0], q[1]); }
+        var faces = THREE.ShapeUtils.triangulateShape(outer.map(V), holes.map(function (h) { return h.map(V); }));
+        for (i = 0; i < faces.length; i++) {
+          f = faces[i]; a = flat[f[0]]; b = flat[f[1]]; c = flat[f[2]];
+          ny = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
+          if ((ny > 0) === up) tri(o, [a[0], y, a[1]], [b[0], y, b[1]], [c[0], y, c[1]]);
+          else tri(o, [a[0], y, a[1]], [c[0], y, c[1]], [b[0], y, b[1]]);
+        }
+      }
+      // A vertical band over a loop. solidInside: the material is inside the loop (an outline); false: the loop is a hole.
+      function wall(o, L, y0, y1, solidInside) {
+        var area = loopArea(L), left = solidInside ? area < 0 : area > 0, i, a, b, a0, b0, a1, b1;
+        for (i = 0; i < L.length; i++) {
+          a = L[i]; b = L[(i + 1) % L.length];
+          a0 = [a[0], y0, a[1]]; b0 = [b[0], y0, b[1]]; a1 = [a[0], y1, a[1]]; b1 = [b[0], y1, b[1]];
+          if (left) { tri(o, a0, b0, b1); tri(o, a0, b1, a1); } else { tri(o, a0, b1, b0); tri(o, a0, a1, b1); }
+        }
+      }
+      // A closed prism from a simple loop.
+      function prism(THREE, o, L, y0, y1) {
+        cap(THREE, o, L, [], y1, true);
+        cap(THREE, o, L, [], y0, false);
+        wall(o, L, y0, y1, true);
+      }
+
+      // ---------- note labels: glyphs from the Text Generator's bold block font (SIL OFL 1.1) ----------
+      var CAP = 172, QSEG = 4;
+      var GLYPHS = {
+        'A': [195, 'm134,0l-7,24l-61,0l-7,-24l-56,0l62,172l65,0l62,-172zm78,63l37,0l-18,61l-1,0z'],
+        'B': [195, 'm181,130q0,-32,-29,-40l0,-1q33,-8,33,-43q0,-14,-7,-24q-7,-10,-18,-16q-12,-6,-25,-6l-116,0l0,172l114,0q13,0,24,-5q11,-6,17,-15q7,-10,7,-22zm74,105l38,0q5,0,9,4q4,4,4,10l0,2q0,6,-4,9q-4,4,-9,4l-38,0zm74,40l42,0q5,0,9,4q4,4,4,10l0,2q0,6,-4,10q-4,4,-9,4l-42,0z'],
+        'C': [195, 'm183,101l-52,0q0,15,-8,24q-8,9,-23,9q-16,0,-24,-11q-8,-10,-8,-29l0,-16q0,-18,8,-29q8,-11,24,-11q16,0,24,9q8,8,8,23l51,0q0,-35,-21,-54q-22,-19,-61,-19q-44,0,-67,23q-23,22,-23,66q0,44,23,67q23,22,67,22q38,0,60,-19q22,-19,22,-55z'],
+        'D': [195, 'm183,86q0,-86,-90,-86l-74,0l0,172l74,0q90,0,90,-86zm74,41l18,0q35,0,35,38l0,15q0,37,-35,37l-18,0z'],
+        'E': [181, 'm19,172l148,0l0,-41l-93,0l0,-24l80,0l0,-39l-80,0l0,-27l95,0l0,-41l-150,0z'],
+        'F': [167, 'm19,172l139,0l0,-41l-84,0l0,-30l72,0l0,-39l-72,0l0,-62l-55,0z'],
+        'G': [208, 'm193,110l-53,0q0,11,-10,17q-9,7,-23,7q-19,0,-29,-11q-10,-10,-10,-29l0,-16q0,-19,10,-29q10,-11,29,-11q14,0,23,7q10,6,10,16l-39,0l0,35l92,0l0,-96l-29,0l-5,17q-24,-20,-62,-20q-43,0,-64,22q-22,23,-22,67q0,44,25,66q24,23,69,23q25,0,45,-7q19,-8,31,-23q12,-14,12,-35z'],
+        '0': [167, 'm157,86q0,-43,-17,-66q-16,-23,-56,-23q-41,0,-57,23q-17,23,-17,66q0,43,17,66q16,23,57,23q40,0,56,-23q17,-23,17,-66zm60,99l0,-25q0,-23,5,-33q6,-10,19,-10q13,0,18,10q5,10,5,33l0,25q0,23,-5,32q-5,10,-18,10q-13,0,-19,-10q-5,-10,-5,-32z'],
+        '1': [167, 'm156,39l0,-39l-130,0l0,39l41,0l0,77l-41,0l0,29q17,1,38,9q21,8,36,18l17,0l0,-133z'],
+        '2': [167, 'm153,123q0,-14,-7,-26q-8,-12,-19,-21q-11,-9,-30,-22q-11,-7,-17,-12l75,0l0,-42l-143,0l0,12q0,13,6,24q7,10,18,21q12,10,35,28q18,14,25,22q7,7,7,15q0,7,-5,13q-5,5,-16,5q-11,0,-18,-7q-6,-6,-6,-17l0,-5l-45,0q0,2,0,6q0,27,19,42q19,16,55,16q20,0,35,-6q15,-7,23,-18q8,-12,8,-28z'],
+        '3': [167, 'm151,128q0,-13,-7,-23q-7,-10,-18,-15l0,-1q15,-4,22,-15q8,-11,8,-27q-1,-22,-19,-36q-18,-14,-53,-14q-24,0,-41,7q-16,6,-24,17q-8,12,-8,26l0,5l44,0q0,-21,26,-21q26,0,26,23q0,9,-5,14q-5,4,-13,4l-18,0l0,31l14,0q8,0,13,5q5,4,5,13q0,8,-6,14q-6,6,-16,6q-11,0,-17,-6q-6,-5,-6,-13l-42,0l0,6q0,13,8,24q8,11,24,17q16,6,37,6q20,0,35,-6q16,-6,23,-17q8,-11,8,-24z'],
+        '4': [167, 'm40,72l50,0l0,36q7,11,15,26q8,15,11,25l21,0l0,-87l24,0l0,-37l-24,0l0,-35l-47,0l0,35l-84,0l0,38q13,19,27,47q13,28,21,55l49,0q-2,-13,-12,-32q-10,-20,-25,-39q-14,-19,-26,-32z'],
+        '5': [167, 'm62,130l-2,-26q0,0,5,3q5,3,13,5q8,3,19,3q27,0,43,-16q16,-15,16,-43q0,-16,-8,-30q-9,-13,-25,-21q-16,-8,-37,-8q-37,0,-57,16q-19,16,-19,43l44,0q0,-11,7,-18q7,-6,20,-6q12,0,19,7q7,7,7,18q0,12,-7,19q-7,7,-19,7q-10,0,-15,-3q-4,-3,-7,-6q-2,-3,-2,-4l-40,6l8,96l119,0l0,-42z'],
+        '6': [167, 'm154,117l-45,0l0,2q0,10,-6,16q-6,6,-17,6q-12,0,-19,-8q-6,-8,-6,-22l0,-14q7,6,17,10q10,3,19,3q17,0,31,-6q14,-6,22,-18q8,-12,8,-29q0,-28,-20,-44q-19,-16,-53,-16q-38,0,-56,21q-19,20,-19,64q0,49,18,71q19,22,57,22q31,0,50,-15q19,-15,19,-43zm61,55q0,-11,6,-18q6,-6,18,-6q12,0,18,6q7,6,7,18q0,12,-7,18q-6,7,-18,7q-12,0,-18,-7q-6,-6,-6,-18z'],
+        '7': [167, 'm95,15l0,-15l-55,0q0,34,14,67q15,33,40,62l-83,0l0,43l145,0l0,-23q-28,-35,-45,-67q-16,-32,-16,-67z'],
+        '8': [167, 'm150,124q0,-13,-5,-21q-5,-7,-16,-15l0,-1q14,-8,21,-17q7,-8,7,-23q0,-24,-20,-37q-20,-13,-54,-13q-34,0,-53,13q-20,13,-20,37q0,15,7,23q7,9,21,17l0,1q-11,8,-16,15q-5,8,-5,21q0,16,8,28q9,11,24,17q15,6,34,6q19,0,34,-6q15,-6,24,-17q9,-12,9,-28zm60,122q0,-9,6,-14q7,-4,17,-4q10,0,17,4q7,5,7,14q0,10,-7,15q-6,4,-17,4q-11,0,-17,-4q-6,-5,-6,-15zm60,51q0,-9,6,-15q7,-5,17,-5q11,0,17,5q7,6,7,15q0,10,-7,15q-7,6,-17,6q-10,0,-16,-6q-7,-5,-7,-15z'],
+        '9': [167, 'm157,90q0,-49,-19,-71q-18,-22,-56,-22q-31,0,-50,15q-19,15,-19,43l45,0l0,-2q0,-9,6,-16q6,-6,17,-6q12,0,19,8q6,8,6,22l0,14q-7,-6,-17,-9q-10,-4,-19,-4q-17,0,-31,6q-14,7,-22,18q-8,12,-8,29q0,29,20,44q19,16,53,16q38,0,56,-21q19,-20,19,-64zm57,117q0,-12,7,-18q6,-7,18,-7q12,0,18,6q6,7,6,18q0,12,-6,19q-6,6,-18,6q-12,0,-18,-6q-7,-6,-7,-18z'],
+        '#': [165, 'm160,126l0,-28l-28,0l-7,-31l27,0l0,-27l-34,0l-9,-43l-29,0l9,43l-29,0l-9,-43l-30,0l9,43l-25,0l0,27l32,0l7,31l-27,0l0,28l32,0l11,49l31,0l-12,-49l28,0l11,49l30,0l-11,-49zm66,67l29,0l7,31l-29,0z']
+      };
+      var glyphCache = {};
+      function parseGlyph(d) {
+        var loops = [], cur = null, x = 0, y = 0, op = null, nums = [], re = /([mlqz])|(-?\d+)/g, m;
+        function flush() {
+          var cx, cy, ex, ey, k, s;
+          if (op === 'm') { x = nums[0]; y = nums[1]; cur = [[x, y]]; loops.push(cur); }
+          else if (op === 'l') { x += nums[0]; y += nums[1]; cur.push([x, y]); }
+          else if (op === 'q') {
+            cx = x + nums[0]; cy = y + nums[1]; ex = x + nums[2]; ey = y + nums[3];
+            for (k = 1; k <= QSEG; k++) {
+              s = k / QSEG;
+              cur.push([(1 - s) * (1 - s) * x + 2 * (1 - s) * s * cx + s * s * ex, (1 - s) * (1 - s) * y + 2 * (1 - s) * s * cy + s * s * ey]);
+            }
+            x = ex; y = ey;
+          }
+          nums = [];
+        }
+        while ((m = re.exec(d)) !== null) {
+          if (m[1]) { flush(); op = m[1] === 'z' ? null : m[1]; } else nums.push(parseInt(m[2], 10));
+        }
+        flush();
+        return loops;
+      }
+      // One glyph as shapes { outer, holes } in font units (u across, v up).
+      function glyphShapes(ch) {
+        if (glyphCache[ch]) return glyphCache[ch];
+        var g = GLYPHS[ch], res = { adv: g ? g[0] : 150, shapes: [] };
+        if (g) {
+          var loops = parseGlyph(g[1]).map(clean).filter(function (L) { return L.length >= 3 && Math.abs(loopArea(L)) > 1; });
+          if (loops.length) {
+            var big = loops.reduce(function (a, b) { return Math.abs(loopArea(b)) > Math.abs(loopArea(a)) ? b : a; });
+            var sgn = loopArea(big) > 0 ? 1 : -1, outers = [], holes = [];
+            loops.forEach(function (L) { if (loopArea(L) * sgn > 0) outers.push({ outer: L, holes: [] }); else holes.push(L); });
+            holes.forEach(function (h) {
+              var host = null;
+              outers.forEach(function (o) { if (inside(h[0], o.outer) && (!host || Math.abs(loopArea(o.outer)) < Math.abs(loopArea(host.outer)))) host = o; });
+              if (host) host.holes.push(h);
+            });
+            res.shapes = outers;
+          }
+        }
+        glyphCache[ch] = res;
+        return res;
+      }
+      function textWidth(str, size) {
+        var w = 0, i, sc = size / CAP;
+        for (i = 0; i < str.length; i++) w += (glyphShapes(str.charAt(i)).adv + 10) * sc;
+        return w - 10 * sc;
+      }
+      // A fixed pseudo-random number in -0.5..0.5 from three integers.
+      function jit(a, b, c) { var s = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return s - Math.floor(s) - 0.5; }
+      // Engraving shapes for a string, centred on x0, baseline at z0, reading with +Z as "up" (root side). Each vertex is
+      // nudged by about 3 microns so that no two glyph outlines line up exactly: a triangulator that is handed vertices
+      // in an exact straight line (two letters on one baseline) can leave a gap in the surface.
+      function textShapes(str, x0, z0, size, seed) {
+        var sc = size / CAP, cursor = -textWidth(str, size) / 2, out = [], i, loopId = 0;
+        function map(L) {
+          var id = ++loopId;
+          return clean(L.map(function (q, k) {
+            return [x0 + cursor + q[0] * sc + jit(seed, id, k) * 0.006, z0 + q[1] * sc + jit(seed, id + 50, k) * 0.006];
+          }));
+        }
+        for (i = 0; i < str.length; i++) {
+          var gs = glyphShapes(str.charAt(i));
+          gs.shapes.forEach(function (s) {
+            var outer = map(s.outer);
+            if (outer.length >= 3) out.push({ outer: outer, holes: s.holes.map(map).filter(function (h) { return h.length >= 3; }) });
+          });
+          cursor += (gs.adv + 10) * sc;
+        }
+        return out;
+      }
+
+      // ---------- tuning ----------
+      var NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      var SCALES = [[0, 2, 4, 5, 7, 9, 11], [0, 2, 3, 5, 7, 8, 10], [0, 2, 4, 7, 9], [0, 3, 5, 7, 10], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]];
+      var SCALE_NAMES = ['Major', 'Natural minor', 'Major pentatonic', 'Minor pentatonic', 'Chromatic'];
+      // Speed of sound in printed PLA along the layers: sqrt(E / density) with E = 3.0 GPa, density 1200 kg/m3.
+      var PLA_C = 1581;
+      var ENGRAVE = 0.6, TIP_CHAMFER = 1.0, MIN_TINE = 12;
+      var SLOPE = 0.9; // roof inset per mm of height: 42 degrees from vertical, inside the 45 degree no-support limit
+
+      // The tines left to right: { name, oct, f, L }. L is the free length in mm from Euler-Bernoulli beam theory:
+      // f = 0.16155 * t * c / L^2 for a flat tine of thickness t in a material with speed of sound c.
+      function tuning(p) {
+        var n = Math.round(p.tines), S = SCALES[Math.round(p.scale)], key = Math.round(p.key), notes = [], k, semi, midi, f, L;
+        var c = PLA_C * Math.sqrt(p.stiff / 100);
+        for (k = 0; k < n; k++) {
+          semi = S[k % S.length] + 12 * Math.floor(k / S.length);
+          midi = 12 * (Math.round(p.octave) + 1) + key + semi;
+          f = 440 * Math.pow(2, (midi - 69) / 12);
+          L = 1000 * Math.sqrt(0.16155 * (p.thick / 1000) * c / f);
+          notes.push({ name: NAMES[midi % 12], oct: Math.floor(midi / 12) - 1, f: f, L: Math.max(MIN_TINE, L) });
+        }
+        var pos = new Array(n), mid = Math.floor(n / 2), j;
+        if (Math.round(p.layout) === 1) {
+          for (k = 0; k < n; k++) pos[k] = notes[k];
+        } else {
+          // The traditional layout: lowest note in the middle, then alternate going up: the 2nd, 4th... lowest notes to the
+          // right and the 3rd, 5th... to the left (C major: D6 B5 G5 E5 C5 A4 F4 D4 C4 E4 G4 B4 D5 F5 A5 C6 E6).
+          pos[mid] = notes[0];
+          for (j = 1; j <= mid; j++) pos[mid - j] = notes[2 * j - 1];
+          for (j = 1; j <= n - 1 - mid; j++) pos[mid + j] = notes[2 * j];
+        }
+        return pos;
+      }
+
+      // The comb-shaped cut that frees the tines: a slit between tines (from the root line to just past the longer
+      // neighbour) and a gap past each tip. Returned as a loop of [x, z] with the tines as teeth pointing to -z.
+      function pocketLoop(xc, L, w, g) {
+        var n = xc.length, top = [], bot = [], k, lo, hi, a, b, hS, ch = Math.min(TIP_CHAMFER, w / 4);
+        function zeta(x, s) { return [x, -s]; }
+        for (k = 0; k <= n; k++) {
+          lo = k === 0 ? xc[0] - w / 2 - g : xc[k - 1] + w / 2;
+          hi = k === n ? xc[n - 1] + w / 2 + g : xc[k] - w / 2;
+          hS = Math.max(k > 0 ? L[k - 1] : 0, k < n ? L[k] : 0) + g;
+          top.push(zeta(lo, hS), zeta(hi, hS));
+          if (k < n) { a = xc[k] - w / 2; b = xc[k] + w / 2; top.push(zeta(a, L[k] + g), zeta(b, L[k] + g)); }
+        }
+        top.push(zeta(xc[n - 1] + w / 2 + g, 0));
+        for (k = n; k >= 0; k--) {
+          lo = k === 0 ? xc[0] - w / 2 - g : xc[k - 1] + w / 2;
+          hi = k === n ? xc[n - 1] + w / 2 + g : xc[k] - w / 2;
+          bot.push(zeta(hi, 0), zeta(lo, 0));
+          if (k > 0) {
+            a = xc[k - 1] - w / 2; b = xc[k - 1] + w / 2;
+            bot.push(zeta(b, L[k - 1] - ch), zeta(b - ch, L[k - 1]), zeta(a + ch, L[k - 1]), zeta(a, L[k - 1] - ch));
+          }
+        }
+        return clean(top.concat(bot));
+      }
+
+      // ---------- the model, in print pose ----------
+      var DEFAULTS = { key: 0, scale: 0, octave: 4, tines: 17, layout: 0, labels: 1, labelSize: 3.6,
+        tineW: 5.5, gap: 1.4, thick: 2.4, stiff: 100,
+        wall: 2, hold: 6, hole: 26, corner: 16, margin: 7, barD: 9, barH: 5 };
+      var NA = 8; // points per corner arc minus one
+      var lastTuning = null, lastPitch = 6.7;
+
+      function model(p, api) {
+        var THREE = api.THREE, out = [], i, j, k;
+        var n = Math.round(p.tines), w = p.tineW, g = p.gap, t = p.thick, wl = p.wall, tn = tuning(p);
+        var pitch = w + g, xc = [], L = [], Lmax = 0;
+        for (i = 0; i < n; i++) { xc.push((i - (n - 1) / 2) * pitch); L.push(tn[i].L); Lmax = Math.max(Lmax, tn[i].L); }
+        lastTuning = tn; lastPitch = pitch;
+        var fieldHalf = (n * w + (n + 1) * g) / 2;
+
+        // Labels: placed past the tine tips, each one clear of every slit and of the labels already placed.
+        var labelMode = Math.round(p.labels), shapes = [], placed = [], topLabel = 0, maxW = 2 * pitch - 1.2;
+        if (labelMode > 0) {
+          var size = p.labelSize;
+          for (i = 0; i < n; i++) {
+            var str = tn[i].name + (labelMode === 2 ? tn[i].oct : '');
+            var sz = size, tw = textWidth(str, sz);
+            if (tw > maxW) { sz = sz * maxW / tw; tw = maxW; }
+            var xl = xc[i] - tw / 2, xr = xc[i] + tw / 2, near = 0, zb;
+            for (j = 0; j < n; j++) {
+              if (xc[j] + w / 2 + g > xl && xc[j] - w / 2 - g < xr) near = Math.max(near, L[j]);
+            }
+            zb = near + g + 1;
+            for (k = 0; k < 8; k++) {
+              var moved = false;
+              placed.forEach(function (r) {
+                if (xl < r.xr + 0.6 && xr > r.xl - 0.6 && zb < r.z1 + 0.8 && zb + sz > r.z0 - 0.8) { zb = r.z1 + 0.8; moved = true; }
+              });
+              if (!moved) break;
+            }
+            placed.push({ xl: xl, xr: xr, z0: zb, z1: zb + sz });
+            topLabel = Math.max(topLabel, zb + sz);
+            shapes = shapes.concat(textShapes(str, xc[i], -(zb + sz), sz, i + 1));
+          }
+        }
+
+        // Plan outline and roof.
+        var rail = Math.max(9, topLabel + 1.4 - Lmax - g);
+        var zFin = -(Lmax + g + rail), zo0 = zFin - wl;
+        var zrIn = Math.max(p.barD, Math.min(p.corner, 30)), zo1 = zrIn + wl;
+        var hwi = fieldHalf + p.margin, hwo = hwi + wl, cz = (zo0 + zo1) / 2, hdo = (zo1 - zo0) / 2;
+        var Rc = clamp(p.corner, 2, Math.min(hwo, hdo) - 1);
+        var outline = clean(rrectPts(0, cz, hwo, hdo, Rc, NA));
+
+        // ---- board: the tines and the playing face. One closed surface; the labels are shallow pits in the face. ----
+        var pocket = pocketLoop(xc, L, w, g), d = Math.min(ENGRAVE, t * 0.4), bo = [];
+        cap(THREE, bo, outline, [pocket], t, true);
+        wall(bo, outline, 0, t, true);
+        wall(bo, pocket, 0, t, false);
+        cap(THREE, bo, outline, [pocket].concat(shapes.map(function (s) { return s.outer; })), 0, false);
+        shapes.forEach(function (s) {
+          wall(bo, s.outer, 0, d, false);
+          cap(THREE, bo, s.outer, s.holes, d, false);
+          s.holes.forEach(function (h) { wall(bo, h, 0, d, true); cap(THREE, bo, h, [], 0, false); });
+        });
+        out.push({ name: 'board', positions: new Float32Array(bo), smoothGroup: 'board' });
+
+        // ---- roof geometry ----
+        var cosf = 1 / Math.sqrt(1 + SLOPE * SLOPE), whs = wl / cosf; // horizontal wall thickness on the slope
+        var hold = Math.max(p.hold, 3), y0 = t + hold;
+        var dTopIn = hdo - p.hole / 2, dmax = Math.max(0.6, dTopIn - whs);
+        var y1 = y0 + dmax / SLOPE, yk = y0 - (whs - wl) / SLOPE;
+        var NS = clamp(Math.ceil(dmax / 1.8), 4, 24);
+        function ring(dd, y) {
+          return rrectPts(0, cz, hwo - dd, hdo - dd, Rc - dd, NA).map(function (q) { return [q[0], y, q[1]]; });
+        }
+        var rO = [ring(0, t), ring(0, y0)], rI = [ring(wl, t), ring(wl, yk)], s;
+        for (s = 1; s <= NS; s++) {
+          rO.push(ring(dmax * s / NS, y0 + (y1 - y0) * s / NS));
+          rI.push(ring(wl + (dmax + whs - wl) * s / NS, yk + (y1 - yk) * s / NS));
+        }
+        var bd = [], A, B, a, b, c, e, m = rO[0].length;
+        function strip(R, outward) {
+          for (var r = 0; r < R.length - 1; r++) {
+            for (var q = 0; q < m; q++) {
+              a = R[r][q]; b = R[r][(q + 1) % m]; c = R[r + 1][(q + 1) % m]; e = R[r + 1][q];
+              if (outward) { tri(bd, a, c, b); tri(bd, a, e, c); } else { tri(bd, a, b, c); tri(bd, a, c, e); }
+            }
+          }
+        }
+        strip(rO, true);
+        strip(rI, false);
+        A = rO[rO.length - 1]; B = rI[rI.length - 1];
+        var A0 = rO[0], B0 = rI[0], q2;
+        for (j = 0; j < m; j++) {
+          q2 = (j + 1) % m;
+          tri(bd, A[j], B[q2], A[q2]); tri(bd, A[j], B[j], B[q2]);       // the rim around the sound hole, facing up
+          tri(bd, A0[j], A0[q2], B0[q2]); tri(bd, A0[j], B0[q2], B0[j]); // the foot of the wall, facing down onto the board
+        }
+        out.push({ name: 'body', positions: new Float32Array(bd), smoothGroup: 'body', color: '#8a5a3b' });
+
+        // ---- root bar: a thick bridge across the rear that the tines grow out of ----
+        var zb0 = 0.6, hwm = hwi + wl / 2, hdm = hdo - wl / 2, rb = Math.max(1, Rc - wl / 2);
+        var mid = rrectPts(0, cz, hwm, hdm, rb, NA), barLoop = [[hwm, zb0]];
+        for (i = 0; i <= 2 * NA + 1; i++) barLoop.push(mid[i]);
+        barLoop.push([-hwm, zb0]);
+        var barTop = t + Math.min(p.barH, hold - 1.3), br = [];
+        prism(THREE, br, clean(barLoop), t - 0.8, barTop);
+        out.push({ name: 'bridge', positions: new Float32Array(br), smoothGroup: 'bridge', color: '#8a5a3b' });
+
+        out.height = y1;
+        return out;
+      }
+
+      // The shown pose is the print pose turned over: playing face up, sound hole down. A half turn about X.
+      function flipOver(meshes, H) {
+        return meshes.map(function (m) {
+          var src = m.positions, dst = new Float32Array(src.length), i;
+          for (i = 0; i < src.length; i += 3) { dst[i] = src[i]; dst[i + 1] = H - src[i + 1]; dst[i + 2] = -src[i + 2]; }
+          var r = { name: m.name, positions: dst, smoothGroup: m.smoothGroup };
+          if (m.color) r.color = m.color;
+          return r;
+        });
+      }
+
+      // ---------- hear a tine ----------
+      var audio = null;
+      function pluck(f) {
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          if (!audio) audio = new AC();
+          if (audio.state === 'suspended') audio.resume();
+          var now = audio.currentTime, master = audio.createGain();
+          master.gain.value = 0.3; master.connect(audio.destination);
+          // A tine rings with its fundamental and, much fainter and shorter, its second bending mode at 6.27 times the pitch.
+          [[1, 0.7, 1.8], [6.267, 0.12, 0.25]].forEach(function (mode) {
+            if (f * mode[0] > 12000) return;
+            var o = audio.createOscillator(), gn = audio.createGain();
+            o.type = 'sine'; o.frequency.value = f * mode[0];
+            gn.gain.setValueAtTime(0.0001, now);
+            gn.gain.exponentialRampToValueAtTime(mode[1], now + 0.004);
+            gn.gain.exponentialRampToValueAtTime(0.0001, now + mode[2]);
+            o.connect(gn); gn.connect(master); o.start(now); o.stop(now + mode[2] + 0.05);
+          });
+        } catch (err) { /* no audio here: the model still works */ }
+      }
+
+      // ---------- parameters ----------
+      function sh(param, fn) { param.showIf = fn; return param; }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+      function options(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value, options: names };
+      }
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-120',
+        category: 'MUSIC // INSTRUMENTS',
+        title: 'Kalimba Maker',
+        fileName: 'Kalimba',
+        palette: [
+          { name: 'Maple Wood', color: '#e3b978' }, { name: 'Walnut', color: '#8a5a3b' },
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Phantom Ice', color: '#93c5fd' },
+          { name: 'Lavender Mist', color: '#d8b4fe' }, { name: 'Shadow Black', color: '#334155' }
+        ],
+        partNames: { board: 'Playing board', body: 'Resonator body', bridge: 'Root bar' },
+        parameters: [
+          options('Notes', 'key', 'Key', NAMES, DEFAULTS.key),
+          options('Notes', 'scale', 'Scale', SCALE_NAMES, DEFAULTS.scale),
+          slider('Notes', 'octave', 'Lowest note octave (4 = middle C)', '', 2, 5, 1, DEFAULTS.octave),
+          slider('Notes', 'tines', 'How many tines', '', 5, 21, 1, DEFAULTS.tines),
+          options('Notes', 'layout', 'Order', ['Low in the middle', 'Low to high'], DEFAULTS.layout),
+          options('Notes', 'labels', 'Note labels engraved on the board', ['Off', 'Note names', 'Names and octave'], DEFAULTS.labels),
+          sh(slider('Notes', 'labelSize', 'Label size', ' mm', 3, 6, 0.2, DEFAULTS.labelSize), function (q) { return Math.round(q.labels) > 0; }),
+          slider('Tines', 'tineW', 'Tine width', ' mm', 4, 9, 0.5, DEFAULTS.tineW),
+          slider('Tines', 'gap', 'Slit between tines (under 1.2 mm may fuse at the bed)', ' mm', 0.8, 2, 0.1, DEFAULTS.gap),
+          slider('Tines', 'thick', 'Tine thickness (thicker = longer tines, louder)', ' mm', 1.6, 3.6, 0.2, DEFAULTS.thick),
+          slider('Tines', 'stiff', 'Material stiffness (tines print flat? lower this)', '%', 50, 150, 5, DEFAULTS.stiff),
+          slider('Body', 'wall', 'Wall thickness', ' mm', 1.6, 3.2, 0.4, DEFAULTS.wall),
+          slider('Body', 'hold', 'Straight wall height', ' mm', 4, 30, 1, DEFAULTS.hold),
+          slider('Body', 'hole', 'Sound hole width (smaller = taller roof)', ' mm', 10, 60, 1, DEFAULTS.hole),
+          slider('Body', 'corner', 'Corner roundness', ' mm', 4, 30, 1, DEFAULTS.corner),
+          slider('Body', 'margin', 'Side margin', ' mm', 4, 16, 1, DEFAULTS.margin),
+          slider('Body', 'barD', 'Root bar depth', ' mm', 6, 20, 1, DEFAULTS.barD),
+          slider('Body', 'barH', 'Root bar height', ' mm', 2, 12, 0.5, DEFAULTS.barH)
+        ],
+        presets: [
+          presetOf('Default 17-key C kalimba', {}),
+          presetOf('Pocket 8-key (C pentatonic)', { scale: 2, tines: 8, tineW: 7, margin: 8, hole: 22, labels: 2 }),
+          presetOf('Lullaby 10-key (A minor pentatonic)', { key: 9, scale: 3, tines: 10, tineW: 6.5, octave: 4, labels: 1 }),
+          presetOf('Deep 15-key (C3 bass)', { octave: 3, tines: 15, thick: 3, tineW: 6.5, gap: 1.4, barD: 11, barH: 6 }),
+          presetOf('Chromatic 13-key', { scale: 4, tines: 13, layout: 1, labels: 2 }),
+          presetOf('Stiff PETG 17-key', { stiff: 70, thick: 2.6 })
+        ],
+        mount: function (container) {
+          var note = document.createElement('p');
+          note.className = 'mm-note';
+          note.textContent = 'Click the board in the 3D view to hear a tine. The lengths are worked out from the beam formula for PLA, so print the longest tine, tap it against a tuner app and, if it is flat or sharp, move the stiffness slider (about 12 percent per semitone). Tines are cut free of the board, so nothing needs gluing.';
+          container.appendChild(note);
+        },
+        onPick: function (hit) {
+          if (!hit || !lastTuning || hit.meshName !== 'board') return;
+          var n = lastTuning.length, i = Math.round(hit.point.x / lastPitch + (n - 1) / 2);
+          if (i < 0 || i >= n) return;
+          pluck(lastTuning[i].f);
+        },
+        build: function (p, api) {
+          var meshes = model(p, api);
+          return flipOver(meshes, meshes.height);
+        },
+        printMeshes: function (p, api) {
+          return model(p, api);
+        }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

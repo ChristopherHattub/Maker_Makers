@@ -33,6 +33,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [stamp-maker.md](stamp-maker.md) | The Stamp Maker (slot 115): mirrored relief text and icons on a plate with a one-piece tapered grip, layouts, icon list |
 | [gravity-walker.md](gravity-walker.md) | The Gravity Walker (slot 122): a ramp-walking toy with print-in-place rear legs, the walking simulation and how to retune it |
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
+| [kalimba-maker.md](kalimba-maker.md) | The Kalimba Maker (slot 120): tines cut into the board and tuned from beam theory, support-free roof, print pose vs shown pose |
 | [fidget-spinner.md](fidget-spinner.md) | The Fidget Spinner (slot 114): six outline styles, print-in-place hub or 608 bearing, arm pockets, raised name |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |
 | [zoetrope.md](zoetrope.md) | The Zoetrope (slot 121): slotted drum on a print-in-place pin, picture strip pieces, the four picture sets, how to add one |
