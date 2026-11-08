@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 106,
+    title: 'Console Faceplate',
+    bundle: 'toys',
+    category: 'GAMING // CONSOLE COVERS',
+    thumbnailUrl: 'assets/thumbnails/console-faceplate.svg',
+    programUrl: 'programs/console-faceplate.html',
+    description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 115,
     title: 'Stamp Maker',
     bundle: 'personal',
@@ -933,6 +942,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/horse-builder.svg',
     programUrl: 'programs/horse-builder.html',
     description: 'A horse, pony or unicorn, standing, kneeling or rearing: tune neck, head, legs, mane, tail and face markings. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 108,
+    title: 'Nutcracker',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // FIGURES',
+    thumbnailUrl: 'assets/thumbnails/nutcracker.svg',
+    programUrl: 'programs/nutcracker.html',
+    description: 'A toy-soldier nutcracker standing on a plinth, with a working jaw that prints in place: the chin swings on two pins inside a bowl with a tolerance gap you set, no supports and no gluing. Pick a shako, crown or spike helmet, size the head, mouth, face and hat, and set the moustache and nose. Paint parts in the Color tool and export .STL.'
   }
 ];
 

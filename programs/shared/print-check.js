@@ -143,6 +143,14 @@
             var sx = ix2 + offs[o][0], sz = iz2 + offs[o][1];
             if (sx >= 0 && sz >= 0 && sx < nx && sz < nz && solid[at(sx, iy2 - 1, sz)]) ok = true;
           }
+          // A one-layer air gap (a print-in-place clearance, a thin slit) bridges fine in a slicer, but on this grid it reads as
+          // empty or full depending on where the layers fall, so solid two layers straight below counts as support too.
+          if (!ok && iy2 >= 2) {
+            for (var gz = -1; gz <= 1 && !ok; gz++) for (var gx = -1; gx <= 1 && !ok; gx++) {
+              var tx2 = ix2 + gx, tz2 = iz2 + gz;
+              if (tx2 >= 0 && tz2 >= 0 && tx2 < nx && tz2 < nz && solid[at(tx2, iy2 - 2, tz2)]) ok = true;
+            }
+          }
           if (!ok) { oh[at(ix2, iy2, iz2)] = 1; ohN++; }
         }
       }
