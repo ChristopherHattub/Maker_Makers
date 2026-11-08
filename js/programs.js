@@ -798,6 +798,8 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/marble-run.svg',
     programUrl: 'programs/marble-run.html',
     description: 'A zigzag marble tower: balls roll down sloped tracks, drop through a gap onto the next track and collect in a ramp at the base. Set the marble size (steel or glass), the number of tracks, the width, the slope and the front lip, then open the Simulate tab to drop balls and watch the run work, or click a track to drop one there. Every track has a 45 degree underside, so the tower prints upright with no supports; the rolling is only simulated and untested on a real printer. Paint each track in the Color tool and export .STL.'
+  },
+  {
     slot: 106,
     title: 'Console Faceplate',
     bundle: 'toys',
