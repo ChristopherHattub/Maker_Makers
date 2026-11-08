@@ -27,8 +27,10 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [pin-maker.md](pin-maker.md) | The Pin Maker (slot 103): picture tracing in the browser, rim, hanging hole, stamps |
 | [paper-towel-holder.md](paper-towel-holder.md) | The Paper Towel Holder (slot 104): three mounts, base shapes, rod styles, stamps, split rod |
 | [nutcracker.md](nutcracker.md) | The Nutcracker (slot 108): print-in-place jaw (quarter disc in a concentric bowl on diamond pins), hats, tolerance, how it was checked. |
+| [gravity-walker.md](gravity-walker.md) | The Gravity Walker (slot 122): a ramp-walking toy with print-in-place rear legs, the walking simulation and how to retune it |
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |
+| [gingerbread-house.md](gingerbread-house.md) | The Gingerbread House (slot 113): one-piece hollow house, corbel eaves, pointed openings, no supports |
 | [pet-bowl-housing.md](pet-bowl-housing.md) | The Pet Bowl Housing (slot 112): a holder with a pocket for your own bowl, single or double, outlines, profiles, wall patterns, base, tray, link bar and platform |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
 | [text-generator.md](text-generator.md) | The Text Generator (slot 101): packed OFL fonts, build styles, triangulation, offsets and the checks |

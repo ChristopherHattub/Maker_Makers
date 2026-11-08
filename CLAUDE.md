@@ -28,7 +28,7 @@ GitHub Pages serves the repo root straight from `main` (no workflow, `.nojekyll`
 
 ## Slots
 
-Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker, 106 is the Console Faceplate, 108 is the Nutcracker, 112 is the Pet Bowl Housing. Next free slot: 109 (check open PRs first; 113 and up are free too). Full list: [docs/slot-registry.md](docs/slot-registry.md).
+Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker, 106 is the Console Faceplate, 108 is the Nutcracker, 112 is the Pet Bowl Housing. Next free slot: 109 (check open PRs first; 113 and 122 are taken, see the registry). Full list: [docs/slot-registry.md](docs/slot-registry.md).
 
 ## Adding a generator (checklist)
 
@@ -69,6 +69,7 @@ JS: single quotes, semicolons, 2-space indent, `var`/function style inside gener
 - **Sedan Maker** (slot 105): a toy sedan with print-in-place wheels in round wheel wells, on hidden diamond-section axle pins, plus a Car parts stamp tab. Unprinted; the tolerance, the hidden axle heads and the tire flats are unproven. The round arches read "needs supports" in the print check (a short bridge, recorded in the baseline). [docs/sedan-maker.md](docs/sedan-maker.md).
 - **Console Faceplate** (slot 106): flat decorative covers for Switch / Switch 2 dock, PS5 panel and Xbox Series X front, at fixed sizes. The plate sizes are estimates, not measured on hardware, and nothing is printed. No hologram tile or side-panel render yet. [docs/console-faceplate.md](docs/console-faceplate.md).
 - **Nutcracker** (slot 108): working jaw prints in place (quarter-disc chin in a concentric bowl, diamond pins, 0.35 mm default gap). Unprinted; the gap, the 30° opening and the thin side-hair plates are unproven. [docs/nutcracker.md](docs/nutcracker.md).
+- **Gravity Walker** (slot 122): a toy that walks down a ramp on a body foot and two print-in-place rear legs. Only simulated (`tools/gravity-walker/walk-sim.mjs`), never printed: the hinge clearance, the stops and the slope it really needs (7 to 10 degrees in the simulation) are unproven. The round soles read as overhang in the print check (known, in the baseline). [docs/gravity-walker.md](docs/gravity-walker.md).
 - **Infinity Cube** was dropped from the plan and has no slot; do not look for it.
 - **Hologram tiles are weak for some generators** (thin, flat or low-contrast models read poorly). Retune with `scripts/hologram-config.json` or re-render.
 - Workshop: generator shapes are single-colour and not autosaved. Overpass scan errors are swallowed (a failed scan looks empty). See "Known issues" in [docs/architecture.md](docs/architecture.md).

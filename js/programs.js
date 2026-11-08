@@ -656,6 +656,15 @@ const GENERATORS = [
     description: 'A flat stand-up figure on a slotted base, in a card, arch, shield, hexagon or round token shape, with a raised knight, wizard, rogue or monster, or a blank frame for your own art. Set the size, thickness, border and tab. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 122,
+    title: 'Gravity Walker',
+    bundle: 'toys',
+    category: 'TOYS // ACTION',
+    thumbnailUrl: 'assets/thumbnails/gravity-walker.svg',
+    programUrl: 'programs/gravity-walker.html',
+    description: 'A toy that shuffles down a gentle ramp with no motor or batteries. The body has one fixed foot and two rear legs on print-in-place hinge pins that swing between stops, so it rocks from foot to foot; the ramp, with side rails at the slope you pick, prints in the same file. Choose a duck, robot or cat head, the leg length and the clearance. The legs and ramp print with no supports, but the round soles are shallow arcs, which a slicer lays down like any cylinder lying flat. The walk is checked in a simulation only and nothing has been printed: expect to tune the ramp slope (about 7 to 10 degrees). Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 91,
     title: 'Flexi Dragon',
     bundle: 'flexi',
@@ -798,6 +807,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/console-faceplate.svg',
     programUrl: 'programs/console-faceplate.html',
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 113,
+    title: 'Gingerbread House',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // HOUSES',
+    thumbnailUrl: 'assets/thumbnails/gingerbread-house.svg',
+    programUrl: 'programs/gingerbread-house.html',
+    description: 'A gingerbread house that prints as one piece with nothing to assemble. Set the length, depth, wall height and roof pitch, pick a raised door or open doorway, pointed, diamond or teardrop windows (with a centre bar), tile rows on the roof, a chimney, gumdrops and a snow base with a scalloped edge. It is hollow and open underneath, so it stands over an LED tea light. The eaves sit on 45 degree corbels and every window top is pointed, so it prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 112,

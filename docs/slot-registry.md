@@ -15,10 +15,14 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 105 | Built: Sedan Maker. |
 | 106 | Built: Console Faceplate. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
+| 109-111 | Free (check open PRs first). |
 | 112 | Built: Pet Bowl Housing. |
-| 109-111, 113+ | Free (check open PRs first). Any number works. |
+| 113 | Built: Gingerbread House. |
+| 114-121 | Free (check open PRs first). |
+| 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
+| 123+ | Free (check open PRs first). Any number works. |
 
-Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -129,6 +133,8 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
 | 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
+| 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
+| 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 112 | Pet Bowl Housing | organization | `pet-bowl-housing.html` (holder with a pocket for your own bowl; single or double; outlines, patterns, tray / link bar / platform) |
 
 ## Groups (BUNDLES)
@@ -136,7 +142,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | id | Name | Members |
 | --- | --- | --- |
 | halloween | Halloween | 5 |
-| christmas | Christmas | 6 |
+| christmas | Christmas | 8 |
 | easter | Easter & Spring | 6 |
 | valentines | Valentine's | 2 |
 | thanksgiving | Thanksgiving & Fall | 7 |
@@ -149,7 +155,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
 | organization | Organisation | 3 |
-| toys | Toys & Games | 1 |
+| toys | Toys & Games | 2 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
 | animals | Animals & Creatures | 15 |
