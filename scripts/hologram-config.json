@@ -479,9 +479,26 @@
     "light": 80,
     "stand": true
   },
+  "battery-dispenser": {
+    "hue": 140,
+    "sat": 70,
+    "light": 78
+  },
   "gingerbread-house": {
     "hue": 28,
     "sat": 75,
     "light": 70
+  },
+  "wall-panel": {
+    "hue": 200,
+    "sat": 70,
+    "light": 75,
+    "stand": true
+  },
+  "fidget-spinner": {
+    "hue": 285,
+    "sat": 80,
+    "light": 70,
+    "stand": true
   }
 }

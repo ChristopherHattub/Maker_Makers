@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-110 Energy Saber // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Energy Saber: a collapsible, extendable toy saber printed in one go. The hilt is a hollow handle; the blade is a
+      // nest of round tubes that slide out of it like a telescope. Every tube is printed in place, collapsed, standing
+      // on the bed, with a clearance gap all round.
+      // Y up, millimetres, the saber stands on y = 0 and is centred on the Y axis. Every solid is a closed lathe shell.
+      //
+      // How a tube is caught (radii, from the tip tube outwards, c = clearance, e = catch overlap, w = wall):
+      //   tube k+1 has a collar at its bottom (outer radius f = ro + c + e, 45 degree chamfer on top),
+      //   tube k   has a lip at its top (hole radius h = ro_next + c, 45 degree underside),
+      //   the collar is wider than the hole by e, so it cannot pull out; the tube body slides through the hole.
+      // The hilt is tube 0: a bore, a floor and the same lip. Nothing in the model is a flat bridge or a steep overhang.
+      // Hilt parts tab: click-to-place decorative modules (band, flange, ribs, fins, studs, gem) on the hilt. Every module is
+      // built with 45 degree undersides and sunk into the hilt wall (never into the bore), so it prints without supports.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      var SEG = 96;          // points around every tube
+      var FLOOR = 4;         // mm of solid hilt under the blade tubes
+      var HILT_COLOR = '#3b3f4a', TUBE_COLORS = ['#7fb6e8', '#dbe9f7'], TIP_COLOR = '#f1f5f9';
+      var PART_COLORS = { band: '#c3a6e8', flange: '#f4a259', ribs: '#f6d365', fins: '#ef6f6c', studs: '#f1f5f9', gem: '#a7e3c4' };
+      var parts = [], partType = 'band', lastCtx = null, refreshUI = null;
+      var MAX_SLOPE = 0.9;   // hilt outline may widen by at most this per mm of height (about 42 degrees from vertical)
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function same(a, b) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
+      function tri(o, a, b, c) { if (same(a, b) || same(b, c) || same(c, a)) return; o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t, s;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // A closed solid of revolution about the Y axis from a closed loop of [r, y] points (r >= 0, points on the axis allowed).
+      // Rings share their vertices, so the surface is closed by construction.
+      function revolve(loop) {
+        var P = [], o = [], n = loop.length, i, j, k, i2, row, a, b, c, d, th;
+        for (i = 0; i < n; i++) {
+          row = [];
+          for (j = 0; j < SEG; j++) {
+            th = (j / SEG) * TAU;
+            row.push([loop[i][0] * Math.cos(th), loop[i][1], loop[i][0] * Math.sin(th)]);
+          }
+          P.push(row);
+        }
+        for (i = 0; i < n; i++) {
+          i2 = (i + 1) % n;
+          for (j = 0; j < SEG; j++) {
+            k = (j + 1) % SEG;
+            a = P[i][j]; b = P[i][k]; c = P[i2][k]; d = P[i2][j];
+            tri(o, a, d, c); tri(o, a, c, b);
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // ---------------------------------------------------------------------
+      // Layout: every radius and height, shared by the mesh builder and the tests
+      // ---------------------------------------------------------------------
+      function layout(p) {
+        var n = Math.round(p.segments), c = p.clearance, e = p.catchOverlap, Lb = p.guide;
+        var s = c + e;                                  // radial width of the catch chamfers
+        var tipR = p.bladeD / 2;
+        var w = Math.min(p.wall, tipR - 1.5);
+        var Hmin = 2 * Lb + 2 * s + 4;
+        var H = Math.max(p.segLen, Hmin);               // tube length
+        var y0 = FLOOR + p.gap, yT = y0 + H;            // tubes stand on the hilt floor, a gap above it
+        var ro = [], k;
+        ro[n] = tipR;
+        for (k = n - 1; k >= 1; k--) ro[k] = ro[k + 1] + 2 * c + e + w;
+        var b0 = ro[1] + 2 * c + e;                     // hilt bore
+        var stroke = H - 2 * Lb - e;                    // travel from collapsed to caught
+        return { n: n, c: c, e: e, Lb: Lb, s: s, tipR: tipR, w: w, H: H, y0: y0, yT: yT, ro: ro, b0: b0, h0: ro[1] + c,
+          hiltH: yT, stroke: stroke, ext: clamp(p.extend, 0, 100) / 100 };
+      }
+
+      // Outline of one blade tube as a closed [r, y] loop. k is 1..n; the last tube is the tip.
+      function tubeLoop(L, k, p) {
+        var ro = L.ro[k], b = ro - L.w, f = ro + L.c + L.e, y0 = L.y0 + k * L.stroke * L.ext, yT = y0 + L.H, s = L.s, Lb = L.Lb;
+        var loop = [[b, y0], [f, y0], [f, y0 + Lb], [ro, y0 + Lb + s], [ro, yT]], h, tip = Math.round(p.tip), dh, j, ph, hc;
+        if (k < L.n) {
+          h = L.ro[k + 1] + L.c;
+          loop.push([h, yT], [h, yT - Lb], [b, yT - Lb - s]);
+          return loop;
+        }
+        // tip tube: solid dome on top, a 45 degree cone closes the bore underneath
+        hc = yT - 1;
+        if (tip === 2) {
+          loop.pop(); loop.push([ro, yT - 1.2], [ro - 1.2, yT], [0, yT]);
+        } else {
+          dh = ro * (tip === 1 ? 2.2 : 0.9);
+          for (j = 1; j <= 10; j++) { ph = (j / 10) * Math.PI / 2; loop.push([j === 10 ? 0 : ro * Math.cos(ph), yT + dh * Math.sin(ph)]); }
+        }
+        loop.push([0, hc], [b, hc - b]);
+        return loop;
+      }
+
+      // Hilt outline r(y): a style shape plus grip rings, then a limiter so nothing widens faster than about 42 degrees.
+      function hiltOutline(L, p) {
+        var Hh = L.hiltH, rmin = L.b0 + 2.2, Rg = Math.max(p.gripD / 2, rmin), style = Math.round(p.hilt);
+        var nR = Math.round(p.rings), rd = p.ringDepth, ys = [], i, y, list = [], rings = [], t, r, out = [], prev;
+        var g0 = 0.22 * Hh, g1 = 0.8 * Hh, gap = (g1 - g0) / Math.max(1, nR), yc;
+        for (i = 0; i < nR; i++) { yc = g0 + (i + 0.5) * gap; rings.push(yc); }
+        for (y = 0; y < Hh; y += 1) ys.push(y);
+        ys.push(Hh);
+        rings.forEach(function (yc2) { ys.push(yc2 - rd, yc2, yc2 + rd); });
+        ys.sort(function (a, b) { return a - b; });
+        ys.forEach(function (v) { if (v >= 0 && v <= Hh && (!list.length || v - list[list.length - 1] > 0.05)) list.push(v); });
+        prev = rmin - 1.5;
+        list.forEach(function (yy, idx) {
+          t = yy / Hh;
+          if (style === 0) r = Rg;
+          else if (style === 1) r = Rg - 3.5 * Math.pow(Math.sin(Math.PI * t), 1.5) + 2 * (1 - smoothstep(0, 0.1, t)) + 1.5 * smoothstep(0.88, 1, t);
+          else if (style === 2) r = Rg + (t < 0.2 ? 3 : t < 0.45 ? 1.5 : 0) + (t > 0.9 ? 2.5 : 0);
+          else r = Rg - 1.5 + 5.5 * Math.exp(-Math.pow((t - 0.11) / 0.065, 2)) + 4 * Math.exp(-Math.pow((t - 0.93) / 0.03, 2));
+          rings.forEach(function (yc2) { r += Math.max(0, rd * (1 - Math.abs(yy - yc2) / rd)); });
+          r = Math.max(r, rmin);
+          if (idx === 0) r = Math.min(r, prev);
+          else r = Math.min(r, prev + MAX_SLOPE * (yy - out[idx - 1][1]));
+          prev = r;
+          out.push([r, yy]);
+        });
+        return out;
+      }
+
+      function hiltLoop(L, p, known) {
+        var outline = known || hiltOutline(L, p), loop = [[0, 0]];
+        outline.forEach(function (q) { loop.push(q); });
+        loop.push([L.h0, L.hiltH], [L.h0, L.hiltH - L.Lb], [L.b0, L.hiltH - L.Lb - L.s], [L.b0, FLOOR], [0, FLOOR]);
+        return loop;
+      }
+
+
+      // ---------------------------------------------------------------------
+      // Hilt parts: modules on the hilt outline
+      // ---------------------------------------------------------------------
+      var PART_NAMES = { band: 'Band', flange: 'Flange', ribs: 'Ribs', fins: 'Fins', studs: 'Studs', gem: 'Gem' };
+      var PART_HELP = {
+        band: 'A smooth raised band with 45 degree edges.',
+        flange: 'A collar that flares out, flat on top. Good under a crown or as a guard.',
+        ribs: 'A set of thin rings. Count sets how many.',
+        fins: 'Radial fins around the hilt. Count sets how many.',
+        studs: 'A ring of round studs. Count sets how many.',
+        gem: 'One faceted gem. Tap where you want it.'
+      };
+
+      // Hilt radius at height y, from the outline the last build used.
+      function rAt(ctx, y) {
+        var o = ctx.outline, i;
+        if (y <= o[0][1]) return o[0][0];
+        for (i = 1; i < o.length; i++) {
+          if (y <= o[i][1]) return o[i - 1][0] + (o[i][0] - o[i - 1][0]) * ((y - o[i - 1][1]) / ((o[i][1] - o[i - 1][1]) || 1));
+        }
+        return o[o.length - 1][0];
+      }
+      function inner(ctx, r) { return Math.max(ctx.b0 + 0.8, r - 1.2); }
+
+      // A ring-shaped band from ya to yb: 45 degree foot and shoulder, 'raise' mm proud of the wall.
+      function bandLoop(ctx, ya, yb, raise) {
+        var ra = rAt(ctx, ya), rb = rAt(ctx, yb), ro = Math.max(ra, rb) + raise, rs = (yb - ya + ra + rb) / 2, rin = inner(ctx, Math.min(ra, rb));
+        ro = Math.min(ro, rs);
+        return [[rin, ya], [ra, ya], [ro, ya + (ro - ra)], [ro, yb - (ro - rb)], [rb, yb], [rin, yb]];
+      }
+      function flangeLoop(ctx, ya, yb, raise) {
+        var ra = rAt(ctx, ya), rin = inner(ctx, ra), reach = Math.min(raise, yb - ya - 1);
+        return [[rin, ya], [ra, ya], [ra + reach, ya + reach], [ra + reach, yb], [rin, yb]];
+      }
+      // Point in a radial frame at angle th: t along the wall, u up, c out from the axis.
+      function radial(th, y, t, u, c) {
+        return [Math.cos(th) * c - Math.sin(th) * t, y + u, Math.sin(th) * c + Math.cos(th) * t];
+      }
+      function discRing(th, y, c, r, n, rot) {
+        var o = [], i, a;
+        for (i = 0; i < n; i++) { a = rot + (i / n) * TAU; o.push(radial(th, y, r * Math.cos(a), r * Math.sin(a), c)); }
+        return o;
+      }
+      // Round or faceted stud pointing out of the wall: a plug sunk into the hilt, then 45 degree steps up to the tip.
+      function studShell(ctx, th, y, r0, steps, n) {
+        var rw = Math.min(rAt(ctx, y - r0), rAt(ctx, y - r0 / 2), rAt(ctx, y), rAt(ctx, y + r0 / 2), rAt(ctx, y + r0)), cin = Math.max(ctx.b0 + 0.8, rw - 1.2 - r0 * r0 / (2 * rw)), rings = [discRing(th, y, cin, r0, n, 0), discRing(th, y, rw, r0, n, 0)], c = rw, r = r0;
+        steps.forEach(function (st) { c += st[0]; r = st[1]; rings.push(discRing(th, y, c, r, n, 0)); });
+        return orient(loft(rings));
+      }
+      function loft(rings) {
+        var o = [], n = rings[0].length, i, j, k, a, b, c, d, cA = [0, 0, 0], cB = [0, 0, 0], first = rings[0], last = rings[rings.length - 1];
+        for (j = 0; j < n; j++) { for (k = 0; k < 3; k++) { cA[k] += first[j][k] / n; cB[k] += last[j][k] / n; } }
+        for (i = 0; i < rings.length - 1; i++) {
+          for (j = 0; j < n; j++) {
+            k = (j + 1) % n;
+            a = rings[i][j]; b = rings[i][k]; c = rings[i + 1][k]; d = rings[i + 1][j];
+            tri(o, a, b, c); tri(o, a, c, d);
+          }
+        }
+        for (j = 0; j < n; j++) { k = (j + 1) % n; tri(o, cB, last[j], last[k]); tri(o, cA, first[k], first[j]); }
+        return orient(new Float32Array(o));
+      }
+      function finShell(ctx, th, y, L, reach, tt) {
+        var yb = y - (reach + L) / 2, rw = rAt(ctx, yb), cin = Math.max(ctx.b0 + 0.8, rw - 1.5);
+        var poly = [[cin, yb], [rw, yb], [rw + reach, yb + reach], [rw + reach, yb + reach + L], [cin, yb + reach + L]];
+        var ring = function (t) { return poly.map(function (q) { return radial(th, 0, t, q[1], q[0]); }); };
+        return loft([ring(-tt / 2), ring(tt / 2)]);
+      }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // The shells of one placed part, as a list of Float32Arrays.
+      function partShells(st, ctx) {
+        var out = [], n = Math.max(1, Math.round(st.count)), i, th, y = st.y, s = st.size, rs = st.raise, pitch, half, r0, r1, L, reach;
+        if (st.type === 'band') {
+          out.push(revolve(bandLoop(ctx, y - s / 2, y + s / 2, rs)));
+        } else if (st.type === 'flange') {
+          out.push(revolve(flangeLoop(ctx, y - s / 2, y + s / 2, rs)));
+        } else if (st.type === 'ribs') {
+          n = Math.min(n, Math.max(1, Math.floor(s / 1.2)));
+          pitch = s / n;
+          for (i = 0; i < n; i++) {
+            half = Math.min(pitch / 2 - 0.15, rs + 0.2);   // a 0.3 mm gap between beads, so no two beads share an edge
+            out.push(revolve(bandLoop(ctx, y - s / 2 + i * pitch + (pitch / 2 - half), y - s / 2 + i * pitch + (pitch / 2 + half), half)));
+          }
+        } else if (st.type === 'fins') {
+          reach = Math.max(2, rs * 2.5); L = Math.max(2, s);
+          for (i = 0; i < n; i++) out.push(finShell(ctx, st.ang + (i / n) * TAU, y, L, reach, Math.max(1.6, s * 0.1)));
+        } else if (st.type === 'studs') {
+          r0 = Math.max(1.6, s * 0.3); r1 = Math.max(0.5, r0 - rs); 
+          for (i = 0; i < n; i++) out.push(studShell(ctx, st.ang + (i / n) * TAU, y, r0, [[r0 - r1, r1]], 14));
+        } else {
+          r0 = Math.max(2, s * 0.4);
+          out.push(studShell(ctx, st.ang, y, r0, [[0.3 * r0, 0.7 * r0], [0.45 * r0, 0.25 * r0]], 6));
+        }
+        return out;
+      }
+      // Keep a part inside the hilt's height so nothing hangs off the top or under the bed.
+      function span(st) {
+        var s = st.size, rs = st.raise;
+        if (st.type === 'fins') return Math.max(2, s) + Math.max(2, rs * 2.5);
+        if (st.type === 'studs') return 2 * Math.max(1.6, s * 0.3);
+        if (st.type === 'gem') return 2 * Math.max(2, s * 0.4);
+        return s;
+      }
+      function makePart(type, y, ang, p, ctx) {
+        var st = { type: type, size: p.decoSize, raise: p.decoRaise, count: p.decoCount, y: y, ang: ang };
+        var h = span(st) / 2 + 0.4;
+        st.y = clamp(y, h, Math.max(h, ctx.Hh - h));
+        return st;
+      }
+      function newPart(hit, p, ctx) { return makePart(partType, hit.point.y, Math.atan2(hit.point.z, hit.point.x), p, ctx); }
+      var PART_SURFACES = { hilt: 1, band: 1, flange: 1, ribs: 1, fins: 1, studs: 1, gem: 1 };
+
+      function build(p) {
+        var L = layout(p), meshes = [], k, outline = hiltOutline(L, p);
+        lastCtx = { outline: outline, b0: L.b0, Hh: L.hiltH };
+        meshes.push({ name: 'hilt', positions: revolve(hiltLoop(L, p, outline)), smoothGroup: 'hilt', color: HILT_COLOR, singlePart: true });
+        parts.forEach(function (st) {
+          var shells = partShells(st, lastCtx);
+          if (shells.length) meshes.push({ name: st.type, positions: concat(shells), color: PART_COLORS[st.type], singlePart: true });
+        });
+        for (k = 1; k <= L.n; k++) {
+          meshes.push({ name: k === L.n ? 'tip' : 'seg' + k, positions: revolve(tubeLoop(L, k, p)), smoothGroup: k === L.n ? 'tip' : 'seg' + k,
+            color: k === L.n ? TIP_COLOR : TUBE_COLORS[(k - 1) % 2], singlePart: true });
+        }
+        if (refreshUI) refreshUI();
+        return meshes;
+      }
+
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      var DEFAULTS = {
+        segments: 3, segLen: 70, bladeD: 11, wall: 1.2, tip: 0,
+        clearance: 0.35, catchOverlap: 1.2, guide: 6, gap: 0.4,
+        hilt: 0, gripD: 36, rings: 5, ringDepth: 1.2, extend: 0,
+        decoSize: 8, decoRaise: 1.6, decoCount: 8
+      };
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-110',
+        category: 'TOYS // COSPLAY',
+        title: 'Energy Saber',
+        fileName: 'Energy_Saber',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Plasma Blue', color: '#7fb6e8' },
+          { name: 'Ember Orange', color: '#f4a259' }, { name: 'Mint Glow', color: '#a7e3c4' },
+          { name: 'Violet Haze', color: '#c3a6e8' }, { name: 'Cherry Red', color: '#ef6f6c' },
+          { name: 'Charcoal', color: '#3b3f4a' }, { name: 'Sunny Yellow', color: '#f6d365' }
+        ],
+        defaultColor: '#7fb6e8',
+        // The tubes hover a deliberate 0.2 to 0.5 mm over the hilt floor (print in place); the voxel check cannot resolve that gap.
+        printCheckOptions: { bridgeGap: 0.8 },
+        partNames: { hilt: 'Hilt', seg1: 'Blade tube 1', seg2: 'Blade tube 2', seg3: 'Blade tube 3', seg4: 'Blade tube 4', tip: 'Blade tip tube',
+          band: 'Hilt band', flange: 'Hilt flange', ribs: 'Hilt ribs', fins: 'Hilt fins', studs: 'Hilt studs', gem: 'Hilt gem' },
+        parameters: [
+          slider('Blade', 'segments', 'Blade tubes (more = longer reach)', '', 2, 5, 1, DEFAULTS.segments),
+          slider('Blade', 'segLen', 'Tube length', ' mm', 45, 110, 1, DEFAULTS.segLen),
+          slider('Blade', 'bladeD', 'Blade width (tip tube)', ' mm', 8, 20, 1, DEFAULTS.bladeD),
+          slider('Blade', 'wall', 'Tube wall', ' mm', 1.2, 2.4, 0.2, DEFAULTS.wall),
+          choice('Blade', 'tip', 'Blade tip', ['Rounded', 'Bullet', 'Flat'], DEFAULTS.tip),
+          choice('Hilt', 'hilt', 'Hilt style', ['Pillar', 'Spindle', 'Tiered', 'Orbit'], DEFAULTS.hilt),
+          slider('Hilt', 'gripD', 'Grip width (never thinner than the blade fits)', ' mm', 28, 70, 1, DEFAULTS.gripD),
+          slider('Hilt', 'rings', 'Grip rings', '', 0, 8, 1, DEFAULTS.rings),
+          slider('Hilt', 'ringDepth', 'Ring depth', ' mm', 0.6, 2, 0.2, DEFAULTS.ringDepth),
+          slider('Print fit', 'clearance', 'Slide clearance (sides)', ' mm', 0.2, 0.6, 0.05, DEFAULTS.clearance),
+          slider('Print fit', 'catchOverlap', 'Catch overlap (stops tube pulling out)', ' mm', 0.8, 2, 0.1, DEFAULTS.catchOverlap),
+          slider('Print fit', 'guide', 'Guide length (longer = stiffer blade)', ' mm', 4, 10, 1, DEFAULTS.guide),
+          slider('Print fit', 'gap', 'Gap above hilt floor (2 layers)', ' mm', 0.2, 0.5, 0.05, DEFAULTS.gap),
+          slider('Preview', 'extend', 'Extend (preview only, print at 0)', '%', 0, 100, 1, DEFAULTS.extend),
+          { group: 'New part', tab: 'decor', key: 'decoSize', label: 'Part size', unit: ' mm', min: 4, max: 30, step: 1, value: DEFAULTS.decoSize },
+          { group: 'New part', tab: 'decor', key: 'decoRaise', label: 'Part height (how far it stands out)', unit: ' mm', min: 0.8, max: 4, step: 0.2, value: DEFAULTS.decoRaise },
+          { group: 'New part', tab: 'decor', key: 'decoCount', label: 'Count (ribs, fins, studs)', unit: '', min: 2, max: 16, step: 1, value: DEFAULTS.decoCount }
+        ],
+        presets: [
+          presetOf('Default saber', {}),
+          presetOf('Pocket saber', { segments: 3, segLen: 50, bladeD: 9, gripD: 32, rings: 3 }),
+          presetOf('Long reach', { segments: 5, segLen: 80, bladeD: 10, gripD: 50, hilt: 2, rings: 4 }),
+          presetOf('Spindle hilt', { hilt: 1, bladeD: 12, tip: 1 }),
+          presetOf('Orbit hilt', { hilt: 3, segments: 4, tip: 2, rings: 3 }),
+          presetOf('Tight fit', { clearance: 0.25 })
+        ],
+        tabs: [{
+          id: 'decor',
+          label: 'Hilt parts',
+          hint: 'Tap the hilt to place the part',
+          mount: function (container, api) {
+            var h = function (tag, attrs, text) {
+              var node = document.createElement(tag);
+              Object.keys(attrs || {}).forEach(function (k) {
+                if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+                else node.setAttribute(k, attrs[k]);
+              });
+              if (text) node.textContent = text;
+              return node;
+            };
+            container.appendChild(h('h3', { class: 'mm-group-title' }, 'Part (tap the hilt to place)'));
+            var chips = h('div', { class: 'mm-chips' }), buttons = {}, help = h('p', { class: 'mm-note' }, PART_HELP[partType]);
+            Object.keys(PART_NAMES).forEach(function (type) {
+              var btn = h('button', { class: 'mm-chip', type: 'button', 'aria-pressed': String(type === partType), onclick: function () {
+                partType = type;
+                help.textContent = PART_HELP[type];
+                Object.keys(buttons).forEach(function (k) { buttons[k].setAttribute('aria-pressed', String(k === type)); });
+              } }, PART_NAMES[type]);
+              buttons[type] = btn;
+              chips.appendChild(btn);
+            });
+            container.appendChild(chips);
+            container.appendChild(help);
+            container.appendChild(h('p', { class: 'mm-note' }, 'Parts sit at the height you tap and stay there when sliders change. Each part is its own colour in the Color tool.'));
+            var count = h('p', { class: 'mm-note' }, '');
+            var sample = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!lastCtx) return;
+              var Hh = lastCtx.Hh, add = function (type, y, ang, over) {
+                var st = makePart(type, y, ang, api.params, lastCtx);
+                Object.keys(over || {}).forEach(function (k) { st[k] = over[k]; });
+                parts.push(st);
+              };
+              add('flange', Hh - 6, 0, { size: 6 }); add('band', Hh * 0.2, 0, { size: 6 }); add('ribs', Hh * 0.45, 0, { size: 12, count: 3 });
+              add('studs', Hh * 0.7, 0, { size: 7, count: 8 }); add('gem', Hh * 0.2 + 12, 0.4, { size: 9 });
+              api.rebuild();
+            } }, 'Add a sample set');
+            var undo = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!parts.length) return;
+              parts.pop();
+              api.rebuild();
+            } }, 'Undo last part');
+            var clear = h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+              if (!parts.length) return;
+              parts = [];
+              api.rebuild();
+            } }, 'Clear parts');
+            var row = h('div', { class: 'mm-export-row' });
+            row.appendChild(sample);
+            row.appendChild(undo);
+            row.appendChild(clear);
+            container.appendChild(count);
+            container.appendChild(row);
+            refreshUI = function () {
+              count.textContent = parts.length + (parts.length === 1 ? ' part placed' : ' parts placed');
+              undo.disabled = clear.disabled = parts.length === 0;
+            };
+            refreshUI();
+          },
+          onHover: function (hit, api) {
+            if (!hit || !PART_SURFACES[hit.meshName] || !lastCtx) { api.setPreview(null); return; }
+            api.setPreview({ positions: concat(partShells(newPart(hit, api.params, lastCtx), lastCtx)) });
+          },
+          onPick: function (hit, api) {
+            if (!hit || !PART_SURFACES[hit.meshName] || !lastCtx) { api.toast('Tap the hilt (the handle at the bottom) to place a part'); return; }
+            parts.push(newPart(hit, api.params, lastCtx));
+            api.rebuild();
+          }
+        }],
+        embedState: { get: function () { return parts; }, set: function (v) { parts = v || []; } },
+        // check-mesh.mjs: one of every part on the hilt, so the mesh and print checks cover them
+        testSetup: function (params) {
+          var L = layout(params), ctx = { outline: hiltOutline(L, params), b0: L.b0, Hh: L.hiltH }, Hh = L.hiltH;
+          parts = [['flange', Hh - 6, 0], ['band', Hh * 0.2, 0], ['ribs', Hh * 0.45, 0], ['studs', Hh * 0.7, 0], ['gem', Hh * 0.3, 0.4], ['fins', Hh * 0.55, 0.2]].map(function (q) {
+            return makePart(q[0], q[1], q[2], params, ctx);
+          });
+        },
+        // Used by the printability test: the telescoping clearances of every tube pair (see tools in docs/energy-saber.md).
+        layout: layout,
+        tubeLoop: tubeLoop,
+        hiltLoop: hiltLoop,
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
