@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 110,
+    title: 'Energy Saber',
+    bundle: 'toys',
+    category: 'TOYS // COSPLAY',
+    thumbnailUrl: 'assets/thumbnails/energy-saber.svg',
+    programUrl: 'programs/energy-saber.html',
+    description: 'A collapsible toy saber that extends like a telescope. A hollow hilt (pillar, spindle, tiered or orbit style, with grip rings) holds two to five nested blade tubes that print in place, collapsed, with a slide clearance all round and a 45 degree catch that stops each tube pulling out. Set tube count and length, blade width and tip, grip width and the print fit; a preview slider shows it extended. No supports; the clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',

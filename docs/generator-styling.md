@@ -88,7 +88,7 @@ These are read by the engine but only a few generators use them. Reach for them 
 | `extrasTitle` | Heading of the accordion section that holds the `mount()` extras (default "Stamps & tools"). |
 | `embedState` | `{ get(), set(state) }` for state that lives outside `parameters`; sent to and restored from the Workshop ([Workshop embed](#workshop-embed)). |
 | `sculpt` | `false` opts out of the Sculpt tab; an object customises its pieces ([Sculpt tab](#sculpt-tab-experimental-cfgsculpt)). Ignored when `printMeshes` is set or in the Workshop embed. |
-| `printCheck`, `printCheckOptions` | `printCheck: false` hides the print-check chip; `printCheckOptions` is `{ minWall, cell }`. |
+| `printCheck`, `printCheckOptions` | `printCheck: false` hides the print-check chip; `printCheckOptions` is `{ minWall, cell, bridgeGap }` (`bridgeGap` in mm: a solid that far straight below still counts as support, for deliberate print-in-place gaps; default 0). |
 | `customStage` | Makes the renderer transparent (no navy background, no plate or grid) so the generator draws its own backdrop with `onStage`. Used by Gift Box 2.0, Snowman 2.0 (Ornament Stacker) and Pottery Wheel. |
 | `onStage(env)` | Called once after the scene exists. `env` has `THREE`, `scene`, `camera`, `renderer`, `controls`, `hemi`, `key`, `rim`, `plateMesh`, `grid`, `container` and `modelGroup`. |
 | `onFrame()` | Called every animation frame before the render, for turntables and other live effects. |
@@ -226,7 +226,7 @@ Every generator page gets a small chip at the bottom left of the 3D view, run by
 | Overhang | Solid with nothing under it within about 50° from vertical (a 45° slope passes, 60° fails). Sags or strands without supports. |
 | Thin wall | Features thinner than 0.8 mm, which a 0.4 mm nozzle may skip. |
 
-The chip is green ("No supports needed"), amber (warnings only) or red ("Needs supports"). Clicking it lists the problems, and red dots in the 3D view mark where. It is an estimate from the mesh, not a guarantee, and it never blocks an export. A generator can opt out with `printCheck: false` or tune it with `printCheckOptions` (`{ minWall, cell }`). `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` runs the same check after the watertight test (`--strict` fails on errors), so use it on defaults, presets and slider extremes. The check ignores the Workshop embed. On the page it runs in a background worker, so a big model does not freeze the editor; if a worker cannot start, it runs on the page.
+The chip is green ("No supports needed"), amber (warnings only) or red ("Needs supports"). Clicking it lists the problems, and red dots in the 3D view mark where. It is an estimate from the mesh, not a guarantee, and it never blocks an export. A generator can opt out with `printCheck: false` or tune it with `printCheckOptions` (`{ minWall, cell, bridgeGap }`). `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` runs the same check after the watertight test (`--strict` fails on errors), so use it on defaults, presets and slider extremes. The check ignores the Workshop embed. On the page it runs in a background worker, so a big model does not freeze the editor; if a worker cannot start, it runs on the page.
 
 ### Sculpt tab (experimental, `cfg.sculpt`)
 
