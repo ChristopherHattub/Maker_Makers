@@ -13,12 +13,43 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
+| 119 | Built: Headphone & Controller Stand. |
+| 114 | Built: Fidget Spinner (`fidget-spinner.html`, fidgets). |
 | 106 | Built: Console Faceplate. |
+| 121 | Built: Zoetrope (slots 106-120 are being built in other open pull requests). |
+| 106+ | Free. Any number works. |
+| 107 | Built: Holiday Tree Topper. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
 | 118 | Built: Self-Watering Planter. |
 | 109+ | Free (check open PRs first). Any number works. |
 
 Total built: 101 generators in 21 groups . Each generator's `code` in its config (`MM-00N`) matches its slot number.
+| 109-122 | Free (check open PRs first); other generator branches are claiming slots here. |
+| 123 | Built: Bird Feeder (three-part kit, no supports). |
+| 124+ | Free. Any number works. |
+
+Total built: 101 generators in 21 groups (garden holds the Bird Feeder). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+| 109+ | Free except 119 (check open PRs first). Any number works. |
+| 116 | Built: Wall Panel Maker. |
+| 109+ | Free (check open PRs first). Any number works. |
+| 115 | Built: Stamp Maker. |
+| 109-114, 116+ | Free (check open PRs first). Any number works. |
+| 109-111 | Free (check open PRs first). |
+| 112 | Built: Pet Bowl Housing. |
+| 109 | Built: Marble Run. |
+| 110+ | Free (check open PRs first). Any number works. |
+| 110 | Built: Energy Saber. |
+| 111+ | Free (check open PRs first). Any number works. |
+| 109-112 | Free (check open PRs first). |
+| 113 | Built: Gingerbread House. |
+| 114-116 | Free (check open PRs first). |
+| 117 | Built: Cable Organizer. |
+| 118-121 | Free (check open PRs first). |
+| 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
+| 123+ | Free (check open PRs first). Any number works. |
+
+Total built: 104 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -127,16 +158,30 @@ Total built: 101 generators in 21 groups . Each generator's `code` in its config
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 119 | Headphone & Controller Stand | organization | `headphone-controller-stand.html` (desk and wall headphone stands, controller rack and shelf; Console Faceplate designs) |
+| 114 | Fidget Spinner | fidgets | `fidget-spinner.html` (six styles; print-in-place hub or 608 bearing; arm pockets; raised name) |
 | 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
+| 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
+| 107 | Holiday Tree Topper | christmas | `holiday-tree-topper.html` (faceted star, heart or gem on a print-in-place spinning fluted bell and socket) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
 | 118 | Self-Watering Planter | garden | `self-watering-planter.html` (pot, wicking insert and saucer printed in place) |
+| 116 | Wall Panel Maker | decor | `wall-panel.html` (text panel; Elements tab with drag-and-drop print-in-place checkboxes, sliders, progress bars, dials) |
+| 115 | Stamp Maker | personal | `stamp-maker.html` (mirrored relief text + 18 icons, 5 layouts, one-piece tapered grip) |
+| 111 | Battery Dispenser | organization | `battery-dispenser.html` (AA and AAA gravity stacks, pull one and the next drops; one part, no supports) |
+| 109 | Marble Run | toys | `marble-run.html` (zigzag marble tower; Simulate tab drops balls) |
+| 110 | Energy Saber | toys | `energy-saber.html` (telescoping print-in-place blade tubes; hilt styles) |
+| 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
+| 117 | Cable Organizer | organization | `cable-organizer.html` (desk edge clip, under-desk tray, clip strip; slot count and cable thickness) |
+| 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
+| 112 | Pet Bowl Housing | organization | `pet-bowl-housing.html` (holder with a pocket for your own bowl; single or double; outlines, patterns, tray / link bar / platform) |
 
 ## Groups (BUNDLES)
 
 | id | Name | Members |
 | --- | --- | --- |
 | halloween | Halloween | 5 |
-| christmas | Christmas | 6 |
+| christmas | Christmas | 8 |
 | easter | Easter & Spring | 6 |
 | valentines | Valentine's | 2 |
 | thanksgiving | Thanksgiving & Fall | 7 |
@@ -144,12 +189,16 @@ Total built: 101 generators in 21 groups . Each generator's `code` in its config
 | birthday | Birthdays | 7 |
 | stpatricks | St. Patrick's Day | 4 |
 | july4 | Fourth of July | 2 |
-| fidgets | Fidgets & Clickers | 9 |
+| fidgets | Fidgets & Clickers | 10 |
 | personal | Personalised | 2 |
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
+| organization | Organisation | 4 |
 | organization | Organisation | 3 |
 | toys | Toys & Games | 1 |
+| garden | Garden | 1 |
+| toys | Toys & Games | 3 |
+| toys | Toys & Games | 2 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
 | animals | Animals & Creatures | 15 |
