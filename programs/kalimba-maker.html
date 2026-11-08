@@ -215,14 +215,15 @@
           L = 1000 * Math.sqrt(0.16155 * (p.thick / 1000) * c / f);
           notes.push({ name: NAMES[midi % 12], oct: Math.floor(midi / 12) - 1, f: f, L: Math.max(MIN_TINE, L) });
         }
-        var pos = new Array(n), mid = Math.floor((n - 1) / 2), j;
+        var pos = new Array(n), mid = Math.floor(n / 2), j;
         if (Math.round(p.layout) === 1) {
           for (k = 0; k < n; k++) pos[k] = notes[k];
         } else {
-          // The traditional layout: lowest note in the middle, then alternate right and left going up.
+          // The traditional layout: lowest note in the middle, then alternate going up: the 2nd, 4th... lowest notes to the
+          // right and the 3rd, 5th... to the left (C major: D6 B5 G5 E5 C5 A4 F4 D4 C4 E4 G4 B4 D5 F5 A5 C6 E6).
           pos[mid] = notes[0];
-          for (j = 1; j <= n - 1 - mid; j++) pos[mid + j] = notes[2 * j - 1];
-          for (j = 1; j <= mid; j++) pos[mid - j] = notes[2 * j];
+          for (j = 1; j <= mid; j++) pos[mid - j] = notes[2 * j - 1];
+          for (j = 1; j <= n - 1 - mid; j++) pos[mid + j] = notes[2 * j];
         }
         return pos;
       }

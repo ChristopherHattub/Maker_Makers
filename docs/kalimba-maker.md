@@ -18,7 +18,7 @@ A thumb piano, `programs/kalimba-maker.html`, in the Toys & Games group. The tin
 
 A flat tine of thickness `t` and free length `L` rings at `f = 0.16155 * t * c / L^2` (Euler-Bernoulli cantilever, first mode), with `c = sqrt(E / density)`. The page uses E = 3.0 GPa and density 1200 kg/m3 for printed PLA along the layers (`PLA_C` = 1581 m/s), scaled by the **Material stiffness** slider (L grows with E^(1/4); pitch with E^(1/2), so a tine that prints a semitone flat needs the slider about 12 percent lower). That slider is the calibration: print, tap the longest tine against a tuner app, adjust, reprint. Tine length is clamped to 12 mm.
 
-Order: the traditional layout puts the lowest note in the middle and alternates right and left going up (note k goes to the right when k is odd, left when even); "Low to high" puts them in order left to right. Scales are major, natural minor, major and minor pentatonic and chromatic, from any key and a start octave.
+Order: the traditional layout puts the lowest note in the middle and alternates right and left going up (the 2nd, 4th, 6th... lowest notes go to the right and the 3rd, 5th, 7th... to the left, as on a C major 17-key: D6 B5 G5 E5 C5 A4 F4 D4 C4 E4 G4 B4 D5 F5 A5 C6 E6); "Low to high" puts them in order left to right. Scales are major, natural minor, major and minor pentatonic and chromatic, from any key and a start octave.
 
 Click the board in the Parametric tab to hear the nearest tine (`onPick`, Web Audio, generated in the browser): a sine at the ideal pitch plus a faint, short second mode at 6.27 times the pitch. It plays the formula's note, not the printed one.
 
