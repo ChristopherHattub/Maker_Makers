@@ -809,6 +809,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 110,
+    title: 'Energy Saber',
+    bundle: 'toys',
+    category: 'TOYS // COSPLAY',
+    thumbnailUrl: 'assets/thumbnails/energy-saber.svg',
+    programUrl: 'programs/energy-saber.html',
+    description: 'A collapsible toy saber that extends like a telescope. A hollow hilt (pillar, spindle, tiered or orbit style, with grip rings) holds two to five nested blade tubes that print in place, collapsed, with a slide clearance all round and a 45 degree catch that stops each tube pulling out. Set tube count and length, blade width and tip, grip width and the print fit; a preview slider shows it extended, and a Hilt parts tab lets you tap bands, flanges, ribs, fins, studs and gems onto the hilt. No supports; the clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 113,
     title: 'Gingerbread House',
     bundle: 'christmas',

@@ -15,6 +15,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 105 | Built: Sedan Maker. |
 | 106 | Built: Console Faceplate. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
+| 110 | Built: Energy Saber. |
+| 111+ | Free (check open PRs first). Any number works. |
 | 109-112 | Free (check open PRs first). |
 | 113 | Built: Gingerbread House. |
 | 114-121 | Free (check open PRs first). |
@@ -132,6 +134,7 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
 | 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
+| 110 | Energy Saber | toys | `energy-saber.html` (telescoping print-in-place blade tubes; hilt styles) |
 | 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 
