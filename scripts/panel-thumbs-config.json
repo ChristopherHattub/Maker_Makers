@@ -731,6 +731,16 @@
   "yaw": 35,
   "elev": 22
  },
+ "battery-dispenser": {
+  "colors": {
+   "body": "#7bd88f",
+   "sleeve": "#f1f5f9",
+   "terminal": "#fdba74",
+   "label": "#334155"
+  },
+  "yaw": 35,
+  "elev": 22
+ },
  "gingerbread-house": {
   "colors": {
    "walls": "#c98a55",

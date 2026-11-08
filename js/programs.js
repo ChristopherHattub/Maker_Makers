@@ -818,6 +818,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 111,
+    title: 'Battery Dispenser',
+    bundle: 'organization',
+    category: 'HOME // ORGANISERS',
+    thumbnailUrl: 'assets/thumbnails/battery-dispenser.svg',
+    programUrl: 'programs/battery-dispenser.html',
+    description: 'A battery-shaped storage block with two slots on top, one for AA and one for AAA. Each slot feeds a gravity stack lying on its side; the bottom battery rolls down a ramp and rests against a small lip, half out of the front. Lift it over the lip and pull, and the stack drops the next one into place. Set the stack height, fit clearance, lip height, wall, divider, sleeve band and terminal nub. The front windows are arches, so it prints as one part with no supports and no moving pieces; battery clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 107,
     title: 'Holiday Tree Topper',
     bundle: 'christmas',
