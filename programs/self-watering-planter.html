@@ -196,13 +196,13 @@
             pr = Math.max(r0 + 4, Rmax * outlineAt(Math.round(p.outline), ysList[k] / H, bw));
             R[k] = k === 0 ? r0 : Math.min(pr, R[k - 1] + (ysList[k] - ysList[k - 1]) * SLOPE);
           }
-          // the wall may not narrow faster than 45 degrees going up either, so the collar under the rim can always be a 45 degree slope
-          for (k = ysList.length - 2; k > 0; k--) R[k] = Math.min(R[k], R[k + 1] + (ysList[k + 1] - ysList[k]) * SLOPE);
+          // the wall may not narrow faster than 45 degrees going up faster than 0.6 mm per mm either, so the collar under the rim can always be a 45 degree slope
+          for (k = ysList.length - 2; k > 0; k--) R[k] = Math.min(R[k], R[k + 1] + (ysList[k + 1] - ysList[k]) * 0.6);
           return R;
         }
         var fine = linspace(0, H, 300), Rfine = baseOn(fine);
         var yoWant = yf + p.level;
-        var collarBottom = H - 22;
+        var collarBottom = H - 28;
         var k0 = 0;
         while (k0 < fine.length - 1 && fine[k0] < yoWant) k0++;
         var Ro = Rfine[k0];
@@ -234,11 +234,11 @@
         d.ys0 = H - d.seatH;                                 // seat starts
         d.yn = d.ys0 - 1;                                    // neck bottom
         // the collar underside leans out at 45 degrees from the neck until it meets the wall
-        d.kCol = 0; d.yCol = d.yn - 16; d.rCol = d.Rw[0];
+        d.kCol = 0; d.yCol = d.yn - 22; d.rCol = d.Rw[0];
         for (k = K - 1; k >= 0; k--) {
           if (ys[k] >= d.yn) continue;
           var u = d.rneck + (d.yn - ys[k]);
-          if (u >= d.Rw[k] - 0.05 || d.yn - ys[k] > 16) { d.kCol = k; d.yCol = ys[k]; d.rCol = Math.min(u, d.Rw[k]); break; }
+          if (u >= d.Rw[k] - 0.05 || d.yn - ys[k] > 22) { d.kCol = k; d.yCol = ys[k]; d.rCol = Math.min(u, d.Rw[k]); break; }
         }
         d.depth = p.depth;
         d.rmaxAll = 0;

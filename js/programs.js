@@ -942,6 +942,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/nutcracker.svg',
     programUrl: 'programs/nutcracker.html',
     description: 'A toy-soldier nutcracker standing on a plinth, with a working jaw that prints in place: the chin swings on two pins inside a bowl with a tolerance gap you set, no supports and no gluing. Pick a shako, crown or spike helmet, size the head, mouth, face and hat, and set the moustache and nose. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 118,
+    title: 'Self-Watering Planter',
+    bundle: 'garden',
+    category: 'GARDEN // PLANTERS',
+    thumbnailUrl: 'assets/thumbnails/self-watering-planter.svg',
+    programUrl: 'programs/self-watering-planter.html',
+    description: 'A self-watering plant pot that prints assembled: a water pot, a planting insert that wicks water up, and a drainage saucer with a moat for overflow. Pick seven outlines (tapered, bowl, tulip, urn, barrel, hourglass), six shapes from above and eight wall styles (ribbed, scalloped, twisted, rings, waves, diamonds, pleated), then set the water space, the full-water overflow level, a fill window and the wick hole. The parts are printed in place with a small clearance and thin snap-off tacks (twist the pot once to free it); no supports. Unprinted. Paint parts in the Color tool and export .STL.'
   }
 ];
 
@@ -1001,7 +1010,7 @@ const BUNDLES = [
     description: 'Hooks, trays, holders and storage.' },
   { id: 'toys', name: 'Toys & Games', accent: '#ff5252', at: [12, 5], size: [4, 2],
     description: 'Puzzles, spinners and pieces to play with.' },
-  { id: 'garden', name: 'Garden', accent: '#7bd34a', at: [0, 9], size: [4, 2], planned: true,
+  { id: 'garden', name: 'Garden', accent: '#7bd34a', at: [0, 9], size: [4, 2],
     description: 'Planters, markers and plant stands.' },
   { id: 'flexi', name: 'Flexi Creatures', accent: '#5eead4',
     description: 'Print-in-place articulated animals: a dragon, gecko, crocodile, octopus, scorpion, centipede, turtle, shark, seahorse and caterpillar.',
