@@ -124,6 +124,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 111 | Battery Dispenser | organization | `battery-dispenser.html` (AA and AAA gravity stacks, pull one and the next drops; one part, no supports) |
 
 ## Groups (BUNDLES)
 
@@ -142,7 +143,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | personal | Personalised | 2 |
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
-| organization | Organisation | 3 |
+| organization | Organisation | 4 |
 | toys | Toys & Games | 1 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |

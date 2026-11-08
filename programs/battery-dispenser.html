@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-111 Battery Dispenser // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Battery Dispenser: a battery-shaped block with two top slots (AA and AAA). Each slot is a gravity stack of
+      // batteries lying on their sides. Pull the bottom one out over the lip and the next one drops and rolls into
+      // its place. One printed part, no moving pieces, no supports (the front window is a 42 degree arch).
+      //
+      // Frame: Y up, millimetres. Batteries lie along X. The AA channel opens to +Z (front), the AAA channel to -Z.
+      // Per channel, q is the distance out from the divider face (z = s * (D/2 + q), s = +1 AA, -1 AAA).
+      var TAU = Math.PI * 2;
+      var AA = { d: 14.5, l: 50.5 }, AAA = { d: 10.5, l: 44.5 };
+      var ARCH_K = 1.1;      // window arch slope (rise per mm sideways): 42 degrees from vertical, prints without supports
+      var SLOPE = 8, POCKET = 6.5; // ramp angle (degrees) and how far the first battery sits out in front of the stack (AA, mm)
+      var EXIT_GAP = 1.6;    // mm of room above battery 1 while it is lifted over the lip, at the arch ends
+      var OV = 0.43, OV2 = 0.37; // shells overlap by a hair so no two shells share an edge
+
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+      function area2(c) {
+        var a = 0, i, n = c.length;
+        for (i = 0; i < n; i++) { var p = c[i], q = c[(i + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; }
+        return a;
+      }
+      // Ear clipping for a simple counter-clockwise polygon. Returns index triples.
+      function earClip(c) {
+        var idx = [], i, out = [], guard = 0;
+        for (i = 0; i < c.length; i++) idx.push(i);
+        function cross(a, b, p) { return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]); }
+        function inside(a, b, d, p) { return cross(a, b, p) > 1e-9 && cross(b, d, p) > 1e-9 && cross(d, a, p) > 1e-9; }
+        while (idx.length > 3 && guard++ < 20000) {
+          var n = idx.length, found = -1, best = -1, bestV = 1e18, k;
+          for (i = 0; i < n && found < 0; i++) {
+            var ia = idx[(i + n - 1) % n], ib = idx[i], ic = idx[(i + 1) % n];
+            var a = c[ia], b = c[ib], d = c[ic], cr = cross(a, b, d);
+            if (cr > 1e-9) {
+              var ok = true;
+              for (k = 0; k < n; k++) {
+                var ik = idx[k];
+                if (ik === ia || ik === ib || ik === ic) continue;
+                if (inside(a, b, d, c[ik])) { ok = false; break; }
+              }
+              if (ok) found = i;
+            }
+            if (Math.abs(cr) < bestV) { bestV = Math.abs(cr); best = i; }
+          }
+          if (found < 0) found = best; // collinear run: drop the flattest vertex
+          var f0 = idx[(found + n - 1) % n], f1 = idx[found], f2 = idx[(found + 1) % n];
+          if (Math.abs(cross(c[f0], c[f1], c[f2])) > 1e-9) out.push([f0, f1, f2]);
+          idx.splice(found, 1);
+        }
+        if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+        return out;
+      }
+      // Closed prism: contour [[u,v],...] extruded from w0 to w1. map(u, v, w) -> [x, y, z]. One shell.
+      function extrude(contour, w0, w1, map) {
+        var c = [], o = [], i, n;
+        contour.forEach(function (q) { // drop repeated points
+          var l = c[c.length - 1];
+          if (!l || Math.abs(l[0] - q[0]) > 1e-6 || Math.abs(l[1] - q[1]) > 1e-6) c.push(q);
+        });
+        var f0 = c[0], l0 = c[c.length - 1];
+        if (c.length > 1 && Math.abs(f0[0] - l0[0]) < 1e-6 && Math.abs(f0[1] - l0[1]) < 1e-6) c.pop();
+        if (area2(c) < 0) c.reverse();
+        n = c.length;
+        var caps = earClip(c);
+        for (i = 0; i < caps.length; i++) {
+          var t = caps[i];
+          tri(o, map(c[t[0]][0], c[t[0]][1], w1), map(c[t[1]][0], c[t[1]][1], w1), map(c[t[2]][0], c[t[2]][1], w1));
+          tri(o, map(c[t[0]][0], c[t[0]][1], w0), map(c[t[2]][0], c[t[2]][1], w0), map(c[t[1]][0], c[t[1]][1], w0));
+        }
+        for (i = 0; i < n; i++) {
+          var a = c[i], b = c[(i + 1) % n];
+          var a0 = map(a[0], a[1], w0), b0 = map(b[0], b[1], w0), a1 = map(a[0], a[1], w1), b1 = map(b[0], b[1], w1);
+          tri(o, a0, b0, b1); tri(o, a0, b1, a1);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two equal-length counter-clockwise loops, extruded.
+      function ringExtrude(outer, inner, w0, w1, map) {
+        var o = [], n = outer.length, i;
+        for (i = 0; i < n; i++) {
+          var j = (i + 1) % n, A = outer[i], B = outer[j], C = inner[j], D = inner[i];
+          tri(o, map(A[0], A[1], w1), map(B[0], B[1], w1), map(C[0], C[1], w1));
+          tri(o, map(A[0], A[1], w1), map(C[0], C[1], w1), map(D[0], D[1], w1));
+          tri(o, map(A[0], A[1], w0), map(C[0], C[1], w0), map(B[0], B[1], w0));
+          tri(o, map(A[0], A[1], w0), map(D[0], D[1], w0), map(C[0], C[1], w0));
+          tri(o, map(A[0], A[1], w0), map(B[0], B[1], w0), map(B[0], B[1], w1)); tri(o, map(A[0], A[1], w0), map(B[0], B[1], w1), map(A[0], A[1], w1));
+          tri(o, map(D[0], D[1], w0), map(D[0], D[1], w1), map(C[0], C[1], w1)); tri(o, map(D[0], D[1], w0), map(C[0], C[1], w1), map(C[0], C[1], w0));
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring whose outer loop grows from outer0 (at w0) to outer1 (at w1); the inner loop is straight. Used for the 45 degree sleeve taper.
+      function ringLoft(outer0, outer1, inner, w0, w1, map) {
+        var o = [], n = outer0.length, i;
+        for (i = 0; i < n; i++) {
+          var j = (i + 1) % n, A0 = outer0[i], B0 = outer0[j], A1 = outer1[i], B1 = outer1[j], C = inner[j], D = inner[i];
+          tri(o, map(A1[0], A1[1], w1), map(B1[0], B1[1], w1), map(C[0], C[1], w1));
+          tri(o, map(A1[0], A1[1], w1), map(C[0], C[1], w1), map(D[0], D[1], w1));
+          tri(o, map(A0[0], A0[1], w0), map(C[0], C[1], w0), map(B0[0], B0[1], w0));
+          tri(o, map(A0[0], A0[1], w0), map(D[0], D[1], w0), map(C[0], C[1], w0));
+          tri(o, map(A0[0], A0[1], w0), map(B0[0], B0[1], w0), map(B1[0], B1[1], w1)); tri(o, map(A0[0], A0[1], w0), map(B1[0], B1[1], w1), map(A1[0], A1[1], w1));
+          tri(o, map(D[0], D[1], w0), map(D[0], D[1], w1), map(C[0], C[1], w1)); tri(o, map(D[0], D[1], w0), map(C[0], C[1], w1), map(C[0], C[1], w0));
+        }
+        return orient(new Float32Array(o));
+      }
+      // Prisms in the three axis directions. Points are world coordinates.
+      function yPrism(ptsXZ, y0, y1) {
+        return extrude(ptsXZ.map(function (p) { return [p[1], p[0]]; }), y0, y1, function (u, v, w) { return [v, w, u]; });
+      }
+      function zPrism(ptsXY, z0, z1) {
+        return extrude(ptsXY, z0, z1, function (u, v, w) { return [u, v, w]; });
+      }
+      function xPrism(ptsZY, x0, x1) {
+        return extrude(ptsZY, x0, x1, function (u, v, w) { return [w, v, u]; });
+      }
+
+      // Rounded rectangle in the XZ plane, counter-clockwise seen from +Y, with n segments per corner.
+      function roundRect(x0, x1, z0, z1, r, n) {
+        var pts = [], k, a, cx, cz;
+        r = Math.max(0.01, Math.min(r, (x1 - x0) / 2 - 0.01, (z1 - z0) / 2 - 0.01));
+        var corners = [[x1 - r, z0 + r, -90], [x1 - r, z1 - r, 0], [x0 + r, z1 - r, 90], [x0 + r, z0 + r, 180]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= n; k++) {
+            a = (c[2] + 90 * k / n) * Math.PI / 180;
+            cx = c[0] + r * Math.cos(a); cz = c[1] + r * Math.sin(a);
+            pts.push([cx, cz]);
+          }
+        });
+        return pts;
+      }
+
+      // ---- per-channel numbers: clearances, ramp, where the first battery rests, the arch ------------------
+      function channel(p, bat) {
+        var d = bat.d, l = bat.l, r = d / 2, cl = p.clear;
+        var g = { d: d, l: l, r: r, cl: cl, w: d + 2 * cl, Lc: l + 2 * cl };
+        g.a = g.Lc / 2;
+        g.alpha = SLOPE * Math.PI / 180;
+        g.tan = Math.tan(g.alpha); g.cos = Math.cos(g.alpha);
+        var sc = d / AA.d;                     // lip and pocket scale with the battery, so a AAA is not asked to climb an AA-sized lip
+        g.pocket = POCKET * sc;
+        g.qLip = g.w + g.pocket;               // lip face, measured out from the divider
+        g.qEdge = g.qLip + p.shelf;            // front face of the body
+        g.yLo = p.floor;                       // floor under the lip
+        g.h = p.lip * sc;
+        g.ySh = g.yLo + g.h;                   // shelf height
+        g.rampTop = g.yLo + g.tan * g.qLip;    // ramp height at the divider
+        // where battery 1 rests: touching the ramp and the lip corner
+        var cy = g.ySh, qc = g.qLip, yc;
+        for (; qc > 0; qc -= 0.01) {
+          yc = g.yLo + g.tan * (g.qLip - qc) + r / g.cos;
+          if ((g.qLip - qc) * (g.qLip - qc) + (yc - cy) * (yc - cy) >= r * r) break;
+        }
+        if (qc < r) { qc = r; yc = g.yLo + g.tan * (g.qLip - qc) + r / g.cos; }
+        g.q1 = qc; g.y1 = yc;
+        g.q2 = r;                              // battery 2 leans on the back wall
+        g.y2 = yc + Math.sqrt(Math.max(d * d - (g.q1 - g.q2) * (g.q1 - g.q2), 0));
+        g.ys = g.ySh + d + EXIT_GAP;           // arch springing height: clears battery 1 lifted over the lip
+        g.yApex = g.ys + ARCH_K * g.a;
+        return g;
+      }
+      // Dispense checks used by the page notes and by the CI/test scripts.
+      //   exit: the arch is high enough to lift battery 1 over the lip
+      //   hold: battery 2 is stopped by the arch at its ends before its middle can leave the shaft
+      function dispenseCheck(g, stack) {
+        var top1 = g.ySh + g.d;                        // highest point of battery 1 while it is lifted over the lip
+        var exitGap = g.ys - top1;                     // vertical room at the ends
+        // Push battery 2 forward and see where it first meets solid. Worst case: shifted a full clearance to one side.
+        var yE = g.ys + ARCH_K * 2 * g.cl, hit = -1, dq, th, qy, yy;
+        for (dq = 0; dq <= g.r * 2 && hit < 0; dq += 0.02) {
+          for (th = 0; th < TAU; th += 0.02) {
+            qy = g.q2 + dq + g.r * Math.cos(th); yy = g.y2 + g.r * Math.sin(th);
+            if (qy >= g.w && yy >= yE) { hit = dq; break; }
+          }
+        }
+        // how far past its resting place battery 2 can move before it is stopped
+        var holdTravel = hit < 0 ? 99 : hit;
+        // Battery 1 sits between the ramp and the lip corner with the whole stack leaning on it through battery 2.
+        // Forces in units of one battery's weight. Equilibrium needs the ramp to keep pushing (rampForce > 0); otherwise
+        // the stack would lift battery 1 over the lip on its own.
+        var K = stack - 1, dqc = g.q1 - g.q2, sinPhi = Math.min(dqc / g.d, 0.999), tanPhi = sinPhi / Math.sqrt(1 - sinPhi * sinPhi);
+        var Ex = K * tanPhi, Ey = -(K + 1);
+        var ux = (g.q1 - g.qLip) / g.r, uy = (g.y1 - g.ySh) / g.r, nx = Math.sin(g.alpha), ny = Math.cos(g.alpha);
+        // solve R*n + C*u + E = 0
+        var det = nx * uy - ny * ux, R = (-Ex * uy + Ey * ux) / det, C = (-nx * Ey + ny * Ex) / det;
+        return { exitGap: exitGap, holdTravel: holdTravel, rampForce: R, lipForce: C, y1: g.y1, y2: g.y2, ys: g.ys, yE: yE };
+      }
+
+      function layout(p) {
+        var aa = channel(p, AA), ax = channel(p, AAA);
+        var D = p.divider, e = p.wall;
+        var A = Math.max(aa.a, ax.a) + e;
+        var zf = D / 2 + aa.qEdge, zb = -(D / 2 + ax.qEdge);
+        var stackTop = aa.y2 + (p.stack - 2) * AA.d + AA.d / 2;
+        var H = Math.max(stackTop + 6, aa.yApex + 14, ax.yApex + 14);
+        return { aa: aa, ax: ax, D: D, e: e, A: A, zf: zf, zb: zb, H: H, rho: Math.min(p.corner, e) };
+      }
+
+      function buildBody(p) {
+        var L = layout(p), out = [], H = L.H, D = L.D, A = L.A, zf = L.zf, zb = L.zb, rho = L.rho;
+        var yLo = p.floor;
+
+        // Floor plate under everything.
+        out.push(yPrism(roundRect(-A, A, zb, zf, rho, 8), 0, yLo));
+
+        // Housing: divider and end walls in one shell. The two channels are notches through the front and back.
+        var a1 = L.aa.a, a2 = L.ax.a, hp = [];
+        function arc(cx, cz, from, to, n) {
+          for (var k = 0; k <= n; k++) { var an = (from + (to - from) * k / n) * Math.PI / 180; hp.push([cx + rho * Math.cos(an), cz + rho * Math.sin(an)]); }
+        }
+        // counter-clockwise from the back-left corner, back edge first (z = zb), then right, front, left
+        arc(-A + rho, zb + rho, 180, 270, 8);
+        hp.push([-a2, zb], [-a2, -D / 2], [a2, -D / 2], [a2, zb]);
+        arc(A - rho, zb + rho, -90, 0, 8);
+        arc(A - rho, zf - rho, 0, 90, 8);
+        hp.push([a1, zf], [a1, D / 2], [-a1, D / 2], [-a1, zf]);
+        arc(-A + rho, zf - rho, 90, 180, 8);
+        out.push(yPrism(hp, yLo - OV, H));
+
+        // Each channel: ramp, shelf and the arched front wall.
+        [[L.aa, 1], [L.ax, -1]].forEach(function (cs) {
+          var g = cs[0], s = cs[1], a = g.a;
+          function zq(q) { return s * (D / 2 + q); }
+          // Ramp wedge: slopes down towards the lip. Section in (z, y), extruded along x.
+          out.push(xPrism([[zq(-OV), yLo - OV], [zq(g.qLip + 0.31), yLo - OV], [zq(g.qLip + 0.31), yLo - g.tan * 0.31], [zq(-OV), yLo + g.tan * (g.qLip + OV)]], -a - OV, a + OV));
+          // Shelf: flat tray in front of the lip.
+          out.push(yPrism([[-a - OV2, zq(g.qLip - OV2 - 0.06)], [a + OV2, zq(g.qLip - OV2 - 0.06)], [a + OV2, zq(g.qEdge)], [-a - OV2, zq(g.qEdge)]], yLo - OV, g.ySh));
+          // Front wall over the window, with the arch underside (an inverted V that grows from both ends).
+          var yb = g.ys - ARCH_K * OV;
+          out.push(zPrism([[-a - OV, yb], [0, g.yApex], [a + OV, yb], [a + OV, H], [-a - OV, H]], zq(g.w), zq(g.qEdge)));
+        });
+
+        // Sleeve band round the top, like a battery wrap. The underside is a 45 degree taper, so it needs no support.
+        if (p.band > 0.05) {
+          var b = p.band, by0 = H - 12, flat = function (u, v, w) { return [u, w, v]; };
+          var inner = roundRect(-A + 0.5, A - 0.5, zb + 0.5, zf - 0.5, Math.max(rho - 0.5, 0.2), 8);
+          var o0 = roundRect(-A, A, zb, zf, rho, 8), o1 = roundRect(-A - b, A + b, zb - b, zf + b, rho + b, 8);
+          out.push(ringLoft(o0, o1, inner, by0, by0 + b * 1.6, flat));
+          out.push(ringExtrude(roundRect(-A - b - 0.0, A + b, zb - b, zf + b, rho + b, 8), inner, by0 + b * 1.6 - OV2, by0 + b * 1.6 + 4, flat));
+        }
+        var body = concat(out), trim = [];
+
+        // Positive terminal nub on the divider between the two slots.
+        if (p.nub > 0.05) {
+          var nw = Math.max(D - 1.6, 2.4), nl = 22;
+          trim.push(yPrism(roundRect(-nl / 2, nl / 2, -nw / 2, nw / 2, nw / 2 - 0.05, 8), H - 0.9, H + p.nub));
+        }
+        var meshes = [{ name: 'body', positions: body, smoothGroup: 'body' }];
+        if (trim.length) meshes.push({ name: 'terminal', positions: concat(trim), smoothGroup: 'terminal' });
+        return meshes;
+      }
+
+      var DEFAULTS = { stack: 8, clear: 0.5, lip: 3.5, shelf: 9, floor: 2.4, wall: 5, divider: 8, corner: 5, band: 1, nub: 3 };
+      function presetOf(label, over) {
+        var values = {}, k;
+        for (k in DEFAULTS) values[k] = DEFAULTS[k];
+        for (k in over) values[k] = over[k];
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-111',
+        category: 'HOME // ORGANISERS',
+        title: 'Battery Dispenser',
+        fileName: 'Battery_Dispenser',
+        palette: [
+          { name: 'Volt Green', color: '#86efac' }, { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Copper Top', color: '#fdba74' }, { name: 'Phantom Ice', color: '#93c5fd' },
+          { name: 'Lavender Mist', color: '#d8b4fe' }, { name: 'Sunny Yellow', color: '#fde047' },
+          { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Shadow Black', color: '#334155' }
+        ],
+        sculpt: false,
+        partNames: { body: 'Battery body', terminal: 'Terminal nub' },
+        parameters: [
+          { group: 'Capacity', key: 'stack', label: 'Batteries per stack (AA, AAA fit more)', unit: '', min: 4, max: 14, step: 1, value: DEFAULTS.stack },
+          { group: 'Fit', key: 'clear', label: 'Battery clearance (snug ↔ roomy)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: DEFAULTS.clear },
+          { group: 'Fit', key: 'lip', label: 'Lip height (holds the battery in)', unit: ' mm', min: 3.0, max: 4.5, step: 0.1, value: DEFAULTS.lip },
+          { group: 'Fit', key: 'shelf', label: 'Pull-out shelf depth', unit: ' mm', min: 5, max: 16, step: 0.5, value: DEFAULTS.shelf },
+          { group: 'Body', key: 'wall', label: 'Side wall', unit: ' mm', min: 3, max: 12, step: 0.5, value: DEFAULTS.wall },
+          { group: 'Body', key: 'divider', label: 'Divider between slots', unit: ' mm', min: 6, max: 16, step: 0.5, value: DEFAULTS.divider },
+          { group: 'Body', key: 'floor', label: 'Floor thickness', unit: ' mm', min: 1.6, max: 5, step: 0.2, value: DEFAULTS.floor },
+          { group: 'Body', key: 'corner', label: 'Corner rounding (max = side wall)', unit: ' mm', min: 0.5, max: 12, step: 0.5, value: DEFAULTS.corner },
+          { group: 'Look', key: 'band', label: 'Top sleeve band', unit: ' mm', min: 0, max: 2, step: 0.25, value: DEFAULTS.band },
+          { group: 'Look', key: 'nub', label: 'Terminal nub height', unit: ' mm', min: 0, max: 6, step: 0.5, value: DEFAULTS.nub }
+        ],
+        presets: [
+          presetOf('Default dispenser', {}),
+          presetOf('Desk top-up (4 stack)', { stack: 4 }),
+          presetOf('Drawer tower (12 stack)', { stack: 12 }),
+          presetOf('Snug fit', { clear: 0.3, lip: 3.2 }),
+          presetOf('Roomy fit', { clear: 0.7, lip: 3.8 }),
+          presetOf('Chunky battery', { wall: 8, divider: 12, corner: 8, band: 1.5, nub: 4 })
+        ],
+        build: function (params) { return buildBody(params); },
+        info: { layout: layout, dispenseCheck: dispenseCheck }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

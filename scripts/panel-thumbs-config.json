@@ -717,5 +717,13 @@
   },
   "yaw": 35,
   "elev": 22
+ },
+ "battery-dispenser": {
+  "colors": {
+   "body": "#7bd88f",
+   "terminal": "#fdba74"
+  },
+  "yaw": 35,
+  "elev": 22
  }
 }

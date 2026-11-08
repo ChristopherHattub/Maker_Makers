@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 111,
+    title: 'Battery Dispenser',
+    bundle: 'organization',
+    category: 'HOME // ORGANISERS',
+    thumbnailUrl: 'assets/thumbnails/battery-dispenser.svg',
+    programUrl: 'programs/battery-dispenser.html',
+    description: 'A battery-shaped storage block with two slots on top, one for AA and one for AAA. Each slot feeds a gravity stack lying on its side; the bottom battery rolls down a ramp and rests against a small lip, half out of the front. Lift it over the lip and pull, and the stack drops the next one into place. Set the stack height, fit clearance, lip height, wall, divider, sleeve band and terminal nub. The front windows are arches, so it prints as one part with no supports and no moving pieces; battery clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',
