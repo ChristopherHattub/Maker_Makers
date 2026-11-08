@@ -20,6 +20,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 106+ | Free. Any number works. |
 | 107 | Built: Holiday Tree Topper. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
+| 118 | Built: Self-Watering Planter. |
+| 109+ | Free (check open PRs first). Any number works. |
+
+Total built: 101 generators in 21 groups . Each generator's `code` in its config (`MM-00N`) matches its slot number.
 | 109-122 | Free (check open PRs first); other generator branches are claiming slots here. |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
 | 124+ | Free. Any number works. |
@@ -161,6 +165,7 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 107 | Holiday Tree Topper | christmas | `holiday-tree-topper.html` (faceted star, heart or gem on a print-in-place spinning fluted bell and socket) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
+| 118 | Self-Watering Planter | garden | `self-watering-planter.html` (pot, wicking insert and saucer printed in place) |
 | 116 | Wall Panel Maker | decor | `wall-panel.html` (text panel; Elements tab with drag-and-drop print-in-place checkboxes, sliders, progress bars, dials) |
 | 115 | Stamp Maker | personal | `stamp-maker.html` (mirrored relief text + 18 icons, 5 layouts, one-piece tapered grip) |
 | 111 | Battery Dispenser | organization | `battery-dispenser.html` (AA and AAA gravity stacks, pull one and the next drops; one part, no supports) |

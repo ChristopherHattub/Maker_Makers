@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-118 Self-Watering Planter // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Self-Watering Planter: a water-tight pot, a planting insert that hangs in it on a wick, and a drainage saucer.
+      // All three print in place, assembled, with a small gap (Clearance) between them, and need no supports.
+      // Y up, millimetres. Every solid is a surface of revolution (scaled by a plan shape), so it is closed by construction.
+      var TAU = Math.PI * 2;
+      var SEG = 120;               // columns around the pot; a multiple of 3, 4, 6 and 8 so every plan shape lands on grid lines
+      var SLOPE = 1;               // steepest overhang, 45 degrees from vertical: radius grows at most 1 mm per mm of height
+      var COS = [], SIN = [];
+      (function () { for (var j = 0; j < SEG; j++) { COS.push(Math.cos(j / SEG * TAU)); SIN.push(Math.sin(j / SEG * TAU)); } })();
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function linspace(a, b, n) {
+        var o = [], i;
+        for (i = 0; i < n; i++) o.push(n === 1 ? a : a + (b - a) * i / (n - 1));
+        return o;
+      }
+      function positive(x, m) { return ((x % m) + m) % m; }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t, s;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // ---------------------------------------------------------------------
+      // Plan shapes: rho[j] scales every ring so the pot is round, square, hexagonal ...
+      // Largest value is 1 (the corner radius); the smallest (apo) is the flat. Widths are measured across flats.
+      // ---------------------------------------------------------------------
+      var rhoCache = {};
+      function planRho(kind, soft) {
+        var key = kind + ':' + soft.toFixed(2);
+        if (rhoCache[key]) return rhoCache[key];
+        var rho = new Float32Array(SEG), j, k, n, p, s, th, mx = 0, mn = 1e9;
+        var NS = [0, 4, 6, 8, 3, 6];
+        n = NS[kind];
+        p = 8 + (1 - soft) * 56;
+        for (j = 0; j < SEG; j++) {
+          th = j / SEG * TAU;
+          if (kind === 0) rho[j] = 1;
+          else if (kind === 5) rho[j] = 1 + (0.06 + 0.1 * (1 - soft)) * Math.cos(n * th);
+          else {
+            s = 0;
+            for (k = 0; k < n; k++) s += Math.pow(Math.max(0, Math.cos(th - k / n * TAU)), p);
+            rho[j] = Math.pow(s, -1 / p);
+          }
+          mx = Math.max(mx, rho[j]);
+        }
+        for (j = 0; j < SEG; j++) { rho[j] /= mx; mn = Math.min(mn, rho[j]); }
+        rho.apo = mn;
+        rhoCache[key] = rho;
+        return rho;
+      }
+
+      // ---------------------------------------------------------------------
+      // Outline of the pot: shape(t) is 0..1 around the foot width bw, t is height 0..1.
+      // ---------------------------------------------------------------------
+      var OUTLINES = ['Tapered', 'Straight', 'Bowl', 'Tulip', 'Urn', 'Barrel', 'Hourglass'];
+      var PLANS = ['Round', 'Square', 'Hexagon', 'Octagon', 'Triangle', 'Flower'];
+      var WALLS = ['Smooth', 'Ribbed', 'Scalloped', 'Twisted', 'Rings', 'Waves', 'Diamonds', 'Pleated'];
+      function outlineAt(kind, t, bw) {
+        var k = 1 - bw;
+        switch (kind) {
+          case 0: return bw + k * t;
+          case 1: return 1;
+          case 2: return bw + k * Math.sin(t * Math.PI / 2);
+          case 3: return bw + k * Math.pow(t, 2.2);
+          case 4: return bw + k * Math.sin(Math.PI * Math.pow(t, 0.8));
+          case 5: return bw + k * Math.pow(Math.sin(Math.PI * t), 0.6);
+          default: return bw + k * Math.pow(Math.abs(2 * t - 1), 1.6);
+        }
+      }
+      // Wall pattern 0..1 (0 = plain wall, 1 = fully raised). The pattern only ever adds to the wall.
+      function wallPat(style, n, th, y, H, tw, kd) {
+        var u;
+        switch (style) {
+          case 1: return 0.5 + 0.5 * Math.cos(n * th);
+          case 2: return Math.pow(Math.abs(Math.sin(n * th / 2)), 0.8);
+          case 3: return 0.5 + 0.5 * Math.cos(n * th + tw * y / H);
+          case 4: return 0.5 + 0.5 * Math.cos(TAU * Math.max(3, Math.round(n / 2)) * y / H);
+          case 5: return 0.5 + 0.5 * Math.cos(n * th + 2.5 * Math.sin(TAU * 2 * y / H));
+          case 6: return 0.5 + 0.5 * Math.cos(n * th + kd * y) * Math.cos(n * th - kd * y);
+          case 7: u = positive(n * th / TAU, 1); return 1 - Math.abs(2 * u - 1);
+          default: return 0;
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // Loop solid: a closed cross-section loop [{ y, r }] (r is a number, or one value per column) turned around the Y axis.
+      // Points with r = 0 are poles. opt.hole cuts a diamond window through two walls of the loop (see below).
+      // ---------------------------------------------------------------------
+      function loopSolid(pts, rho, opt) {
+        var P = pts.length, V = new Float32Array(P * SEG * 3), pole = [], p, j, r, rr, o, tris = [], q, key;
+        for (p = 0; p < P; p++) {
+          pole[p] = typeof pts[p].r === 'number' && pts[p].r < 1e-6;
+          for (j = 0; j < SEG; j++) {
+            r = typeof pts[p].r === 'number' ? pts[p].r : pts[p].r[j];
+            rr = r * rho[j];
+            o = (p * SEG + j) * 3;
+            V[o] = rr * COS[j]; V[o + 1] = pts[p].y; V[o + 2] = rr * SIN[j];
+          }
+        }
+        function id(pp, jj) { return pp * SEG + ((jj % SEG) + SEG) % SEG; }
+        var diag = {}, skip = {};
+        function mark(s, jj, d, t) { var k = s + ',' + ((jj % SEG) + SEG) % SEG; diag[k] = d; skip[k] = t; }
+        var hole = opt && opt.hole;
+        if (hole) {
+          [hole.mo, hole.mi].forEach(function (m) {
+            mark(m - 1, hole.j - 1, 2, 1); mark(m - 1, hole.j, 1, 1); mark(m, hole.j - 1, 1, 0); mark(m, hole.j, 2, 0);
+          });
+        }
+        for (p = 0; p < P; p++) {
+          q = (p + 1) % P;
+          for (j = 0; j < SEG; j++) {
+            if (pole[p] && pole[q]) continue;
+            var a = id(p, j), b = id(p, j + 1), c = id(q, j + 1), d = id(q, j);
+            key = p + ',' + j;
+            var dg = diag[key] || 1, sk = skip[key] == null ? -1 : skip[key];
+            if (pole[p]) { if (sk !== 1) tris.push(a, c, d); continue; }
+            if (pole[q]) { if (sk !== 0) tris.push(a, b, c); continue; }
+            if (dg === 1) { if (sk !== 0) tris.push(a, b, c); if (sk !== 1) tris.push(a, c, d); }
+            else { if (sk !== 0) tris.push(a, b, d); if (sk !== 1) tris.push(b, c, d); }
+          }
+        }
+        if (hole) {
+          // Four tunnel walls from the outer diamond to the inner one. The inner ring order runs the other way,
+          // so the outer vertex N meets the inner vertex S and the other way round.
+          var dir = {}, i;
+          for (i = 0; i < tris.length; i += 3) {
+            dir[tris[i] + '>' + tris[i + 1]] = 1; dir[tris[i + 1] + '>' + tris[i + 2]] = 1; dir[tris[i + 2] + '>' + tris[i]] = 1;
+          }
+          var oN = id(hole.mo - 1, hole.j), oE = id(hole.mo, hole.j + 1), oS = id(hole.mo + 1, hole.j), oW = id(hole.mo, hole.j - 1);
+          var iN = id(hole.mi + 1, hole.j), iE = id(hole.mi, hole.j + 1), iS = id(hole.mi - 1, hole.j), iW = id(hole.mi, hole.j - 1);
+          var ring = [[oN, iN], [oE, iE], [oS, iS], [oW, iW]];
+          for (i = 0; i < 4; i++) {
+            var X = ring[i], Y = ring[(i + 1) % 4];
+            if (dir[X[0] + '>' + Y[0]]) tris.push(Y[0], X[0], X[1], Y[0], X[1], Y[1]);
+            else tris.push(X[0], Y[0], Y[1], X[0], Y[1], X[1]);
+          }
+        }
+        var out = new Float32Array(tris.length * 3), k;
+        for (k = 0; k < tris.length; k++) {
+          out[k * 3] = V[tris[k] * 3]; out[k * 3 + 1] = V[tris[k] * 3 + 1]; out[k * 3 + 2] = V[tris[k] * 3 + 2];
+        }
+        return orient(out);
+      }
+
+      // ---------------------------------------------------------------------
+      // Derived geometry shared by the three parts. Pot coordinates: y = 0 is the lowest point of the pot.
+      // ---------------------------------------------------------------------
+      function derive(p, tune) {
+        var d = { p: p, tune: tune };
+        var rho = planRho(Math.round(p.plan), p.soft / 100);
+        var apo = rho.apo;
+        function h(x) { return x / apo; }       // a thickness measured on a flat, as a radius change
+        d.rho = rho; d.h = h;
+        var H = p.height, wall = p.wall, gv = p.clear;
+        d.H = H; d.gv = gv;
+        var rw = p.wick / 2;
+        var rc = rw + h(wall) * Math.SQRT2;                  // insert tip outer radius
+        var space = Math.max(p.space, 5.5);
+        var hW = h(space);                                   // water space on the flats
+        var rf = rc + hW - gv;                               // pot floor radius under the insert tip
+        var yf = wall + tune.dy;                             // pot floor thickness (nudged by tune, see build)
+        var r0 = rf + h(wall) * Math.SQRT2 - yf;             // flat tip of the pot's cone bottom
+        d.rw = rw; d.rc = rc; d.rf = rf; d.yf = yf; d.r0 = r0; d.hW = hW;
+        // sample heights; one ring sits exactly at the overflow hole and its neighbours one cell either side
+        var step = Math.max(1.3, H / 62);
+        // outer base radius with the 45 degree limit, evaluated on a fine list first to find the radius at the hole height
+        function baseOn(ysList) {
+          var R = new Float32Array(ysList.length), k, pr, bw = p.foot / 100, Rmax = p.width / 2 / apo;
+          for (k = 0; k < ysList.length; k++) {
+            pr = Math.max(r0 + 4, Rmax * outlineAt(Math.round(p.outline), ysList[k] / H, bw));
+            R[k] = k === 0 ? r0 : Math.min(pr, R[k - 1] + (ysList[k] - ysList[k - 1]) * SLOPE);
+          }
+          // the wall may not narrow faster than 45 degrees going up faster than 0.6 mm per mm either, so the collar under the rim can always be a 45 degree slope
+          for (k = ysList.length - 2; k > 0; k--) R[k] = Math.min(R[k], R[k + 1] + (ysList[k + 1] - ysList[k]) * 0.6);
+          return R;
+        }
+        var fine = linspace(0, H, 300), Rfine = baseOn(fine);
+        var yoWant = yf + p.level;
+        var collarBottom = H - 28;
+        var k0 = 0;
+        while (k0 < fine.length - 1 && fine[k0] < yoWant) k0++;
+        var Ro = Rfine[k0];
+        var dcell = clamp(0.85 * TAU * Ro * rho[0] / SEG, 2, 6);   // a little steeper than 45 degrees so the roof of the hole prints clean
+        var yo = clamp(yoWant, yf + dcell + 1, collarBottom - dcell - 1.5);
+        d.yo = yo; d.dcell = dcell;
+        var n1 = Math.max(3, Math.ceil((yo - dcell) / step) + 1);
+        var n2 = Math.max(3, Math.ceil((H - (yo + dcell)) / step) + 1);
+        var ys = linspace(0, yo - dcell, n1).concat([yo]).concat(linspace(yo + dcell, H, n2));
+        d.ys = ys; d.i0 = n1;
+        d.Rb = baseOn(ys);
+        var K = ys.length, k;
+        // where the pot leaves its 45 degree base cone: the saucer ridge sits there
+        d.kc = K - 1;
+        for (k = 1; k < K; k++) { if (d.Rb[k] < r0 + ys[k] - 0.05) { d.kc = k - 1; break; } }
+        d.yc = ys[d.kc]; d.Rr = d.Rb[d.kc];
+        // inner wall limit
+        d.Rw = new Float32Array(K);
+        for (k = 0; k < K; k++) {
+          var ka = Math.max(0, k - 1), kb = Math.min(K - 1, k + 1);
+          var sl = clamp((d.Rb[kb] - d.Rb[ka]) / Math.max(1e-6, ys[kb] - ys[ka]), -1, 1);
+          d.Rw[k] = d.Rb[k] - h(wall) * Math.sqrt(1 + sl * sl);
+        }
+        // collar and seat at the top
+        var wr = 1.4;                                        // rim width
+        d.ropen = d.Rb[K - 1] - h(wr);
+        d.seatH = 5;
+        d.rneck = d.ropen - d.seatH;
+        d.ys0 = H - d.seatH;                                 // seat starts
+        d.yn = d.ys0 - 1;                                    // neck bottom
+        // the collar underside leans out at 45 degrees from the neck until it meets the wall
+        d.kCol = 0; d.yCol = d.yn - 22; d.rCol = d.Rw[0];
+        for (k = K - 1; k >= 0; k--) {
+          if (ys[k] >= d.yn) continue;
+          var u = d.rneck + (d.yn - ys[k]);
+          if (u >= d.Rw[k] - 0.05 || d.yn - ys[k] > 22) { d.kCol = k; d.yCol = ys[k]; d.rCol = Math.min(u, d.Rw[k]); break; }
+        }
+        d.depth = p.depth;
+        d.rmaxAll = 0;
+        return d;
+      }
+
+      // ---------------------------------------------------------------------
+      // The pot (the water reservoir)
+      // ---------------------------------------------------------------------
+      function buildPot(d) {
+        var p = d.p, ys = d.ys, K = ys.length, H = d.H, rho = d.rho, pts = [], k, j;
+        var style = Math.round(p.style), n = Math.round(p.count), tw = p.twist * Math.PI / 180;
+        var depth = style === 0 ? 0 : p.depth, kd = n / Math.max(30, p.width / 2);
+        // outer rings with the wall pattern, kept inside the 45 degree limit in every column
+        var outer = [];
+        for (k = 0; k < K; k++) outer.push(new Float32Array(SEG));
+        for (j = 0; j < SEG; j++) {
+          var th = j / SEG * TAU;
+          for (k = 0; k < K; k++) {
+            var fade = smoothstep(d.yc, d.yc + 8, ys[k]);
+            var v = d.Rb[k] + depth * wallPat(style, n, th, ys[k], H, tw, kd) * fade;
+            if (k > 0) v = Math.min(v, outer[k - 1][j] + (ys[k] - ys[k - 1]) * SLOPE);
+            outer[k][j] = v;
+            if (v > d.rmaxAll) d.rmaxAll = v;
+          }
+        }
+        pts.push({ y: 0, r: 0 });
+        for (k = 0; k < K; k++) pts.push({ y: ys[k], r: outer[k] });
+        var moOuter = 1 + d.i0;
+        // inner side, top to bottom: rim, seat, neck, collar underside, wall, base cone, floor
+        pts.push({ y: H, r: d.ropen });
+        pts.push({ y: d.ys0, r: d.rneck });
+        pts.push({ y: d.yn, r: d.rneck });
+        pts.push({ y: d.yCol, r: d.rCol });
+        var miInner = -1;
+        for (k = d.kCol - 1; k >= 0; k--) {
+          if (ys[k] <= d.yf + 0.3) break;
+          var ri = Math.min(d.rf + (ys[k] - d.yf), d.Rw[k]);
+          if (k === d.i0) miInner = pts.length;
+          pts.push({ y: ys[k], r: ri });
+        }
+        pts.push({ y: d.yf, r: d.rf });
+        pts.push({ y: d.yf, r: 0 });
+        return loopSolid(pts, rho, { hole: { mo: moOuter, mi: miInner, j: 0 } });
+      }
+
+      // ---------------------------------------------------------------------
+      // The planting insert: a funnel that hangs on a 45 degree seat in the pot, with a wick hole at the bottom
+      // ---------------------------------------------------------------------
+      function buildInsert(d) {
+        var p = d.p, rho = d.rho, h = d.h, H = d.H, gv = d.gv, wall = p.wall, j, k;
+        var y0 = d.yf + gv, top = H + p.lip;
+        var ys = linspace(y0, top, Math.max(24, Math.round((top - y0) / 2.2)));
+        [d.ys0 - 6, d.ys0, d.yn, H].forEach(function (yy) { if (yy > y0 + 1 && yy < top - 1) ys.push(yy); });
+        ys.sort(function (a, b) { return a - b; });
+        var K = ys.length, margin = 1;
+        // the body may never be wider than the pot's neck or its wall minus the water space, looking from the top down
+        var target = new Float32Array(K), run = 1e9;
+        function potWall(y) {                      // pot inner wall limit at height y, interpolated
+          var kk = 0, ysP = d.ys, KP = ysP.length;
+          while (kk < KP - 2 && ysP[kk + 1] < y) kk++;
+          var t = clamp((y - ysP[kk]) / Math.max(1e-6, ysP[kk + 1] - ysP[kk]), 0, 1);
+          return d.Rw[kk] * (1 - t) + d.Rw[kk + 1] * t;
+        }
+        for (k = K - 1; k >= 0; k--) {
+          var tv = potWall(ys[k]) - d.hW;
+          if (ys[k] > d.yCol) tv = Math.min(tv, d.rneck - margin);
+          if (ys[k] > H) tv = run;
+          run = Math.min(run, tv);
+          target[k] = Math.max(run, d.rc + 1);
+        }
+        var body = new Float32Array(K), flare = new Float32Array(K);
+        for (k = 0; k < K; k++) {
+          body[k] = Math.min(d.rc + (ys[k] - y0), target[k]);
+          flare[k] = d.rneck + (Math.min(ys[k], H) - d.ys0) - gv;
+        }
+        // fill window: the flare is cut away over an arc so water can be poured straight into the reservoir
+        var half = p.window * Math.PI / 360, win = new Float32Array(SEG);
+        for (j = 0; j < SEG; j++) {
+          var dth = Math.abs(((j / SEG * TAU - Math.PI) + 3 * Math.PI) % TAU - Math.PI);
+          win[j] = p.window <= 0 ? 0 : 1 - smoothstep(half, half + 0.18, dth);
+        }
+        var outer = [], inner = [];
+        for (k = 0; k < K; k++) { outer.push(new Float32Array(SEG)); inner.push(new Float32Array(SEG)); }
+        for (j = 0; j < SEG; j++) {
+          for (k = 0; k < K; k++) {
+            var fl = Math.max(0, flare[k] - body[k]);
+            outer[k][j] = body[k] + fl * (1 - win[j]);
+            if (k > 0) outer[k][j] = Math.min(outer[k][j], outer[k - 1][j] + (ys[k] - ys[k - 1]) * SLOPE);
+          }
+          for (k = 0; k < K; k++) {
+            var ka = Math.max(0, k - 1), kb = Math.min(K - 1, k + 1);
+            var sl = clamp((outer[kb][j] - outer[ka][j]) / Math.max(1e-6, ys[kb] - ys[ka]), -1, 1);
+            var cone = d.rw + Math.max(0, ys[k] - y0 - 3);
+            inner[k][j] = Math.max(d.rw, Math.min(cone, outer[k][j] - h(wall) * Math.sqrt(1 + sl * sl)));
+          }
+        }
+        var pts = [];
+        for (k = 0; k < K; k++) pts.push({ y: ys[k], r: outer[k] });
+        for (k = K - 1; k >= 0; k--) pts.push({ y: ys[k], r: inner[k] });
+        return loopSolid(pts, rho, null);
+      }
+
+      // ---------------------------------------------------------------------
+      // The saucer: a pedestal with a 45 degree seat for the pot and a moat around it that catches the overflow
+      // ---------------------------------------------------------------------
+      function buildSaucer(d) {
+        var p = d.p, h = d.h, ys0 = d.tune.ys0, ym = ys0;
+        var Rs = d.rmaxAll + h(p.margin), rimW = h(2.4), ridgeW = h(2), ch = 0.8;
+        var yRidge = ys0 + d.yc, Hs = ym + p.sdepth;
+        Rs = Math.max(Rs, d.Rr + ridgeW + rimW + h(8));
+        var pts = [
+          { y: 0, r: 0 }, { y: 0, r: Rs - ch }, { y: ch, r: Rs }, { y: Hs, r: Rs }, { y: Hs, r: Rs - rimW },
+          { y: ym, r: Rs - rimW }, { y: ym, r: d.Rr + ridgeW }, { y: yRidge, r: d.Rr + ridgeW }, { y: yRidge, r: d.Rr },
+          { y: ys0, r: d.r0 }, { y: ys0, r: 0 }
+        ];
+        return loopSolid(pts, d.rho, null);
+      }
+
+      // A small eight-sided post, used for the snap-off tacks.
+      function post(cx, cz, ya, yb, r) {
+        var o = [], i, a, b, A, B, N = 8;
+        function ring(y, i2) { var t = i2 / N * TAU; return [cx + r * Math.cos(t), y, cz + r * Math.sin(t)]; }
+        for (i = 0; i < N; i++) {
+          A = ring(ya, i); B = ring(ya, i + 1); a = ring(yb, i); b = ring(yb, i + 1);
+          o.push(A[0], A[1], A[2], B[0], B[1], B[2], b[0], b[1], b[2], A[0], A[1], A[2], b[0], b[1], b[2], a[0], a[1], a[2]);
+          o.push(cx, ya, cz, B[0], B[1], B[2], A[0], A[1], A[2]);
+          o.push(cx, yb, cz, a[0], a[1], a[2], b[0], b[1], b[2]);
+        }
+        return new Float32Array(o);
+      }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      function shift(pos, dy) { for (var i = 1; i < pos.length; i += 3) pos[i] += dy; return pos; }
+
+      function assemble(p, tune) {
+        var d = derive(p, tune);
+        var pot = buildPot(d);                      // fills d.rmaxAll
+        var insert = buildInsert(d);
+        var saucer = buildSaucer(d);
+        var off = tune.ys0 + d.gv;                  // the pot's lowest point floats one clearance above the saucer pit
+        shift(pot, off); shift(insert, off);
+        var out = [
+          { name: 'saucer', positions: saucer },
+          { name: 'pot', positions: pot },
+          { name: 'insert', positions: insert }
+        ];
+        if (Math.round(p.tacks) >= 1) {
+          // Snap-off tacks: thin posts that hold the first layer of the pot and of the insert steady while they print
+          // over the clearance. One twist of the pot breaks them.
+          var t = [], j, k, rr;
+          for (k = 0; k < 6; k++) {
+            j = k * SEG / 6; rr = 0.6 * d.r0 * d.rho[j];
+            t.push(post(rr * COS[j], rr * SIN[j], tune.ys0 - 0.8, off + 0.8, 0.9));
+          }
+          for (k = 0; k < 4; k++) {
+            j = SEG / 8 + k * SEG / 4; rr = (d.rw + d.rc) / 2 * d.rho[j];
+            t.push(post(rr * COS[j], rr * SIN[j], d.yf + off - 0.8, d.yf + off + d.gv + 0.8, 0.8));
+          }
+          out.push({ name: 'tacks', positions: concat(t) });
+        }
+        return out;
+      }
+
+      // The print check slices the model into layers about 0.5 to 1 mm tall. A 0.4 mm clearance can fall exactly on
+      // one of those layers and read as a flat overhang, or fall between two and read as solid. The saucer pit height and
+      // the pot floor thickness each have a little slack (about a millimetre), so pick the pair that keeps both
+      // clearances between layers. It changes nothing a slicer sees by more than a few tenths of a millimetre.
+      function spanOf(list) {
+        var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9], e, i, k, a;
+        for (e = 0; e < list.length; e++) {
+          a = list[e].positions;
+          for (i = 0; i < a.length; i += 3) for (k = 0; k < 3; k++) { if (a[i + k] < lo[k]) lo[k] = a[i + k]; if (a[i + k] > hi[k]) hi[k] = a[i + k]; }
+        }
+        return Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+      }
+      function pickTune(cell, gv, wall) {
+        var best = { ys0: 3, dy: 0 }, bestScore = -1e9, a, b;
+        function margin(g) { var t = (((g - cell / 2) % cell) + cell) % cell; return Math.min(t, cell - t - gv); }
+        for (a = 2.6; a <= 4.2; a += 0.02) {
+          for (b = 0; b <= 0.9; b += 0.02) {
+            var g2 = a + gv + wall + b;
+            var sc = Math.min(margin(a), margin(g2)) - 0.01 * (Math.abs(a - 3) + b);
+            if (sc > bestScore) { bestScore = sc; best = { ys0: a, dy: b }; }
+          }
+        }
+        return best;
+      }
+      function build(p) {
+        var tune = { ys0: 3, dy: 0 }, out = assemble(p, tune), pass;
+        for (pass = 0; pass < 2; pass++) {
+          tune = pickTune(Math.max(0.4, spanOf(out) / 170), p.clear, p.wall);
+          out = assemble(p, tune);
+        }
+        return out;
+      }
+
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+      function sh(param, fn) { param.showIf = fn; return param; }
+
+      var DEFAULTS = {
+        width: 120, height: 110, foot: 62, outline: 0, plan: 0, soft: 60,
+        style: 1, count: 16, depth: 2, twist: 120,
+        space: 10, level: 30, wick: 6, window: 40, lip: 8,
+        wall: 2.4, clear: 0.4, tacks: 1, margin: 10, sdepth: 14
+      };
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-118',
+        category: 'GARDEN // PLANTERS',
+        title: 'Self-Watering Planter',
+        fileName: 'Self_Watering_Planter',
+        palette: [
+          { name: 'Terracotta', color: '#e8a07a' }, { name: 'Sage Green', color: '#a7c4a0' },
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Ocean Glass', color: '#93c5fd' },
+          { name: 'Blush', color: '#fda4af' }, { name: 'Sunny Yellow', color: '#fde047' },
+          { name: 'Walnut', color: '#8a6a4f' }, { name: 'Charcoal', color: '#3b3f4a' }
+        ],
+        defaultColor: '#e8a07a',
+        partNames: { pot: 'Water pot', insert: 'Planting insert', saucer: 'Drainage saucer', tacks: 'Snap-off tacks' },
+        parameters: [
+          slider('Size', 'width', 'Pot width across the top (across the flats)', ' mm', 70, 190, 1, DEFAULTS.width),
+          slider('Size', 'height', 'Pot height', ' mm', 70, 200, 1, DEFAULTS.height),
+          slider('Outline', 'foot', 'Foot width, as a share of the top (Straight ignores it)', '%', 45, 100, 1, DEFAULTS.foot),
+          choice('Outline', 'outline', 'Outline', OUTLINES, DEFAULTS.outline),
+          choice('Outline', 'plan', 'Shape from above', PLANS, DEFAULTS.plan),
+          sh(slider('Outline', 'soft', 'Corner softness (rounded corners print cleaner)', '%', 0, 100, 1, DEFAULTS.soft), function (q) { return Math.round(q.plan) !== 0; }),
+          choice('Wall style', 'style', 'Wall style', WALLS, DEFAULTS.style),
+          sh(slider('Wall style', 'count', 'How many ribs, flutes or rings', '', 6, 36, 1, DEFAULTS.count), function (q) { return Math.round(q.style) > 0; }),
+          sh(slider('Wall style', 'depth', 'Pattern depth', ' mm', 0.5, 6, 0.5, DEFAULTS.depth), function (q) { return Math.round(q.style) > 0; }),
+          sh(slider('Wall style', 'twist', 'Twist from foot to rim', '°', 0, 360, 5, DEFAULTS.twist), function (q) { return Math.round(q.style) === 3; }),
+          slider('Self-watering', 'space', 'Water space around the insert', ' mm', 6, 20, 1, DEFAULTS.space),
+          slider('Self-watering', 'level', 'Full water level, with the overflow hole there', ' mm', 12, 70, 1, DEFAULTS.level),
+          slider('Self-watering', 'wick', 'Wick hole width (thread a cotton rope through it)', ' mm', 4, 10, 0.5, DEFAULTS.wick),
+          slider('Self-watering', 'window', 'Fill window around the rim (0 = closed)', '°', 0, 90, 5, DEFAULTS.window),
+          slider('Self-watering', 'lip', 'Insert rim above the pot', ' mm', 4, 20, 1, DEFAULTS.lip),
+          slider('Print', 'wall', 'Wall thickness', ' mm', 1.6, 3.2, 0.2, DEFAULTS.wall),
+          slider('Print', 'clear', 'Clearance between the parts (print in place)', ' mm', 0.3, 0.6, 0.05, DEFAULTS.clear),
+          choice('Print', 'tacks', 'Snap-off tacks under the pot and insert', ['Off', 'On'], DEFAULTS.tacks),
+          slider('Saucer', 'margin', 'Saucer reaches past the pot by', ' mm', 6, 25, 1, DEFAULTS.margin),
+          slider('Saucer', 'sdepth', 'Saucer depth', ' mm', 8, 30, 1, DEFAULTS.sdepth)
+        ],
+        presets: [
+          presetOf('Default terracotta', {}),
+          presetOf('Herb pot', { width: 90, height: 90, foot: 70, outline: 2, style: 2, count: 12, level: 24, space: 8 }),
+          presetOf('Fluted urn', { width: 130, height: 140, foot: 55, outline: 4, style: 2, count: 14, depth: 2.5, level: 40 }),
+          presetOf('Hex tower', { width: 100, height: 170, foot: 100, outline: 1, plan: 2, soft: 40, style: 7, count: 12, depth: 2.5, level: 45 }),
+          presetOf('Twist vase', { width: 110, height: 150, foot: 60, outline: 6, style: 3, count: 10, depth: 3, twist: 200, level: 36 }),
+          presetOf('Flower bowl', { width: 150, height: 90, foot: 55, outline: 2, plan: 5, style: 0, level: 24 }),
+          presetOf('Square diamonds', { width: 120, height: 120, foot: 70, outline: 0, plan: 1, soft: 70, style: 6, count: 16, depth: 1.5, level: 32 }),
+          presetOf('Barrel rings', { width: 120, height: 110, foot: 70, outline: 5, style: 4, count: 16, depth: 2, level: 30 }),
+          presetOf('Tulip planter', { width: 140, height: 120, foot: 50, outline: 3, style: 5, count: 12, depth: 2.5, level: 34 })
+        ],
+        build: function (p) { return build(p); }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
