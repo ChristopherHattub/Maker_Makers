@@ -34,6 +34,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
 | [fidget-spinner.md](fidget-spinner.md) | The Fidget Spinner (slot 114): six outline styles, print-in-place hub or 608 bearing, arm pockets, raised name |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |
+| [zoetrope.md](zoetrope.md) | The Zoetrope (slot 121): slotted drum on a print-in-place pin, picture strip pieces, the four picture sets, how to add one |
 | [wall-panel.md](wall-panel.md) | The Wall Panel Maker (slot 116): text panel with a drag-and-drop Elements tab, print-in-place checkboxes, sliders, progress bars and dials |
 | [battery-dispenser.md](battery-dispenser.md) | The Battery Dispenser (slot 111): AA and AAA gravity stacks, ramp and lip, arched front windows, the dispense checks |
 | [holiday-tree-topper.md](holiday-tree-topper.md) | The Holiday Tree Topper (slot 107): faceted star on a print-in-place spinning cone, socket geometry, clearances, print-check alignment |

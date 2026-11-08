@@ -16,6 +16,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 119 | Built: Headphone & Controller Stand. |
 | 114 | Built: Fidget Spinner (`fidget-spinner.html`, fidgets). |
 | 106 | Built: Console Faceplate. |
+| 121 | Built: Zoetrope (slots 106-120 are being built in other open pull requests). |
+| 106+ | Free. Any number works. |
 | 107 | Built: Holiday Tree Topper. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
 | 109+ | Free except 119 (check open PRs first). Any number works. |
@@ -150,6 +152,7 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | 119 | Headphone & Controller Stand | organization | `headphone-controller-stand.html` (desk and wall headphone stands, controller rack and shelf; Console Faceplate designs) |
 | 114 | Fidget Spinner | fidgets | `fidget-spinner.html` (six styles; print-in-place hub or 608 bearing; arm pockets; raised name) |
 | 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
+| 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 107 | Holiday Tree Topper | christmas | `holiday-tree-topper.html` (faceted star, heart or gem on a print-in-place spinning fluted bell and socket) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
 | 116 | Wall Panel Maker | decor | `wall-panel.html` (text panel; Elements tab with drag-and-drop print-in-place checkboxes, sliders, progress bars, dials) |

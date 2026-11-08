@@ -845,6 +845,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 121,
+    title: 'Zoetrope',
+    bundle: 'toys',
+    category: 'TOYS // OPTICAL',
+    thumbnailUrl: 'assets/thumbnails/zoetrope.svg',
+    programUrl: 'programs/zoetrope.html',
+    description: 'A spinning slotted drum that makes pictures move. The drum prints already sitting on its pin (a cone-headed pin, a small gap, no supports); flick it and look through the slots at the strip inside. Pick a running figure, flapping bird, bouncing ball or blooming flower, 6 to 16 frames, drum size, picture height and slot width, and print the picture strip flat in one to four pieces, or leave it off and draw your own. Prints with no supports; the gap under the drum is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 116,
     title: 'Wall Panel Maker',
     bundle: 'decor',

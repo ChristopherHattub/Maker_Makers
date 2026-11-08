@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-121 Zoetrope // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Zoetrope: a slotted drum that spins on a pin printed inside its own hub, plus a strip of animation
+    // frames that curls into the drum. Everything prints flat with no supports:
+    //  - the base disc carries a pin with a 45 degree cone head; the drum is printed on it with a small gap,
+    //    so one flick of the finger frees it and it spins
+    //  - the slots are open at the top (a crown), so there is nothing to bridge
+    //  - the drum wall has a picture pocket whose top edge is a 45 degree chamfer, the strip slides in under it
+    //  - the strip pieces and their raised pictures lie flat on the bed beside the base
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Mesh toolkit. A mesh is a flat array of triangle corners (x,y,z per corner, 9 per triangle),
+      // Y-up, millimetres, counter-clockwise seen from outside. Shells may overlap (slicers union them).
+      // -----------------------------------------------------------------------
+      var PI = Math.PI, TAU = Math.PI * 2;
+
+      function tri(m, a, b, c) {
+        if ((a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) || (b[0] === c[0] && b[1] === c[1] && b[2] === c[2]) ||
+            (a[0] === c[0] && a[1] === c[1] && a[2] === c[2])) return;
+        m.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(m, a, b, c, d) { tri(m, a, b, c); tri(m, a, c, d); }
+      function append(dst, src) { for (var i = 0; i < src.length; i++) dst.push(src[i]); return dst; }
+      function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+      function box(x0, y0, z0, x1, y1, z1) {
+        var m = [];
+        quad(m, [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]);
+        quad(m, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
+        quad(m, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]);
+        quad(m, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]);
+        quad(m, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
+        quad(m, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]);
+        return m;
+      }
+
+      // Solid of revolution about the Y axis. prof = [[r, y], ...] closed outline, counter-clockwise in
+      // the (r right, y up) plane (interior on the left). Points on the axis (r = 0) make poles.
+      function lathe(prof, seg) {
+        var m = [], n = prof.length, j, k;
+        for (k = 0; k < n; k++) {
+          var p1 = prof[k], p2 = prof[(k + 1) % n];
+          if (p1[0] === 0 && p2[0] === 0) continue;
+          for (j = 0; j < seg; j++) {
+            var f0 = TAU * j / seg, f1 = TAU * (j + 1) / seg;
+            var c0 = Math.cos(f0), s0 = Math.sin(f0), c1 = Math.cos(f1), s1 = Math.sin(f1);
+            if (j === seg - 1) { c1 = 1; s1 = 0; }
+            quad(m, [p1[0] * c0, p1[1], p1[0] * s0], [p2[0] * c0, p2[1], p2[0] * s0],
+                    [p2[0] * c1, p2[1], p2[0] * s1], [p1[0] * c1, p1[1], p1[0] * s1]);
+          }
+        }
+        return m;
+      }
+
+      // Signed area of a polygon given as [x, z] pairs; the code below keeps polygons clockwise in (x,z).
+      function area2(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s;
+      }
+      function cw(poly) { return area2(poly) < 0 ? poly : poly.slice().reverse(); }
+
+      // Ear clipping triangulation of a simple clockwise polygon [x, z]. Returns index triples.
+      function earClip(P) {
+        var n = P.length, idx = [], i, out = [];
+        for (i = 0; i < n; i++) idx.push(i);
+        var guard = 0;
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); }
+        while (idx.length > 3 && guard++ < 20000) {
+          var clipped = false;
+          for (i = 0; i < idx.length; i++) {
+            var ia = idx[(i + idx.length - 1) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+            var a = P[ia], b = P[ib], c = P[ic];
+            if (cross(a, b, c) > -1e-9) continue;
+            var inside = false;
+            for (var k = 0; k < idx.length && !inside; k++) {
+              var id = idx[k];
+              if (id === ia || id === ib || id === ic) continue;
+              var p = P[id];
+              if (cross(a, b, p) <= 1e-9 && cross(b, c, p) <= 1e-9 && cross(c, a, p) <= 1e-9) inside = true;
+            }
+            if (inside) continue;
+            out.push([ia, ib, ic]);
+            idx.splice(i, 1);
+            clipped = true;
+            break;
+          }
+          if (!clipped) idx.splice(0, 1);
+        }
+        if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+        return out;
+      }
+
+      // Prism: a simple polygon [x, z] extruded from y0 to y1.
+      function extrude(poly, y0, y1) {
+        var P = cw(poly), m = [], n = P.length, i;
+        var T = earClip(P);
+        for (i = 0; i < T.length; i++) {
+          var t = T[i];
+          tri(m, [P[t[0]][0], y1, P[t[0]][1]], [P[t[1]][0], y1, P[t[1]][1]], [P[t[2]][0], y1, P[t[2]][1]]);
+          tri(m, [P[t[0]][0], y0, P[t[0]][1]], [P[t[2]][0], y0, P[t[2]][1]], [P[t[1]][0], y0, P[t[1]][1]]);
+        }
+        for (i = 0; i < n; i++) {
+          var a = P[i], b = P[(i + 1) % n];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        return m;
+      }
+
+      // -----------------------------------------------------------------------
+      // Picture shapes. Each picture is a few simple 2D shapes in "figure units" (the picture area is
+      // -1..1 both ways, +x to the right, +y up). A shape is a polygon of [x, y] points.
+      // -----------------------------------------------------------------------
+      var ANIM_NAMES = ['Running figure', 'Flapping bird', 'Bouncing ball', 'Blooming flower'];
+
+      function ellipsePts(cx, cy, rx, ry, rot, n) {
+        var pts = [], c = Math.cos(rot), s = Math.sin(rot);
+        for (var i = 0; i < n; i++) {
+          var a = TAU * i / n, ex = rx * Math.cos(a), ey = ry * Math.sin(a);
+          pts.push([cx + ex * c - ey * s, cy + ex * s + ey * c]);
+        }
+        return pts;
+      }
+      // A stroke (rounded line) from a to b with radius r.
+      function capsulePts(ax, ay, bx, by, r, rmin) {
+        r = Math.max(r, rmin);
+        var ang = Math.atan2(by - ay, bx - ax), pts = [], i, k = 8;
+        for (i = 0; i <= k; i++) { var a1 = ang - PI / 2 + PI * i / k; pts.push([bx + r * Math.cos(a1), by + r * Math.sin(a1)]); }
+        for (i = 0; i <= k; i++) { var a2 = ang + PI / 2 + PI * i / k; pts.push([ax + r * Math.cos(a2), ay + r * Math.sin(a2)]); }
+        return pts;
+      }
+
+      // Returns { shapes: [polygon...], ground: bool } for frame i of n.
+      function frameShapes(anim, i, n, rmin) {
+        var th = TAU * i / n, shapes = [], ground = false, k;
+        function stroke(ax, ay, bx, by, r) { shapes.push(capsulePts(ax, ay, bx, by, r, rmin)); }
+        function disc(cx, cy, r) { shapes.push(ellipsePts(cx, cy, Math.max(r, rmin), Math.max(r, rmin), 0, 28)); }
+
+        if (anim === 0) { // running figure: stick body, legs and arms swing through a full stride
+          ground = true;
+          var groundTop = -0.9, L1 = 0.42, L2 = 0.42, leg = [], ext = 0;
+          for (k = 0; k < 2; k++) {
+            var psi = th + k * PI, t = 0.8 * Math.sin(psi);
+            var kf = 0.15 + 1.0 * Math.max(0, Math.cos(psi + 0.4));
+            var s = t - kf;
+            leg.push({ t: t, s: s, psi: psi });
+            ext = Math.max(ext, L1 * Math.cos(t) + L2 * Math.cos(s) + 0.05);
+          }
+          var hx = -0.05, hy = groundTop + ext;
+          for (k = 0; k < 2; k++) {
+            var lg = leg[k];
+            var kx = hx + L1 * Math.sin(lg.t), ky = hy - L1 * Math.cos(lg.t);
+            var ax = kx + L2 * Math.sin(lg.s), ay = ky - L2 * Math.cos(lg.s);
+            stroke(hx, hy, kx, ky, 0.085);
+            stroke(kx, ky, ax, ay, 0.075);
+            stroke(ax, ay, ax + 0.2, ay - 0.04, 0.07);
+          }
+          var lean = 0.2, sx = hx + 0.55 * Math.sin(lean), sy = hy + 0.55 * Math.cos(lean);
+          stroke(hx, hy, sx, sy, 0.1);
+          disc(sx + 0.2 * Math.sin(lean), sy + 0.25 * Math.cos(lean), 0.17);
+          for (k = 0; k < 2; k++) {
+            var ua = -0.8 * Math.sin(th + k * PI), ex = sx + 0.32 * Math.sin(ua), ey = sy - 0.32 * Math.cos(ua);
+            var fa = ua + 1.1;
+            stroke(sx, sy, ex, ey, 0.065);
+            stroke(ex, ey, ex + 0.3 * Math.sin(fa), ey - 0.3 * Math.cos(fa), 0.06);
+          }
+        } else if (anim === 1) { // flapping bird: the wing swings up and down, the body bobs
+          var b = 0.1 * Math.sin(th + PI * 0.5);
+          shapes.push(ellipsePts(-0.05, b, 0.42, 0.24, 0, 36));
+          disc(0.4, b + 0.2, 0.17);
+          shapes.push([[0.52, b + 0.27], [0.84, b + 0.17], [0.54, b + 0.1]]);
+          var tl = 0.1 * Math.sin(th);
+          shapes.push([[-0.35, b + 0.05], [-0.88, b + 0.12 + tl], [-0.82, b - 0.14 + tl], [-0.35, b - 0.1]]);
+          var phi = PI + 0.85 * Math.sin(th), dx = Math.cos(phi), dy = Math.sin(phi), px = -dy, py = dx;
+          var rx0 = -0.05, ry0 = b + 0.1;
+          shapes.push([[rx0 + px * 0.13, ry0 + py * 0.13], [rx0 + dx * 0.42 + px * 0.24, ry0 + dy * 0.42 + py * 0.24],
+            [rx0 + dx * 0.92, ry0 + dy * 0.92], [rx0 + dx * 0.42 - px * 0.24, ry0 + dy * 0.42 - py * 0.24],
+            [rx0 - px * 0.13, ry0 - py * 0.13]]);
+          stroke(0.0, b - 0.2, -0.02, b - 0.42, 0.06);
+          stroke(0.14, b - 0.2, 0.18, b - 0.42, 0.06);
+        } else if (anim === 2) { // bouncing ball that squashes as it lands
+          ground = true;
+          var hgt = 1.15 * Math.abs(Math.sin(th / 2)), q = 0.28 * Math.max(0, 1 - hgt / 0.22), r = 0.26;
+          var ry = r * (1 - q), rxx = r * (1 + q);
+          shapes.push(ellipsePts(0, -0.9 + ry + hgt, rxx, ry, 0, 36));
+        } else { // blooming flower: two rings of petals breathe in and out and turn opposite ways
+          var g1 = 0.5 + 0.5 * Math.sin(th), g2 = 0.5 + 0.5 * Math.sin(th + PI);
+          for (k = 0; k < 8; k++) {
+            var a1 = TAU * k / 8 + TAU / 8 * (i / n), r1 = 0.1 + 0.42 * g1;
+            shapes.push(ellipsePts(r1 * Math.cos(a1), r1 * Math.sin(a1), 0.12 + 0.34 * g1, 0.12, a1, 20));
+          }
+          for (k = 0; k < 6; k++) {
+            var a2 = TAU * k / 6 - TAU / 6 * (i / n), r2 = 0.04 + 0.22 * g2;
+            shapes.push(ellipsePts(r2 * Math.cos(a2), r2 * Math.sin(a2), 0.1 + 0.18 * g2, 0.09, a2, 20));
+          }
+          disc(0, 0, 0.2);
+        }
+        return { shapes: shapes, ground: ground };
+      }
+
+      // -----------------------------------------------------------------------
+      // The model
+      // -----------------------------------------------------------------------
+      var TB = 4;            // base thickness
+      var WALL = 3.2;        // drum wall (the picture pocket thins it by the strip thickness + play)
+      var FLOOR = 3;         // drum floor
+      var STRIP_PLAY = 0.4;  // room around the strip in its pocket
+      var PIC_H = 0.6;       // height of the raised pictures above the strip
+
+      function geometry(p) {
+        var g = {};
+        g.n = Math.round(p.frames);
+        g.R = p.radius;
+        g.rIn = g.R - WALL;
+        g.t = p.stripT;
+        g.rP = g.rIn + g.t + STRIP_PLAY;               // pocket radius
+        g.Hs = p.pictureH;
+        g.pinR = 3.5;
+        g.holeR = g.pinR + p.pinClear;
+        g.hubR = g.holeR + 3;
+        g.Rb = g.R + 5;
+        g.y0 = TB + p.gap;                              // underside of the drum floor
+        g.yf = g.y0 + FLOOR;                            // floor top = bottom of the pocket
+        g.hubTop = g.yf + 5;
+        g.yPocketTop = g.yf + g.Hs + 0.6;
+        g.yS = g.yPocketTop + (g.rP - g.rIn);           // bottom of the slots
+        g.yTop = g.yS + p.slotH;
+        g.stripLen = TAU * (g.rP - g.t / 2) - 1;        // all strip pieces together
+        g.pitch = g.stripLen / g.n;
+        return g;
+      }
+
+      // Drum: one watertight surface. The lathe profile has a "prong" form and a "slot" form that differ only in
+      // the crown at the top; the angle list switches between them so the slots are open at the top (no bridges).
+      function buildDrum(p, g) {
+        var n = g.n, pitch = TAU / n, delta = Math.min(p.slotW / g.rIn, pitch * 0.5);
+        var prongArc = pitch - delta, per = Math.max(2, Math.ceil(prongArc / (3 * PI / 180)));
+        var angles = [], isSlot = [], j, k;
+        for (j = 0; j < n; j++) {
+          var cj = j * pitch;
+          angles.push(cj - delta / 2); isSlot.push(true);
+          for (k = 0; k < per; k++) { angles.push(cj + delta / 2 + prongArc * k / per); isSlot.push(false); }
+        }
+        var cb = 1.0, out = [];
+        function profile(slot) {
+          return [
+            [g.holeR, g.y0], [g.R - cb, g.y0], [g.R, g.y0 + cb], [g.R, g.yS],
+            [g.R, slot ? g.yS : g.yTop], [g.rIn, slot ? g.yS : g.yTop],
+            [g.rIn, g.yS], [g.rP, g.yPocketTop], [g.rP, g.yf], [g.hubR, g.yf], [g.hubR, g.hubTop], [g.holeR, g.hubTop]
+          ];
+        }
+        var PP = profile(false), PS = profile(true), N = angles.length, e;
+        for (k = 0; k < N; k++) {
+          var a = angles[k], b = angles[(k + 1) % N] + (k === N - 1 ? TAU : 0);
+          var prof = isSlot[k] ? PS : PP, ca = Math.cos(a), sa = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b);
+          for (e = 0; e < prof.length; e++) {
+            var q1 = prof[e], q2 = prof[(e + 1) % prof.length];
+            quad(out, [q1[0] * ca, q1[1], q1[0] * sa], [q2[0] * ca, q2[1], q2[0] * sa],
+                      [q2[0] * cB, q2[1], q2[0] * sB], [q1[0] * cB, q1[1], q1[0] * sB]);
+          }
+          // end faces where a prong meets a slot
+          var nxt = isSlot[(k + 1) % N];
+          if (!isSlot[k] && nxt) { // prong ends here, face looks along +angle
+            quad(out, [g.R * cB, g.yS, g.R * sB], [g.R * cB, g.yTop, g.R * sB], [g.rIn * cB, g.yTop, g.rIn * sB], [g.rIn * cB, g.yS, g.rIn * sB]);
+          }
+          if (isSlot[k] && !nxt) { // prong starts at the end of this slot segment, face looks along -angle
+            quad(out, [g.rIn * cB, g.yS, g.rIn * sB], [g.rIn * cB, g.yTop, g.rIn * sB], [g.R * cB, g.yTop, g.R * sB], [g.R * cB, g.yS, g.R * sB]);
+          }
+        }
+        return out;
+      }
+
+      function buildBase(g) {
+        var c = 1.2;
+        return lathe([[0, 0], [g.Rb - c, 0], [g.Rb, c], [g.Rb, TB - c], [g.Rb - c, TB], [0, TB]], 96);
+      }
+      function buildPin(p, g) {
+        var head0 = g.hubTop + p.gap, hr = g.pinR + 2.2, cone = hr - g.pinR;
+        return lathe([[0, 0], [g.pinR, 0], [g.pinR, head0], [hr, head0 + cone], [hr, head0 + cone + 0.8], [0, head0 + cone + 0.8]], 40);
+      }
+
+      // Strip pieces lie flat in a column in front of the base, pictures facing up, picture "up" pointing
+      // away from the viewer. Frame 0 is at the left of the first piece.
+      function buildStrip(p, g) {
+        var band = [], pics = [], pieces = Math.round(p.pieces), n = g.n, i, f = 0;
+        var t = g.t, W = g.pitch, H = g.Hs, S = Math.max(4, Math.min(W, H) - 3), U = S / 2;
+        var rmin = 0.6 / U, barH = Math.max(1.0, 0.1 * U);
+        for (i = 0; i < pieces; i++) {
+          var cnt = Math.floor(n / pieces) + (i < n % pieces ? 1 : 0);
+          if (cnt < 1) continue;
+          var len = cnt * W, zc = g.Rb + 7 + H / 2 + i * (H + 4), x0 = -len / 2, hasGround = false, j, s;
+          append(band, box(x0, 0, zc - H / 2, x0 + len, t, zc + H / 2));
+          for (j = 0; j < cnt; j++, f++) {
+            var fr = frameShapes(Math.round(p.animation), f, n, rmin), uc = x0 + (j + 0.5) * W;
+            hasGround = hasGround || fr.ground;
+            for (s = 0; s < fr.shapes.length; s++) {
+              // a hair of offset per shape so two identical shapes (both arms at the same angle) never share an edge exactly
+              var ox = ((f * 7 + s * 37) % 11) * 0.0023, oz = ((f * 5 + s * 53) % 13) * 0.0017;
+              var poly = fr.shapes[s].map(function (pt) { return [uc + ox + pt[0] * U, zc + oz - pt[1] * U]; });
+              append(pics, extrude(poly, t - 0.2, t + PIC_H));
+            }
+          }
+          if (hasGround) append(pics, box(x0 + 0.5, t - 0.2, zc + 0.9 * U - barH, x0 + len - 0.5, t + PIC_H, zc + 0.9 * U));
+        }
+        return { band: band, pics: pics };
+      }
+
+      function buildZoetrope(p) {
+        var g = geometry(p), out = [];
+        out.push({ name: 'base', positions: new Float32Array(buildBase(g)) });
+        out.push({ name: 'pin', positions: new Float32Array(buildPin(p, g)) });
+        out.push({ name: 'drum', positions: new Float32Array(buildDrum(p, g)) });
+        if (p.strip >= 1) {
+          var s = buildStrip(p, g);
+          out.push({ name: 'strip', positions: new Float32Array(s.band) });
+          out.push({ name: 'pictures', positions: new Float32Array(s.pics) });
+        }
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-121',
+        category: 'TOYS // OPTICAL',
+        title: 'Zoetrope',
+        fileName: 'Zoetrope',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { base: 'Base plate', pin: 'Pin', drum: 'Drum', strip: 'Picture strip', pictures: 'Pictures' },
+        parameters: [
+          { group: 'Animation', key: 'animation', label: 'Picture set', unit: '', min: 0, max: 3, step: 1, value: 0, format: function (v) { return ANIM_NAMES[Math.round(v)]; } },
+          { group: 'Animation', key: 'frames', label: 'Frames (one slot each)', unit: '', min: 6, max: 16, step: 2, value: 12 },
+          { group: 'Animation', key: 'strip', label: 'Printed picture strip', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+          { group: 'Animation', key: 'pieces', label: 'Strip pieces (more = shorter pieces)', unit: '', min: 1, max: 4, step: 1, value: 2, showIf: function (p) { return p.strip >= 1; } },
+          { group: 'Drum', key: 'radius', label: 'Drum radius', unit: ' mm', min: 30, max: 52, step: 1, value: 42 },
+          { group: 'Drum', key: 'pictureH', label: 'Picture height', unit: ' mm', min: 16, max: 32, step: 1, value: 24 },
+          { group: 'Drum', key: 'slotH', label: 'Slot height', unit: ' mm', min: 12, max: 30, step: 1, value: 20 },
+          { group: 'Drum', key: 'slotW', label: 'Slot width (narrow = sharper)', unit: ' mm', min: 1.2, max: 4, step: 0.1, value: 2.2 },
+          { group: 'Fit', key: 'gap', label: 'Gap under the drum (bigger = freer)', unit: ' mm', min: 0.3, max: 0.8, step: 0.05, value: 0.5 },
+          { group: 'Fit', key: 'pinClear', label: 'Pin gap (sideways)', unit: ' mm', min: 0.3, max: 0.8, step: 0.05, value: 0.5 },
+          { group: 'Fit', key: 'stripT', label: 'Strip thickness (thin bends easier)', unit: ' mm', min: 0.6, max: 1.2, step: 0.2, value: 0.8 }
+        ],
+        presets: [
+          { label: 'Default running figure', values: { animation: 0, frames: 12, strip: 1, pieces: 2, radius: 42, pictureH: 24, slotH: 20, slotW: 2.2, gap: 0.5, pinClear: 0.5, stripT: 0.8 } },
+          { label: 'Flapping bird', values: { animation: 1, frames: 12, strip: 1, pieces: 2, radius: 42, pictureH: 24, slotH: 20, slotW: 2.2, gap: 0.5, pinClear: 0.5, stripT: 0.8 } },
+          { label: 'Bouncing ball', values: { animation: 2, frames: 12, strip: 1, pieces: 2, radius: 42, pictureH: 24, slotH: 20, slotW: 2.2, gap: 0.5, pinClear: 0.5, stripT: 0.8 } },
+          { label: 'Blooming flower', values: { animation: 3, frames: 12, strip: 1, pieces: 2, radius: 42, pictureH: 24, slotH: 20, slotW: 2.2, gap: 0.5, pinClear: 0.5, stripT: 0.8 } },
+          { label: 'Small desk model', values: { animation: 1, frames: 8, strip: 1, pieces: 1, radius: 32, pictureH: 20, slotH: 16, slotW: 2, gap: 0.5, pinClear: 0.5, stripT: 0.8 } },
+          { label: 'Big sixteen-frame drum', values: { animation: 0, frames: 16, strip: 1, pieces: 3, radius: 52, pictureH: 30, slotH: 26, slotW: 2.6, gap: 0.55, pinClear: 0.5, stripT: 0.8 } },
+          { label: 'Drum only (draw your own strip)', values: { animation: 0, frames: 12, strip: 0, pieces: 2, radius: 42, pictureH: 24, slotH: 20, slotW: 2.2, gap: 0.5, pinClear: 0.5, stripT: 0.8 } }
+        ],
+        build: function (p) { return buildZoetrope(p); }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

@@ -811,5 +811,17 @@
    "text": "#ffffff",
    "pads": "#ffd23f"
   }
+ },
+ "zoetrope": {
+  "colors": {
+   "base": "#d8b4fe",
+   "pin": "#f1f5f9",
+   "drum": "#fdba74",
+   "strip": "#f1f5f9",
+   "pictures": "#334155"
+  },
+  "yaw": 28,
+  "elev": 30,
+  "fill": 0.78
  }
 }

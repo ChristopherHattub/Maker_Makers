@@ -1269,5 +1269,28 @@
     "Default witch hat": [
       "overhang"
     ]
+  },
+  "zoetrope": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default running figure": [
+      "overhang"
+    ],
+    "Flapping bird": [
+      "overhang"
+    ],
+    "Bouncing ball": [
+      "overhang"
+    ],
+    "Blooming flower": [
+      "overhang"
+    ],
+    "Big sixteen-frame drum": [
+      "overhang"
+    ],
+    "Drum only (draw your own strip)": [
+      "overhang"
+    ]
   }
 }
