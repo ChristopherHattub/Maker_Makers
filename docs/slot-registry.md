@@ -13,9 +13,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
+| 114 | Built: Fidget Spinner (`fidget-spinner.html`, fidgets). |
 | 106+ | Free. Any number works. |
 
-Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 102 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -124,6 +125,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 114 | Fidget Spinner | fidgets | `fidget-spinner.html` (six styles; print-in-place hub or 608 bearing; arm pockets; raised name) |
 
 ## Groups (BUNDLES)
 
@@ -138,7 +140,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | birthday | Birthdays | 7 |
 | stpatricks | St. Patrick's Day | 4 |
 | july4 | Fourth of July | 2 |
-| fidgets | Fidgets & Clickers | 9 |
+| fidgets | Fidgets & Clickers | 10 |
 | personal | Personalised | 2 |
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |

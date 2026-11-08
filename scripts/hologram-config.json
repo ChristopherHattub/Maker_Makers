@@ -470,5 +470,11 @@
     "sat": 70,
     "light": 80,
     "stand": true
+  },
+  "fidget-spinner": {
+    "hue": 285,
+    "sat": 80,
+    "light": 70,
+    "stand": true
   }
 }

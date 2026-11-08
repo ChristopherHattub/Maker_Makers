@@ -67,6 +67,7 @@ JS: single quotes, semicolons, 2-space indent, `var`/function style inside gener
 - **Fancy Ring** (slot 102): prints as two halves glued around the stone. Unprinted; the glue seam and fit of the stone are unproven. [docs/fancy-ring.md](docs/fancy-ring.md).
 - **Pin Maker** (slot 103): a picture traced into a badge pin, in the browser only. Unprinted; it has a flat back for a glued pin-back, no printed pin-back. [docs/pin-maker.md](docs/pin-maker.md).
 - **Sedan Maker** (slot 105): a toy sedan with print-in-place wheels in round wheel wells, on hidden diamond-section axle pins, plus a Car parts stamp tab. Unprinted; the tolerance, the hidden axle heads and the tire flats are unproven. The round arches read "needs supports" in the print check (a short bridge, recorded in the baseline). [docs/sedan-maker.md](docs/sedan-maker.md).
+- **Fidget Spinner** (slot 114): six outline styles, a print-in-place diamond-rim hub (0.35 mm clearance) or a 608 bearing with printed pads, arm pockets and a raised name. Unprinted; the hub clearance, bearing fit and pocket sizes are unproven. [docs/fidget-spinner.md](docs/fidget-spinner.md).
 - **Infinity Cube** was dropped from the plan and has no slot; do not look for it.
 - **Hologram tiles are weak for some generators** (thin, flat or low-contrast models read poorly). Retune with `scripts/hologram-config.json` or re-render.
 - Workshop: generator shapes are single-colour and not autosaved. Overpass scan errors are swallowed (a failed scan looks empty). See "Known issues" in [docs/architecture.md](docs/architecture.md).
