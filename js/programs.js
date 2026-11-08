@@ -933,6 +933,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/horse-builder.svg',
     programUrl: 'programs/horse-builder.html',
     description: 'A horse, pony or unicorn, standing, kneeling or rearing: tune neck, head, legs, mane, tail and face markings. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 108,
+    title: 'Nutcracker',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // FIGURES',
+    thumbnailUrl: 'assets/thumbnails/nutcracker.svg',
+    programUrl: 'programs/nutcracker.html',
+    description: 'A toy-soldier nutcracker standing on a plinth, with a working jaw that prints in place: the chin swings on two pins inside a bowl with a tolerance gap you set, no supports and no gluing. Pick a shako, crown or spike helmet, size the head, mouth, face and hat, and set the moustache and nose. Paint parts in the Color tool and export .STL.'
   }
 ];
 
