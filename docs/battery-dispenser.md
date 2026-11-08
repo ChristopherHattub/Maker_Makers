@@ -10,8 +10,14 @@ Y up, millimetres. Batteries lie along X. The AA channel opens to +Z (the front)
 
 | Mesh | What it is |
 | --- | --- |
-| `body` | Overlapping closed shells that a slicer unions: the floor plate, the housing (divider and end walls in one shell, with a notch for each channel), per channel a ramp wedge, a shelf slab and the arched front wall, and the sleeve band. Shells overlap by 0.37 to 0.43 mm and never share an edge, so the mesh check sees each as a closed solid. |
+| `body` | Overlapping closed shells that a slicer unions: the floor plate, the housing (divider and end walls in one shell, with a notch for each channel), per channel a ramp wedge, a shelf slab and the arched front wall, and the base ring. Shells overlap by 0.37 to 0.43 mm and never share an edge, so the mesh check sees each as a closed solid. |
+| `sleeve` | The raised wraps that make it read as a battery: the crimp band at the top, the label sleeve over the plain upper body (above the window arches, 0.8 mm proud) and each has a 45 degree taper underneath. Own part in the Color tool, so it can be painted another colour. |
 | `terminal` | The positive terminal nub, on the divider between the two slots. |
+| `label` | Optional raised letters on the top deck in front of each slot: AA (two letters) beside the AA slot, AAA (three) beside the AAA slot, 0.8 mm proud, apex towards the slot. |
+
+## Body shape
+
+`shape` is Block (a rounded rectangle, `corner` sets the rounding) or Round (a cylinder). Round is a circle cut flat by the front and back planes where the windows are, so every piece that reaches the front (shelf, arch wall, label deck) stays flush and the side walls keep the full `wall` thickness. The circle radius is the smallest that reaches the corners of those flat cuts, so Round is about 90 mm across with defaults.
 
 The Sculpt tab is off (`sculpt: false`): the body is a set of overlapping shells, and moving or deleting one of them breaks the part.
 
@@ -34,7 +40,7 @@ The check places battery 1 touching the ramp and the lip corner, battery 2 touch
 
 ## Parameters
 
-Stack height (4 to 14 AA; the AAA fits more), clearance (0.3 to 0.7 mm each side), lip height (3.0 to 4.5 mm), shelf depth, side wall, divider width, floor, corner rounding, sleeve band and terminal nub height. The ramp angle and pocket reach are constants in the page, not sliders, because the dispense checks only hold for that pair: changing them breaks the stack at some other settings.
+Stack height (4 to 14 AA; the AAA fits more), clearance (0.3 to 0.7 mm each side), lip height (3.0 to 4.5 mm), shelf depth, body shape (Block or Round), side wall, divider width, floor, corner rounding (Block only), battery sleeve on/off, top labels on/off, top band and terminal nub height. The ramp angle and pocket reach are constants in the page, not sliders, because the dispense checks only hold for that pair: changing them breaks the stack at some other settings.
 
 Higher stacks make the block taller (about 125 mm for 8, 180 mm for 12). The 184 mm bed fits up to 12.
 
@@ -42,4 +48,4 @@ Higher stacks make the block taller (about 125 mm for 8, 180 mm for 12). The 184
 
 - Unprinted. Check that a battery rolls to the lip on a printed ramp and lifts out over it without catching the arch.
 - The AA channel is the front, the AAA the back; there is no label on the body, only the different slot widths.
-- Hologram tile and side-panel render are of the default settings.
+- Hologram tile and side-panel render are of the first version (no sleeve, labels or round shape); re-render them if the look should match.

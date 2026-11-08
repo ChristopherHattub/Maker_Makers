@@ -217,39 +217,82 @@
         return { exitGap: exitGap, holdTravel: holdTravel, rampForce: R, lipForce: C, y1: g.y1, y2: g.y2, ys: g.ys, yE: yE };
       }
 
+      // Circle cut flat by the front and back planes: loop of 2 * (n + 1) points for any radius / plane offsets.
+      function roundLoop(R, zc, zf, zb, n) {
+        var xf = Math.sqrt(Math.max(R * R - (zf - zc) * (zf - zc), 0.01)), xb = Math.sqrt(Math.max(R * R - (zb - zc) * (zb - zc), 0.01));
+        var tf = Math.atan2(zf - zc, xf), tb = Math.atan2(zb - zc, xb), pts = [], k, t;
+        for (k = 0; k <= n; k++) { t = tb + (tf - tb) * k / n; pts.push([R * Math.cos(t), zc + R * Math.sin(t)]); }
+        for (k = 0; k <= n; k++) { t = Math.PI - tf + (tf - tb) * k / n; pts.push([R * Math.cos(t), zc + R * Math.sin(t)]); }
+        return pts;
+      }
+
       function layout(p) {
         var aa = channel(p, AA), ax = channel(p, AAA);
-        var D = p.divider, e = p.wall;
+        var D = p.divider, e = p.wall, round = p.shape === 1;
         var A = Math.max(aa.a, ax.a) + e;
-        var zf = D / 2 + aa.qEdge, zb = -(D / 2 + ax.qEdge);
+        var zf = D / 2 + aa.qEdge, zb = -(D / 2 + ax.qEdge), zc = (zf + zb) / 2, R = 0;
+        if (round) {
+          // the flat cuts keep a full side wall beside each window; the circle just has to reach those corners
+          R = Math.max(Math.sqrt((aa.a + e) * (aa.a + e) + (zf - zc) * (zf - zc)), Math.sqrt((ax.a + e) * (ax.a + e) + (zc - zb) * (zc - zb)));
+        }
         var stackTop = aa.y2 + (p.stack - 2) * AA.d + AA.d / 2;
         var H = Math.max(stackTop + 6, aa.yApex + 14, ax.yApex + 14);
-        return { aa: aa, ax: ax, D: D, e: e, A: A, zf: zf, zb: zb, H: H, rho: Math.min(p.corner, e) };
+        var rho = Math.min(p.corner, e);
+        // outline(off): the plan outline grown (off > 0) or shrunk by off, always with the same number of points
+        function outline(off) {
+          if (round) return roundLoop(R + off, zc, zf + off, zb - off, 40);
+          return roundRect(-A - off, A + off, zb - off, zf + off, Math.max(rho + off, 0.2), 8);
+        }
+        return { aa: aa, ax: ax, D: D, e: e, A: A, zf: zf, zb: zb, zc: zc, R: R, round: round, H: H, rho: rho, outline: outline };
+      }
+
+      // Raised block letter A: two legs and a crossbar, apex towards the slot. Returns shells.
+      function letterA(cx, zApex, zBase, t, y0, y1) {
+        var h = zBase - zApex, half = 3.2, out = [];
+        function bar(x0, z0, x1, z1) {
+          var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz), nx = -dz / l * t / 2, nz = dx / l * t / 2, ex = dx / l * t * 0.3, ez = dz / l * t * 0.3;
+          return yPrism([[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]], y0, y1);
+        }
+        out.push(bar(cx - half, zBase, cx, zApex));
+        out.push(bar(cx + half, zBase, cx, zApex));
+        out.push(bar(cx - half * 0.55 + 0.17, zApex + h * 0.62, cx + half * 0.55 - 0.17, zApex + h * 0.62));
+        return out;
       }
 
       function buildBody(p) {
-        var L = layout(p), out = [], H = L.H, D = L.D, A = L.A, zf = L.zf, zb = L.zb, rho = L.rho;
-        var yLo = p.floor;
+        var L = layout(p), out = [], H = L.H, D = L.D, A = L.A, zf = L.zf, zb = L.zb, rho = L.rho, round = L.round;
+        var yLo = p.floor, O = L.outline;
 
         // Floor plate under everything.
-        out.push(yPrism(roundRect(-A, A, zb, zf, rho, 8), 0, yLo));
+        out.push(yPrism(O(0), 0, yLo));
 
         // Housing: divider and end walls in one shell. The two channels are notches through the front and back.
         var a1 = L.aa.a, a2 = L.ax.a, hp = [];
         function arc(cx, cz, from, to, n) {
           for (var k = 0; k <= n; k++) { var an = (from + (to - from) * k / n) * Math.PI / 180; hp.push([cx + rho * Math.cos(an), cz + rho * Math.sin(an)]); }
         }
-        // counter-clockwise from the back-left corner, back edge first (z = zb), then right, front, left
-        arc(-A + rho, zb + rho, 180, 270, 8);
-        hp.push([-a2, zb], [-a2, -D / 2], [a2, -D / 2], [a2, zb]);
-        arc(A - rho, zb + rho, -90, 0, 8);
-        arc(A - rho, zf - rho, 0, 90, 8);
-        hp.push([a1, zf], [a1, D / 2], [-a1, D / 2], [-a1, zf]);
-        arc(-A + rho, zf - rho, 90, 180, 8);
+        var notchF = [[a1, zf], [a1, D / 2], [-a1, D / 2], [-a1, zf]], notchB = [[-a2, zb], [-a2, -D / 2], [a2, -D / 2], [a2, zb]];
+        if (round) {
+          // counter-clockwise: right arc (back to front), front notch, left arc (front to back), back notch
+          var rl = O(0), half = rl.length / 2, i;
+          for (i = 0; i < half; i++) hp.push(rl[i]);
+          notchF.forEach(function (q) { hp.push(q); });
+          for (i = half; i < rl.length; i++) hp.push(rl[i]);
+          notchB.forEach(function (q) { hp.push(q); });
+        } else {
+          // counter-clockwise from the back-left corner, back edge first (z = zb), then right, front, left
+          arc(-A + rho, zb + rho, 180, 270, 8);
+          notchB.forEach(function (q) { hp.push(q); });
+          arc(A - rho, zb + rho, -90, 0, 8);
+          arc(A - rho, zf - rho, 0, 90, 8);
+          notchF.forEach(function (q) { hp.push(q); });
+          arc(-A + rho, zf - rho, 90, 180, 8);
+        }
         out.push(yPrism(hp, yLo - OV, H));
 
+        var labels = [];
         // Each channel: ramp, shelf and the arched front wall.
-        [[L.aa, 1], [L.ax, -1]].forEach(function (cs) {
+        [[L.aa, 1, 2], [L.ax, -1, 3]].forEach(function (cs) {
           var g = cs[0], s = cs[1], a = g.a;
           function zq(q) { return s * (D / 2 + q); }
           // Ramp wedge: slopes down towards the lip. Section in (z, y), extruded along x.
@@ -259,16 +302,33 @@
           // Front wall over the window, with the arch underside (an inverted V that grows from both ends).
           var yb = g.ys - ARCH_K * OV;
           out.push(zPrism([[-a - OV, yb], [0, g.yApex], [a + OV, yb], [a + OV, H], [-a - OV, H]], zq(g.w), zq(g.qEdge)));
+          // Optional label on the top deck beside the slot: one letter A per size step (AA = 2, AAA = 3).
+          if (p.labels === 1) {
+            var deck = g.qEdge - g.w, lh = Math.min(8, deck - 4);
+            if (lh >= 4) {
+              var qc = (g.w + g.qEdge) / 2, n = cs[2], k;
+              for (k = 0; k < n; k++) {
+                letterA((k - (n - 1) / 2) * 9, zq(qc - lh / 2), zq(qc + lh / 2), 1.5, H - 0.35, H + 0.8).forEach(function (m) { labels.push(m); });
+              }
+            }
+          }
         });
 
-        // Sleeve band round the top, like a battery wrap. The underside is a 45 degree taper, so it needs no support.
-        if (p.band > 0.05) {
-          var b = p.band, by0 = H - 12, flat = function (u, v, w) { return [u, w, v]; };
-          var inner = roundRect(-A + 0.5, A - 0.5, zb + 0.5, zf - 0.5, Math.max(rho - 0.5, 0.2), 8);
-          var o0 = roundRect(-A, A, zb, zf, rho, 8), o1 = roundRect(-A - b, A + b, zb - b, zf + b, rho + b, 8);
-          out.push(ringLoft(o0, o1, inner, by0, by0 + b * 1.6, flat));
-          out.push(ringExtrude(roundRect(-A - b - 0.0, A + b, zb - b, zf + b, rho + b, 8), inner, by0 + b * 1.6 - OV2, by0 + b * 1.6 + 4, flat));
+        // Wraps round the body: a 45 degree taper under each raised band so it needs no support.
+        var wraps = [];
+        function wrap(off, y0, y1) {
+          var inner = O(-0.5), flat = function (u, v, w) { return [u, w, v]; };
+          wraps.push(ringLoft(O(0), O(off), inner, y0, y0 + off * 1.6, flat));
+          wraps.push(ringExtrude(O(off), inner, y0 + off * 1.6 - OV2, y1, flat));
         }
+        if (p.band > 0.05) wrap(p.band, H - 12, H - 12 + p.band * 1.6 + 4);
+        // Battery sleeve: a thin raised label wrap over the plain upper body, above the window arches.
+        if (p.sleeve === 1) {
+          var ys0 = Math.max(L.aa.yApex, L.ax.yApex) + 3, ys1 = H - 12.6;
+          if (ys1 - ys0 > 6) wrap(0.8, ys0, ys1);
+        }
+        // Base ring (below the shelf, so the exit stays clear).
+        out.push(ringExtrude(O(1), O(-0.5), 0, Math.min(3, yLo + 0.6), function (u, v, w) { return [u, w, v]; }));
         var body = concat(out), trim = [];
 
         // Positive terminal nub on the divider between the two slots.
@@ -277,11 +337,13 @@
           trim.push(yPrism(roundRect(-nl / 2, nl / 2, -nw / 2, nw / 2, nw / 2 - 0.05, 8), H - 0.9, H + p.nub));
         }
         var meshes = [{ name: 'body', positions: body, smoothGroup: 'body' }];
+        if (wraps.length) meshes.push({ name: 'sleeve', positions: concat(wraps), smoothGroup: 'sleeve' });
         if (trim.length) meshes.push({ name: 'terminal', positions: concat(trim), smoothGroup: 'terminal' });
+        if (labels.length) meshes.push({ name: 'label', positions: concat(labels), smoothGroup: 'label' });
         return meshes;
       }
 
-      var DEFAULTS = { stack: 8, clear: 0.5, lip: 3.5, shelf: 9, floor: 2.4, wall: 5, divider: 8, corner: 5, band: 1, nub: 3 };
+      var DEFAULTS = { shape: 0, labels: 1, sleeve: 1, stack: 8, clear: 0.5, lip: 3.5, shelf: 9, floor: 2.4, wall: 5, divider: 8, corner: 5, band: 1, nub: 3 };
       function presetOf(label, over) {
         var values = {}, k;
         for (k in DEFAULTS) values[k] = DEFAULTS[k];
@@ -301,16 +363,19 @@
           { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Shadow Black', color: '#334155' }
         ],
         sculpt: false,
-        partNames: { body: 'Battery body', terminal: 'Terminal nub' },
+        partNames: { body: 'Battery body', sleeve: 'Sleeve and bands', terminal: 'Terminal nub', label: 'AA / AAA labels' },
         parameters: [
           { group: 'Capacity', key: 'stack', label: 'Batteries per stack (AA, AAA fit more)', unit: '', min: 4, max: 14, step: 1, value: DEFAULTS.stack },
           { group: 'Fit', key: 'clear', label: 'Battery clearance (snug ↔ roomy)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: DEFAULTS.clear },
           { group: 'Fit', key: 'lip', label: 'Lip height (holds the battery in)', unit: ' mm', min: 3.0, max: 4.5, step: 0.1, value: DEFAULTS.lip },
           { group: 'Fit', key: 'shelf', label: 'Pull-out shelf depth', unit: ' mm', min: 5, max: 16, step: 0.5, value: DEFAULTS.shelf },
+          { group: 'Body', key: 'shape', label: 'Body shape', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.shape, options: ['Block', 'Round'] },
           { group: 'Body', key: 'wall', label: 'Side wall', unit: ' mm', min: 3, max: 12, step: 0.5, value: DEFAULTS.wall },
           { group: 'Body', key: 'divider', label: 'Divider between slots', unit: ' mm', min: 6, max: 16, step: 0.5, value: DEFAULTS.divider },
           { group: 'Body', key: 'floor', label: 'Floor thickness', unit: ' mm', min: 1.6, max: 5, step: 0.2, value: DEFAULTS.floor },
-          { group: 'Body', key: 'corner', label: 'Corner rounding (max = side wall)', unit: ' mm', min: 0.5, max: 12, step: 0.5, value: DEFAULTS.corner },
+          { group: 'Body', key: 'corner', label: 'Corner rounding (max = side wall)', unit: ' mm', min: 0.5, max: 12, step: 0.5, value: DEFAULTS.corner, showIf: function (p) { return p.shape === 0; } },
+          { group: 'Look', key: 'sleeve', label: 'Battery sleeve (raised wrap)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.sleeve, options: ['Off', 'On'] },
+          { group: 'Look', key: 'labels', label: 'Top labels (AA / AAA letters)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.labels, options: ['Off', 'On'] },
           { group: 'Look', key: 'band', label: 'Top sleeve band', unit: ' mm', min: 0, max: 2, step: 0.25, value: DEFAULTS.band },
           { group: 'Look', key: 'nub', label: 'Terminal nub height', unit: ' mm', min: 0, max: 6, step: 0.5, value: DEFAULTS.nub }
         ],
@@ -320,6 +385,8 @@
           presetOf('Drawer tower (12 stack)', { stack: 12 }),
           presetOf('Snug fit', { clear: 0.3, lip: 3.2 }),
           presetOf('Roomy fit', { clear: 0.7, lip: 3.8 }),
+          presetOf('Round cell', { shape: 1, wall: 4, band: 1.5, nub: 4 }),
+          presetOf('Plain (no labels or sleeve)', { labels: 0, sleeve: 0 }),
           presetOf('Chunky battery', { wall: 8, divider: 12, corner: 8, band: 1.5, nub: 4 })
         ],
         build: function (params) { return buildBody(params); },
