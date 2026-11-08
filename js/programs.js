@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 115,
+    title: 'Stamp Maker',
+    bundle: 'personal',
+    category: 'PERSONALISED // STAMPS',
+    thumbnailUrl: 'assets/thumbnails/stamp-maker.svg',
+    programUrl: 'programs/stamp-maker.html',
+    description: 'Design a rubber-stamp style hand stamp: type your text in 10 open-licence fonts, add one of 18 icons (heart, paw, star, flower, cat and more), and pick a layout (icon above or beside the text, text only, icon only, or a round seal with text around the icon). Choose the plate shape and border; the design is mirrored for you. It prints design-up with a tapered one-piece grip underneath, so there are no supports and nothing to assemble: flip it over to stamp. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',
