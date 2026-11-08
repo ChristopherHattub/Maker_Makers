@@ -255,7 +255,7 @@
 
       // ---------- the model, in print pose ----------
       var DEFAULTS = { key: 0, scale: 0, octave: 4, tines: 17, layout: 0, labels: 1, labelSize: 3.6,
-        tineW: 5.5, gap: 1.2, thick: 2.4, stiff: 100,
+        tineW: 5.5, gap: 1.4, thick: 2.4, stiff: 100,
         wall: 2, hold: 6, hole: 26, corner: 16, margin: 7, barD: 9, barH: 5 };
       var NA = 8; // points per corner arc minus one
       var lastTuning = null, lastPitch = 6.7;
@@ -432,7 +432,7 @@
           options('Notes', 'labels', 'Note labels engraved on the board', ['Off', 'Note names', 'Names and octave'], DEFAULTS.labels),
           sh(slider('Notes', 'labelSize', 'Label size', ' mm', 3, 6, 0.2, DEFAULTS.labelSize), function (q) { return Math.round(q.labels) > 0; }),
           slider('Tines', 'tineW', 'Tine width', ' mm', 4, 9, 0.5, DEFAULTS.tineW),
-          slider('Tines', 'gap', 'Slit between tines (under 1 mm may fuse)', ' mm', 0.8, 2, 0.1, DEFAULTS.gap),
+          slider('Tines', 'gap', 'Slit between tines (under 1.2 mm may fuse at the bed)', ' mm', 0.8, 2, 0.1, DEFAULTS.gap),
           slider('Tines', 'thick', 'Tine thickness (thicker = longer tines, louder)', ' mm', 1.6, 3.6, 0.2, DEFAULTS.thick),
           slider('Tines', 'stiff', 'Material stiffness (tines print flat? lower this)', '%', 50, 150, 5, DEFAULTS.stiff),
           slider('Body', 'wall', 'Wall thickness', ' mm', 1.6, 3.2, 0.4, DEFAULTS.wall),

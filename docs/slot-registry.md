@@ -15,10 +15,13 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 105 | Built: Sedan Maker. |
 | 106 | Built: Console Faceplate. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
+| 109-112 | Free (check open PRs first). |
+| 113 | Built: Gingerbread House. |
+| 114-119 | Free (check open PRs first). |
 | 120 | Built: Kalimba Maker (thumb piano, print-in-place tines). |
-| 109+ | Free (check open PRs first). Any number works. |
+| 121+ | Free (check open PRs first). Any number works. |
 
-Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -129,6 +132,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
 | 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
 | 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
+| 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
 | 120 | Kalimba Maker | toys | `kalimba-maker.html` (tines cut into the board, tuned from beam theory; roof closes with no supports; click-to-hear) |
 
 ## Groups (BUNDLES)
@@ -136,7 +140,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | id | Name | Members |
 | --- | --- | --- |
 | halloween | Halloween | 5 |
-| christmas | Christmas | 6 |
+| christmas | Christmas | 8 |
 | easter | Easter & Spring | 6 |
 | valentines | Valentine's | 2 |
 | thanksgiving | Thanksgiving & Fall | 7 |
@@ -149,7 +153,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
 | organization | Organisation | 3 |
-| toys | Toys & Games | 1 |
+| toys | Toys & Games | 2 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
 | animals | Animals & Creatures | 15 |

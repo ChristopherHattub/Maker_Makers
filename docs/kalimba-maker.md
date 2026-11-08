@@ -24,7 +24,7 @@ Click the board in the Parametric tab to hear the nearest tine (`onPick`, Web Au
 
 ## Geometry rules
 
-- Slits: `gap` (default 1.2 mm) between tines and past each tip; tips are chamfered 1 mm. Under 1 mm may fuse in the first layers.
+- Slits: `gap` (default 1.4 mm, so an elephant-foot flare of 0.2 mm a side still leaves 1 mm at the bed) between tines and past each tip; tips are chamfered 1 mm. Under 1.2 mm may fuse in the first layers.
 - Labels sit past the tine tips on the board, each clear of every slit and of other labels (greedy placement, `placed`). Glyph outlines are the Text Generator's bold block font (SIL OFL 1.1), embedded for `A-G`, `0-9` and `#`. Each glyph vertex is nudged by about 3 microns (`jit`) because exactly collinear vertices from two letters on one baseline made the triangulator leave a gap.
 - The rear inner wall is at least `min(corner, 30)` mm from the root so the bar's rounded rear corners stay inside the cavity; the bar top is kept at least 1.3 mm under the start of the roof.
 - Heights: board 1.6 to 3.6 mm, straight wall 4 to 30 mm, then the roof; with the defaults the body is about 34 mm tall in total. A smaller sound hole makes a taller roof.
@@ -35,4 +35,4 @@ Defaults and all presets read "no supports needed". A label on a pit wider than 
 
 ## Open items
 
-Unprinted. To check: tine pitch against the formula and the stiffness default, whether 1.2 mm slits fuse, the engraved label legibility, and the volume of a PLA board. Presets: Default 17-key C, Pocket 8-key, Lullaby 10-key (A minor pentatonic), Deep 15-key (C3), Chromatic 13-key, Stiff PETG 17-key.
+Unprinted. To check: tine pitch against the formula and the stiffness default, whether the 1.4 mm slits fuse, the engraved label legibility, and the volume of a PLA board. Presets: Default 17-key C, Pocket 8-key, Lullaby 10-key (A minor pentatonic), Deep 15-key (C3), Chromatic 13-key, Stiff PETG 17-key.
