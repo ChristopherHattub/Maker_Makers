@@ -14,6 +14,12 @@ Radii run outwards from the tip tube (`ro`), with `c` = slide clearance, `e` = c
 
 Slider notes: more tubes make the whole saber wider (each step costs `2c + e + w` of radius); the grip width has a floor so the hilt wall never gets thinner than 2.2 mm around the bore. The **Extend** slider is preview only: at 0 % the model is in its print position, any other value floats tubes in the air and the print chip rightly turns red.
 
+## Hilt parts tab
+
+A second tab, **Hilt parts**, places decorative modules on the hilt by tapping it (the same pattern as the Sedan Maker's Car parts): band, flange, ribs, fins, studs and gem. A tap sets the height (and the turn angle for fins, studs and the gem); the sliders in the tab (size, height, count) apply to the next part. Parts stay put when other sliders change, each is its own colour in the Color tool, and "Add a sample set", "Undo last part" and "Clear parts" are in the tab. State lives in the `parts` array (also `embedState` for the Workshop).
+
+Rules that keep every part printable: undersides are 45 degree cones, bands and ribs follow the hilt outline, studs and the gem start at the narrowest wall height under them so no plug hangs in the air, and every part is sunk into the wall but never closer than 0.8 mm to the bore (so it cannot touch a blade tube). Parts are clamped to the hilt height. `testSetup` places one of each so `check-mesh.mjs` and CI cover them, using the tab's slider values; ribs are limited to one bead per 1.2 mm and kept 0.3 mm apart so no two beads share an edge.
+
 ## Print check
 
 `printCheckOptions: { bridgeGap: 0.8 }` tells the shared print check that a part hovering within 0.8 mm of another solid is a deliberate print-in-place gap (the voxel grid cannot resolve 0.4 mm). `bridgeGap` defaults to 0, so no other generator changes. The gap itself is still a bridge over 0.4 mm of air in the slicer.
