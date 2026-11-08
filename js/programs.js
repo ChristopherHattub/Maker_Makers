@@ -797,7 +797,7 @@ const GENERATORS = [
     category: 'GAMING // CONSOLE COVERS',
     thumbnailUrl: 'assets/thumbnails/console-faceplate.svg',
     programUrl: 'programs/console-faceplate.html',
-    description: 'A decorative faceplate or cover panel for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X top, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the trim, size, plate thickness, rim and pattern height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print a small piece and use the Trim slider; the PS5 panel is larger than most beds, so scale it down or print it smaller. Paint parts in the Color tool and export .STL.'
+    description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,

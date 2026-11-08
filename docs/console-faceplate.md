@@ -4,14 +4,14 @@
 
 ## Devices (sizes are estimates)
 
-The plate sizes in `DEVICES` are rough values taken from published console dimensions and photos. **Nothing was measured on hardware and nothing is printed.** Test-print a small piece or use the Trim slider (-6 to +6 mm) to grow or shrink the plate before a long print.
+The plate sizes in `DEVICES` are rough values taken from published console dimensions and photos. **Nothing was measured on hardware and nothing is printed.** Plate sizes are fixed (no size or trim sliders), so a plate always fits the same. Test-print one and, if it does not fit, edit the numbers in `DEVICES`.
 
 | Device | Plate (x by z, mm) | Corner radius | Notes |
 | --- | --- | --- | --- |
 | Switch dock | 160 x 92 | 9 | Fits the 184 mm preview bed. |
 | Switch 2 dock | 178 x 100 | 10 | Fits the 184 mm bed. |
-| PS5 side panel | 380 x 250 | 28 | Bigger than most beds; the engine grows the preview bed. Use Size (%) to print it smaller. |
-| Xbox Series X top | 148 x 148 | 6 | The square top face. |
+| PS5 side panel | 380 x 250 | 28 | Bigger than most beds; the engine grows the preview bed. |
+| Xbox Series X front | 148 x 298 | 6 | The front face only. The top is left clear because it holds the fan vents. Taller than 256 mm, so the preview bed grows to 350 mm. |
 
 ## Parts
 
@@ -23,7 +23,7 @@ The plate sizes in `DEVICES` are rough values taken from published console dimen
 
 ## Add a design or a console
 
-Designs are entries in `PATTERNS` (call `add(convexPolygon)`; `R` is the pattern rectangle) plus a name in `DESIGNS`. Consoles are entries in `DEVICES`. Run `node scripts/ci/check-generator.mjs console-faceplate`; also sweep every design on every console at the cell, relief and scale extremes.
+Designs are entries in `PATTERNS` (call `add(convexPolygon)`; `R` is the pattern rectangle) plus a name in `DESIGNS`. Consoles are entries in `DEVICES`. Run `node scripts/ci/check-generator.mjs console-faceplate`; also sweep every design on every console at the cell and relief extremes.
 
 ## Open items
 

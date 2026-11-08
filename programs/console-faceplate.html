@@ -15,16 +15,17 @@
       // Y up, millimetres. The plate lies flat on the bed, face up, centred on x and z. Every solid is a closed shell.
       var TAU = Math.PI * 2, DEG = Math.PI / 180;
 
-      // Devices. w and h are the plate size in mm (x and z). ESTIMATES from published sizes and photos of each
-      // console, not measured on hardware: test-print the Trim slider first, then dial the size in.
+      // Devices. w and h are the fixed plate size in mm (x and z), so every plate is the same size every time.
+      // ESTIMATES from published sizes and photos of each console, not measured on hardware: test-print and
+      // adjust the numbers here if a plate does not fit.
       var DEVICES = [
         { name: 'Switch dock', w: 160, h: 92, r: 9 },
         { name: 'Switch 2 dock', w: 178, h: 100, r: 10 },
         { name: 'PS5 side panel', w: 380, h: 250, r: 28 },
-        { name: 'Xbox Series X top', w: 148, h: 148, r: 6 }
+        { name: 'Xbox Series X front', w: 148, h: 298, r: 6 }
       ];
       var DESIGNS = ['Plain bezel', 'Honeycomb', 'Diagonal stripes', 'Circuit traces', 'Broken rings', 'Pixel fade', 'Mountains and sun', 'Starburst'];
-      var DEFAULTS = { device: 0, design: 1, vents: 0, thick: 3, rimH: 2, rimW: 2.4, reliefH: 1.2, cell: 10, scale: 100, trim: 0, seed: 4 };
+      var DEFAULTS = { device: 0, design: 1, vents: 0, thick: 3, rimH: 2, rimW: 2.4, reliefH: 1.2, cell: 10, seed: 4 };
 
       function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
       function concat(list) {
@@ -211,9 +212,9 @@
       };
 
       function build(p, api) {
-        var THREE = api.THREE, dev = DEVICES[Math.round(p.device)], s = p.scale / 100;
-        var W = Math.max(30, (dev.w + p.trim) * s), H = Math.max(30, (dev.h + p.trim) * s), hw = W / 2, hd = H / 2;
-        var rad = Math.min(dev.r * Math.sqrt(s), hw - 2, hd - 2), t = p.thick, rimW = p.rimW, N = 8, out = [], list;
+        var THREE = api.THREE, dev = DEVICES[Math.round(p.device)];
+        var hw = dev.w / 2, hd = dev.h / 2;
+        var rad = dev.r, t = p.thick, rimW = p.rimW, N = 8, out = [], list;
         var pad = rimW + 2, ro = Math.max(0.1, rad - pad);
         var R = { x0: -hw + pad, x1: hw - pad, z0: -hd + pad, z1: hd - pad };
         var holes = [];
@@ -273,10 +274,8 @@
         defaultColor: '#2b2f3a',
         partNames: { plate: 'Plate', rim: 'Raised rim', pattern: 'Pattern' },
         parameters: [
-          choice('Console', 'device', 'Console (plate size is an estimate)', DEVICES.map(function (d) { return d.name; }), DEFAULTS.device),
+          choice('Console', 'device', 'Console (fixed size)', DEVICES.map(function (d) { return d.name; }), DEFAULTS.device),
           choice('Console', 'design', 'Design', DESIGNS, DEFAULTS.design),
-          slider('Console', 'trim', 'Trim (grow or shrink to fit)', ' mm', -6, 6, 0.5, DEFAULTS.trim),
-          slider('Console', 'scale', 'Size (100 = full panel; PS5 needs a big bed)', '%', 20, 100, 1, DEFAULTS.scale),
           choice('Console', 'vents', 'Vent slots cut through', ['Off', 'On'], DEFAULTS.vents),
           slider('Plate', 'thick', 'Plate thickness', ' mm', 2, 6, 0.5, DEFAULTS.thick),
           slider('Plate', 'rimW', 'Rim width', ' mm', 1.2, 6, 0.2, DEFAULTS.rimW),
@@ -291,9 +290,8 @@
           presetOf('Switch 2 dock circuit', { device: 1, design: 3, cell: 10 }),
           presetOf('Switch 2 dock mountains', { device: 1, design: 6, cell: 12 }),
           presetOf('PS5 panel rings', { device: 2, design: 4, cell: 16, thick: 3.5 }),
-          presetOf('PS5 panel half size', { device: 2, design: 2, scale: 50, cell: 10 }),
-          presetOf('Xbox top starburst', { device: 3, design: 7, cell: 9 }),
-          presetOf('Xbox top vented stripes', { device: 3, design: 2, vents: 1, cell: 10 }),
+          presetOf('Xbox front starburst', { device: 3, design: 7, cell: 9 }),
+          presetOf('Xbox front vented stripes', { device: 3, design: 2, vents: 1, cell: 10 }),
           presetOf('Plain bezel', { design: 0 })
         ],
         build: build

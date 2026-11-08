@@ -125,7 +125,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
-| 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X top; eight designs; sizes are estimates) |
+| 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
 
 ## Groups (BUNDLES)
 
