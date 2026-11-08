@@ -31,6 +31,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [gravity-walker.md](gravity-walker.md) | The Gravity Walker (slot 122): a ramp-walking toy with print-in-place rear legs, the walking simulation and how to retune it |
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |
+| [holiday-tree-topper.md](holiday-tree-topper.md) | The Holiday Tree Topper (slot 107): faceted star on a print-in-place spinning cone, socket geometry, clearances, print-check alignment |
 | [energy-saber.md](energy-saber.md) | The Energy Saber (slot 110): telescoping print-in-place blade tubes, catch and clearance geometry, hilt styles, how it is tested |
 | [gingerbread-house.md](gingerbread-house.md) | The Gingerbread House (slot 113): one-piece hollow house, corbel eaves, pointed openings, no supports |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |

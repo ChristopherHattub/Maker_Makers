@@ -818,6 +818,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 107,
+    title: 'Holiday Tree Topper',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // TREE DECOR',
+    thumbnailUrl: 'assets/thumbnails/holiday-tree-topper.svg',
+    programUrl: 'programs/holiday-tree-topper.html',
+    description: 'A faceted crystal star (four or five points), heart or gem on a fluted bell that sits on a socket for the tree tip. Set the size, pointiness and puff, the tree tip width and the socket depth, and choose a smooth or fluted bell and a socket collar. The bell is printed in place on a captured post, so the topper spins on its socket with a 0.4 mm clearance you can change, or print it fixed. Every downward surface is 40 degrees or steeper from vertical; the bell\'s first layers bridge a 0.4 mm gap over a ledge. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 110,
     title: 'Energy Saber',
     bundle: 'toys',
