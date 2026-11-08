@@ -12,7 +12,7 @@
 
 ## Slot sizing
 
-`sizes(p)` in the page: the opening is `cable thickness + clearance` (default 5 + 0.5 mm). The mouth is narrower by twice the **snap-in grip** but never below 72 % of the opening, so the lip underside stays steeper than about 45 degrees and prints without supports. Lower the grip to 0 for an open slot. Tray length and wall height grow to fit the slot count and cable size, and the clip width grows with the slot count (never below "Clip width at least").
+`sizes(p)` in the page: the opening is `cable thickness + clearance` (default 5 + 0.5 mm). The mouth is narrower by twice the **snap-in grip** but never below 80 % of the opening, so the lip underside stays steeper than 45 degrees and prints without supports. Lower the grip to 0 for an open slot. Tray length and wall height grow to fit the slot count and cable size, and the clip width grows with the slot count (never below "Clip width at least").
 
 ## Print-check notes
 
