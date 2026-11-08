@@ -51,7 +51,7 @@ Playback keeps the cost flat however many tiles exist (`js/worldmap.js`, `hoverL
 
 - `scripts/hologram-config.json`, keyed by thumbnail id: `hue` (degrees, 185 = cyan, 28 = orange), `stand` (force a flat
   model upright, default auto), `yaw0` (start angle), `fill` (how much of the cell the model fills, default 0.8),
-  `skipRender` (leave a tile alone), `sat`/`light` (colour saturation/lightness; `sat: 0` = white),
+  `skipRender` (leave a tile alone), `hide` (part names left out of the render, e.g. loose strips lying beside the model), `sat`/`light` (colour saturation/lightness; `sat: 0` = white),
   `dark: true` (black model: part-transparent near-black body with scanlines, light rim and edge glow; `darka` URL param sets body opacity, default 0.62). Every tile has a thematic `hue`/`sat`/`light`.
 - Look parameters on the render URL: `wire`, `edge`, `body`, `glow`, `angle`, `frames`, `ss` (see `tools/hologram.html`).
 - Every tile currently uses the one shared `base-tile.webp` (`rims` in the manifest is empty). Per-section rim colours

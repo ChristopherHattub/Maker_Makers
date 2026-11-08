@@ -5,6 +5,19 @@
    "face": "#1b2236"
   }
  },
+ "gravity-walker": {
+  "colors": {
+   "body": "#f1f5f9",
+   "head": "#fdba74",
+   "eyes": "#334155",
+   "legs": "#7fd6b4",
+   "pins": "#c084fc",
+   "ramp": "#93c5fd",
+   "rails": "#fda4af"
+  },
+  "yaw": 38,
+  "elev": 24
+ },
  "pumpkin-plotter": {
   "colors": {
    "body": "#f28c28",
@@ -525,6 +538,12 @@
    "foot": "#1d4ed8"
   }
  },
+ "cable-organizer": {
+  "colors": {
+   "body": "#2f3a52",
+   "slots": "#3b82f6"
+  }
+ },
  "remote-caddy": {
   "colors": {
    "caddy": "#2f3a52",
@@ -718,14 +737,15 @@
   "yaw": 35,
   "elev": 22
  },
- "kalimba-maker": {
+ "battery-dispenser": {
   "colors": {
-   "board": "#e3b978",
-   "body": "#8a5a3b",
-   "bridge": "#6b4329"
+   "body": "#7bd88f",
+   "sleeve": "#f1f5f9",
+   "terminal": "#fdba74",
+   "label": "#334155"
   },
-  "yaw": 25,
-  "elev": 38
+  "yaw": 35,
+  "elev": 22
  },
  "gingerbread-house": {
   "colors": {
@@ -742,5 +762,85 @@
   },
   "yaw": 30,
   "elev": 24
+ },
+ "marble-run": {
+  "colors": {
+   "frame": "#f1e7d0",
+   "base": "#3b3f4a",
+   "collector": "#2f9e8f",
+   "level": [
+    "#ef5b5b",
+    "#f6b73c",
+    "#4aa3e8",
+    "#4cc07a",
+    "#a874e8",
+    "#f08a3c"
+   ]
+  }
+ },
+ "stamp-maker": {
+  "colors": {
+   "body": "#e8d9c0",
+   "border": "#c0392b",
+   "icon": "#c0392b",
+   "lettering": "#c0392b"
+  },
+  "yaw": 35,
+  "elev": 30
+ },
+ "wall-panel": {
+  "colors": {
+   "plate": "#2f4a73",
+   "rim": "#7ab3ff",
+   "text": "#f1ece1",
+   "deco": "#ff9a4d",
+   "rails": "#7ab3ff",
+   "chips": "#7be0b0",
+   "pins": "#7ab3ff",
+   "knobs": "#ff8fb1",
+   "marks": "#f1ece1"
+  },
+  "yaw": 0,
+  "elev": 55
+ },
+ "fidget-spinner": {
+  "colors": {
+   "body": "#a78bfa",
+   "core": "#60a5fa",
+   "hub": "#ffd23f",
+   "text": "#ffffff",
+   "pads": "#ffd23f"
+  }
+ },
+ "zoetrope": {
+  "colors": {
+   "base": "#d8b4fe",
+   "pin": "#f1f5f9",
+   "drum": "#fdba74",
+   "strip": "#f1f5f9",
+   "pictures": "#334155"
+  },
+  "yaw": 28,
+  "elev": 30,
+  "fill": 0.78
+ },
+ "bird-feeder": {
+  "colors": {
+   "tray": "#d9b38c",
+   "posts": "#d9b38c",
+   "hopper": "#8ecae6",
+   "roof": "#e8756f"
+  },
+  "yaw": 30,
+  "elev": 18
+ },
+ "kalimba-maker": {
+  "colors": {
+   "board": "#e3b978",
+   "body": "#8a5a3b",
+   "bridge": "#6b4329"
+  },
+  "yaw": 25,
+  "elev": 38
  }
 }

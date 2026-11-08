@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-119 Headphone & Controller Stand // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Y up, millimetres. Every solid is a closed shell. Desk stands print upright on a flat base; wall mounts print
+      // lying on their back plate, so hooks, fins and shelves rise straight up from the bed (no supports).
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      var MOUNTS = ['Desk headphone stand', 'Wall headphone hook', 'Desk controller rack', 'Wall controller shelf'];
+      // Same eight designs as the Console Faceplate (slot 106), so a stand and a faceplate can match.
+      var DESIGNS = ['Plain bezel', 'Honeycomb', 'Diagonal stripes', 'Circuit traces', 'Broken rings', 'Pixel fade', 'Mountains and sun', 'Starburst'];
+      var DEFAULTS = {
+        mount: 0, design: 1, bandW: 46, height: 220, post: 52, cap: 100, baseL: 120, baseW: 120,
+        hooks: 1, pegH: 40, pegW: 22, lipH: 10, slots: 2, slotW: 70, finH: 80, rackD: 130,
+        thick: 4, plateT: 6, screw: 4.5, rimH: 2, rimW: 2.4, reliefH: 1.2, cell: 10, seed: 4
+      };
+
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+      // Convex outline pts [x, z] spanning y0..y1.
+      function fanPrism(pts, y0, y1) {
+        var o = [], n = pts.length, i, a, b, cx = 0, cz = 0;
+        for (i = 0; i < n; i++) { cx += pts[i][0] / n; cz += pts[i][1] / n; }
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, [cx, y1, cz], at, bt);
+          tri(o, [cx, y0, cz], bb, ab);
+          tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      function circlePts(cx, cz, r, n, rot) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([cx + r * Math.cos((i / n) * TAU + (rot || 0)), cz + r * Math.sin((i / n) * TAU + (rot || 0))]);
+        return pts;
+      }
+      // Rounded rectangle outline: n + 1 points per corner, so the point count never changes with r.
+      function rrectPts(cx, cz, hw, hd, r, n) {
+        r = Math.max(0.05, Math.min(r, hw - 0.01, hd - 0.01));
+        var cs = [[hw - r, hd - r, 0], [-(hw - r), hd - r, 90], [-(hw - r), -(hd - r), 180], [hw - r, -(hd - r), 270]];
+        var pts = [], i, k, a;
+        for (i = 0; i < 4; i++) {
+          for (k = 0; k <= n; k++) {
+            a = (cs[i][2] + (90 * k) / n) * DEG;
+            pts.push([cx + cs[i][0] + r * Math.cos(a), cz + cs[i][1] + r * Math.sin(a)]);
+          }
+        }
+        return pts;
+      }
+      function ccw(pts) {
+        var a = 0, i, n = pts.length;
+        for (i = 0; i < n; i++) a += pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1];
+        return a < 0 ? pts.slice().reverse() : pts;
+      }
+
+      function rnd(i, seed) { var s = Math.sin(i * 127.1 + (seed || 0) * 311.7) * 43758.5453; return s - Math.floor(s); }
+
+      // Clip a convex polygon to the pattern rectangle (Sutherland-Hodgman). Returns null for slivers.
+      function clipRect(poly, R) {
+        var edges = [[0, 1, R.x0], [0, -1, -R.x1], [1, 1, R.z0], [1, -1, -R.z1]], e, out, i, a, b, da, db, t, k;
+        for (k = 0; k < 4; k++) {
+          e = edges[k]; out = [];
+          for (i = 0; i < poly.length; i++) {
+            a = poly[i]; b = poly[(i + 1) % poly.length];
+            da = e[1] * a[e[0]] - e[2]; db = e[1] * b[e[0]] - e[2];
+            if (da >= 0) out.push(a);
+            if ((da >= 0) !== (db >= 0)) { t = da / (da - db); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
+          }
+          poly = out;
+          if (poly.length < 3) return null;
+        }
+        var area = 0;
+        for (i = 0; i < poly.length; i++) area += poly[i][0] * poly[(i + 1) % poly.length][1] - poly[(i + 1) % poly.length][0] * poly[i][1];
+        return Math.abs(area) / 2 < 3 ? null : ccw(poly);
+      }
+
+      // Pattern generators: each calls add(convexPolygon). R = pattern rectangle, c = cell size in mm.
+      var PATTERNS = {
+        1: function (R, c, seed, add) { // honeycomb of raised hexagon tiles
+          var s = c / 2, dx = Math.sqrt(3) * s, dz = 1.5 * s, rr = s - 0.8, row, col, x, z;
+          for (row = 0, z = R.z0 - s; z < R.z1 + s; z += dz, row++) {
+            for (col = 0, x = R.x0 - dx + (row % 2 ? dx / 2 : 0); x < R.x1 + dx; x += dx, col++) add(circlePts(x, z, rr, 6, Math.PI / 6));
+          }
+        },
+        2: function (R, c, seed, add) { // 45 degree stripes
+          var w = R.x1 - R.x0, d = R.z1 - R.z0, L = w + d, cx = (R.x0 + R.x1) / 2, cz = (R.z0 + R.z1) / 2, k, sw = c * 0.42, ux = 0.7071, uz = 0.7071, nx = -0.7071, nz = 0.7071, px, pz, N = Math.ceil(L / c / 1.4) + 1;
+          for (k = -N; k <= N; k++) {
+            px = cx + nx * k * c * 1.0; pz = cz + nz * k * c * 1.0;
+            add([[px - ux * L - nx * sw / 2, pz - uz * L - nz * sw / 2], [px + ux * L - nx * sw / 2, pz + uz * L - nz * sw / 2],
+                 [px + ux * L + nx * sw / 2, pz + uz * L + nz * sw / 2], [px - ux * L + nx * sw / 2, pz - uz * L + nz * sw / 2]]);
+          }
+        },
+        3: function (R, c, seed, add) { // circuit board traces and pads
+          var p = c * 0.8, tw = 1.7, row = 0, z, x, len, i, n = 0, prevPads = [];
+          function strip(x0, z0, x1, z1) {
+            var dx = x1 - x0, dz = z1 - z0, l = Math.sqrt(dx * dx + dz * dz) || 1, ex = dx / l * tw * 0.3, ez = dz / l * tw * 0.3, nx = -dz / l * tw / 2, nz = dx / l * tw / 2;
+            add([[x0 - ex - nx, z0 - ez - nz], [x1 + ex - nx, z1 + ez - nz], [x1 + ex + nx, z1 + ez + nz], [x0 - ex + nx, z0 - ez + nz]]);
+          }
+          for (z = R.z0 + p / 2; z < R.z1; z += p, row++) {
+            x = R.x0 - p * rnd(row, seed) * 2;
+            while (x < R.x1) {
+              len = p * (2 + Math.floor(rnd(n++, seed + 1) * 5));
+              strip(x, z, x + len, z);
+              if (rnd(n++, seed + 2) < 0.65) add(circlePts(x + len, z, 2.6, 8, 0.39));
+              if (rnd(n++, seed + 3) < 0.45) { strip(x + len, z, x + len, z + p); add(circlePts(x + len, z + p, 2.6, 8, 0.39)); }
+              x += len + p * (1 + Math.floor(rnd(n++, seed + 4) * 2));
+            }
+          }
+        },
+        4: function (R, c, seed, add) { // dashed concentric rings
+          var cx = (R.x0 + R.x1) / 2, cz = (R.z0 + R.z1) / 2, far = Math.sqrt(Math.pow(R.x1 - R.x0, 2) + Math.pow(R.z1 - R.z0, 2)) / 2;
+          var pitch = c * 0.9, rw = pitch * 0.42, k, r, m, M, a0, span, j, rot;
+          add(circlePts(cx, cz, pitch * 0.55, 24));
+          for (k = 1; r = pitch * (k + 0.6), r - rw < far; k++) {
+            M = Math.max(6, Math.round(TAU * r / (c * 2.2)));
+            rot = (k % 2 ? 0.5 : 0) * TAU / M + k * 0.3; span = TAU / M * 0.62;
+            for (m = 0; m < M; m++) {
+              a0 = rot + m * TAU / M; var pts = [];
+              for (j = 0; j <= 3; j++) pts.push([cx + (r + rw / 2) * Math.cos(a0 + span * j / 3), cz + (r + rw / 2) * Math.sin(a0 + span * j / 3)]);
+              for (j = 3; j >= 0; j--) pts.push([cx + (r - rw / 2) * Math.cos(a0 + span * j / 3), cz + (r - rw / 2) * Math.sin(a0 + span * j / 3)]);
+              add(pts);
+            }
+          }
+        },
+        5: function (R, c, seed, add) { // pixel squares thinning out toward the bottom edge
+          var q = c * 0.62, ix, iz, x, z, n = 0, f;
+          for (iz = 0, z = R.z0 + c / 2; z < R.z1 + c; z += c * 0.8, iz++) {
+            f = (z - R.z0) / Math.max(1, R.z1 - R.z0);
+            for (ix = 0, x = R.x0 + c / 2; x < R.x1 + c; x += c * 0.8, ix++) {
+              if (rnd(ix * 97 + iz, seed) < 0.85 - 0.8 * f) add([[x - q / 2, z - q / 2], [x + q / 2, z - q / 2], [x + q / 2, z + q / 2], [x - q / 2, z + q / 2]]);
+            }
+          }
+        },
+        6: function (R, c, seed, add) { // layered peaks along the bottom edge, a sun and a few stars
+          var w = R.x1 - R.x0, d = R.z1 - R.z0, n = 0, layer, x, h, b, y, cx = (R.x0 + R.x1) / 2;
+          for (layer = 0; layer < 3; layer++) {
+            for (x = R.x0 - c + rnd(layer, seed) * c; x < R.x1 + c; x += c * (1.9 + rnd(n++, seed + layer) * 1.2)) {
+              h = d * (0.22 + 0.1 * layer) * (0.6 + rnd(n++, seed + 7) * 0.7); b = h * 0.62 + 0.013 * layer;
+              if (x - b < R.x0 + 2 || x + b > R.x1 - 2) continue;
+              add([[x - b, R.z1 + 0.5 + layer * 0.011], [x + b, R.z1 + 0.5 + layer * 0.011], [x, R.z1 - h]]);
+            }
+          }
+          add(circlePts(cx + w * (rnd(1, seed) - 0.5) * 0.4, R.z0 + d * 0.28, Math.min(w, d) * 0.13, 40));
+          for (x = 0; x < 10; x++) add(circlePts(R.x0 + rnd(x + 40, seed) * w, R.z0 + rnd(x + 70, seed) * d * 0.4, 1.7, 8, 0.39));
+        },
+        7: function (R, c, seed, add) { // rays around a hub
+          var cx = (R.x0 + R.x1) / 2, cz = (R.z0 + R.z1) / 2, far = Math.sqrt(Math.pow(R.x1 - R.x0, 2) + Math.pow(R.z1 - R.z0, 2)) / 2;
+          var N = 28, k, a, half = TAU / N * 0.32, r0 = c * 1.1, r1;
+          add(circlePts(cx, cz, c * 0.7, 32));
+          for (k = 0; k < N; k++) {
+            a = k * TAU / N + 0.05; r1 = (k % 2 ? 0.7 : 1.2) * far;
+            add([[cx + r0 * Math.cos(a - half), cz + r0 * Math.sin(a - half)], [cx + r0 * Math.cos(a + half), cz + r0 * Math.sin(a + half)], [cx + r1 * Math.cos(a), cz + r1 * Math.sin(a)]]);
+          }
+        }
+      };
+
+      // Extrude a 2D outline (convex or concave, optional holes) in (u, v) over w0..w1, then map (u, v, w) to world x, y, z.
+      function solid(THREE, outer, holes, w0, w1, map) {
+        var sh = new THREE.Shape(outer.map(function (p) { return new THREE.Vector2(p[0], p[1]); }));
+        (holes || []).forEach(function (h) { sh.holes.push(new THREE.Path(h.map(function (p) { return new THREE.Vector2(p[0], p[1]); }))); });
+        var g = new THREE.ExtrudeGeometry(sh, { depth: w1 - w0, bevelEnabled: false, steps: 1, curveSegments: 12 });
+        var a = g.attributes.position.array, out = new Float32Array(a.length), i, q;
+        for (i = 0; i < a.length; i += 3) { q = map(a[i], a[i + 1], a[i + 2] + w0); out[i] = q[0]; out[i + 1] = q[1]; out[i + 2] = q[2]; }
+        return orient(out);
+      }
+      function mapPlan(u, v, w) { return [u, w, v]; }   // outline in the floor plane (x, z), extruded up
+      function mapSideZ(u, v, w) { return [w, v, u]; }  // outline in (z, y), extruded along x
+      function mapXY(u, v, w) { return [u, v, w]; }     // outline in (x, y), extruded along z
+      function remap(pos, fn) {
+        var out = new Float32Array(pos.length), i, q;
+        for (i = 0; i < pos.length; i += 3) { q = fn(pos[i], pos[i + 1], pos[i + 2]); out[i] = q[0]; out[i + 1] = q[1]; out[i + 2] = q[2]; }
+        return orient(out);
+      }
+      function box(THREE, x0, x1, y0, y1, z0, z1) { return solid(THREE, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], null, z0, z1, mapXY); }
+
+      // Raised relief on a VERTICAL face prints with each tile hanging out sideways. Chamfer every downward-facing edge at
+      // about 45 degrees (the tile narrows as it rises out of the face) so the first layers of each tile are supported.
+      function insetPoly(q, h) {
+        var n = q.length, f, i, d = [], nm = [], any = false;
+        for (i = 0; i < n; i++) {
+          var a = q[i], b = q[(i + 1) % n], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.sqrt(tx * tx + ty * ty) || 1;
+          nm.push([ty / l, -tx / l]);
+          if (-tx / l > 0.55) any = true;
+        }
+        if (!any) return null;
+        for (f = 1; f > 0.2; f -= 0.25) {
+          var out = [], ok = true;
+          for (i = 0; i < n; i++) d.push(nm[i][1] > 0.55 ? h * 1.05 * f : 0);
+          for (i = 0; i < n && ok; i++) {
+            var j = (i + n - 1) % n, n1 = nm[j], n2 = nm[i], c1 = n1[0] * q[i][0] + n1[1] * q[i][1] - d[j], c2 = n2[0] * q[i][0] + n2[1] * q[i][1] - d[i];
+            var det = n1[0] * n2[1] - n1[1] * n2[0];
+            if (Math.abs(det) < 1e-6) out.push([q[i][0] - n2[0] * d[i], q[i][1] - n2[1] * d[i]]);
+            else out.push([(c1 * n2[1] - c2 * n1[1]) / det, (n1[0] * c2 - n2[0] * c1) / det]);
+          }
+          for (i = 0; i < n && ok; i++) {
+            var o1 = out[i], o2 = out[(i + 1) % n], e1x = o2[0] - o1[0], e1y = o2[1] - o1[1], e0x = q[(i + 1) % n][0] - q[i][0], e0y = q[(i + 1) % n][1] - q[i][1];
+            if (e1x * e0x + e1y * e0y <= 0.04 * (e0x * e0x + e0y * e0y) || Math.sqrt(e1x * e1x + e1y * e1y) < 0.15) ok = false;
+          }
+          d = [];
+          if (ok) return out;
+        }
+        return null;
+      }
+      function wallBand(o, low, yl, high, yh, flip) {
+        var n = low.length, i, a, b, at, bt, ab, bb;
+        for (i = 0; i < n; i++) {
+          a = low[i]; b = low[(i + 1) % n];
+          ab = [a[0], yl, a[1]]; bb = [b[0], yl, b[1]]; at = [high[i][0], yh, high[i][1]]; bt = [high[(i + 1) % n][0], yh, high[(i + 1) % n][1]];
+          if (flip) { tri(o, at, bt, bb); tri(o, at, bb, ab); } else { tri(o, bt, at, ab); tri(o, bt, ab, bb); }
+        }
+      }
+      function fanCap(o, L, y, up) {
+        var n = L.length, cx = 0, cz = 0, i;
+        for (i = 0; i < n; i++) { cx += L[i][0] / n; cz += L[i][1] / n; }
+        for (i = 0; i < n; i++) {
+          if (up) tri(o, [cx, y, cz], [L[i][0], y, L[i][1]], [L[(i + 1) % n][0], y, L[(i + 1) % n][1]]);
+          else tri(o, [cx, y, cz], [L[(i + 1) % n][0], y, L[(i + 1) % n][1]], [L[i][0], y, L[i][1]]);
+        }
+      }
+      // Convex tile with chamfered underside: Q in the face (u, v), embedded from y0 to 0, flaring to Q2 at height h.
+      function taperTile(q, y0, h) {
+        var q2 = insetPoly(q, h), o = [];
+        if (!q2) return fanPrism(q, y0, h);
+        fanCap(o, q, y0, false);
+        wallBand(o, q, y0, q, 0, false);
+        wallBand(o, q, 0, q2, h, false);
+        fanCap(o, q2, h, true);
+        return orient(new Float32Array(o));
+      }
+      // Rim ring with the same chamfer: loops A (outer) and B (inner), both counter-clockwise with equal point counts.
+      function ringNormals(L) {
+        return L.map(function (p, i) {
+          var a = L[(i + L.length - 1) % L.length], b = L[(i + 1) % L.length], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.sqrt(tx * tx + ty * ty) || 1;
+          return [ty / l, -tx / l];
+        });
+      }
+      function taperRing(A, B, y0, h, maxD) {
+        var nA = ringNormals(A), nB = ringNormals(B), dd = Math.min(h * 1.05, maxD), n = A.length, i, o = [], a, a2, b, b2;
+        var A2 = A.map(function (p, k) { var d = nA[k][1] > 0.55 ? dd : 0; return [p[0] - nA[k][0] * d, p[1] - nA[k][1] * d]; });
+        var B2 = B.map(function (p, k) { var d = nB[k][1] < -0.55 ? dd : 0; return [p[0] + nB[k][0] * d, p[1] + nB[k][1] * d]; });
+        for (i = 0; i < n; i++) {
+          a = A2[i]; a2 = A2[(i + 1) % n]; b = B2[i]; b2 = B2[(i + 1) % n];
+          tri(o, [a[0], h, a[1]], [a2[0], h, a2[1]], [b2[0], h, b2[1]]); tri(o, [a[0], h, a[1]], [b2[0], h, b2[1]], [b[0], h, b[1]]);
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          tri(o, [a[0], y0, a[1]], [b2[0], y0, b2[1]], [a2[0], y0, a2[1]]); tri(o, [a[0], y0, a[1]], [b[0], y0, b[1]], [b2[0], y0, b2[1]]);
+        }
+        wallBand(o, A, y0, A, 0, false); wallBand(o, A, 0, A2, h, false);
+        wallBand(o, B, y0, B, 0, true); wallBand(o, B, 0, B2, h, true);
+        return orient(new Float32Array(o));
+      }
+
+      // A raised, decorated panel on a flat face, like the Console Faceplate. P = { u0, u1, v0, v1 } in the face's own
+      // coordinates (v grows downward on the finished stand). fn maps (u, height, v) to world. skip = rectangles to leave clear.
+      function panel(out, P, fn, p, skip, taper) {
+        var rimW = p.rimW, hw = (P.u1 - P.u0) / 2, hd = (P.v1 - P.v0) / 2, cu = (P.u0 + P.u1) / 2, cv = (P.v0 + P.v1) / 2, list = [];
+        if (hw < 8 || hd < 8) return;
+        if (p.rimH > 0.05) {
+          var rA = rrectPts(cu, cv, hw, hd, 3, 6), rB = rrectPts(cu, cv, hw - rimW, hd - rimW, Math.max(0.6, 3 - rimW), 6);
+          out.push({ name: 'rim', positions: remap(taper ? taperRing(rA, rB, -0.4, p.rimH, rimW - 0.6) : ringPrism(rA, rB, -0.4, p.rimH), fn), smoothGroup: 'rim' });
+        }
+        var pad = rimW + 2, R = { x0: P.u0 + pad, x1: P.u1 - pad, z0: P.v0 + pad, z1: P.v1 - pad };
+        var gen = PATTERNS[Math.round(p.design)];
+        if (!gen || R.x1 - R.x0 < 10 || R.z1 - R.z0 < 10) return;
+        gen(R, p.cell, p.seed, function (poly) {
+          var q = clipRect(poly, R), i, hit = false, x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+          if (!q) return;
+          for (i = 0; i < q.length; i++) { x0 = Math.min(x0, q[i][0]); x1 = Math.max(x1, q[i][0]); z0 = Math.min(z0, q[i][1]); z1 = Math.max(z1, q[i][1]); }
+          (skip || []).forEach(function (s) { if (x1 > s.u0 && x0 < s.u1 && z1 > s.v0 && z0 < s.v1) hit = true; });
+          if (!hit) list.push(remap(taper ? taperTile(q, -0.4, p.reliefH) : fanPrism(q, -0.4, p.reliefH), fn));
+        });
+        if (list.length) out.push({ name: 'pattern', positions: concat(list), smoothGroup: 'pattern' });
+      }
+
+      // A 45 degree wedge: the underside of a lip, so it prints without supports. Profile in (x, y), extruded over z.
+      function wedge(THREE, xBase, h, yTop, c, z0, z1) {
+        var rise = (h + 3) * 1.15, yb = yTop - c - rise;
+        return solid(THREE, [[xBase - 3, yb], [xBase + h, yb + rise], [xBase + h, yTop], [xBase - 3, yTop]], null, z0, z1, mapXY);
+      }
+
+      function build(p, api) {
+        var THREE = api.THREE, m = Math.round(p.mount), out = [], i, n, tb = p.plateT, ft = p.thick, skip = [], P;
+        function add(name, pos, group) { out.push({ name: name, positions: pos, smoothGroup: group || name }); }
+
+        if (m === 0) { // Desk headphone stand: base, post and a domed cradle
+          var H = p.height, pz = p.post, cz = Math.max(p.cap, pz + 16), band = p.bandW, dome = 10, capT = 10, flare = (cz - pz) / 2;
+          var yg = H - dome - capT - flare, bl = Math.max(p.baseL, band + 30), bw = Math.max(p.baseW, cz + 20), pts = [];
+          add('base', solid(THREE, rrectPts(0, 0, bl / 2, bw / 2, 10, 8), null, 0, tb, mapPlan));
+          pts.push([-pz / 2, tb - 0.4], [pz / 2, tb - 0.4], [pz / 2, yg], [cz / 2, yg + flare]);
+          for (i = 0; i <= 16; i++) { var uu = cz / 2 - cz * i / 16; pts.push([uu, H - dome + dome * (1 - Math.pow(2 * uu / cz, 2))]); }
+          pts.push([-cz / 2, yg + flare], [-pz / 2, yg]);
+          add('post', solid(THREE, pts, null, -band / 2, band / 2, mapSideZ));
+          P = { u0: -pz / 2 + 3, u1: pz / 2 - 3, v0: -(yg - 4), v1: -(tb + 4) };
+          panel(out, P, function (a, h, v) { return [band / 2 + h, -v, a]; }, p, null, true);
+        } else if (m === 1) { // Wall headphone hook: back plate with upright pegs
+          var pegH = p.pegH, pegW = p.pegW, D = p.bandW;
+          n = Math.round(p.hooks);
+          var Wp = (n - 1) * 110 + 104, Hp = pegH + 56, xtop = Hp / 2 - 16, xa = xtop - pegH, holes = [];
+          if (p.screw > 0.5) { holes.push(circlePts(0, -(Wp / 2 - 9), p.screw / 2, 24), circlePts(0, Wp / 2 - 9, p.screw / 2, 24)); }
+          add('plate', solid(THREE, rrectPts(0, 0, Hp / 2, Wp / 2, 8, 8), holes, 0, tb, mapPlan));
+          var blades = [], lips = [], zc, lw = pegW * 0.62;
+          for (i = 0; i < n; i++) {
+            zc = (i - (n - 1) / 2) * 110;
+            blades.push(fanPrism(rrectPts((xa + xtop) / 2, zc, pegH / 2, pegW / 2, pegW / 2 - 0.05, 10), tb - 0.4, tb + D));
+            if (p.lipH > 0.5) lips.push(wedge(THREE, xtop, p.lipH, tb + D, 4, zc - lw / 2, zc + lw / 2));
+            skip.push({ u0: zc - pegW / 2 - 4, u1: zc + pegW / 2 + 4, v0: -(xtop + 4), v1: -(xa - 4) });
+          }
+          add('hook', concat(blades), 'hook');
+          if (lips.length) add('lip', concat(lips), 'hook');
+          P = { u0: -Wp / 2 + 16, u1: Wp / 2 - 16, v0: -(Hp / 2 - 3), v1: Hp / 2 - 3 };
+          panel(out, P, function (a, h, v) { return [-v, tb + h, a]; }, p, skip);
+        } else {
+          n = Math.round(p.slots);
+          var sw = p.slotW, Wc = n * sw + (n + 1) * ft, Hf = p.finH, Dd = p.rackD, zi, fins = [];
+          if (m === 2) { // Desk controller rack: base, back wall and fins that hold controllers on edge
+            var Hb = Hf + 30, xb = -Dd / 2;
+            add('base', solid(THREE, rrectPts(0, 0, Dd / 2 + 6, Wc / 2 + 12, 8, 8), null, 0, tb, mapPlan));
+            add('wall', box(THREE, xb, xb + ft, tb - 0.4, tb + Hb, -Wc / 2, Wc / 2));
+            for (i = 0; i <= n; i++) {
+              zi = -Wc / 2 + ft / 2 + i * (sw + ft);
+              fins.push(solid(THREE, [[xb + ft - 0.4, tb - 0.4], [Dd / 2, tb - 0.4], [Dd / 2, tb + Hf * 0.4], [xb + ft - 0.4, tb + Hf]], null, zi - ft / 2, zi + ft / 2, mapXY));
+            }
+            add('fins', concat(fins), 'fins');
+            if (p.lipH > 0.5) add('stop', box(THREE, Dd / 2 - 3, Dd / 2, tb - 0.4, tb + p.lipH, -Wc / 2, Wc / 2));
+            P = { u0: -Wc / 2 + 3, u1: Wc / 2 - 3, v0: -(tb + Hb - 3), v1: -(tb + 3) };
+            panel(out, P, function (a, h, v) { return [xb - h, -v, a]; }, p, null, true);
+          } else { // Wall controller shelf: back plate, shelf and fins, printed on its back
+            var Wp2 = Wc + 36, Hp2 = ft + Hf + 54, x0 = -Hp2 / 2 + ft, hl = [];
+            if (p.screw > 0.5) { hl.push(circlePts(0, -(Wp2 / 2 - 9), p.screw / 2, 24), circlePts(0, Wp2 / 2 - 9, p.screw / 2, 24)); }
+            add('plate', solid(THREE, rrectPts(0, 0, Hp2 / 2, Wp2 / 2, 8, 8), hl, 0, tb, mapPlan));
+            add('shelf', box(THREE, -Hp2 / 2, x0, tb - 0.4, tb + Dd, -Wc / 2, Wc / 2));
+            for (i = 0; i <= n; i++) {
+              zi = -Wc / 2 + ft / 2 + i * (sw + ft);
+              fins.push(solid(THREE, [[x0 - 0.4, tb - 0.4], [x0 + Hf, tb - 0.4], [x0 + Hf * 0.35, tb + Dd], [x0 - 0.4, tb + Dd]], null, zi - ft / 2, zi + ft / 2, mapXY));
+            }
+            add('fins', concat(fins), 'fins');
+            if (p.lipH > 0.5) add('stop', wedge(THREE, x0, p.lipH, tb + Dd, 3, -Wc / 2, Wc / 2));
+            P = { u0: -Wp2 / 2 + 16, u1: Wp2 / 2 - 16, v0: -(Hp2 / 2 - 3), v1: -(x0 + Hf + 8) };
+            panel(out, P, function (a, h, v) { return [-v, tb + h, a]; }, p);
+          }
+        }
+        return out;
+      }
+
+      function show(list) { return function (p) { return list.indexOf(Math.round(p.mount)) >= 0; }; }
+      function slider(group, key, label, unit, min, max, step, show_) {
+        var o = { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: DEFAULTS[key] };
+        if (show_) o.showIf = show_;
+        return o;
+      }
+      function choice(group, key, label, names) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: DEFAULTS[key], options: names };
+      }
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-119',
+        category: 'GAMING // STANDS & MOUNTS',
+        title: 'Headphone & Controller Stand',
+        fileName: 'Headphone_Controller_Stand',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Shadow Black', color: '#2b2f3a' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Sunny Yellow', color: '#fde047' }, { name: 'Pumpkin Matte', color: '#fdba74' }
+        ],
+        defaultColor: '#2b2f3a',
+        partNames: { base: 'Base', post: 'Post and cradle', plate: 'Back plate', hook: 'Hook', lip: 'Hook lip', wall: 'Back wall', fins: 'Slot fins', shelf: 'Shelf', stop: 'Front stop', rim: 'Raised rim', pattern: 'Pattern' },
+        parameters: [
+          choice('Stand', 'mount', 'Type', MOUNTS),
+          choice('Stand', 'design', 'Design (matches Console Faceplate)', DESIGNS),
+          slider('Headphones', 'bandW', 'Headband width', ' mm', 36, 70, 1, show([0, 1])),
+          slider('Headphones', 'height', 'Stand height', ' mm', 160, 260, 5, show([0])),
+          slider('Headphones', 'post', 'Post width', ' mm', 36, 80, 2, show([0])),
+          slider('Headphones', 'cap', 'Cradle width', ' mm', 80, 140, 2, show([0])),
+          slider('Headphones', 'baseL', 'Base length', ' mm', 100, 170, 5, show([0])),
+          slider('Headphones', 'baseW', 'Base width', ' mm', 100, 170, 5, show([0])),
+          slider('Headphones', 'hooks', 'Number of hooks', '', 1, 2, 1, show([1])),
+          slider('Headphones', 'pegH', 'Hook height', ' mm', 24, 70, 2, show([1])),
+          slider('Headphones', 'pegW', 'Hook thickness', ' mm', 16, 34, 1, show([1])),
+          slider('Controllers', 'slots', 'Controller slots', '', 1, 5, 1, show([2, 3])),
+          slider('Controllers', 'slotW', 'Slot width', ' mm', 55, 90, 1, show([2, 3])),
+          slider('Controllers', 'finH', 'Divider height', ' mm', 60, 110, 5, show([2, 3])),
+          slider('Controllers', 'rackD', 'Slot depth (controller length)', ' mm', 100, 170, 5, show([2, 3])),
+          slider('Controllers', 'thick', 'Divider thickness', ' mm', 3, 8, 0.5, show([2, 3])),
+          slider('Fit', 'lipH', 'Lip height (0 = none)', ' mm', 0, 18, 1, show([1, 2, 3])),
+          slider('Fit', 'plateT', 'Base / plate thickness', ' mm', 4, 12, 1),
+          slider('Fit', 'screw', 'Screw hole (0 = none)', ' mm', 0, 6, 0.5, show([1, 3])),
+          slider('Pattern', 'rimW', 'Rim width', ' mm', 1.2, 6, 0.2),
+          slider('Pattern', 'rimH', 'Rim height (0 = no rim)', ' mm', 0, 4, 0.5),
+          slider('Pattern', 'reliefH', 'Pattern height', ' mm', 0.6, 3, 0.2),
+          slider('Pattern', 'cell', 'Pattern size', ' mm', 6, 24, 1),
+          slider('Pattern', 'seed', 'Pattern shuffle', '', 1, 20, 1)
+        ],
+        presets: [
+          presetOf('Default desk headphone stand', {}),
+          presetOf('Headphone stand mountains', { design: 6, cell: 12 }),
+          presetOf('Headphone stand circuit, wide base', { design: 3, baseL: 150, baseW: 150 }),
+          presetOf('Plain bezel stand', { design: 0 }),
+          presetOf('Wall headphone hook', { mount: 1 }),
+          presetOf('Two wall hooks pixel fade', { mount: 1, hooks: 2, design: 5, cell: 9 }),
+          presetOf('Desk rack for two controllers', { mount: 2 }),
+          presetOf('Desk rack for four, stripes', { mount: 2, slots: 4, design: 2 }),
+          presetOf('Wall shelf for two controllers', { mount: 3, design: 4, cell: 14 }),
+          presetOf('Wall shelf for three, starburst', { mount: 3, slots: 3, design: 7, cell: 9 })
+        ],
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

@@ -74,6 +74,7 @@ iframe { position: absolute; left: -9999px; top: 0; width: 1100px; height: 800px
   function renderModel(stage, cfg, id) {
     var T = stage.THREE;
     var data = stage.getModelData();
+    if (cfg.hide) data = data.filter(function (e) { return cfg.hide.indexOf(e.name) < 0; });   // parts to leave out of the hologram (e.g. loose strips beside the model)
     var total = 0;
     data.forEach(function (e) { total += e.positions.length; });
     var pos = new Float32Array(total), o = 0;
