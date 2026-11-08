@@ -226,6 +226,8 @@ Every generator page gets a small chip at the bottom left of the 3D view, run by
 | Overhang | Solid with nothing under it within about 50° from vertical (a 45° slope passes, 60° fails). Sags or strands without supports. |
 | Thin wall | Features thinner than 0.8 mm, which a 0.4 mm nozzle may skip. |
 
+A one-layer air gap (a print-in-place clearance, a thin slit) counts as bridged: a voxel with solid two layers straight below it is supported, because on the check's grid a gap of 0.3-0.4 mm reads as empty or full depending on where the layers fall. Gaps two or more layers tall still fail.
+
 The chip is green ("No supports needed"), amber (warnings only) or red ("Needs supports"). Clicking it lists the problems, and red dots in the 3D view mark where. It is an estimate from the mesh, not a guarantee, and it never blocks an export. A generator can opt out with `printCheck: false` or tune it with `printCheckOptions` (`{ minWall, cell }`). `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html` runs the same check after the watertight test (`--strict` fails on errors), so use it on defaults, presets and slider extremes. The check ignores the Workshop embed. On the page it runs in a background worker, so a big model does not freeze the editor; if a worker cannot start, it runs on the page.
 
 ### Sculpt tab (experimental, `cfg.sculpt`)

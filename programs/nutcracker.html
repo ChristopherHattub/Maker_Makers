@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-108 Nutcracker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Nutcracker: a toy soldier with a working jaw that prints in place. The lower jaw is a quarter disc that
+    // swings on two diamond-section pins inside a bowl of the same radius (a clearance gap all round), so
+    // nothing needs supports and nothing needs gluing. The page layout, the viewport, the Color tool and the
+    // exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      var TAU = Math.PI * 2;
+      function rad(d) { return (d * Math.PI) / 180; }
+      function sqr(x) { return x * x; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vmul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vnorm(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+      // rings: array of closed point loops [[x,y,z],...] or { pole: [x,y,z] } (a single point cap).
+      // Neighbouring rings must have the same winding. wrap = true joins the last ring to the first (torus).
+      // The winding of the whole shell is fixed afterwards from its signed volume.
+      function shell(rings, wrap) {
+        var verts = [], idx = [], info = [], i, j;
+        rings.forEach(function (r) {
+          if (r.pole) { info.push({ pole: true, s: verts.length, n: 1 }); verts.push(r.pole); }
+          else { info.push({ s: verts.length, n: r.length }); r.forEach(function (q) { verts.push(q); }); }
+        });
+        var n = rings.length, last = wrap ? n : n - 1;
+        for (i = 0; i < last; i++) {
+          var A = info[i], B = info[(i + 1) % n];
+          if (A.pole && B.pole) continue;
+          if (A.pole) { for (j = 0; j < B.n; j++) idx.push(A.s, B.s + (j + 1) % B.n, B.s + j); }
+          else if (B.pole) { for (j = 0; j < A.n; j++) idx.push(A.s + j, A.s + (j + 1) % A.n, B.s); }
+          else {
+            for (j = 0; j < A.n; j++) {
+              var a = A.s + j, b = A.s + (j + 1) % A.n, c = B.s + (j + 1) % B.n, d = B.s + j;
+              idx.push(a, b, c, a, c, d);
+            }
+          }
+        }
+        var vol = 0, p, q, r;
+        for (i = 0; i < idx.length; i += 3) {
+          p = verts[idx[i]]; q = verts[idx[i + 1]]; r = verts[idx[i + 2]];
+          vol += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+        }
+        var out = new Float32Array(idx.length * 3), o = 0, v;
+        for (i = 0; i < idx.length; i += 3) {
+          var tri = vol < 0 ? [idx[i], idx[i + 2], idx[i + 1]] : [idx[i], idx[i + 1], idx[i + 2]];
+          for (j = 0; j < 3; j++) { v = verts[tri[j]]; out[o++] = v[0]; out[o++] = v[1]; out[o++] = v[2]; }
+        }
+        return out;
+      }
+
+      function cat(list) {
+        var n = 0, i;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        var out = new Float32Array(n), at = 0;
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Circle / ellipse loop in the XZ plane at height y. o: { cx, cz, sx, sz, rot }.
+      function loopXZ(r, y, seg, o) {
+        o = o || {};
+        var cx = o.cx || 0, cz = o.cz || 0, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
+        var cr = Math.cos(rot), sr = Math.sin(rot), out = [], j, a, x, z;
+        for (j = 0; j < seg; j++) {
+          a = (j / seg) * TAU;
+          x = r * sx * Math.cos(a); z = r * sz * Math.sin(a);
+          out.push([cx + x * cr - z * sr, y, cz + x * sr + z * cr]);
+        }
+        return out;
+      }
+
+      // Solid of revolution from a profile [[r, y, dx, dz], ...] (bottom to top). r = 0 makes a pole.
+      function lathe(profile, seg, o) {
+        o = o || {};
+        var rings = profile.map(function (p) {
+          var oo = { cx: (o.cx || 0) + (p[2] || 0), cz: (o.cz || 0) + (p[3] || 0), sx: o.sx, sz: o.sz, rot: o.rot };
+          if (p[0] < 1e-6) return { pole: [oo.cx, p[1], oo.cz] };
+          return loopXZ(p[0], p[1], seg, oo);
+        });
+        return shell(rings, false);
+      }
+
+      // Closed ring-shaped solid (torus-like): cross-section polygon [[r, y], ...] revolved around Y.
+      function bandRing(poly, seg, o) {
+        return shell(poly.map(function (p) { return loopXZ(p[0], p[1], seg, o); }), true);
+      }
+
+      // Sphere or ellipsoid. tFrom > 0 starts the sphere at a flat cut (polar angle from the bottom pole).
+      function ball(cx, cy, cz, rx, ry, rz, seg, steps) {
+        var prof = [], k, t;
+        for (k = 0; k <= steps; k++) {
+          t = (k / steps) * Math.PI;
+          prof.push([Math.sin(t), cy - ry * Math.cos(t)]);
+        }
+        prof[0][0] = 0; prof[steps][0] = 0;
+        return lathe(prof, seg, { cx: cx, cz: cz, sx: rx, sz: rz });
+      }
+
+      // Rounded rectangle loop (counter-clockwise from above) at height y.
+      function rrect(hx, hz, cr, y, arcN, cx, cz) {
+        cr = Math.max(0.05, Math.min(cr, Math.min(hx, hz) - 0.02));
+        var out = [], k, a, corners = [[hx - cr, hz - cr, 0], [-(hx - cr), hz - cr, 90], [-(hx - cr), -(hz - cr), 180], [hx - cr, -(hz - cr), 270]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= arcN; k++) {
+            a = rad(c[2] + (k / arcN) * 90);
+            out.push([(cx || 0) + c[0] + cr * Math.cos(a), y, (cz || 0) + c[1] + cr * Math.sin(a)]);
+          }
+        });
+        return out;
+      }
+      function centroid(loop) {
+        var c = [0, 0, 0];
+        loop.forEach(function (p) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; });
+        return [c[0] / loop.length, c[1] / loop.length, c[2] / loop.length];
+      }
+      // Loft of loops with flat end caps.
+      function loftCapped(loops) {
+        var rings = [{ pole: centroid(loops[0]) }].concat(loops, [{ pole: centroid(loops[loops.length - 1]) }]);
+        return shell(rings, false);
+      }
+
+      // Rod with rounded ends from a to b, radius ra at a and rb at b.
+      function capsule(a, b, ra, rb, seg, capN) {
+        var d = vnorm(vsub(b, a));
+        var ax = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        var u = vnorm(vcross(d, ax)), v = vcross(d, u);
+        function ring(c, r) {
+          var out = [], j, ang;
+          for (j = 0; j < seg; j++) {
+            ang = (j / seg) * TAU;
+            out.push(vadd(c, vadd(vmul(u, r * Math.cos(ang)), vmul(v, r * Math.sin(ang)))));
+          }
+          return out;
+        }
+        var rings = [{ pole: vsub(a, vmul(d, ra)) }], k, phi;
+        for (k = 1; k <= capN; k++) {
+          phi = (k / capN) * (Math.PI / 2);
+          rings.push(ring(vsub(a, vmul(d, ra * Math.cos(phi))), ra * Math.sin(phi)));
+        }
+        for (k = 0; k < capN; k++) {
+          phi = (Math.PI / 2) * (1 - k / capN);
+          rings.push(ring(vadd(b, vmul(d, rb * Math.cos(phi))), rb * Math.sin(phi)));
+        }
+        rings.push({ pole: vadd(b, vmul(d, rb)) });
+        return shell(rings, false);
+      }
+
+      // ---- Small helpers --------------------------------------------------------------------------
+      function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      // Catmull-Rom through table rows [key, v1, v2, ...] at key y.
+      function sample(table, y) {
+        var n = table.length, i = 0, k, out = [];
+        while (i < n - 2 && y > table[i + 1][0]) i++;
+        var t = clamp((y - table[i][0]) / (table[i + 1][0] - table[i][0]), 0, 1);
+        var p0 = table[Math.max(0, i - 1)], p1 = table[i], p2 = table[i + 1], p3 = table[Math.min(n - 1, i + 2)];
+        for (k = 1; k < p1.length; k++) {
+          var a = p0[k], b = p1[k], c = p2[k], d = p3[k];
+          out.push(0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t));
+        }
+        return out;
+      }
+
+      // Extrude a flat outline [[z, y], ...] (holes: same) along x from x0 to x1. Needs api.THREE (r128).
+      function extrude(THREE, pts, holes, x0, x1) {
+        function area(a) { var t = 0, j; for (j = 0; j < a.length; j++) { var b = a[(j + 1) % a.length]; t += a[j].x * b.y - b.x * a.y; } return t / 2; }
+        function flat(a, ccw) { var v = a.map(function (q) { return new THREE.Vector2(-q[0], q[1]); }); if ((area(v) > 0) !== ccw) v.reverse(); return v; }
+        var shape = new THREE.Shape(flat(pts, false));      // three.js wants the outline clockwise and holes counter-clockwise
+        (holes || []).forEach(function (h) { shape.holes.push(new THREE.Path(flat(h, true))); });
+        var geo = new THREE.ExtrudeGeometry(shape, { depth: x1 - x0, bevelEnabled: false, curveSegments: 1, steps: 1 });
+        var src = geo.attributes.position.array, out = new Float32Array(src.length), i;
+        for (i = 0; i < src.length; i += 3) { out[i] = x0 + src[i + 2]; out[i + 1] = src[i + 1]; out[i + 2] = -src[i]; }
+        geo.dispose();
+        return out;
+      }
+      // Rotate about the x axis through (y = py, z = 0): the jaw's pose. Positive angle drops the front.
+      function swing(pos, py, deg) {
+        if (!deg) return pos;
+        var c = Math.cos(rad(deg)), s = Math.sin(rad(deg)), out = new Float32Array(pos.length), i, dz, dy;
+        for (i = 0; i < pos.length; i += 3) {
+          dz = pos[i + 2]; dy = pos[i + 1] - py;
+          out[i] = pos[i]; out[i + 1] = py + (-dz * s + dy * c); out[i + 2] = dz * c + dy * s;
+        }
+        return out;
+      }
+      function diamondRing(x, y, z, r) { return [[x, y, z + r], [x, y + r, z], [x, y, z - r], [x, y - r, z]]; }
+      // Diamond-section bar along x with tapered ends (brows, moustache).
+      function barX(x0, x1, y0, y1, z, r) {
+        var loops = [], k, t, taper;
+        for (k = 0; k <= 6; k++) {
+          t = k / 6; taper = 0.45 + 0.55 * Math.sin(Math.PI * t);
+          loops.push(diamondRing(lerp(x0, x1, t), lerp(y0, y1, t), z, r * taper));
+        }
+        return loftCapped(loops);
+      }
+      // Pyramid stud pointing +z (diamond section: no overhang).
+      function stud(cx, cy, z0, len, r) {
+        function ring(z, rr) { return [[cx + rr, cy, z], [cx, cy + rr, z], [cx - rr, cy, z], [cx, cy - rr, z]]; }
+        return loftCapped([ring(z0 - 0.6, r), ring(z0, r), ring(z0 + len, r * 0.3)]);
+      }
+      // Ellipsoid whose underside is cut flat at yMin (so a foot sits on the plinth with a flat first layer).
+      function footBall(cx, cy, cz, rx, ry, rz, yMin) {
+        var pos = ball(cx, cy, cz, rx, ry, rz, 20, 12), i;
+        for (i = 1; i < pos.length; i += 3) if (pos[i] < yMin) pos[i] = yMin;
+        return pos;
+      }
+
+      // ---- Layout: everything the build needs, in design millimetres (1 unit = 1 mm at 112 mm tall) ----
+      var BASE_H = 4, COAT_TOP = 54, PHI_MAX = 30, PIN_R = 2.2, CHEEK_T = 4.6, HOLE_DEPTH = 2.7;
+      function layout(p) {
+        var L = {};
+        L.s = p.height / 112;
+        L.clr = p.tolerance / L.s;
+        L.R = p.mouth; L.Rb = L.R + L.clr;
+        L.W = p.headWidth;
+        L.Wu = L.W / 2 - CHEEK_T; L.Wj = L.Wu - L.clr;
+        L.hdg = Math.SQRT2 * (PIN_R + L.clr);
+        var c = Math.cos(rad(PHI_MAX)), sn = Math.sin(rad(PHI_MAX));
+        L.zw = -(PIN_R + L.clr) / c;                       // rear wall of the mouth pocket
+        var t = L.zw * sn + Math.sqrt(L.Rb * L.Rb - L.zw * L.zw * c * c);
+        L.E = [L.zw - t * sn, -t * c];                     // where the slanted rear wall meets the bowl (relative to the pivot)
+        L.Py = COAT_TOP + L.Rb + 2.8;
+        L.yc = L.Py + PIN_R + L.clr;                       // ceiling of the mouth slit
+        L.yTop = L.yc + p.faceH;
+        L.zU = Math.sqrt(L.R * L.R - PIN_R * PIN_R) + 0.2;   // the face is flush with the front of the chin, so the lip has no overhang
+        L.zr = L.E[0] - 3.4;
+        L.zf = L.Rb * Math.cos(rad(315));
+        L.czH = (L.zr + L.zU) / 2;
+        L.hzT = (L.zU - L.zr) / 2 + 1.6;
+        L.hxT = L.W / 2 + 2.2;
+        var kx = L.hxT, kz = L.hzT;
+        L.table = [
+          [BASE_H - 0.5, kx * 1.12, kz * 1.15, 0],
+          [12, kx * 1.02, kz * 1.08, 0.04],
+          [24, kx * 0.86, kz * 0.97, 0.2],
+          [34, kx * 0.85, kz * 0.95, 0.4],
+          [44, kx * 0.95, kz * 1.0, 0.7],
+          [COAT_TOP, kx, kz, 1]
+        ];
+        L.body = function (y) { var r = sample(L.table, y); return { hx: r[0], hz: r[1], cz: r[2] * L.czH }; };
+        return L;
+      }
+
+      // ---- Build ------------------------------------------------------------------------------------
+      function build(p, api) {
+        var THREE = api.THREE, L = layout(p), s = L.s, list = [], i, k;
+        var AN = 4, Py = L.Py, Wu = L.Wu, Wj = L.Wj, clr = L.clr;
+        function add(name, color, parts, fixed) { list.push({ name: name, color: color, positions: Array.isArray(parts) ? cat(parts) : parts, fixed: fixed !== false }); }
+        function rr(hx, hz, y, cz) { return rrect(hx, hz, 0.45 * Math.min(hx, hz), y, AN, 0, cz); }
+        function bandAt(y0, y1, grow, depth) {
+          // a chamfered band hugging the coat from y0 to y1, `grow` mm proud of it
+          var loops = [], ys = [y0, y0 + grow, y1 - grow, y1];
+          ys.forEach(function (y, j) { var b = L.body(y), g = (j === 1 || j === 2) ? grow : 0; loops.push(rr(b.hx + g, b.hz + g, y, b.cz)); });
+          return loftCapped(loops);
+        }
+
+        // Plinth
+        var b0 = L.body(BASE_H - 0.5), hxP = b0.hx + 5, hzP = b0.hz + 6;
+        add('base', '#c08457', loftCapped([rr(hxP - 0.9, hzP - 0.9, 0, 0), rr(hxP, hzP, 0.9, 0), rr(hxP, hzP, BASE_H - 0.9, 0), rr(hxP - 0.9, hzP - 0.9, BASE_H, 0)]));
+
+        // Coat (long, standing on the plinth)
+        var loops = [], y, N = 18;
+        for (k = 0; k <= N; k++) { y = lerp(BASE_H - 0.5, COAT_TOP, k / N); var bb = L.body(y); loops.push(rr(bb.hx, bb.hz, y, bb.cz)); }
+        add('coat', '#f87171', loftCapped(loops));
+        add('trim', '#fde047', [bandAt(BASE_H - 0.5, BASE_H + 4.5, 0.9), bandAt(22, 26.5, 0.8), bandAt(COAT_TOP - 4.5, COAT_TOP, 0.8)]);
+        var studs = [], zf = function (yy) { var q = L.body(yy); return q.cz + q.hz; };
+        [31, 37, 43].forEach(function (yy) { studs.push(stud(0, yy, zf(yy) + 0.2, 1.7, 1.8)); });
+        studs.push(stud(0, 24.2, zf(24.2) + 0.9, 2.0, 2.6));
+        add('jewel', '#93c5fd', studs);
+
+        // Boots peeking out of the hem
+        var bh = L.body(BASE_H + 1), boots = [];
+        [-1, 1].forEach(function (sg) { boots.push(footBall(sg * 6.2, BASE_H + 3.0, bh.cz + bh.hz - 1.0, 4.8, 3.6, 6.2, BASE_H)); });
+        add('boots', '#334155', boots);
+
+        // Arms: hang down the sides, hands tucked into the coat so they are supported
+        var arms = [], hands = [];
+        [-1, 1].forEach(function (sg) {
+          var yS = COAT_TOP - 5, yE = 38, yH = 27, bS = L.body(yS), bE = L.body(yE), bH = L.body(yH);
+          var S = [sg * (bS.hx + 0.2), yS, bS.cz], E = [sg * (bE.hx + 1.4), yE, bE.cz + 1.5], H = [sg * (bH.hx - 0.8), yH, bH.cz + 3];
+          arms.push(capsule(S, E, 3.5, 3.1, 14, 5), capsule(E, H, 3.1, 3.0, 14, 5));
+          hands.push(ball(H[0], H[1] - 0.8, H[2] + 0.8, 3.5, 3.4, 3.5, 16, 10));
+        });
+        add('arms', '#f87171', arms); add('hands', '#f1f5f9', hands);
+
+        // ---- Head: cup + upper head (centre block), cheek plates with blind diamond pin holes ----
+        var pts = [], th, thE = Math.atan2(L.E[1], L.E[0]) * 180 / Math.PI + 360;
+        pts.push([L.zr, COAT_TOP - 0.5]);
+        pts.push([L.zf, COAT_TOP - 0.5]);
+        for (k = 0; k <= 14; k++) { th = lerp(315, thE, k / 14); pts.push([L.Rb * Math.cos(rad(th)), Py + L.Rb * Math.sin(rad(th))]); }
+        pts.push([L.zw, Py], [-(PIN_R + clr), Py]);
+        for (k = 1; k <= 8; k++) { th = lerp(180, 90, k / 8); pts.push([(PIN_R + clr) * Math.cos(rad(th)), Py + (PIN_R + clr) * Math.sin(rad(th))]); }   // ceiling follows the rounded back of the jaw
+        pts.push([L.zU, L.yc], [L.zU, L.yTop], [L.zr, L.yTop]);
+        var head = [extrude(THREE, pts, null, -(Wu + 0.3), Wu + 0.3)];
+        var cheek = [[L.zr, COAT_TOP - 0.5], [L.zU, COAT_TOP - 0.5], [L.zU, L.yTop], [L.zr, L.yTop]];
+        var hole = [[0, Py + L.hdg], [-L.hdg, Py], [0, Py - L.hdg], [L.hdg, Py]];
+        [-1, 1].forEach(function (sg) {
+          var a = sg * Wu, b = sg * (Wu + HOLE_DEPTH), c2 = sg * (Wu + HOLE_DEPTH - 0.1), d = sg * (L.W / 2);
+          head.push(extrude(THREE, cheek, [hole], Math.min(a, b), Math.max(a, b)));
+          head.push(extrude(THREE, cheek, null, Math.min(c2, d), Math.max(c2, d)));
+        });
+        add('head', '#fdd5b1', head.slice(0, 1));
+        add('cheeks', '#c08457', head.slice(1));
+
+        // ---- Jaw: quarter disc in the bowl, pinned at the pivot ----
+        var thT = Math.asin(PIN_R / L.R) * 180 / Math.PI;
+        var jp = [[-PIN_R, Py], [-PIN_R, Py - Math.sqrt(L.R * L.R - PIN_R * PIN_R)]];
+        for (k = 1; k <= 22; k++) { th = lerp(270, 360 + thT, k / 22); jp.push([L.R * Math.cos(rad(th)), Py + L.R * Math.sin(rad(th))]); }
+        for (k = 0; k < 8; k++) { th = lerp(90, 180, k / 8); jp.push([PIN_R * Math.cos(rad(th)), Py + PIN_R * Math.sin(rad(th))]); }   // back of the jaw is a quarter circle round the pivot, so it never lifts into the ceiling
+        jp[2] = [L.R * Math.cos(rad(270 + (360 + thT - 270) / 22)), Py + L.R * Math.sin(rad(270 + (360 + thT - 270) / 22))];
+        var jaw = [extrude(THREE, jp, null, -Wj, Wj)];
+        [-1, 1].forEach(function (sg) {
+          var xa = sg * (Wj - 1.0), xb = sg * (Wu + HOLE_DEPTH - 0.7);
+          jaw.push(loftCapped([diamondRing(xa, Py, 0, PIN_R), diamondRing(xb, Py, 0, PIN_R)]));
+        });
+        var jawPos = swing(cat(jaw), Py, p.pose);
+
+        // ---- Face ----
+        var zFace = L.zU, fy = function (f) { return L.yc + f * p.faceH; };
+        var ex = Math.min(6.2, L.W * 0.2);
+        add('eyes', '#334155', [ball(-ex, fy(0.58), zFace - 0.2, 1.7, 1.7, 1.5, 14, 8), ball(ex, fy(0.58), zFace - 0.2, 1.7, 1.7, 1.5, 14, 8)]);
+        add('brows', '#f1f5f9', [barX(-ex - 2.8, -ex + 2.8, fy(0.86), fy(0.8), zFace - 0.3, 1.1), barX(ex - 2.8, ex + 2.8, fy(0.8), fy(0.86), zFace - 0.3, 1.1)]);
+        add('nose', '#f4b393', ball(0, fy(0.42), zFace - 0.4, p.nose * 0.85, p.nose * 1.15, p.nose, 16, 10));
+        if (p.mustache >= 1) add('mustache', '#f1f5f9', barX(-L.Wu * 0.8, L.Wu * 0.8, fy(0.15), fy(0.15), zFace - 0.2, 1.9));
+
+        // ---- Hat ----
+        var hx0 = L.W / 2, hz0 = (L.zU - L.zr) / 2, yH0 = L.yTop - 0.4, hH = p.hatH, hatLoops = [], trim = [], plume = null;
+        function hl(sc, y, g) { g = g || 0; return rrect(hx0 * sc + g, hz0 * sc + g, 0.4 * Math.min(hx0, hz0) * sc + g, y, AN, 0, L.czH); }
+        if (p.hat === 0) {            // shako
+          hatLoops = [hl(1, yH0), hl(0.97, yH0 + hH * 0.5), hl(0.8, yH0 + hH)];
+          trim.push(loftCapped([hl(0.8, yH0 + hH - 3.2), hl(0.8, yH0 + hH - 2, 1.2), hl(0.8, yH0 + hH - 0.8, 1.2), hl(0.8, yH0 + hH + 0.4)]));
+          plume = ball(L.hxT * 0 , yH0 + hH + 2.4, L.czH, 4.2, 4.6, 4.2, 18, 12);
+        } else if (p.hat === 1) {     // crown
+          var ch = Math.min(hH * 0.42, 11);
+          hatLoops = [hl(1, yH0), hl(1.0, yH0 + ch * 0.5), hl(1.0, yH0 + ch)];
+          trim.push(loftCapped([hl(1.0, yH0 + ch * 0.9), hl(1.0, yH0 + ch + 0.2)].map(function (lp) { return lp; })));
+          var spikes = [], sy = yH0 + ch - 0.4, sh = Math.min(hH * 0.4, 10), rim = [[hx0 - 4.5, hz0 - 4.5], [-hx0 + 4.5, hz0 - 4.5], [hx0 - 4.5, -hz0 + 4.5], [-hx0 + 4.5, -hz0 + 4.5], [0, hz0 - 3.2], [0, -hz0 + 3.2], [hx0 - 3.2, 0], [-hx0 + 3.2, 0]];
+          rim.forEach(function (q) { spikes.push(lathe([[0, sy - 0.6], [2.7, sy - 0.6], [2.7, sy], [0, sy + sh]], 10, { cx: q[0], cz: L.czH + q[1] })); });
+          plume = cat(spikes);
+        } else {                      // spike helmet
+          for (k = 0; k <= 7; k++) { var tt = k / 7; hatLoops.push(hl(0.45 + 0.55 * Math.sqrt(1 - tt * tt * 0.97), yH0 + hH * tt)); }
+          trim.push(loftCapped([hl(1, yH0), hl(1, yH0 + 1.0, 1.0), hl(1, yH0 + 3.2, 1.0), hl(1, yH0 + 4.2)]));
+          plume = lathe([[0, yH0 + hH - 0.8], [3.0, yH0 + hH - 0.8], [3.0, yH0 + hH], [1.6, yH0 + hH + 4], [0, yH0 + hH + 9]], 12, { cx: 0, cz: L.czH });
+        }
+        add('hat', p.hat === 1 ? '#fde047' : '#60a5fa', loftCapped(hatLoops));
+        if (p.hat !== 1) add('hatTrim', '#fde047', trim); else add('hatTrim', '#f87171', trim);
+        add('plume', p.hat === 2 ? '#fde047' : (p.hat === 1 ? '#fde047' : '#f1f5f9'), plume);
+
+        // Jaw last so the Color tool lists it with the head
+        var fixed = list.filter(function (m) { return m.fixed; });
+        var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+        fixed.forEach(function (m) { for (i = 0; i < m.positions.length; i += 3) for (k = 0; k < 3; k++) { var v = m.positions[i + k]; if (v < lo[k]) lo[k] = v; if (v > hi[k]) hi[k] = v; } });
+        var cx = (lo[0] + hi[0]) / 2, cz = (lo[2] + hi[2]) / 2, y0 = lo[1];
+        list.push({ name: 'jaw', color: '#f1f5f9', positions: jawPos, fixed: false });
+        return list.map(function (m) {
+          var a = m.positions, o = new Float32Array(a.length);
+          for (i = 0; i < a.length; i += 3) { o[i] = (a[i] - cx) * s; o[i + 1] = (a[i + 1] - y0) * s; o[i + 2] = (a[i + 2] - cz) * s; }
+          return { name: m.name, positions: o, color: m.color, singlePart: true };
+        });
+      }
+
+      // ---- Parameters -----------------------------------------------------------------------------
+      function slider(group, key, label, unit, min, max, step, value) { return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value }; }
+      var HATS = ['Shako', 'Crown', 'Spike helmet'];
+      var DEFAULTS = { height: 120, headWidth: 30, mouth: 10, faceH: 14, hatH: 24, hat: 0, mustache: 1, nose: 3.2, tolerance: 0.35, pose: 0 };
+      var PARAMS = [
+        slider('Size', 'height', 'Figure height (about)', ' mm', 90, 150, 1, DEFAULTS.height),
+        slider('Size', 'headWidth', 'Head width', ' mm', 26, 38, 1, DEFAULTS.headWidth),
+        slider('Size', 'mouth', 'Mouth size (chin radius)', ' mm', 9, 14, 0.5, DEFAULTS.mouth),
+        slider('Size', 'faceH', 'Face height above the mouth', ' mm', 12, 20, 1, DEFAULTS.faceH),
+        { group: 'Hat', key: 'hat', label: 'Hat', unit: '', min: 0, max: 2, step: 1, value: DEFAULTS.hat, format: function (v) { return HATS[Math.round(v)]; } },
+        slider('Hat', 'hatH', 'Hat height', ' mm', 14, 34, 1, DEFAULTS.hatH),
+        { group: 'Face', key: 'mustache', label: 'Moustache', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.mustache, options: ['Off', 'On'] },
+        slider('Face', 'nose', 'Nose size', ' mm', 2, 4.5, 0.1, DEFAULTS.nose),
+        slider('Print fit', 'tolerance', 'Jaw tolerance: air gap round the jaw and pins (0.35 suits most printers)', ' mm', 0.25, 0.6, 0.05, DEFAULTS.tolerance),
+        slider('Print fit', 'pose', 'Jaw pose (leave at 0 to print in place; above 0 is a display pose)', '°', 0, 30, 1, DEFAULTS.pose)
+      ];
+      function presetOf(label, over) {
+        var v = {}; Object.keys(DEFAULTS).forEach(function (k) { v[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { v[k] = over[k]; });
+        return { label: label, values: v };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-108',
+        category: 'CHRISTMAS // FIGURES',
+        title: 'Nutcracker',
+        fileName: 'Nutcracker',
+        printerLink: '../index.html#map-screen',
+        defaultColor: '#f87171',
+        palette: [
+          { name: 'Candy Red', color: '#f87171' }, { name: 'Royal Blue', color: '#60a5fa' },
+          { name: 'Gold', color: '#fde047' }, { name: 'Snow White', color: '#f1f5f9' },
+          { name: 'Peach Skin', color: '#fdd5b1' }, { name: 'Coal Black', color: '#334155' },
+          { name: 'Pine Green', color: '#86efac' }, { name: 'Wood Brown', color: '#c08457' }
+        ],
+        partNames: { base: 'Plinth', coat: 'Coat', trim: 'Gold trim', jewel: 'Buttons & buckle', boots: 'Boots', arms: 'Arms', hands: 'Hands', head: 'Head', cheeks: 'Side hair (cheek plates)', jaw: 'Moving jaw', eyes: 'Eyes', brows: 'Eyebrows', nose: 'Nose', mustache: 'Moustache', hat: 'Hat', hatTrim: 'Hat band', plume: 'Plume / spike / crown points' },
+        parameters: PARAMS,
+        presets: [
+          presetOf('Default nutcracker', {}),
+          presetOf('Royal king', { hat: 1, hatH: 22, mustache: 1 }),
+          presetOf('Spiked guard', { hat: 2, hatH: 20, mustache: 0 }),
+          presetOf('Tall drummer', { height: 138, hatH: 32, faceH: 17 }),
+          presetOf('Small stocking filler', { height: 92, headWidth: 27, mouth: 9, faceH: 12, hatH: 16 }),
+          presetOf('Big chomper', { mouth: 13.5, headWidth: 36, faceH: 16, nose: 3.8 })
+        ],
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
