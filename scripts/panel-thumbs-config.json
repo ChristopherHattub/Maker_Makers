@@ -781,5 +781,20 @@
   },
   "yaw": 35,
   "elev": 30
+ },
+ "wall-panel": {
+  "colors": {
+   "plate": "#2f4a73",
+   "rim": "#7ab3ff",
+   "text": "#f1ece1",
+   "deco": "#ff9a4d",
+   "rails": "#7ab3ff",
+   "chips": "#7be0b0",
+   "pins": "#7ab3ff",
+   "knobs": "#ff8fb1",
+   "marks": "#f1ece1"
+  },
+  "yaw": 0,
+  "elev": 55
  }
 }

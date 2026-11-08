@@ -818,6 +818,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 116,
+    title: 'Wall Panel Maker',
+    bundle: 'decor',
+    category: 'WALL // DECOR',
+    thumbnailUrl: 'assets/thumbnails/wall-panel.svg',
+    programUrl: 'programs/wall-panel.html',
+    description: 'A flat typography panel to hang on the wall, with real moving parts for to-do lists and progress tracking. Set the panel size, corners, border and hanging holes, then drag elements onto it from the Elements tab: text in seven fonts, sliding checkboxes, sliders, progress bars with scale marks, turning dials, dividers and icons. Move them freely on the panel, or start from a to-do list, habit tracker, goals board or dial dashboard. The moving parts print in place, flat on the bed, with no supports; the clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 115,
     title: 'Stamp Maker',
     bundle: 'personal',
