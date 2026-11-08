@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 112,
+    title: 'Pet Bowl Maker',
+    bundle: 'organization',
+    category: 'HOME // PET CARE',
+    thumbnailUrl: 'assets/thumbnails/pet-bowl.svg',
+    programUrl: 'programs/pet-bowl.html',
+    description: 'A custom pet bowl, single or double. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, flat or rounded rims with an outer lip and scallops, and a flat, anti-tip flange or raised pedestal base. Double sets can have different sizes and join with a link bar or a spill tray. Prints with no supports; walls lean out at most about 30 degrees. Paint the inside, outside and rim in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',

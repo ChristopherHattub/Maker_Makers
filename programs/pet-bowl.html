@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-112 Pet Bowl Maker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Pet Bowl Maker: one bowl or two, in seven outlines, four profiles, five wall patterns, rim, base and tray styles.
+      // Every bowl is ONE lathe-style surface (outside, rim, inside, floor) so it is watertight by construction.
+      // Walls never lean out more than ~35 degrees from vertical, so the defaults and presets print with no supports.
+      var TAU = Math.PI * 2;
+      var SEG = 144;              // segments around every bowl
+      var TAN_WALL = 0.6;         // steepest outward lean of a wall (about 31 degrees)
+      var CHAMFER = 1;                       // small bevel on the bed edge (stops elephant foot)
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function smoothstep(e0, e1, x) { if (e1 <= e0) return x >= e1 ? 1 : 0; var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      // ---------------------------------------------------------------------
+      // Outlines: a table of SEG radius factors (mean 1) around the bowl.
+      // ---------------------------------------------------------------------
+      var OUTLINES = ['Round', 'Rounded square', 'Hexagon', 'Octagon', 'Oval', 'Flower', 'Heart'];
+      var PROFILES = ['Classic curve', 'Straight taper', 'Trumpet flare', 'S-curve'];
+      var PATTERNS = ['Smooth', 'Fluted', 'Twisted', 'Rings', 'Quilted'];
+      var BASES = ['Flat', 'Anti-tip flange', 'Pedestal'];
+      var JOINS = ['None', 'Link bar', 'Spill tray'];
+
+      function polygonRaw(n, th) {
+        var seg = TAU / n, phi = ((((th + Math.PI / n) % seg) + seg) % seg) - Math.PI / n;
+        return Math.cos(Math.PI / n) / Math.cos(phi);
+      }
+      function heartTable() {
+        // Classic heart curve, seen from a centre point; pointed end towards +z (the front).
+        var pts = [], k, t, x, y, a;
+        for (k = 0; k < 1440; k++) {
+          t = (k / 1440) * TAU;
+          x = 16 * Math.pow(Math.sin(t), 3);
+          y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t) - 1.5;
+          a = Math.atan2(-y, x); if (a < 0) a += TAU;
+          pts.push([a, Math.sqrt(x * x + y * y)]);
+        }
+        pts.sort(function (p, q) { return p[0] - q[0]; });
+        var tab = new Float64Array(SEG), j, th, lo, hi, m, f;
+        for (j = 0; j < SEG; j++) {
+          th = (j / SEG) * TAU; lo = 0; hi = pts.length - 1;
+          while (hi - lo > 1) { m = (lo + hi) >> 1; if (pts[m][0] <= th) lo = m; else hi = m; }
+          f = (th - pts[lo][0]) / Math.max(1e-9, pts[hi][0] - pts[lo][0]);
+          tab[j] = pts[lo][1] + (pts[hi][1] - pts[lo][1]) * clamp(f, 0, 1);
+        }
+        // soften the top notch and the point so walls stay printable
+        var soft = new Float64Array(SEG), kk, acc;
+        for (j = 0; j < SEG; j++) {
+          acc = 0;
+          for (kk = -8; kk <= 8; kk++) acc += tab[(j + kk + SEG) % SEG];
+          soft[j] = 0.1 * tab[j] + 0.9 * (acc / 17);
+        }
+        return soft;
+      }
+      var HEART = heartTable();
+
+      function outlineTable(p) {
+        var o = Math.round(p.outline), tab = new Float64Array(SEG), j, th, k, w, sum = 0, v;
+        var corner = clamp(p.corner, 0, 100) / 100;
+        for (j = 0; j < SEG; j++) {
+          th = (j / SEG) * TAU;
+          if (o === 0) v = 1;
+          else if (o === 1) {
+            var n = 3 + (1 - corner) * 9;
+            v = Math.pow(Math.pow(Math.abs(Math.cos(th)), n) + Math.pow(Math.abs(Math.sin(th)), n), -1 / n);
+          } else if (o === 2 || o === 3) {
+            var sides = o === 2 ? 6 : 8, sw = corner * (Math.PI / sides) * 0.95; v = 0;
+            for (k = -4; k <= 4; k++) v += polygonRaw(sides, th + (k / 4) * sw);
+            v /= 9;
+          } else if (o === 4) {
+            var st = clamp(p.oval, 105, 200) / 100;
+            v = 1 / Math.sqrt(Math.pow(Math.cos(th), 2) / (st * st) + Math.pow(Math.sin(th), 2));
+          } else if (o === 5) {
+            v = 1 + 0.1 * Math.cos(Math.round(p.petals) * th);
+          } else v = HEART[j];
+          tab[j] = v; sum += v;
+        }
+        var mean = sum / SEG;
+        for (j = 0; j < SEG; j++) tab[j] /= mean;
+        return tab;
+      }
+      // How far the outline reaches towards +x / -x for a bowl of radius R (largest x component).
+      function xExtents(tab, R) {
+        var plus = 0, minus = 0, j, c;
+        for (j = 0; j < SEG; j++) {
+          c = tab[j] * Math.cos((j / SEG) * TAU) * R;
+          if (c > plus) plus = c;
+          if (-c > minus) minus = -c;
+        }
+        return [plus, minus];
+      }
+
+      // ---------------------------------------------------------------------
+      // One bowl: a stack of rings (bottom pole, outside up, rim, inside down, floor pole).
+      // ---------------------------------------------------------------------
+      function profileF(style, t) {
+        if (style === 1) return t;
+        if (style === 2) return Math.pow(t, 2.2);
+        if (style === 3) return t * t * (3 - 2 * t);
+        return Math.sin(t * Math.PI / 2);
+      }
+
+      function makeBowl(q, R, H, tab) {
+        var wall = q.wall, floorT = q.floorT, N = 40, k, i, smax = 1;
+        for (k = 0; k < SEG; k++) smax = Math.max(smax, tab[k]);
+        lip = Math.min(lip, 0.4 * H / smax / 1.2);
+        var tanW = TAN_WALL / smax;   // a wide outline stretches the slope, so lean less
+        var lip = clamp(q.lip, 0, 0.4 * H);
+        var baseStyle = Math.round(q.baseStyle);
+        var rbTop = R * clamp(q.baseW, 40, 100) / 100;
+        // body radius table (before the lip), steepness-limited from the top down
+        var rs = [], dy = H / N;
+        for (k = 0; k <= N; k++) rs.push(rbTop + (R - rbTop) * profileF(Math.round(q.profile), k / N));
+        for (k = N; k > 0; k--) rs[k - 1] = Math.max(rs[k - 1], rs[k] - dy * tanW);
+        var rb0 = rs[0];
+        function bodyR(yb) {
+          var f = clamp(yb / dy, 0, N), a = Math.floor(f), b = Math.min(N, a + 1);
+          return rs[a] + (rs[b] - rs[a]) * (f - a);
+        }
+        // pedestal
+        var y0 = 0, pedPts = null, rs0 = 0;
+        if (baseStyle === 2) {
+          rs0 = clamp(q.stemD / 2, 6, rb0 - 4);
+          var tanF = 0.9 / smax;
+          y0 = Math.max(q.standH, 15 + (rb0 - rs0) / tanF);
+          var rf = Math.max(rb0, rs0 + 10), yA = y0 - (rb0 - rs0) / tanF;
+          pedPts = [[0, rf], [3, rf], [7, rs0 + (rf - rs0) * 0.38], [11, rs0 + (rf - rs0) * 0.12], [14, rs0], [yA, rs0], [y0, rb0]];
+        }
+        function pedR(y) {
+          var a, b;
+          for (i = 1; i < pedPts.length; i++) {
+            if (y <= pedPts[i][0] + 1e-9) {
+              a = pedPts[i - 1]; b = pedPts[i];
+              return a[1] + (b[1] - a[1]) * clamp((y - a[0]) / Math.max(1e-9, b[0] - a[0]), 0, 1);
+            }
+          }
+          return pedPts[pedPts.length - 1][1];
+        }
+        // flange
+        var fl = baseStyle === 1 ? q.flange : 0, fh = Math.max(2.5, floorT - 0.5);
+        function flangeR(y) {
+          if (fl <= 0 || y >= fh) return 0;
+          return rb0 + fl * (y <= 1.2 ? 1 : 1 - (y - 1.2) / (fh - 1.2));
+        }
+        var yTop = y0 + H, yf = y0 + floorT;
+        function lipX(yb) { return lip > 0 ? lip * clamp(1 - (H - yb) / (3 * lip * smax), 0, 1) : 0; }
+        function rOutFn(y) {
+          if (pedPts && y < y0) return pedR(y);
+          var yb = Math.max(0, y - y0);
+          return Math.max(bodyR(yb) + lipX(yb), flangeR(y));
+        }
+        function rInFn(y) { return bodyR(Math.max(0, y - y0)) - wall; }
+        var rMax = Math.max(R + lip, rb0 + fl, pedPts ? pedPts[0][1] : 0);
+
+        // wall pattern
+        var pat = Math.round(q.pattern), depth = 0, period = clamp(q.ringSpace, 4, 20);
+        if (pat > 0) {
+          depth = Math.min(q.patDepth, wall - 1.2);
+          if (pat >= 3) depth = Math.min(depth, period * 0.11);
+        }
+        var patN = Math.round(q.patCount), twist = q.twist * TAU / H;
+        var texTopEnd = yTop - Math.max(0.08 * H, 3 * lip * smax + 2), texTopStart = texTopEnd - 0.18 * H;
+        var texBotStart = y0 + 0.08 * H, texBotEnd = y0 + 0.22 * H;
+        function texW(y) { return smoothstep(texBotStart, texBotEnd, y) * (1 - smoothstep(texTopStart, texTopEnd, y)); }
+        function texG(th, y) {
+          var a = 0.5 - 0.5 * Math.cos(patN * th + (pat === 2 ? twist * (y - y0) : 0));
+          if (pat === 1 || pat === 2) return a;
+          var b = 0.5 - 0.5 * Math.cos(TAU * (y - y0) / period);
+          return pat === 3 ? b : a * b;
+        }
+        // rim scallops (the rim dips; the wall follows the same profile curve)
+        var scal = clamp(q.scalAmp, 0, 8), scalN = Math.round(q.scalCount);
+        var band = Math.min(Math.max(10, scal * 3), Math.max(4, (H - floorT) * 0.8));
+        scal = Math.min(scal, band / 3);
+        function shiftAt(th, y) { return scal > 0 ? scal * (0.5 - 0.5 * Math.cos(scalN * th)) * smoothstep(yTop - band, yTop, y) : 0; }
+
+        // fillet where the floor meets the inside wall
+        var rcIn = rInFn(yf + 3);
+        var fr = clamp(Math.min(rcIn - 4, 4, floorT), 0, 4); if (fr < 0.6) fr = 0;
+        var rIn0 = rInFn(yf + fr);
+
+        // ring list
+        var rings = [], ys = [], yy;
+        function addY(y) { if (y > CHAMFER + 0.05 && y < yTop - 0.01) ys.push(y); }
+        for (k = 1; k < N; k++) addY(y0 + H * k / N);
+        if (fl > 0) { addY(1.2); addY(fh); }
+        if (pedPts) for (i = 0; i < pedPts.length; i++) addY(pedPts[i][0]);
+        ys.sort(function (a, b) { return a - b; });
+        var uy = [];
+        for (i = 0; i < ys.length; i++) if (!uy.length || ys[i] - uy[uy.length - 1] > 0.08) uy.push(ys[i]);
+        var rounded = Math.round(q.rimEdge) === 1;
+        var hv = rounded ? Math.min(4, (wall + lip) / 2) : 0;
+
+        rings.push({ k: 'ax', y: 0, g: 'out' });
+        rings.push({ k: 'o', y: 0, dr: -0.6, g: 'out' });
+        rings.push({ k: 'o', y: CHAMFER, dr: 0, g: 'out' });
+        for (i = 0; i < uy.length; i++) if (uy[i] < yTop - hv - 0.3) rings.push({ k: 'o', y: uy[i], dr: 0, g: 'out' });
+        if (rounded) {
+          rings.push({ k: 'o', y: yTop - hv, dr: 0, g: 'rim' });
+          for (i = 1; i < 8; i++) rings.push({ k: 'a', y: yTop - hv, a: (i / 8) * Math.PI, g: 'rim' });
+          rings.push({ k: 'i', y: yTop - hv, g: 'in' });
+        } else {
+          rings.push({ k: 'o', y: yTop, dr: 0, g: 'rim' });
+          rings.push({ k: 'i', y: yTop, g: 'in' });
+        }
+        var innerYs = [];
+        for (k = N - 1; k >= 1; k--) {
+          yy = y0 + H * k / N;
+          if (yy > yf + fr + 0.2 && yy < yTop - hv - 0.3) innerYs.push(yy);
+        }
+        for (i = 0; i < innerYs.length; i++) rings.push({ k: 'i', y: innerYs[i], g: 'in' });
+        if (fr > 0) {
+          rings.push({ k: 'i', y: yf + fr, g: 'in' });
+          for (i = 1; i <= 5; i++) rings.push({ k: 'f', a: (Math.PI / 2) * (1 - i / 5), g: 'in' });
+        } else rings.push({ k: 'i', y: yf, g: 'in' });
+        rings.push({ k: 'ax', y: yf, g: 'in' });
+        rings.forEach(function (r) { r.pole = r.k === 'ax'; });
+
+        function pointOf(ring, j) {
+          var th = (j / SEG) * TAU, s = tab[j], y, r, yc, ro, ri, hw;
+          if (ring.k === 'ax') return [0, ring.y, 0];
+          if (ring.k === 'f') { r = rIn0 - fr + fr * Math.sin(ring.a); y = yf + fr - fr * Math.cos(ring.a); }
+          else {
+            yc = ring.y - shiftAt(th, ring.y);
+            if (ring.k === 'o') {
+              r = rOutFn(yc) + ring.dr; y = yc;
+              if (depth > 0) r -= depth * texG(th, yc) * texW(yc);
+            } else if (ring.k === 'i') { r = rInFn(yc); y = yc; }
+            else {
+              ro = rOutFn(yc); ri = rInFn(yc); hw = (ro - ri) / 2;
+              r = (ro + ri) / 2 + hw * Math.cos(ring.a); y = yc + hv * Math.sin(ring.a);
+            }
+          }
+          return [r * s * Math.cos(th), y, r * s * Math.sin(th)];
+        }
+        return { rings: rings, pointOf: pointOf, rMax: rMax, y0: y0, yTop: yTop, rb0: rb0 };
+      }
+
+      // Build triangles (per group) from a ring list; flips every group together when the volume is negative.
+      function ringTris(rings, pointOf, dx, dz) {
+        var P = [], i, j, k, row, out = {}, vol = 0, g, arr, a, b, c, d, d0, d1, t;
+        for (i = 0; i < rings.length; i++) {
+          row = [];
+          if (rings[i].pole) { var pp = pointOf(rings[i], 0); for (j = 0; j < SEG; j++) row.push(pp); }
+          else for (j = 0; j < SEG; j++) row.push(pointOf(rings[i], j));
+          P.push(row);
+        }
+        for (i = 0; i < rings.length - 1; i++) {
+          d0 = rings[i].pole; d1 = rings[i + 1].pole;
+          if (d0 && d1) continue;
+          g = rings[i].g; arr = out[g] || (out[g] = []);
+          for (j = 0; j < SEG; j++) {
+            k = (j + 1) % SEG; a = P[i][j]; b = P[i][k]; c = P[i + 1][k]; d = P[i + 1][j];
+            if (d0) tri(arr, a, d, c);
+            else if (d1) tri(arr, a, c, b);
+            else { tri(arr, a, d, c); tri(arr, a, c, b); }
+          }
+        }
+        var names = Object.keys(out), n, p;
+        names.forEach(function (nm) {
+          p = out[nm];
+          for (n = 0; n < p.length; n += 9) {
+            vol += p[n] * (p[n + 4] * p[n + 8] - p[n + 5] * p[n + 7])
+                 - p[n + 1] * (p[n + 3] * p[n + 8] - p[n + 5] * p[n + 6])
+                 + p[n + 2] * (p[n + 3] * p[n + 7] - p[n + 4] * p[n + 6]);
+          }
+        });
+        var flip = vol < 0, res = {};
+        names.forEach(function (nm) {
+          p = out[nm];
+          var f = new Float32Array(p.length);
+          for (n = 0; n < p.length; n += 9) {
+            for (t = 0; t < 3; t++) {
+              f[n + t] = p[n + t];
+              f[n + 3 + t] = p[n + (flip ? 6 : 3) + t];
+              f[n + 6 + t] = p[n + (flip ? 3 : 6) + t];
+            }
+            f[n] += dx; f[n + 3] += dx; f[n + 6] += dx;
+            f[n + 2] += dz; f[n + 5] += dz; f[n + 8] += dz;
+          }
+          res[nm] = f;
+        });
+        return res;
+      }
+
+      // ---------------------------------------------------------------------
+      // Stadium (rounded slot) outline in polar form, for the tray and link bar.
+      // ---------------------------------------------------------------------
+      function stadium(L, rho, th) {
+        var c = Math.abs(Math.cos(th)), s = Math.abs(Math.sin(th));
+        if (s < 1e-9) return L + rho;
+        var t = rho / s;
+        if (t * c <= L) return t;
+        return L * c + Math.sqrt(Math.max(0, rho * rho - L * L * s * s));
+      }
+      function stadiumSolid(rings, L, rho, rw, dx) {
+        function pointOf(ring, j) {
+          var th = (j / SEG) * TAU, r;
+          if (ring.k === 'ax') return [0, ring.y, 0];
+          r = stadium(L, ring.k === 'ti' ? rho - rw : rho + (ring.off || 0), th);
+          return [r * Math.cos(th), ring.y, r * Math.sin(th)];
+        }
+        rings.forEach(function (r) { r.pole = r.k === 'ax'; });
+        var res = ringTris(rings, pointOf, dx, 0);
+        var all = [];
+        Object.keys(res).forEach(function (k) { all.push(res[k]); });
+        var n = 0, at = 0, out;
+        all.forEach(function (a) { n += a.length; });
+        out = new Float32Array(n);
+        all.forEach(function (a) { out.set(a, at); at += a.length; });
+        return out;
+      }
+
+      // ---------------------------------------------------------------------
+      // build()
+      // ---------------------------------------------------------------------
+      function build(p) {
+        var double = Math.round(p.layout) === 1;
+        var R1 = p.diam / 2, H1 = p.height, R2 = R1 * p.d2 / 100, H2 = H1 * p.h2 / 100;
+        var tab = outlineTable(p);
+        var b1 = makeBowl(p, R1, H1, tab), b2 = double ? makeBowl(p, R2, H2, tab) : null;
+        var e1 = xExtents(tab, b1.rMax), e2 = b2 ? xExtents(tab, b2.rMax) : null;
+        var cx1, cx2, xMin, xMax;
+        if (double) {
+          cx1 = 0; cx2 = e1[0] + p.gap + e2[1];
+          xMin = cx1 - e1[1]; xMax = cx2 + e2[0];
+        } else { cx1 = 0; xMin = -e1[1]; xMax = e1[0]; }
+        var shiftX = -(xMin + xMax) / 2;
+        cx1 += shiftX; if (double) cx2 += shiftX;
+        xMin += shiftX; xMax += shiftX;
+
+        var meshes = [];
+        function addBowl(b, cx, suffix, grp) {
+          var t = ringTris(b.rings, b.pointOf, cx, 0);
+          ['out', 'rim', 'in'].forEach(function (g) {
+            if (t[g] && t[g].length) meshes.push({ name: g + suffix, positions: t[g], smoothGroup: grp });
+          });
+        }
+        addBowl(b1, cx1, '', 'bowl1');
+        if (double) addBowl(b2, cx2, '2', 'bowl2');
+
+        var join = Math.round(p.join);
+        if (join === 2) {
+          var margin = p.trayMargin, pts = [], j, th, s, bb, cc, rr;
+          [[b1, cx1], [b2, cx2]].forEach(function (pair) {
+            bb = pair[0]; cc = pair[1];
+            if (!bb) return;
+            for (j = 0; j < SEG; j++) {
+              th = (j / SEG) * TAU; rr = bb.rMax * tab[j];
+              pts.push([cc + rr * Math.cos(th), rr * Math.sin(th)]);
+            }
+          });
+          var mid = (xMin + xMax) / 2, halfX = (xMax - xMin) / 2, zH = 0, it, L = 0, rho, need, dd, ax;
+          pts.forEach(function (pt) { zH = Math.max(zH, Math.abs(pt[1])); });
+          rho = zH + margin;
+          for (it = 0; it < 8; it++) {
+            L = Math.max(0, halfX + margin - rho); need = 0;
+            pts.forEach(function (pt) {
+              ax = Math.abs(pt[0] - mid);
+              dd = ax > L ? Math.sqrt((ax - L) * (ax - L) + pt[1] * pt[1]) : Math.abs(pt[1]);
+              if (dd > need) need = dd;
+            });
+            if (need + margin <= rho + 0.01) break;
+            rho = need + margin;
+          }
+          var rimH = Math.max(3.5, p.trayRim), tF = 2.4, rw = 2.4;
+          meshes.push({ name: 'tray', smoothGroup: 'tray', positions: stadiumSolid([
+            { k: 'ax', y: 0, g: 'a' }, { k: 'to', y: 0, off: -0.6, g: 'a' }, { k: 'to', y: CHAMFER, off: 0, g: 'a' },
+            { k: 'to', y: rimH, off: 0, g: 'a' }, { k: 'ti', y: rimH, g: 'a' }, { k: 'ti', y: tF, g: 'a' }, { k: 'ax', y: tF, g: 'a' }
+          ], L, rho, rw, mid) });
+        } else if (join === 1 && double) {
+          var barH = Math.min(p.floorT - 0.6, 3.5), half = (cx2 - cx1) / 2;
+          meshes.push({ name: 'tray', smoothGroup: 'tray', positions: stadiumSolid([
+            { k: 'ax', y: 0, g: 'a' }, { k: 'to', y: 0, off: 0, g: 'a' }, { k: 'to', y: barH, off: 0, g: 'a' }, { k: 'ax', y: barH, g: 'a' }
+          ], half, p.barW / 2, 0, (cx1 + cx2) / 2) });
+        }
+        return meshes;
+      }
+
+      // ---------------------------------------------------------------------
+      // Config
+      // ---------------------------------------------------------------------
+      function choice(group, key, label, names, value) {
+        return { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+      }
+      function slider(group, key, label, unit, min, max, step, value) {
+        return { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+      }
+      function sh(param, fn) { param.showIf = fn; return param; }
+      function is(key, val) { return function (q) { return Math.round(q[key]) === val; }; }
+      function dbl(q) { return Math.round(q.layout) === 1; }
+
+      var DEFAULTS = {
+        layout: 0, diam: 140, height: 50, d2: 100, h2: 100, gap: 14, join: 0, trayMargin: 10, trayRim: 10, barW: 20,
+        outline: 0, corner: 45, petals: 8, oval: 140, profile: 0, baseW: 62,
+        wall: 3.2, floorT: 4, pattern: 0, patDepth: 1.6, patCount: 16, ringSpace: 8, twist: 0.5,
+        rimEdge: 1, lip: 0, scalAmp: 0, scalCount: 8,
+        baseStyle: 0, flange: 10, standH: 40, stemD: 34
+      };
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      var parameters = [
+        choice('Bowls', 'layout', 'Setup', ['Single', 'Double'], DEFAULTS.layout),
+        slider('Bowls', 'diam', 'Bowl width across the top', ' mm', 70, 240, 1, DEFAULTS.diam),
+        slider('Bowls', 'height', 'Bowl height (tall + steep = more material)', ' mm', 25, 110, 1, DEFAULTS.height),
+        sh(slider('Bowls', 'd2', 'Second bowl width (% of the first)', '%', 50, 130, 5, DEFAULTS.d2), dbl),
+        sh(slider('Bowls', 'h2', 'Second bowl height (% of the first)', '%', 50, 140, 5, DEFAULTS.h2), dbl),
+        sh(slider('Bowls', 'gap', 'Gap between the two bowls', ' mm', 4, 60, 1, DEFAULTS.gap), dbl),
+        choice('Bowls', 'join', 'Joined with (a link bar needs Double)', JOINS, DEFAULTS.join),
+        sh(slider('Bowls', 'trayMargin', 'Tray: border around the bowls', ' mm', 6, 30, 1, DEFAULTS.trayMargin), is('join', 2)),
+        sh(slider('Bowls', 'trayRim', 'Tray: rim height (catches spills)', ' mm', 4, 24, 1, DEFAULTS.trayRim), is('join', 2)),
+        sh(slider('Bowls', 'barW', 'Link bar width', ' mm', 10, 40, 1, DEFAULTS.barW), function (q) { return dbl(q) && Math.round(q.join) === 1; }),
+        choice('Shape', 'outline', 'Outline from above', OUTLINES, DEFAULTS.outline),
+        sh(slider('Shape', 'corner', 'Corner roundness (0 = sharp)', '%', 0, 100, 5, DEFAULTS.corner), function (q) { var o = Math.round(q.outline); return o >= 1 && o <= 3; }),
+        sh(slider('Shape', 'oval', 'Oval length (% of width)', '%', 110, 200, 5, DEFAULTS.oval), is('outline', 4)),
+        sh(slider('Shape', 'petals', 'Number of petals', '', 4, 12, 1, DEFAULTS.petals), is('outline', 5)),
+        choice('Shape', 'profile', 'Side profile', PROFILES, DEFAULTS.profile),
+        slider('Shape', 'baseW', 'Base width (% of the top; small = steep sides)', '%', 40, 100, 1, DEFAULTS.baseW),
+        slider('Walls', 'wall', 'Wall thickness', ' mm', 2.4, 6, 0.2, DEFAULTS.wall),
+        slider('Walls', 'floorT', 'Floor thickness', ' mm', 3, 10, 0.5, DEFAULTS.floorT),
+        choice('Walls', 'pattern', 'Wall pattern', PATTERNS, DEFAULTS.pattern),
+        sh(slider('Walls', 'patDepth', 'Pattern depth (grooves cut into the wall)', ' mm', 0.4, 3, 0.1, DEFAULTS.patDepth), function (q) { return Math.round(q.pattern) > 0; }),
+        sh(slider('Walls', 'patCount', 'Flutes or dimples around', '', 6, 32, 1, DEFAULTS.patCount), function (q) { var o = Math.round(q.pattern); return o === 1 || o === 2 || o === 4; }),
+        sh(slider('Walls', 'ringSpace', 'Ring spacing up the wall', ' mm', 5, 16, 0.5, DEFAULTS.ringSpace), function (q) { return Math.round(q.pattern) >= 3; }),
+        sh(slider('Walls', 'twist', 'Twist (turns up the bowl)', '', 0.1, 1.5, 0.05, DEFAULTS.twist), is('pattern', 2)),
+        choice('Rim', 'rimEdge', 'Rim edge', ['Flat', 'Rounded'], DEFAULTS.rimEdge),
+        slider('Rim', 'lip', 'Outer lip for a better grip (0 = none)', ' mm', 0, 14, 1, DEFAULTS.lip),
+        slider('Rim', 'scalAmp', 'Scalloped rim depth (0 = smooth)', ' mm', 0, 8, 0.5, DEFAULTS.scalAmp),
+        sh(slider('Rim', 'scalCount', 'Number of scallops', '', 3, 16, 1, DEFAULTS.scalCount), function (q) { return q.scalAmp > 0; }),
+        choice('Base', 'baseStyle', 'Base style', BASES, DEFAULTS.baseStyle),
+        sh(slider('Base', 'flange', 'Flange width (stops tipping)', ' mm', 4, 30, 1, DEFAULTS.flange), is('baseStyle', 1)),
+        sh(slider('Base', 'standH', 'Stand height (raised feeder for cats)', ' mm', 20, 80, 1, DEFAULTS.standH), is('baseStyle', 2)),
+        sh(slider('Base', 'stemD', 'Stem width', ' mm', 14, 70, 1, DEFAULTS.stemD), is('baseStyle', 2))
+      ];
+
+      window.MM_GENERATOR = {
+        code: 'MM-112',
+        category: 'HOME // PET CARE',
+        title: 'Pet Bowl Maker',
+        fileName: 'Pet_Bowl',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Mint Biscuit', color: '#a7e3c8' },
+          { name: 'Peach Treat', color: '#fdba9a' }, { name: 'Lilac Paw', color: '#d8b4fe' },
+          { name: 'Sky Water', color: '#93c5fd' }, { name: 'Berry Chew', color: '#fda4af' },
+          { name: 'Charcoal', color: '#3b3f4a' }, { name: 'Butter Yellow', color: '#fde68a' }
+        ],
+        defaultColor: '#f1f5f9',
+        partNames: {
+          out: 'Bowl outside', rim: 'Bowl rim', 'in': 'Bowl inside',
+          out2: 'Bowl 2 outside', rim2: 'Bowl 2 rim', in2: 'Bowl 2 inside', tray: 'Tray or link bar'
+        },
+        openGroups: ['Bowls'],
+        parameters: parameters,
+        presets: [
+          presetOf('Default single bowl', {}),
+          presetOf('Small dog, fluted', { diam: 120, height: 45, pattern: 1, patCount: 14, rimEdge: 1, lip: 4 }),
+          presetOf('Food + water set', { layout: 1, diam: 105, height: 42, d2: 100, h2: 110, gap: 10, join: 2, trayMargin: 8, trayRim: 10 }),
+          presetOf('Cat dish, raised', { diam: 120, height: 28, baseW: 72, profile: 3, baseStyle: 2, standH: 30, stemD: 44, rimEdge: 1, wall: 2.8 }),
+          presetOf('Flower pair on a link bar', { layout: 1, outline: 5, petals: 8, diam: 120, height: 40, d2: 90, h2: 100, gap: 12, join: 1, barW: 24, scalAmp: 3, scalCount: 8, profile: 1, baseW: 70 }),
+          presetOf('Hexagon twist, anti-tip', { outline: 2, corner: 30, diam: 150, height: 55, pattern: 2, patCount: 12, twist: 0.4, baseStyle: 1, flange: 12, profile: 1, baseW: 68 }),
+          presetOf('Heart bowl', { outline: 6, diam: 130, height: 38, profile: 3, baseW: 66, pattern: 3, ringSpace: 9, patDepth: 1, rimEdge: 1 }),
+          presetOf('Big dog double with tray', { layout: 1, diam: 190, height: 80, d2: 100, h2: 100, gap: 16, join: 2, trayMargin: 14, trayRim: 12, wall: 4, floorT: 5, baseStyle: 1, flange: 14, profile: 2, baseW: 62 }),
+          presetOf('Quilted oval slow-sipper', { outline: 4, oval: 130, diam: 150, height: 42, pattern: 4, patCount: 16, ringSpace: 9, patDepth: 1.2, lip: 6, profile: 1, baseW: 66 })
+        ],
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
