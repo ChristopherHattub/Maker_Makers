@@ -470,5 +470,10 @@
     "sat": 70,
     "light": 80,
     "stand": true
+  },
+  "bird-feeder": {
+    "hue": 110,
+    "sat": 65,
+    "light": 78
   }
 }

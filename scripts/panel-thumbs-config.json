@@ -717,5 +717,15 @@
   },
   "yaw": 35,
   "elev": 22
+ },
+ "bird-feeder": {
+  "colors": {
+   "tray": "#d9b38c",
+   "posts": "#d9b38c",
+   "hopper": "#8ecae6",
+   "roof": "#e8756f"
+  },
+  "yaw": 30,
+  "elev": 18
  }
 }
