@@ -31,7 +31,9 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 111+ | Free (check open PRs first). Any number works. |
 | 109-112 | Free (check open PRs first). |
 | 113 | Built: Gingerbread House. |
-| 114-121 | Free (check open PRs first). |
+| 114-116 | Free (check open PRs first). |
+| 117 | Built: Cable Organizer. |
+| 118-121 | Free (check open PRs first). |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123+ | Free (check open PRs first). Any number works. |
 
@@ -156,6 +158,7 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | 109 | Marble Run | toys | `marble-run.html` (zigzag marble tower; Simulate tab drops balls) |
 | 110 | Energy Saber | toys | `energy-saber.html` (telescoping print-in-place blade tubes; hilt styles) |
 | 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
+| 117 | Cable Organizer | organization | `cable-organizer.html` (desk edge clip, under-desk tray, clip strip; slot count and cable thickness) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 112 | Pet Bowl Housing | organization | `pet-bowl-housing.html` (holder with a pocket for your own bowl; single or double; outlines, patterns, tray / link bar / platform) |
 

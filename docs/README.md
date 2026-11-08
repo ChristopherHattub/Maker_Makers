@@ -26,6 +26,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [spinner-ring.md](spinner-ring.md) | The Spinner Ring (slot 46): two-piece snap-fit band, 11 fonts, five relief patterns, the Print tab demo animation |
 | [pin-maker.md](pin-maker.md) | The Pin Maker (slot 103): picture tracing in the browser, rim, hanging hole, stamps |
 | [paper-towel-holder.md](paper-towel-holder.md) | The Paper Towel Holder (slot 104): three mounts, base shapes, rod styles, stamps, split rod |
+| [cable-organizer.md](cable-organizer.md) | The Cable Organizer (slot 117): desk edge clip, under-desk tray and clip strip, slot sizing, snap-in lips |
 | [marble-run.md](marble-run.md) | The Marble Run (slot 109): zigzag tower layout, support-free track profile, the ball simulation |
 | [nutcracker.md](nutcracker.md) | The Nutcracker (slot 108): print-in-place jaw (quarter disc in a concentric bowl on diamond pins), hats, tolerance, how it was checked. |
 | [stamp-maker.md](stamp-maker.md) | The Stamp Maker (slot 115): mirrored relief text and icons on a plate with a one-piece tapered grip, layouts, icon list |
