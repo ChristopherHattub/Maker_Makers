@@ -1,5 +1,8 @@
 {
   "_help": "Per-generator overrides for tools/hologram.html, keyed by thumbnail id. hue: degrees (185 cyan, 28 orange). stand: true/false forces a flat model upright (default: auto). yaw0: start angle. fill: fraction of the cell the model fills (default 0.8). skipRender: true leaves the tile on its current art. dark: true renders a black model (opaque near-black body, light rim and edges). sat/light: colour saturation and lightness (sat 0 = white).",
+  "gravity-walker": {
+    "hue": 185
+  },
   "pumpkin-plotter": {
     "hue": 28
   },
@@ -475,6 +478,37 @@
     "sat": 70,
     "light": 80,
     "stand": true
+  },
+  "battery-dispenser": {
+    "hue": 140,
+    "sat": 70,
+    "light": 78
+  },
+  "gingerbread-house": {
+    "hue": 28,
+    "sat": 75,
+    "light": 70
+  },
+  "wall-panel": {
+    "hue": 200,
+    "sat": 70,
+    "light": 75,
+    "stand": true
+  },
+  "fidget-spinner": {
+    "hue": 285,
+    "sat": 80,
+    "light": 70,
+    "stand": true
+  },
+  "zoetrope": {
+    "hue": 275,
+    "sat": 75,
+    "light": 76,
+    "hide": [
+      "strip",
+      "pictures"
+    ]
   },
   "bird-feeder": {
     "hue": 110,
