@@ -28,7 +28,7 @@ GitHub Pages serves the repo root straight from `main` (no workflow, `.nojekyll`
 
 ## Slots
 
-Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker, 106 is the Console Faceplate, 107 is the Holiday Tree Topper, 108 is the Nutcracker. Next free slot: 109 (check open PRs first). Full list: [docs/slot-registry.md](docs/slot-registry.md).
+Slots 1-75 are built (14 and 39 are unused gaps), 76-90 are the animals (`tools/animals/`, [docs/animals.md](docs/animals.md)), 91-100 are the Flexi Creatures, 101 is the Text Generator, 102 is the Fancy Ring, 103 is the Pin Maker, 104 is the Paper Towel Holder, 105 is the Sedan Maker, 106 is the Console Faceplate, 107 is the Holiday Tree Topper, 108 is the Nutcracker, 112 is the Pet Bowl Housing. Next free slot: 109 (check open PRs first; 113 and 122 are taken, see the registry). Full list: [docs/slot-registry.md](docs/slot-registry.md).
 
 ## Adding a generator (checklist)
 

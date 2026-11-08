@@ -16,6 +16,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 106 | Built: Console Faceplate. |
 | 107 | Built: Holiday Tree Topper. |
 | 108 | Built: Nutcracker (print-in-place jaw). |
+| 109-111 | Free (check open PRs first). |
+| 112 | Built: Pet Bowl Housing. |
 | 109 | Built: Marble Run. |
 | 110+ | Free (check open PRs first). Any number works. |
 | 110 | Built: Energy Saber. |
@@ -143,6 +145,7 @@ Total built: 107 generators in 21 groups (1 group is `planned` and empty: garden
 | 110 | Energy Saber | toys | `energy-saber.html` (telescoping print-in-place blade tubes; hilt styles) |
 | 113 | Gingerbread House | christmas | `gingerbread-house.html` (one piece, hollow, open underneath) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
+| 112 | Pet Bowl Housing | organization | `pet-bowl-housing.html` (holder with a pocket for your own bowl; single or double; outlines, patterns, tray / link bar / platform) |
 
 ## Groups (BUNDLES)
 
