@@ -800,6 +800,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 109,
+    title: 'Marble Run',
+    bundle: 'toys',
+    category: 'TOYS // KINETIC',
+    thumbnailUrl: 'assets/thumbnails/marble-run.svg',
+    programUrl: 'programs/marble-run.html',
+    description: 'A zigzag marble tower: balls roll down sloped tracks, drop through a gap onto the next track and collect in a ramp at the base. Set the marble size (steel or glass), the number of tracks, the width, the slope and the front lip, then open the Simulate tab to drop balls and watch the run work, or click a track to drop one there. Every track has a 45 degree underside, so the tower prints upright with no supports; the rolling is only simulated and untested on a real printer. Paint each track in the Color tool and export .STL.'
+  },
+  {
     slot: 106,
     title: 'Console Faceplate',
     bundle: 'toys',
@@ -807,6 +816,33 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/console-faceplate.svg',
     programUrl: 'programs/console-faceplate.html',
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 111,
+    title: 'Battery Dispenser',
+    bundle: 'organization',
+    category: 'HOME // ORGANISERS',
+    thumbnailUrl: 'assets/thumbnails/battery-dispenser.svg',
+    programUrl: 'programs/battery-dispenser.html',
+    description: 'A battery-shaped storage block with two slots on top, one for AA and one for AAA. Each slot feeds a gravity stack lying on its side; the bottom battery rolls down a ramp and rests against a small lip, half out of the front. Lift it over the lip and pull, and the stack drops the next one into place. Set the stack height, fit clearance, lip height, wall, divider, sleeve band and terminal nub. The front windows are arches, so it prints as one part with no supports and no moving pieces; battery clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 107,
+    title: 'Holiday Tree Topper',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // TREE DECOR',
+    thumbnailUrl: 'assets/thumbnails/holiday-tree-topper.svg',
+    programUrl: 'programs/holiday-tree-topper.html',
+    description: 'A faceted crystal star (four or five points), heart or gem on a fluted bell that sits on a socket for the tree tip. Set the size, pointiness and puff, the tree tip width and the socket depth, and choose a smooth or fluted bell and a socket collar. The bell is printed in place on a captured post, so the topper spins on its socket with a 0.4 mm clearance you can change, or print it fixed. Every downward surface is 40 degrees or steeper from vertical; the bell\'s first layers bridge a 0.4 mm gap over a ledge. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 110,
+    title: 'Energy Saber',
+    bundle: 'toys',
+    category: 'TOYS // COSPLAY',
+    thumbnailUrl: 'assets/thumbnails/energy-saber.svg',
+    programUrl: 'programs/energy-saber.html',
+    description: 'A collapsible toy saber that extends like a telescope. A hollow hilt (pillar, spindle, tiered or orbit style, with grip rings) holds two to five nested blade tubes that print in place, collapsed, with a slide clearance all round and a 45 degree catch that stops each tube pulling out. Set tube count and length, blade width and tip, grip width and the print fit; a preview slider shows it extended, and a Hilt parts tab lets you tap bands, flanges, ribs, fins, studs and gems onto the hilt. No supports; the clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 113,
@@ -824,7 +860,7 @@ const GENERATORS = [
     category: 'HOME // PET CARE',
     thumbnailUrl: 'assets/thumbnails/pet-bowl-housing.svg',
     programUrl: 'programs/pet-bowl-housing.html',
-    description: 'A housing that holds your own pet bowl, single or double. Enter the bowl rim, body, bottom and height and it makes a snug pocket with a rim seat. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, an outer lip, and a flat, anti-tip flange or raised pedestal base. Put the pet's name front and centre on a sloped name ramp in front or a board behind, in five fonts and six plate shapes. Double sets can have different sizes and join with a link bar, a spill tray or a raised platform. Prints with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'A housing that holds your own pet bowl, single or double. Enter the bowl rim, body, bottom and height and it makes a snug pocket with a rim seat. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, an outer lip, and a flat, anti-tip flange or raised pedestal base. Put the pet\'s name front and centre on a sloped name ramp in front or a board behind, in five fonts and six plate shapes. Double sets can have different sizes and join with a link bar, a spill tray or a raised platform. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,
