@@ -800,6 +800,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 119,
+    title: 'Headphone & Controller Stand',
+    bundle: 'organization',
+    category: 'GAMING // STANDS & MOUNTS',
+    thumbnailUrl: 'assets/thumbnails/headphone-controller-stand.svg',
+    programUrl: 'programs/headphone-controller-stand.html',
+    description: 'A desk headphone stand, a wall headphone hook, a desk controller rack or a wall controller shelf, with the same eight designs as the Console Faceplate (honeycomb, circuit traces, mountains and more) so a stand can match a faceplate. Set the headband width, stand height and cradle, one or two hooks, one to five controller slots with slot width and divider height, a front lip, screw holes and the pattern. Desk stands print upright on a flat base and wall mounts print on their back plate, every overhang is chamfered to 45 degrees, so there are no supports. Unprinted: test the fit with your own headphones and controllers. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 114,
     title: 'Fidget Spinner',
     bundle: 'fidgets',
