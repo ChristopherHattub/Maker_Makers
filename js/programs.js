@@ -797,7 +797,7 @@ const GENERATORS = [
     category: 'CHRISTMAS // TREE DECOR',
     thumbnailUrl: 'assets/thumbnails/holiday-tree-topper.svg',
     programUrl: 'programs/holiday-tree-topper.html',
-    description: 'A faceted crystal star, sparkle burst, heart, gem, drop, crest or diamond that sits on a socket for the tree tip. Set the number of points, size, pointiness and puff, and the tip width and depth of the socket. The star and its cone are printed in place on a captured post, so the topper spins on its socket with a 0.4 mm clearance you can change, or print it fixed. Prints upright with no supports on the default settings. Paint parts in the Color tool and export .STL.'
+    description: 'A faceted crystal star (four or five points), heart or gem on a fluted bell that sits on a socket for the tree tip. Set the size, pointiness and puff, the tree tip width and the socket depth, and choose a smooth or fluted bell and a socket collar. The bell is printed in place on a captured post, so the topper spins on its socket with a 0.4 mm clearance you can change, or print it fixed. Every downward surface is 40 degrees or steeper from vertical; the bell\'s first layers bridge a 0.4 mm gap over a ledge. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,
