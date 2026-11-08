@@ -141,7 +141,7 @@ function runVariant(presetLabel, out) {
       if (typeof cfg.printActive === 'function') variants.push([' (print variant)', printed]); else variants[0] = ['', printed];
     }
     variants.forEach(([tag, list]) => {
-      const pc = pcCheck(list);
+      const pc = pcCheck(list, cfg.printCheckOptions || {});
       if (!pc.issues.length) out('PRINT CHECK' + tag + ': no supports needed (no floating parts, no overhang over ~50 degrees, no thin walls).');
       pc.issues.forEach((i) => { out('PRINT CHECK' + tag + ' ' + i.severity.toUpperCase() + ' (' + i.kind + '): ' + i.message); res.print.push({ kind: i.kind, severity: i.severity, message: i.message }); });
       (pc.spots || []).slice(0, 6).forEach((s) => out('  at x ' + s.x.toFixed(1) + ' y ' + s.y.toFixed(1) + ' z ' + s.z.toFixed(1) + ' (Y-up), ' + Math.round(s.area) + ' mm2'));

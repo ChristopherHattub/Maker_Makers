@@ -16,6 +16,9 @@
     opt = opt || {};
     var minWall = opt.minWall || 0.8;
     var angle = opt.angle || 45;
+    // bridgeGap (mm): a solid within this distance straight below still counts as support. For deliberate print-in-place gaps
+    // (a part hovering 0.3 mm over another) that the voxel grid cannot resolve. Default 0: every other generator is unchanged.
+    var bridgeGap = opt.bridgeGap || 0;
     var t0 = Date.now();
 
     // ---- bounds and grid -------------------------------------------------------------------
@@ -118,7 +121,17 @@
       }
       comps.push({ id: nl, n: cnt, miny: miny, maxy: maxy, cx: cxs / cnt, cy: cys / cnt, cz: czs / cnt });
     }
-    var floats = comps.filter(function (cp) { return cp.miny > 1 && cp.n > 12; });
+    if (bridgeGap > 0) {
+      // a part hovering within bridgeGap of another solid is a print-in-place part, not a loose strand
+      var gl = Math.ceil(bridgeGap / c - 1e-6) + 1;
+      for (idx = 0; idx < N; idx++) {
+        if (!solid[idx]) continue;
+        var cpi = comps[label[idx] - 1], lay = layerOf(idx);
+        if (cpi.hover || lay !== cpi.miny || cpi.miny <= 1) continue;
+        for (var gb = 1; gb <= gl && lay - gb >= 0; gb++) if (solid[idx - gb * nz * nx]) { cpi.hover = true; break; }
+      }
+    }
+    var floats = comps.filter(function (cp) { return cp.miny > 1 && cp.n > 12 && !cp.hover; });
     var spots = [];
     if (floats.length) {
       var lowest = Math.min.apply(null, floats.map(function (cp) { return yOf(cp.miny); }));
@@ -138,10 +151,11 @@
       for (var iz2 = 0; iz2 < nz; iz2++) {
         for (var ix2 = 0; ix2 < nx; ix2++) {
           if (!solid[at(ix2, iy2, iz2)]) continue;
-          var ok = false;
+          var ok = false, below = bridgeGap > 0 ? Math.ceil(bridgeGap / c - 1e-6) + 1 : 1;
           for (var o = 0; o < offs.length && !ok; o++) {
             var sx = ix2 + offs[o][0], sz = iz2 + offs[o][1];
-            if (sx >= 0 && sz >= 0 && sx < nx && sz < nz && solid[at(sx, iy2 - 1, sz)]) ok = true;
+            if (sx < 0 || sz < 0 || sx >= nx || sz >= nz) continue;
+            for (var bl = 1; bl <= below && iy2 - bl >= 0; bl++) if (solid[at(sx, iy2 - bl, sz)]) { ok = true; break; }
           }
           // A one-layer air gap (a print-in-place clearance, a thin slit) bridges fine in a slicer, but on this grid it reads as
           // empty or full depending on where the layers fall, so solid two layers straight below counts as support too.
