@@ -13,8 +13,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
 | 105 | Built: Sedan Maker. |
-| 109 | Built: Marble Run. (106 to 108 are held by other open branches.) |
-| 106+ | Free. Any number works. |
+| 106 | Built: Console Faceplate. |
+| 108 | Built: Nutcracker (print-in-place jaw). |
+| 109 | Built: Marble Run. |
+| 110+ | Free (check open PRs first). Any number works. |
 
 Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -125,6 +127,8 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | 103 | Pin Maker | jewelry | `pin-maker.html` |
 | 104 | Paper Towel Holder | organization | `paper-towel-holder.html` (countertop, wall and under-cabinet mounts; stamps; split rod; magnets) |
 | 105 | Sedan Maker | toys | `sedan-maker.html` (print-in-place wheels; Car parts stamps) |
+| 106 | Console Faceplate | toys | `console-faceplate.html` (Switch / Switch 2 dock, PS5 panel, Xbox Series X front; eight designs; sizes are estimates) |
+| 108 | Nutcracker | christmas | `nutcracker.html` (print-in-place jaw on diamond pins, about 40 mix-and-match options) |
 | 109 | Marble Run | toys | `marble-run.html` (zigzag marble tower; Simulate tab drops balls) |
 
 ## Groups (BUNDLES)
@@ -145,7 +149,7 @@ Total built: 101 generators in 21 groups (1 group is `planned` and empty: garden
 | pottery | Pottery | 1 |
 | decor | Home & Decor | 6 |
 | organization | Organisation | 3 |
-| toys | Toys & Games | 2 |
+| toys | Toys & Games | 3 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
 | animals | Animals & Creatures | 15 |

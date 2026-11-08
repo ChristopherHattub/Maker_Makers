@@ -30,6 +30,11 @@
     "sat": 85,
     "light": 80
   },
+  "nutcracker": {
+    "hue": 355,
+    "sat": 80,
+    "light": 66
+  },
   "holiday-tree": {
     "hue": 130,
     "sat": 80,

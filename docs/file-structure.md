@@ -2,7 +2,7 @@
 
 ```
 .
-├── index.html               Page markup: header, four screens, idea modal, footer disclaimer
+├── index.html               Page markup: header, five screens, footer disclaimer
 ├── css/
 │   ├── styles.css           Site styles (blueprint theme, homepage world map, viewer, printer map, modal)
 │   └── workshop.css         Workshop editor and Workshop tile styles
@@ -10,7 +10,8 @@
 │   ├── programs.js          GENERATORS list, BUNDLES (map regions) and the PROGRAMS slot array built from them
 │   ├── worldmap.js          Homepage world map: layout, camera, selection, hologram hover tiles, minimap, sort, rearrange
 │   ├── workshop.js          Workshop: free-range 3D editor (shape catalog, STL import, booleans, STL / OBJ export)
-│   └── app.js               Router, viewer, idea queue, printer map
+│   ├── guides.js            Printing guides: GUIDES link list and search
+│   └── app.js               Router, viewer, printer map
 ├── data/
 │   ├── public-printers.json Verified printer listings (solid dots, directory)
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
