@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-109 Marble Run // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Marble Run: a zigzag tower of sloped tracks. Every track is a flat-bottomed shelf with a 45 degree
+    // underside, so the whole tower prints upright with no supports. The Simulate tab drops balls through
+    // the same geometry (a small 2D physics model, display only: the balls are never exported).
+    (function () {
+      'use strict';
+
+      var BOARD = 4;        // back board thickness (z)
+      var POST = 4.5;       // side post thickness (x)
+      var FLOOR = 3;        // track floor thickness at the front edge
+      var LIP_W = 2.4;      // front lip thickness
+      var BASE_H = 6;       // base plate height
+      var FOOT_BACK = 14;   // base plate extends this far behind the board
+      var FOOT_FRONT = 24;  // ... and this far in front of the lip
+      var MARGIN = 2.5;     // headroom above a ball between tracks
+      var G = 9810;         // mm/s^2
+
+      function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+      // -----------------------------------------------------------------------
+      // Layout: where every track sits. Level 0 is the top, level `levels` is the collector ramp in the base.
+      // -----------------------------------------------------------------------
+      function layout(p) {
+        var d = p.ball, r = d / 2, c = p.clear, D = d + 2 * c, K = D + LIP_W;
+        var s = Math.tan(p.slope * Math.PI / 180);
+        var W = p.width, gap = d + 4, n = p.levels;
+        var ct = FLOOR + K - D / 2;           // underside thickness at the ball plane (45 degree chamfer)
+        var hl = Math.max(3, d * p.lip / 100); // front lip height
+        var levels = [], i;
+        function mk(i, isRamp) {
+          var dir = i % 2 === 0 ? 1 : -1;
+          var len = isRamp ? W : W - gap;
+          var xs = -dir * W / 2;
+          return { i: i, dir: dir, ramp: isRamp, len: len, xs: xs, xe: xs + dir * len, drop: len * s, yc: 0 };
+        }
+        for (i = 0; i <= n; i++) levels.push(mk(i, i === n));
+        function floorY(lv, x) { return lv.yc + lv.drop / 2 - lv.drop * ((x - lv.xs) * lv.dir / lv.len); }
+        var ramp = levels[n];
+        ramp.yc = BASE_H + 3 + ramp.drop / 2;
+        for (i = n - 1; i >= 0; i--) {
+          var up = levels[i], low = levels[i + 1], need = -1e9, k, x, lo, hi;
+          lo = Math.max(Math.min(up.xs, up.xe), Math.min(low.xs, low.xe));
+          hi = Math.min(Math.max(up.xs, up.xe), Math.max(low.xs, low.xe));
+          up.yc = 0;
+          for (k = 0; k <= 40; k++) {
+            x = lo + (hi - lo) * k / 40;
+            need = Math.max(need, floorY(low, x) + d + MARGIN + ct - floorY(up, x));
+          }
+          up.yc = need;
+        }
+        var top = levels[0];
+        var H = top.yc + top.drop / 2 + d + 16;
+        var L = { d: d, r: r, c: c, D: D, K: K, W: W, s: s, gap: gap, n: n, ct: ct, hl: hl, levels: levels, H: H, zc: D / 2,
+          floorY: floorY, zMin: -(BOARD + FOOT_BACK), zMax: K + FOOT_FRONT };
+        L.zOff = -(L.zMin + L.zMax) / 2;
+        // Collision segments for the ball plane: [x1, y1, x2, y2]
+        var segs = [];
+        for (i = 0; i <= n; i++) {
+          var lv = levels[i], ys = floorY(lv, lv.xs), ye = floorY(lv, lv.xe);
+          segs.push([lv.xs, ys, lv.xe, ye]);
+          if (!lv.ramp) {
+            segs.push([lv.xs, ys - ct, lv.xe, ye - ct]);
+            segs.push([lv.xe, ye, lv.xe, ye - ct]);
+          }
+        }
+        segs.push([-W / 2, 0, -W / 2, H], [W / 2, 0, W / 2, H]);
+        L.segs = segs;
+        return L;
+      }
+
+      // -----------------------------------------------------------------------
+      // Mesh helpers: closed solids lofted between two (z, y) polygons.
+      // -----------------------------------------------------------------------
+      function loft(out, pA, xA, pB, xB, zOff) {
+        var n = pA.length, t = [], i, k;
+        function P(poly, x, j) { return [x, poly[j][1], poly[j][0] + zOff]; }
+        function tri(a, b, c) { t.push(a, b, c); }
+        for (k = 1; k < n - 1; k++) {
+          tri(P(pA, xA, 0), P(pA, xA, k + 1), P(pA, xA, k));   // cap A, reversed
+          tri(P(pB, xB, 0), P(pB, xB, k), P(pB, xB, k + 1));   // cap B, forward
+        }
+        for (i = 0; i < n; i++) {
+          var j = (i + 1) % n;
+          var a0 = P(pA, xA, i), a1 = P(pA, xA, j), b1 = P(pB, xB, j), b0 = P(pB, xB, i);
+          tri(a0, a1, b1); tri(a0, b1, b0);
+        }
+        var vol = 0;
+        for (i = 0; i < t.length; i += 3) {
+          var u = t[i], v = t[i + 1], w = t[i + 2];
+          vol += u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0]);
+        }
+        for (i = 0; i < t.length; i += 3) {
+          var q = vol < 0 ? [t[i], t[i + 2], t[i + 1]] : [t[i], t[i + 1], t[i + 2]];
+          q.forEach(function (pt) { out.push(pt[0], pt[1], pt[2]); });
+        }
+      }
+      function shiftY(poly, dy) { return poly.map(function (q) { return [q[0], q[1] + dy]; }); }
+      function box(out, x0, x1, y0, y1, z0, z1, zOff) {
+        var poly = [[z0, y0], [z1, y0], [z1, y1], [z0, y1]];
+        loft(out, poly, x0, poly, x1, zOff);
+      }
+
+      function build(p) {
+        var L = layout(p), zo = L.zOff, n = L.n, W = L.W, K = L.K, D = L.D, i;
+        var meshes = [];
+        var halfOuter = W / 2 + POST;
+
+        // Frame: back board and the two side posts
+        var f = [];
+        box(f, -halfOuter, halfOuter, 0, L.H, -BOARD, 0, zo);
+        box(f, -halfOuter, -W / 2, 0, L.H, -BOARD + 1, K, zo);
+        box(f, W / 2, halfOuter, 0, L.H, -BOARD + 1, K, zo);
+        meshes.push({ name: 'frame', positions: new Float32Array(f), color: '#f1e7d0' });
+
+        // Base plate and the collector ramp in it
+        var b = [];
+        box(b, -halfOuter - 10, halfOuter + 10, 0, BASE_H, L.zMin, L.zMax, zo);
+        meshes.push({ name: 'base', positions: new Float32Array(b), color: '#3b3f4a' });
+
+        var LEVEL_COLORS = ['#ef5b5b', '#f6b73c', '#4aa3e8', '#4cc07a', '#a874e8', '#f08a3c'];
+        for (i = 0; i <= n; i++) {
+          var lv = L.levels[i], o = [];
+          var x0 = Math.min(lv.xs, lv.xe), x1 = Math.max(lv.xs, lv.xe);
+          // overlap 1 mm into the post at the start end so the shells union cleanly
+          if (lv.dir > 0) x0 -= 1; else x1 += 1;
+          var yA = L.floorY(lv, x0), yB = L.floorY(lv, x1);
+          if (lv.ramp) {
+            var slabA = [[-1, BASE_H - 1], [K, BASE_H - 1], [K, yA], [-1, yA]];
+            var slabB = [[-1, BASE_H - 1], [K, BASE_H - 1], [K, yB], [-1, yB]];
+            loft(o, slabA, x0, slabB, x1, zo);
+            loft(o, [[D, BASE_H], [K, BASE_H], [K, yA + L.hl], [D, yA + L.hl]], x0,
+              [[D, BASE_H], [K, BASE_H], [K, yB + L.hl], [D, yB + L.hl]], x1, zo);
+            meshes.push({ name: 'collector', positions: new Float32Array(o), color: '#2f9e8f' });
+          } else {
+            var prof = [[-1, -FLOOR - (K + 1)], [K, -FLOOR], [K, 0], [-1, 0]];
+            var lip = [[D, -1], [K, -1], [K, L.hl], [D, L.hl]];
+            loft(o, shiftY(prof, yA), x0, shiftY(prof, yB), x1, zo);
+            loft(o, shiftY(lip, yA), x0, shiftY(lip, yB), x1, zo);
+            meshes.push({ name: 'level' + (i + 1), positions: new Float32Array(o), color: LEVEL_COLORS[i % LEVEL_COLORS.length] });
+          }
+        }
+        return meshes;
+      }
+
+      // -----------------------------------------------------------------------
+      // Ball simulation (2D, in the plane of the ball centres). Display only.
+      // -----------------------------------------------------------------------
+      function newSim() { return { sig: '', L: null, balls: [], delivered: 0, feed: false, feedT: 0, seq: 0 }; }
+      var sim = newSim();
+      var BALL_COLORS = ['#e5484d', '#f5b83d', '#3d9be9', '#46b96b', '#a35be0', '#ff8a3d'];
+      var MAX_BALLS = 12;
+
+      function segContact(b, s, r, dt) {
+        var ax = s[0], ay = s[1], dx = s[2] - ax, dy = s[3] - ay;
+        var t = clamp(((b.x - ax) * dx + (b.y - ay) * dy) / (dx * dx + dy * dy), 0, 1);
+        var nx = b.x - (ax + dx * t), ny = b.y - (ay + dy * t), d2 = nx * nx + ny * ny;
+        if (d2 >= r * r || d2 < 1e-12) return;
+        var dist = Math.sqrt(d2);
+        nx /= dist; ny /= dist;
+        b.x += nx * (r - dist); b.y += ny * (r - dist);
+        var vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) {
+          var e = -vn > 80 ? 0.3 : 0;
+          b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny;
+        }
+        if (ny > 0.2) {
+          // rolling, not sliding: a solid ball picks up only 5/7 of the slope's pull
+          var tx = -ny, ty = nx, gt = -G * ty;
+          b.vx -= (2 / 7) * gt * dt * tx; b.vy -= (2 / 7) * gt * dt * ty;
+          var damp = 1 - 0.25 * dt;
+          b.vx *= damp; b.vy *= damp;
+        }
+      }
+
+      function simStep(S, dt) {
+        var L = S.L, r = L.r, i, j, k, b;
+        for (i = 0; i < S.balls.length; i++) {
+          b = S.balls[i];
+          b.vy -= G * dt;
+          var sp = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+          if (sp > 2500) { b.vx *= 2500 / sp; b.vy *= 2500 / sp; }
+          b.x += b.vx * dt; b.y += b.vy * dt;
+          for (k = 0; k < L.segs.length; k++) segContact(b, L.segs[k], r, dt);
+          if (!b.done && b.y < L.levels[L.n].yc + L.levels[L.n].drop / 2 + r) { b.done = true; S.delivered++; }
+        }
+        for (i = 0; i < S.balls.length; i++) {
+          for (j = i + 1; j < S.balls.length; j++) {
+            var a = S.balls[i], c = S.balls[j], dx = c.x - a.x, dy = c.y - a.y, d2 = dx * dx + dy * dy;
+            if (d2 >= 4 * r * r || d2 < 1e-9) continue;
+            var dist = Math.sqrt(d2), nx = dx / dist, ny = dy / dist, ov = (2 * r - dist) / 2;
+            a.x -= nx * ov; a.y -= ny * ov; c.x += nx * ov; c.y += ny * ov;
+            var vn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
+            if (vn < 0) {
+              var jn = -(1 + 0.4) * vn / 2;
+              a.vx -= jn * nx; a.vy -= jn * ny; c.vx += jn * nx; c.vy += jn * ny;
+            }
+          }
+        }
+      }
+
+      function simAdvance(S, seconds) {
+        var steps = Math.max(1, Math.ceil(seconds / (1 / 960))), dt = seconds / steps, i;
+        for (i = 0; i < steps; i++) simStep(S, dt);
+      }
+
+      function dropAt(S, x, y) {
+        if (!S.L || S.balls.length >= MAX_BALLS) return false;
+        for (var i = 0; i < S.balls.length; i++) {   // never drop into another ball
+          var q = S.balls[i], dx = q.x - x, dy = q.y - y;
+          if (dx * dx + dy * dy < 4.4 * S.L.r * S.L.r) return false;
+        }
+        S.balls.push({ x: x, y: y, vx: 0, vy: 0, c: S.seq++ % BALL_COLORS.length, done: false });
+        return true;
+      }
+      function dropTop(S, rnd) {
+        var L = S.L, lv = L.levels[0], x = lv.xs + lv.dir * (L.r + 3 + rnd * (lv.len * 0.35));
+        return dropAt(S, x, L.floorY(lv, x) + L.r + 10 + rnd * 6);
+      }
+      // Drop where the visitor clicked: onto the track nearest below that point.
+      function dropNear(S, x, y) {
+        var L = S.L, best = null, i;
+        for (i = 0; i <= L.n; i++) {
+          var lv = L.levels[i], lo = Math.min(lv.xs, lv.xe) + L.r, hi = Math.max(lv.xs, lv.xe) - L.r;
+          var cx = clamp(x, lo, hi), fy = L.floorY(lv, cx);
+          if (fy <= y + 6 && (!best || fy > best.fy)) best = { x: cx, fy: fy };
+        }
+        if (!best) return dropTop(S, 0.2);
+        return dropAt(S, best.x, best.fy + L.r + 1.5);
+      }
+
+      // Headless check used by scripts (check-mesh.mjs does not call it): drop balls on a fresh layout.
+      function simTest(p, count, seconds) {
+        var S = newSim(), i, t = 0;
+        S.L = layout(p);
+        for (i = 0; i < count; i++) dropTop(S, (i * 0.37) % 1);
+        var frames = Math.ceil(seconds * 60), maxOut = 0;
+        for (i = 0; i < frames; i++) {
+          simAdvance(S, 1 / 60); t += 1 / 60;
+          S.balls.forEach(function (b) {
+            if (Math.abs(b.x) > S.L.W / 2 + 0.01 || b.y < -1 || b.y > S.L.H + 40) maxOut++;
+          });
+        }
+        return { delivered: S.delivered, outside: maxOut, balls: S.balls.map(function (b) { return [Math.round(b.x), Math.round(b.y)]; }) };
+      }
+
+      // -----------------------------------------------------------------------
+      // Stage (browser only): bright toy-room backdrop, glossy balls, the Simulate tab.
+      // -----------------------------------------------------------------------
+      var stage = null, ui = null;
+
+      function onStage(env) {
+        var T = env.THREE;
+        env.container.style.background = 'linear-gradient(#ffe7b0, #ffb98a 70%, #ff9f7a)';
+        env.plateMesh.parent.visible = false;
+        env.grid.visible = false;
+        env.hemi.color.set(0xfff4e0); env.hemi.groundColor.set(0xffc9a0); env.hemi.intensity = 0.9;
+        env.key.color.set(0xfff2d8); env.key.intensity = 0.75;
+        env.rim.color.set(0xffa070); env.rim.intensity = 0.3;
+        // checkerboard play mat
+        var cv = document.createElement('canvas'); cv.width = cv.height = 256;
+        var g = cv.getContext('2d'), a, b2;
+        for (a = 0; a < 8; a++) for (b2 = 0; b2 < 8; b2++) {
+          g.fillStyle = (a + b2) % 2 ? '#fff6e6' : '#ffd9ad'; g.fillRect(a * 32, b2 * 32, 32, 32);
+        }
+        var tex = new T.CanvasTexture(cv); tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.repeat.set(5, 5);
+        var mat = new T.Mesh(new T.CircleGeometry(150, 64), new T.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0 }));
+        mat.rotation.x = -Math.PI / 2; mat.position.y = -0.1;
+        env.scene.add(mat);
+        env.controls.maxDistance = 600;
+        var group = new T.Group(); env.scene.add(group);
+        var geo = new T.SphereGeometry(1, 28, 20);
+        var mats = BALL_COLORS.map(function (c) { return new T.MeshStandardMaterial({ color: c, roughness: 0.18, metalness: 0.25 }); });
+        stage = { T: T, group: group, geo: geo, mats: mats, meshes: [], last: 0 };
+      }
+
+      function syncMeshes() {
+        if (!stage || !sim.L) return;
+        var L = sim.L, i;
+        while (stage.meshes.length < sim.balls.length) {
+          var m = new stage.T.Mesh(stage.geo, stage.mats[0]);
+          stage.group.add(m); stage.meshes.push(m);
+        }
+        while (stage.meshes.length > sim.balls.length) stage.group.remove(stage.meshes.pop());
+        for (i = 0; i < sim.balls.length; i++) {
+          var b = sim.balls[i], m2 = stage.meshes[i];
+          m2.material = stage.mats[b.c];
+          m2.scale.set(L.r, L.r, L.r);
+          m2.position.set(b.x, b.y, L.zc + L.zOff);
+        }
+      }
+
+      function onFrame() {
+        if (!stage) return;
+        var now = performance.now(), dt = stage.last ? Math.min(0.05, (now - stage.last) / 1000) : 0;
+        stage.last = now;
+        var printOn = document.getElementById('mm-body-print');
+        stage.group.visible = !(printOn && !printOn.hidden);
+        if (sim.L && dt) {
+          var speed = (ui && ui.api && ui.api.params.simSpeed) || 1;
+          if (sim.feed) {
+            sim.feedT -= dt;
+            if (sim.feedT <= 0) { if (dropTop(sim, Math.random())) sim.feedT = 1.6; else sim.feedT = 0.5; }
+          }
+          if (sim.balls.length) simAdvance(sim, dt * speed);
+        }
+        syncMeshes();
+        if (ui && ui.status) {
+          var txt = sim.balls.length + (sim.balls.length === 1 ? ' ball, ' : ' balls, ') + sim.delivered + ' collected';
+          if (ui.status.textContent !== txt) ui.status.textContent = txt;
+        }
+      }
+
+      function mountSim(container, api) {
+        var h = function (tag, attrs, text) {
+          var node = document.createElement(tag);
+          Object.keys(attrs || {}).forEach(function (k) {
+            if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+            else node.setAttribute(k, attrs[k]);
+          });
+          if (text) node.textContent = text;
+          return node;
+        };
+        var status = h('p', { class: 'mm-note' }, '0 balls, 0 collected');
+        var feedBtn;
+        var row1 = h('div', { class: 'mm-export-row' });
+        row1.appendChild(h('button', { class: 'mm-btn mm-btn--green', type: 'button', onclick: function () { dropTop(sim, Math.random()); } }, 'Drop a ball'));
+        row1.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () {
+          var k; for (k = 0; k < 5; k++) { var q = k; setTimeout(function () { dropTop(sim, Math.random() * 0.9); }, q * 450); }
+        } }, 'Drop 5 balls'));
+        var row2 = h('div', { class: 'mm-export-row' });
+        feedBtn = h('button', { class: 'mm-btn', type: 'button', 'aria-pressed': 'false', onclick: function () {
+          sim.feed = !sim.feed; sim.feedT = 0;
+          feedBtn.setAttribute('aria-pressed', String(sim.feed));
+          feedBtn.textContent = sim.feed ? 'Auto-feed: on' : 'Auto-feed: off';
+        } }, 'Auto-feed: off');
+        row2.appendChild(feedBtn);
+        row2.appendChild(h('button', { class: 'mm-btn', type: 'button', onclick: function () { sim.balls = []; sim.delivered = 0; } }, 'Clear balls'));
+        container.appendChild(h('p', { class: 'mm-note' }, 'Balls roll through the same tracks you are about to print. The simulation is a flat 2D model, so real marbles and printed surfaces will differ a little. The balls are not part of the export.'));
+        container.appendChild(row1); container.appendChild(row2); container.appendChild(status);
+        ui = { status: status, api: api };
+      }
+
+      // The engine calls build() on every slider move: keep balls only while the track layout is unchanged.
+      function buildWithSim(p, api) {
+        var sig = [p.ball, p.clear, p.levels, p.width, p.slope, p.lip].join('|');
+        if (sig !== sim.sig) { sim.sig = sig; sim.balls = []; sim.delivered = 0; }
+        sim.L = layout(p);
+        if (api && api.params && ui) ui.api = api;
+        return build(p);
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-109',
+        category: 'TOYS // KINETIC',
+        title: 'Marble Run',
+        fileName: 'marble-run',
+        defaultColor: '#f1e7d0',
+        creaseShading: 35,
+        sculpt: false,
+        minFrame: 160,
+        palette: [
+          { name: 'Candy Red', color: '#ef5b5b' }, { name: 'Sunny Yellow', color: '#f6b73c' },
+          { name: 'Sky Blue', color: '#4aa3e8' }, { name: 'Leaf Green', color: '#4cc07a' },
+          { name: 'Grape', color: '#a874e8' }, { name: 'Tangerine', color: '#f08a3c' },
+          { name: 'Cream', color: '#f1e7d0' }, { name: 'Charcoal', color: '#3b3f4a' }
+        ],
+        partNames: {
+          frame: 'Back board & posts', base: 'Base plate', collector: 'Collector ramp',
+          level1: 'Track 1', level2: 'Track 2', level3: 'Track 3', level4: 'Track 4', level5: 'Track 5',
+          level6: 'Track 6', level7: 'Track 7', level8: 'Track 8', level9: 'Track 9', level10: 'Track 10'
+        },
+        parameters: [
+          { group: 'Marble', key: 'ball', label: 'Marble diameter', unit: ' mm', min: 8, max: 20, step: 1, value: 12 },
+          { group: 'Marble', key: 'clear', label: 'Clearance each side (more = freer roll)', unit: ' mm', min: 0.6, max: 2, step: 0.1, value: 1 },
+          { group: 'Tower', key: 'levels', label: 'Tracks', unit: '', min: 3, max: 10, step: 1, value: 4 },
+          { group: 'Tower', key: 'width', label: 'Track length (width between posts)', unit: ' mm', min: 80, max: 200, step: 5, value: 120 },
+          { group: 'Tower', key: 'slope', label: 'Track slope', unit: '°', min: 3, max: 9, step: 0.5, value: 5 },
+          { group: 'Tower', key: 'lip', label: 'Front lip height (% of marble)', unit: '%', min: 30, max: 60, step: 5, value: 45 },
+          { tab: 'sim', group: 'Simulation', key: 'simSpeed', label: 'Simulation speed', unit: 'x', min: 0.25, max: 3, step: 0.25, value: 1 }
+        ],
+        presets: [
+          { label: 'Default tower', values: { ball: 12, clear: 1, levels: 4, width: 120, slope: 5, lip: 45 } },
+          { label: 'Steel balls 10 mm', values: { ball: 10, clear: 0.8, levels: 5, width: 100, slope: 5, lip: 45 } },
+          { label: 'Glass marbles 16 mm', values: { ball: 16, clear: 1.2, levels: 4, width: 150, slope: 5, lip: 40 } },
+          { label: 'Tall and gentle', values: { ball: 12, clear: 1, levels: 7, width: 110, slope: 4, lip: 45 } },
+          { label: 'Wide and steep', values: { ball: 14, clear: 1.2, levels: 3, width: 180, slope: 8, lip: 40 } }
+        ],
+        tabs: [{
+          id: 'sim',
+          label: 'Simulate',
+          hint: 'Click a track to drop a ball there',
+          mount: mountSim,
+          onPick: function (hit) { if (hit && sim.L) dropNear(sim, hit.point.x, hit.point.y); }
+        }],
+        coloredTabs: ['sim'],
+        customStage: true,
+        onStage: onStage,
+        onFrame: onFrame,
+        simTest: simTest,
+        build: buildWithSim
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
