@@ -5,6 +5,19 @@
    "face": "#1b2236"
   }
  },
+ "gravity-walker": {
+  "colors": {
+   "body": "#f1f5f9",
+   "head": "#fdba74",
+   "eyes": "#334155",
+   "legs": "#7fd6b4",
+   "pins": "#c084fc",
+   "ramp": "#93c5fd",
+   "rails": "#fda4af"
+  },
+  "yaw": 38,
+  "elev": 24
+ },
  "pumpkin-plotter": {
   "colors": {
    "body": "#f28c28",
@@ -717,6 +730,72 @@
   },
   "yaw": 35,
   "elev": 22
+ },
+ "battery-dispenser": {
+  "colors": {
+   "body": "#7bd88f",
+   "sleeve": "#f1f5f9",
+   "terminal": "#fdba74",
+   "label": "#334155"
+  },
+  "yaw": 35,
+  "elev": 22
+ },
+ "gingerbread-house": {
+  "colors": {
+   "walls": "#c98a55",
+   "roof": "#f6f1e7",
+   "door": "#6b4430",
+   "knob": "#f2c94c",
+   "chimney": "#e0525a",
+   "candy": "#e0525a",
+   "candy2": "#9fd8b4",
+   "base": "#f6f1e7",
+   "trim": "#fffdf7",
+   "drips": "#fffdf7"
+  },
+  "yaw": 30,
+  "elev": 24
+ },
+ "marble-run": {
+  "colors": {
+   "frame": "#f1e7d0",
+   "base": "#3b3f4a",
+   "collector": "#2f9e8f",
+   "level": [
+    "#ef5b5b",
+    "#f6b73c",
+    "#4aa3e8",
+    "#4cc07a",
+    "#a874e8",
+    "#f08a3c"
+   ]
+  }
+ },
+ "stamp-maker": {
+  "colors": {
+   "body": "#e8d9c0",
+   "border": "#c0392b",
+   "icon": "#c0392b",
+   "lettering": "#c0392b"
+  },
+  "yaw": 35,
+  "elev": 30
+ },
+ "wall-panel": {
+  "colors": {
+   "plate": "#2f4a73",
+   "rim": "#7ab3ff",
+   "text": "#f1ece1",
+   "deco": "#ff9a4d",
+   "rails": "#7ab3ff",
+   "chips": "#7be0b0",
+   "pins": "#7ab3ff",
+   "knobs": "#ff8fb1",
+   "marks": "#f1ece1"
+  },
+  "yaw": 0,
+  "elev": 55
  },
  "fidget-spinner": {
   "colors": {

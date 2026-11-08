@@ -26,10 +26,19 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [spinner-ring.md](spinner-ring.md) | The Spinner Ring (slot 46): two-piece snap-fit band, 11 fonts, five relief patterns, the Print tab demo animation |
 | [pin-maker.md](pin-maker.md) | The Pin Maker (slot 103): picture tracing in the browser, rim, hanging hole, stamps |
 | [paper-towel-holder.md](paper-towel-holder.md) | The Paper Towel Holder (slot 104): three mounts, base shapes, rod styles, stamps, split rod |
+| [marble-run.md](marble-run.md) | The Marble Run (slot 109): zigzag tower layout, support-free track profile, the ball simulation |
 | [nutcracker.md](nutcracker.md) | The Nutcracker (slot 108): print-in-place jaw (quarter disc in a concentric bowl on diamond pins), hats, tolerance, how it was checked. |
+| [stamp-maker.md](stamp-maker.md) | The Stamp Maker (slot 115): mirrored relief text and icons on a plate with a one-piece tapered grip, layouts, icon list |
+| [gravity-walker.md](gravity-walker.md) | The Gravity Walker (slot 122): a ramp-walking toy with print-in-place rear legs, the walking simulation and how to retune it |
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
 | [fidget-spinner.md](fidget-spinner.md) | The Fidget Spinner (slot 114): six outline styles, print-in-place hub or 608 bearing, arm pockets, raised name |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |
+| [wall-panel.md](wall-panel.md) | The Wall Panel Maker (slot 116): text panel with a drag-and-drop Elements tab, print-in-place checkboxes, sliders, progress bars and dials |
+| [battery-dispenser.md](battery-dispenser.md) | The Battery Dispenser (slot 111): AA and AAA gravity stacks, ramp and lip, arched front windows, the dispense checks |
+| [holiday-tree-topper.md](holiday-tree-topper.md) | The Holiday Tree Topper (slot 107): faceted star on a print-in-place spinning cone, socket geometry, clearances, print-check alignment |
+| [energy-saber.md](energy-saber.md) | The Energy Saber (slot 110): telescoping print-in-place blade tubes, catch and clearance geometry, hilt styles, how it is tested |
+| [gingerbread-house.md](gingerbread-house.md) | The Gingerbread House (slot 113): one-piece hollow house, corbel eaves, pointed openings, no supports |
+| [pet-bowl-housing.md](pet-bowl-housing.md) | The Pet Bowl Housing (slot 112): a holder with a pocket for your own bowl, single or double, outlines, profiles, wall patterns, base, tray, link bar and platform |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
 | [text-generator.md](text-generator.md) | The Text Generator (slot 101): packed OFL fonts, build styles, triangulation, offsets and the checks |
 | [dice-tower.md](dice-tower.md) | The Dice Tower (slot 66): shapes, themes, tray shapes, stamps |
