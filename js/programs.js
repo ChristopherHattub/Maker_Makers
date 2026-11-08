@@ -809,6 +809,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 113,
+    title: 'Gingerbread House',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // HOUSES',
+    thumbnailUrl: 'assets/thumbnails/gingerbread-house.svg',
+    programUrl: 'programs/gingerbread-house.html',
+    description: 'A gingerbread house that prints as one piece with nothing to assemble. Set the length, depth, wall height and roof pitch, pick a raised door or open doorway, pointed, diamond or teardrop windows (with a centre bar), tile rows on the roof, a chimney, gumdrops and a snow base with a scalloped edge. It is hollow and open underneath, so it stands over an LED tea light. The eaves sit on 45 degree corbels and every window top is pointed, so it prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',
