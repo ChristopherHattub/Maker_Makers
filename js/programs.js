@@ -791,6 +791,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 121,
+    title: 'Zoetrope',
+    bundle: 'toys',
+    category: 'TOYS // OPTICAL',
+    thumbnailUrl: 'assets/thumbnails/zoetrope.svg',
+    programUrl: 'programs/zoetrope.html',
+    description: 'A spinning slotted drum that makes pictures move. The drum prints already sitting on its pin (a cone-headed pin, a small gap, no supports); flick it and look through the slots at the strip inside. Pick a running figure, flapping bird, bouncing ball or blooming flower, 6 to 16 frames, drum size, picture height and slot width, and print the picture strip flat in one to four pieces, or leave it off and draw your own. Prints with no supports; the gap under the drum is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 76,
     title: 'Dino Builder',
     bundle: 'animals',

@@ -470,5 +470,11 @@
     "sat": 70,
     "light": 80,
     "stand": true
+  },
+  "zoetrope": {
+    "hue": 275,
+    "sat": 75,
+    "light": 76,
+    "hide": ["strip", "pictures"]
   }
 }
