@@ -656,6 +656,15 @@ const GENERATORS = [
     description: 'A flat stand-up figure on a slotted base, in a card, arch, shield, hexagon or round token shape, with a raised knight, wizard, rogue or monster, or a blank frame for your own art. Set the size, thickness, border and tab. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 122,
+    title: 'Gravity Walker',
+    bundle: 'toys',
+    category: 'TOYS // ACTION',
+    thumbnailUrl: 'assets/thumbnails/gravity-walker.svg',
+    programUrl: 'programs/gravity-walker.html',
+    description: 'A toy that shuffles down a gentle ramp with no motor or batteries. The body has one fixed foot and two rear legs on print-in-place hinge pins that swing between stops, so it rocks from foot to foot; the ramp, with side rails at the slope you pick, prints in the same file. Choose a duck, robot or cat head, the leg length and the clearance. The legs and ramp print with no supports, but the round soles are shallow arcs, which a slicer lays down like any cylinder lying flat. The walk is checked in a simulation only and nothing has been printed: expect to tune the ramp slope (about 7 to 10 degrees). Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 91,
     title: 'Flexi Dragon',
     bundle: 'flexi',

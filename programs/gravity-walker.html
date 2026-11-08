@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-122 Gravity Walker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Gravity Walker: a toy that shuffles down a gentle ramp with no motor. The body has one fixed foot and two rear
+      // legs hung on print-in-place hinge pins; the rear legs swing between two stops (a pin in a slot) and the toy
+      // rocks from one foot onto the other. The ramp is part of the model. Every solid is an extrusion of a 2D side
+      // profile (extrude), so everything is closed and watertight by construction.
+      //
+      // Y up, millimetres, +X is the way it walks, Z is across. In a profile the hinge is the origin and a point is
+      // pol(R, theta): theta = 0 straight down, positive = forward. The foot arcs of the body and of the rear legs are
+      // arcs of the same circle around the hinge (radius legR), so the walker rolls from one foot to the next.
+      //
+      // The numbers that make it walk come from a small planar simulation (two hinged legs, arc feet, a ramp):
+      // body foot arc +-16 deg, rear leg foot arc +-24 deg, rear legs free to swing from -16 to +10 degrees against
+      // the body, centre of mass of the body about a third of the leg length under the hinge, rear legs about a
+      // tenth of the weight. See docs/gravity-walker.md.
+      var DEG = Math.PI / 180, TAU = Math.PI * 2;
+      var A_HALF = 20 * DEG;            // half width of the body's foot arc
+      var B_HALF = 24 * DEG;            // half width of each rear leg's foot arc
+      var PSI_MIN = -16 * DEG;          // swing range of the rear legs against the body (rear leg angle minus body angle)
+      var PSI_MAX = 12 * DEG;
+      var STOP_AT = 90 * DEG;           // the stop pin sits straight ahead of the hinge, so its slot is nearly vertical
+      var FLANK = 1.19;                 // rise per run of the 50 degree flanks, so no overhang is steeper than 40 degrees from vertical
+      var HEAD_STYLES = ['Duck', 'Robot', 'Cat'];
+      var DENSITY = 0.35;               // g/cm3, an average printed part (walls plus sparse infill); only the ratios matter
+      var lastProps = null, balanceEl = null;
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function pol(R, th) { return [R * Math.sin(th), -R * Math.cos(th)]; }
+      function arcPts(R, t0, t1, n) {
+        var out = [], i;
+        for (i = 0; i <= n; i++) out.push(pol(R, t0 + (t1 - t0) * i / n));
+        return out;
+      }
+      function circlePts(cx, cy, R, n) {
+        var out = [], i;
+        for (i = 0; i < n; i++) out.push([cx + R * Math.cos(TAU * i / n), cy + R * Math.sin(TAU * i / n)]);
+        return out;
+      }
+      function area2(pts) {
+        var s = 0, i, j;
+        for (i = 0; i < pts.length; i++) { j = (i + 1) % pts.length; s += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]; }
+        return s;
+      }
+      function cleanLoop(pts) {
+        var out = [], i, q;
+        for (i = 0; i < pts.length; i++) {
+          q = out[out.length - 1];
+          if (!q || Math.abs(q[0] - pts[i][0]) > 1e-6 || Math.abs(q[1] - pts[i][1]) > 1e-6) out.push(pts[i]);
+        }
+        q = out[0];
+        while (out.length > 3 && Math.abs(out[out.length - 1][0] - q[0]) < 1e-6 && Math.abs(out[out.length - 1][1] - q[1]) < 1e-6) out.pop();
+        return out;
+      }
+      function orientLoop(pts, ccw) {
+        var l = cleanLoop(pts);
+        return (area2(l) > 0) === ccw ? l : l.slice().reverse();
+      }
+      function hull(points) {
+        var pts = points.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }), lo = [], up = [], i;
+        function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+        for (i = 0; i < pts.length; i++) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], pts[i]) <= 0) lo.pop(); lo.push(pts[i]); }
+        for (i = pts.length - 1; i >= 0; i--) { while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], pts[i]) <= 0) up.pop(); up.push(pts[i]); }
+        lo.pop(); up.pop();
+        return lo.concat(up);
+      }
+      function shift(pts, dx, dy) { return pts.map(function (q) { return [q[0] + dx, q[1] + dy]; }); }
+      function mirrorX(pts) { return pts.map(function (q) { return [-q[0], q[1]]; }).reverse(); }
+
+      // A solid with the side profile outer (minus the holes), straight through z0..z1. Caps are triangulated with
+      // three.js ShapeUtils; the walls reuse the same corner points, so the surface is closed.
+      function extrude(T, outer, holes, z0, z1) {
+        var contour = orientLoop(outer, true), hs = (holes || []).map(function (h) { return orientLoop(h, false); });
+        var all = contour.slice(), o = [], loops = [contour].concat(hs);
+        hs.forEach(function (h) { all = all.concat(h); });
+        var faces = T.ShapeUtils.triangulateShape(contour.map(function (q) { return new T.Vector2(q[0], q[1]); }), hs.map(function (h) { return h.map(function (q) { return new T.Vector2(q[0], q[1]); }); }));
+        faces.forEach(function (f) {
+          var a = all[f[0]], b = all[f[1]], c = all[f[2]], t;
+          if ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) < 0) { t = b; b = c; c = t; }
+          o.push(a[0], a[1], z1, b[0], b[1], z1, c[0], c[1], z1);
+          o.push(a[0], a[1], z0, c[0], c[1], z0, b[0], b[1], z0);
+        });
+        loops.forEach(function (l) {
+          var i, j, p, q;
+          for (i = 0; i < l.length; i++) {
+            j = (i + 1) % l.length; p = l[i]; q = l[j];
+            o.push(p[0], p[1], z0, q[0], q[1], z0, q[0], q[1], z1);
+            o.push(p[0], p[1], z0, q[0], q[1], z1, p[0], p[1], z1);
+          }
+        });
+        return o;
+      }
+
+      // Closed solid from rings (arrays of [x, y, z], same length) with a cap at each end; equal points collapse (apex).
+      function tri(o, a, b, c) {
+        function same(p, q) { return p[0] === q[0] && p[1] === q[1] && p[2] === q[2]; }
+        if (same(a, b) || same(b, c) || same(c, a)) return;
+        o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function loft(rings) {
+        var o = [], n = rings[0].length, i, j, k, a, b, c, d, cA = [0, 0, 0], cB = [0, 0, 0], first = rings[0], last = rings[rings.length - 1];
+        for (j = 0; j < n; j++) for (k = 0; k < 3; k++) { cA[k] += first[j][k] / n; cB[k] += last[j][k] / n; }
+        for (i = 0; i < rings.length - 1; i++) {
+          for (j = 0; j < n; j++) {
+            k = (j + 1) % n; a = rings[i][j]; b = rings[i][k]; c = rings[i + 1][k]; d = rings[i + 1][j];
+            tri(o, a, b, c); tri(o, a, c, d);
+          }
+        }
+        for (j = 0; j < n; j++) { k = (j + 1) % n; tri(o, cB, last[j], last[k]); tri(o, cA, first[k], first[j]); }
+        return orient(o);
+      }
+      function orient(o) {
+        var v = 0, i, t, s;
+        for (i = 0; i < o.length; i += 9) {
+          v += o[i] * (o[i + 4] * o[i + 8] - o[i + 5] * o[i + 7]) - o[i + 1] * (o[i + 3] * o[i + 8] - o[i + 5] * o[i + 6]) + o[i + 2] * (o[i + 3] * o[i + 7] - o[i + 4] * o[i + 6]);
+        }
+        if (v < 0) for (i = 0; i < o.length; i += 9) for (t = 0; t < 3; t++) { s = o[i + 3 + t]; o[i + 3 + t] = o[i + 6 + t]; o[i + 6 + t] = s; }
+        return o;
+      }
+
+      // ---------------------------------------------------------------------
+      // The walker model: all 2D profiles (hinge at the origin) and z positions.
+      // ---------------------------------------------------------------------
+      // A diamond (square turned 45 degrees) with a small flat at the bottom, half diagonal d: prints without supports lying along z.
+      function diamond(d, cx, cy) {
+        var f = 0.6;
+        return [[cx + f, cy - (d - f)], [cx + d, cy], [cx, cy + d], [cx - d, cy], [cx - f, cy - (d - f)]];
+      }
+      function model(p) {
+        var r = p.legR, W = p.bodyW, g = p.fit, tB = p.legT;
+        var m = { r: r, W: W, g: g, tB: tB };
+        // z layout (one side): body wall at W/2, rear leg plate, then the pin head
+        m.zIn = W / 2 + g; m.zOut = m.zIn + tB; m.zHead0 = m.zOut + g; m.zHead1 = m.zHead0 + 2.4;
+        m.d = 3.2; m.ds = 2.2; m.dHead = m.d + 2.6;
+        m.rh = m.d + g;                       // hinge hole radius
+        m.rho = 0.24 * r;                     // distance of the stop pin from the hinge
+        m.Rd = m.rho + m.ds + g * Math.SQRT2 + 2.6;                      // radius of the hip disc of a rear leg
+        // rear leg (profile in its own frame, straight down is theta = 0): a hip disc round the hinge, a narrow neck,
+        // and a foot ring (a ring sector whose outer edge is the foot arc). The hip disc holds the hinge hole and the stop slot.
+        var Rd = m.Rd, rf = 0.62 * r, bn = 10 * DEG, sideY = -0.3 * Rd, i, right, left;
+        var yj = (sideY / FLANK - Rd) / (1 / FLANK + Math.tan(bn)), xj = -yj * Math.tan(bn);   // where the 50 degree flank meets the neck
+        right = arcPts(r, 0, B_HALF, 20).concat(arcPts(rf, B_HALF, bn, 8));                   // from the bottom of the foot, up the right side
+        right.push([xj, yj], [Rd, sideY], [Rd, 0]);
+        for (i = 1; i < 36; i++) right.push([Rd * Math.cos(Math.PI / 2 * i / 36), Rd * Math.sin(Math.PI / 2 * i / 36)]);
+        left = right.slice(1).map(function (q) { return [-q[0], q[1]]; }).reverse();
+        var outer = right.concat([[0, Rd]], left);
+        m.legOuter = outer;
+        // foot weight: a ring sector on the outside of each rear leg, so most of its weight sits low (centre of weight about 0.7 x leg length from the hinge)
+        m.block = arcPts(r, -B_HALF, B_HALF, 40).concat(arcPts(rf, B_HALF, -B_HALF, 30));
+        m.tBlock = p.foot; m.zBlock = m.zOut + p.foot;
+        // hinge hole: a circle with a pointed top, so the roof needs no bridge (faces 40 degrees from flat, flat top 2 mm)
+        var s = 40 * DEG, rh = m.rh, yTop = rh * Math.cos(s) + (rh * Math.sin(s) - 1) * Math.tan(s), hole = [[1, yTop], [-1, yTop]], t;
+        for (i = 0; i <= 48; i++) { t = (90 * DEG + s) + (TAU - 2 * s) * i / 48; hole.push([rh * Math.cos(t), rh * Math.sin(t)]); }
+        m.legHole = hole;
+        // stop slot: the stop pin (fixed to the body) travels along an arc in the leg. Hull of two diamonds, so the ends are pointed.
+        var D = m.ds + g * Math.SQRT2, ends = [PSI_MIN, PSI_MAX].map(function (psi) { return pol(m.rho, STOP_AT - psi); }), pts = [];
+        ends.forEach(function (e) { pts.push([e[0], e[1] + D], [e[0] + D, e[1]], [e[0], e[1] - D], [e[0] - D, e[1]]); });
+        m.legSlot = hull(pts);
+        // body: foot (sector), torso (bell with 50 degree flanks), head
+        m.foot = [[0, 0]].concat(arcPts(r, -A_HALF, A_HALF, 24));
+        var rw = 0.55 * r, pw = pol(rw, A_HALF), ex = 0.4 * r, y1 = pw[1] + (ex - pw[0]) * FLANK, yTop = p.bodyTop / 100 * r, dome = 0.55 * ex;
+        var ySide = Math.max(y1 + 2, yTop - dome), tor = [[-pw[0], pw[1]], [pw[0], pw[1]], [ex, y1], [ex, ySide]];
+        for (i = 1; i <= 16; i++) { t = 90 * DEG * i / 16; tor.push([ex * Math.cos(t), ySide + (yTop - ySide) * Math.sin(t)]); }
+        for (i = 15; i >= 1; i--) { t = 90 * DEG * i / 16; tor.push([-ex * Math.cos(t), ySide + (yTop - ySide) * Math.sin(t)]); }
+        tor.push([-ex, ySide], [-ex, y1]);
+        m.torso = tor; m.yTop = yTop; m.ex = ex;
+        m.hr = p.headSize / 100 * r; m.Wh = 0.58 * W;
+        m.hx = 0; m.hy = Math.max(yTop + 0.55 * m.hr, m.Rd + 0.65 * m.hr);
+        var nw = Math.max(4, 0.5 * m.hr);
+        m.neck = [[-nw, yTop - 2], [nw, yTop - 2], [nw, m.hy], [-nw, m.hy]];
+        return m;
+      }
+
+      // Head shapes (profiles), each one closed; style 0 duck, 1 robot, 2 cat.
+      function headProfile(m, style) {
+        var hr = m.hr, hx = m.hx, hy = m.hy, q = 0.4 * hr, i, pts;
+        if (style === 1) { // robot: a box with chamfered lower corners
+          var w = 0.95 * hr, hh = 0.8 * hr;
+          return [[hx - w + q, hy - hh], [hx + w - q, hy - hh], [hx + w, hy - hh + q], [hx + w, hy + hh - 0.2 * hr], [hx + w - 0.2 * hr, hy + hh], [hx - w + 0.2 * hr, hy + hh], [hx - w, hy + hh - 0.2 * hr], [hx - w, hy - hh + q]];
+        }
+        // a round head that narrows to the neck at 45 degrees below, so its underside needs no support
+        var nw = Math.max(4, 0.5 * hr);
+        return hull(circlePts(hx, hy, hr, 72).concat([[hx - nw, hy - 1.45 * hr], [hx + nw, hy - 1.45 * hr]]));
+      }
+      function earProfile(m, side) { // cat ear: a triangle on the head circle
+        var hr = m.hr, hx = m.hx, hy = m.hy, a0 = (side > 0 ? 28 : 152) * DEG, a1 = (side > 0 ? 68 : 112) * DEG, a2 = (side > 0 ? 44 : 136) * DEG;
+        var base0 = [hx + 0.97 * hr * Math.cos(a0), hy + 0.97 * hr * Math.sin(a0)], base1 = [hx + 0.97 * hr * Math.cos(a1), hy + 0.97 * hr * Math.sin(a1)], tip = [hx + 1.5 * hr * Math.cos(a2), hy + 1.55 * hr * Math.sin(a2)];
+        return [base0, tip, base1];
+      }
+
+      // ---------------------------------------------------------------------
+      // Pieces (profile + z range + which rigid body it belongs to), used both to build the meshes and to weigh them.
+      // ---------------------------------------------------------------------
+      function pieces(p) {
+        var m = model(p), W = m.W, list = [], head = headProfile(m, p.head), hz = m.Wh / 2, er = 0.2 * m.hr;
+        list.push({ mesh: 'body', body: 'A', outer: m.foot, z0: -W / 2, z1: W / 2 });
+        list.push({ mesh: 'body', body: 'A', outer: m.torso, z0: -W / 2, z1: W / 2 });
+        list.push({ mesh: 'body', body: 'A', outer: m.neck, z0: -hz, z1: hz });
+        list.push({ mesh: 'head', body: 'A', outer: head, z0: -hz, z1: hz });
+        if (p.head === 2) { list.push({ mesh: 'head', body: 'A', outer: earProfile(m, 1), z0: -hz * 0.85, z1: hz * 0.85 }); list.push({ mesh: 'head', body: 'A', outer: earProfile(m, -1), z0: -hz * 0.85, z1: hz * 0.85 }); }
+        var ey = m.hy + 0.1 * m.hr, ex = m.hx + 0.38 * m.hr;
+        [-1, 1].forEach(function (s) {
+          list.push({ mesh: 'eyes', body: 'A', outer: circlePts(ex, ey, er, 28), z0: s > 0 ? hz - 0.4 : -hz - 1.2, z1: s > 0 ? hz + 1.2 : -hz + 0.4 });
+        });
+        [-1, 1].forEach(function (s) {
+          var za = s > 0 ? m.zIn : -m.zOut, zb = s > 0 ? m.zOut : -m.zIn;
+          list.push({ mesh: 'legs', body: 'B', outer: m.legOuter, holes: [m.legHole, m.legSlot], z0: za, z1: zb });
+          if (m.tBlock > 0.1) list.push({ mesh: 'legs', body: 'B', outer: m.block, z0: s > 0 ? m.zOut - 0.5 : -m.zBlock, z1: s > 0 ? m.zBlock : -m.zOut + 0.5 });
+          var shaft = s > 0 ? [W / 2 - 1, m.zHead0 + 0.5] : [-m.zHead0 - 0.5, -W / 2 + 1];
+          var head1 = s > 0 ? [m.zHead0, m.zHead1] : [-m.zHead1, -m.zHead0];
+          var stop = s > 0 ? [W / 2 - 1, m.zOut + 0.6] : [-m.zOut - 0.6, -W / 2 + 1];
+          list.push({ mesh: 'pins', body: 'A', outer: diamond(m.d, 0, 0), z0: shaft[0], z1: shaft[1] });
+          list.push({ mesh: 'pins', body: 'A', outer: diamond(m.dHead, 0, m.dHead - m.d), z0: head1[0], z1: head1[1] });
+          var sp = pol(m.rho, STOP_AT);
+          list.push({ mesh: 'pins', body: 'A', outer: diamond(m.ds, sp[0], sp[1]), z0: stop[0], z1: stop[1] });
+        });
+        return { m: m, list: list };
+      }
+
+      // Mass properties of the two rigid bodies, in cm and g, for the walking simulation (docs/gravity-walker.md).
+      function props(p) {
+        var P = pieces(p), r = P.m.r, acc = { A: { m: 0, sx: 0, sy: 0, J: 0 }, B: { m: 0, sx: 0, sy: 0, J: 0 } };
+        P.list.forEach(function (c) {
+          if (c.mesh === 'eyes') return;
+          var loops = [c.outer].concat(c.holes || []), t = (c.z1 - c.z0) / 10, k = acc[c.body];
+          loops.forEach(function (l, idx) {
+            var o = orientLoop(l, idx === 0), i, j, cr, a = 0, sx = 0, sy = 0, J = 0, x0, y0, x1, y1;
+            for (i = 0; i < o.length; i++) {
+              j = (i + 1) % o.length; x0 = o[i][0] / 10; y0 = o[i][1] / 10; x1 = o[j][0] / 10; y1 = o[j][1] / 10; cr = x0 * y1 - x1 * y0;
+              a += cr / 2; sx += (x0 + x1) * cr / 6; sy += (y0 + y1) * cr / 6; J += cr * (x0 * x0 + x0 * x1 + x1 * x1 + y0 * y0 + y0 * y1 + y1 * y1) / 12;
+            }
+            k.m += DENSITY * t * a; k.sx += DENSITY * t * sx; k.sy += DENSITY * t * sy; k.J += DENSITY * t * J;
+          });
+        });
+        function leg(k, mult) {
+          var m = k.m * mult, cx = k.sx * mult / m, cy = k.sy * mult / m, c = Math.sqrt(cx * cx + cy * cy), J = k.J * mult;
+          return { m: m, c: c, beta: Math.atan2(cx, -cy), I: J - m * c * c };
+        }
+        var A = leg(acc.A, 1), B = leg(acc.B, 1);
+        var slack = p.fit * Math.SQRT2 / P.m.rho;
+        return { r: r / 10, mA: A.m, cA: A.c, betaA: A.beta, IA: A.I, mB: B.m, cB: B.c, betaB: B.beta, IB: B.I, winA: [-A_HALF, A_HALF], winB: [-B_HALF, B_HALF], psiMin: PSI_MIN - slack, psiMax: PSI_MAX + slack };
+      }
+
+      // ---------------------------------------------------------------------
+      // The ramp: a wedge with side rails, printed flat on its back.
+      // ---------------------------------------------------------------------
+      function rampSolids(T, p, m, zc) {
+        var L = p.rampLen, tg = Math.tan(p.slope * DEG), t0 = 5, h0 = t0 + L * tg, lane = 2 * (Math.max(m.zHead1, m.zBlock) + 3), rail = 3, hr = 9, out = { deck: [], rails: [] };
+        function surf(x) { return h0 - (x + L / 2) * tg; } // top of the deck, high at the back
+        var prof = [[-L / 2, 0], [L / 2, 0], [L / 2, surf(L / 2)], [-L / 2, surf(-L / 2)]];
+        out.deck = extrude(T, prof, [], zc - lane / 2 - rail, zc + lane / 2 + rail);
+        var rp = [[-L / 2, surf(-L / 2) - 1], [L / 2, surf(L / 2) - 1], [L / 2, surf(L / 2) + hr], [-L / 2, surf(-L / 2) + hr]];
+        out.rails = extrude(T, rp, [], zc + lane / 2, zc + lane / 2 + rail).concat(extrude(T, rp, [], zc - lane / 2 - rail, zc - lane / 2));
+        out.width = lane + 2 * rail;
+        return out;
+      }
+
+      // Walker meshes in world space: y up from the bed (the arcs touch y = 0), centred on x = 0 at z = zc.
+      function f32(list, dx, dy, dz) {
+        var a = new Float32Array(list.length), i;
+        for (i = 0; i < list.length; i += 3) { a[i] = list[i] + dx; a[i + 1] = list[i + 1] + dy; a[i + 2] = list[i + 2] + dz; }
+        return a;
+      }
+      function catList(lists) { return Array.prototype.concat.apply([], lists); }
+
+      function beakMesh(m) { // a four sided pyramid, 45 degree faces
+        var x0 = m.hx + 0.9 * m.hr, y = m.hy - 0.1 * m.hr, a = 0.28 * m.hr, rings = [], len = 0.5 * m.hr;
+        function ring(x, s) { return [[x, y + a * s, 0], [x, y, a * s], [x, y - a * s, 0], [x, y, -a * s]]; }
+        rings.push(ring(x0 - 0.35 * m.hr, 1), ring(x0, 1));
+        var tip = [x0 + len, y - 0.15 * a, 0];
+        rings.push([tip, tip, tip, tip]);
+        return loft(rings);
+      }
+      function antennaMesh(m) { // a thin diamond post with an octahedron on top
+        var d = 1.2, y0 = m.hy + 0.7 * m.hr, y1 = y0 + 0.55 * m.hr, x = m.hx - 0.2 * m.hr, rings = [], b = 0.2 * m.hr;
+        function ring(y, h) { return [[x + h, y, 0], [x, y, h], [x - h, y, 0], [x, y, -h]]; }
+        rings.push(ring(y0 - 1, d), ring(y1, d), ring(y1 + b, b), ring(y1 + 2 * b, 0));
+        return loft(rings);
+      }
+
+      function buildWalker(p, T, zc) {
+        var P = pieces(p), m = P.m, meshes = {}, out = [];
+        P.list.forEach(function (c) {
+          (meshes[c.mesh] = meshes[c.mesh] || []).push(extrude(T, c.outer, c.holes, c.z0, c.z1));
+        });
+        if (p.head === 0) meshes.head.push(beakMesh(m));
+        if (p.head === 1) meshes.head.push(antennaMesh(m));
+        ['body', 'head', 'eyes', 'legs', 'pins'].forEach(function (name) {
+          if (meshes[name]) out.push({ name: name, positions: f32(catList(meshes[name]), 0, m.r, zc) });
+        });
+        return { meshes: out, m: m, halfWidth: Math.max(m.zHead1, m.zBlock) };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-122',
+        category: 'TOYS // ACTION',
+        title: 'Gravity Walker',
+        fileName: 'Gravity_Walker',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        partNames: { body: 'Body and foot', head: 'Head', eyes: 'Eyes', legs: 'Rear legs', pins: 'Hinge pins', ramp: 'Ramp', rails: 'Ramp rails' },
+        parameters: [
+          { group: 'Walker', key: 'legR', label: 'Leg length', unit: ' mm', min: 42, max: 64, step: 1, value: 50 },
+          { group: 'Walker', key: 'bodyW', label: 'Body width', unit: ' mm', min: 24, max: 40, step: 1, value: 28 },
+          { group: 'Walker', key: 'bodyTop', label: 'Body above hinge (% of leg)', unit: '%', min: 4, max: 10, step: 1, value: 6 },
+          { group: 'Walker', key: 'head', label: 'Head', unit: '', min: 0, max: 2, step: 1, value: 0, format: function (v) { return HEAD_STYLES[v]; } },
+          { group: 'Walker', key: 'headSize', label: 'Head size (% of leg)', unit: '%', min: 14, max: 18, step: 1, value: 16 },
+          { group: 'Print in place', key: 'fit', label: 'Clearance (loose ↔ tight)', unit: ' mm', min: 0.2, max: 0.5, step: 0.05, value: 0.3 },
+          { group: 'Print in place', key: 'foot', label: 'Foot weight (rear legs)', unit: ' mm', min: 8, max: 16, step: 1, value: 14 },
+          { group: 'Print in place', key: 'legT', label: 'Rear leg thickness', unit: ' mm', min: 2.4, max: 4, step: 0.2, value: 2.4 },
+          { group: 'Ramp', key: 'part', label: 'Print', unit: '', min: 0, max: 2, step: 1, value: 0, format: function (v) { return ['Walker only', 'Ramp only', 'Walker and ramp'][v]; } },
+          { group: 'Ramp', key: 'slope', label: 'Ramp slope', unit: '°', min: 5, max: 12, step: 0.5, value: 8.5 },
+          { group: 'Ramp', key: 'rampLen', label: 'Ramp length', unit: ' mm', min: 100, max: 220, step: 5, value: 170 }
+        ],
+        presets: [
+          { label: 'Default duck', values: { legR: 50, bodyW: 28, bodyTop: 6, head: 0, headSize: 16, fit: 0.3, foot: 14, legT: 2.4, part: 0, slope: 8.5, rampLen: 170 } },
+          { label: 'Robot', values: { head: 1 } },
+          { label: 'Cat', values: { head: 2 } },
+          { label: 'Walker and ramp together', values: { part: 2 } },
+          { label: 'Ramp only', values: { part: 1 } },
+          { label: 'Small walker', values: { legR: 42, bodyW: 26, foot: 14 } },
+          { label: 'Big walker', values: { legR: 62, bodyW: 34, foot: 14 } }
+        ],
+        mount: function (container) {
+          var note = document.createElement('div');
+          note.className = 'mm-note';
+          note.textContent = 'Print the walker, then the ramp (Ramp group: Print). The rear legs are printed free, nothing to assemble: swing them to check they move. Stand the walker at the top of the ramp, facing down. If it stops, raise the slope a little; if it slides or tumbles, lower it.';
+          container.appendChild(note);
+          balanceEl = document.createElement('div');
+          balanceEl.className = 'mm-note';
+          container.appendChild(balanceEl);
+        },
+        walkProps: function (p) { return props(p); },
+        build: function (p, api) {
+          var T = api.THREE, w = buildWalker(p, T, 0), meshes = [], ramp, rw, zW = 0, zR = 0, pr = props(p);
+          lastProps = pr;
+          if (balanceEl) {
+            balanceEl.textContent = 'Balance: centre of weight ' + (pr.cA / pr.r).toFixed(2) + ' x leg length under the hinge (aim 0.25 to 0.45); rear legs ' + Math.round(100 * pr.mB / (pr.mA + pr.mB)) + '% of the weight (aim 8 to 20%).';
+          }
+          ramp = rampSolids(T, p, w.m, 0); rw = ramp.width;
+          if (p.part === 2) { zW = -(rw / 2 + 14 + w.halfWidth); }
+          if (p.part !== 1) {
+            w = buildWalker(p, T, zW);
+            w.meshes.forEach(function (e) { meshes.push(e); });
+          }
+          if (p.part !== 0) {
+            meshes.push({ name: 'ramp', positions: f32(ramp.deck, 0, 0, zR) });
+            meshes.push({ name: 'rails', positions: f32(ramp.rails, 0, 0, zR) });
+          }
+          return meshes;
+        }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

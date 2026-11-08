@@ -5,6 +5,19 @@
    "face": "#1b2236"
   }
  },
+ "gravity-walker": {
+  "colors": {
+   "body": "#f1f5f9",
+   "head": "#fdba74",
+   "eyes": "#334155",
+   "legs": "#7fd6b4",
+   "pins": "#c084fc",
+   "ramp": "#93c5fd",
+   "rails": "#fda4af"
+  },
+  "yaw": 38,
+  "elev": 24
+ },
  "pumpkin-plotter": {
   "colors": {
    "body": "#f28c28",
