@@ -845,8 +845,7 @@ function worldRenderPanel() {
       <div class="panel-tile">
         <span class="panel-kicker">OPEN SLOT // ${escapeHTML(g.name.toUpperCase())}</span>
         <h4>Nothing here yet</h4>
-        <p>This spot is reserved for a future ${escapeHTML(g.name)} generator. Have an idea for what belongs here?</p>
-        <button type="button" class="btn btn-amber panel-open" data-act="idea">&#10010; Suggest a generator</button>
+        <p>This spot is reserved for a future ${escapeHTML(g.name)} generator.</p>
       </div>`;
   }
 
@@ -887,13 +886,7 @@ function worldPanelClick(e) {
   else if (b.dataset.act === 'pick') {
     const prog = PROGRAMS.find(p => p.id === b.dataset.id);
     worldTileTap(prog, s.region);
-  } else if (b.dataset.act === 'idea') worldSuggest(s.region.group);
-}
-
-function worldSuggest(group) {
-  const t = document.getElementById('idea-title');
-  if (t && !t.value) t.value = `${group.name}: `;
-  toggleIdeaModal(true);
+  }
 }
 
 // ---------- input ----------
