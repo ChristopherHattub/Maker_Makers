@@ -525,6 +525,12 @@
    "foot": "#1d4ed8"
   }
  },
+ "cable-organizer": {
+  "colors": {
+   "body": "#2f3a52",
+   "slots": "#3b82f6"
+  }
+ },
  "remote-caddy": {
   "colors": {
    "caddy": "#2f3a52",

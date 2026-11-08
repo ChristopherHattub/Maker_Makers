@@ -557,6 +557,15 @@ const GENERATORS = [
     description: 'A caddy with 1 to 6 upright pockets for remotes or controllers, a low front wall, floor holes for cables, a wider foot for stability and an optional side comb that holds 2 to 8 cables. Set the pocket size to fit your remote. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 117,
+    title: 'Cable Organizer',
+    bundle: 'organization',
+    category: 'HOME // CABLE MANAGEMENT',
+    thumbnailUrl: 'assets/thumbnails/cable-organizer.svg',
+    programUrl: 'programs/cable-organizer.html',
+    description: 'Three cable holders sized from a slot count and a cable thickness: a clamp that grips the desk edge with a snap-in cable comb, a shallow under-desk tray with snap-in notches in both long walls and screw holes in the floor, or a flat strip of C-shaped cable clips to screw under the desk. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 65,
     title: 'Tray Maker',
     bundle: 'organization',
