@@ -5,6 +5,19 @@
    "face": "#1b2236"
   }
  },
+ "gravity-walker": {
+  "colors": {
+   "body": "#f1f5f9",
+   "head": "#fdba74",
+   "eyes": "#334155",
+   "legs": "#7fd6b4",
+   "pins": "#c084fc",
+   "ramp": "#93c5fd",
+   "rails": "#fda4af"
+  },
+  "yaw": 38,
+  "elev": 24
+ },
  "pumpkin-plotter": {
   "colors": {
    "body": "#f28c28",
@@ -727,5 +740,21 @@
   },
   "yaw": 35,
   "elev": 22
+ },
+ "gingerbread-house": {
+  "colors": {
+   "walls": "#c98a55",
+   "roof": "#f6f1e7",
+   "door": "#6b4430",
+   "knob": "#f2c94c",
+   "chimney": "#e0525a",
+   "candy": "#e0525a",
+   "candy2": "#9fd8b4",
+   "base": "#f6f1e7",
+   "trim": "#fffdf7",
+   "drips": "#fffdf7"
+  },
+  "yaw": 30,
+  "elev": 24
  }
 }

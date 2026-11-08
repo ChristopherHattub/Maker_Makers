@@ -656,6 +656,15 @@ const GENERATORS = [
     description: 'A flat stand-up figure on a slotted base, in a card, arch, shield, hexagon or round token shape, with a raised knight, wizard, rogue or monster, or a blank frame for your own art. Set the size, thickness, border and tab. Prints flat with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 122,
+    title: 'Gravity Walker',
+    bundle: 'toys',
+    category: 'TOYS // ACTION',
+    thumbnailUrl: 'assets/thumbnails/gravity-walker.svg',
+    programUrl: 'programs/gravity-walker.html',
+    description: 'A toy that shuffles down a gentle ramp with no motor or batteries. The body has one fixed foot and two rear legs on print-in-place hinge pins that swing between stops, so it rocks from foot to foot; the ramp, with side rails at the slope you pick, prints in the same file. Choose a duck, robot or cat head, the leg length and the clearance. The legs and ramp print with no supports, but the round soles are shallow arcs, which a slicer lays down like any cylinder lying flat. The walk is checked in a simulation only and nothing has been printed: expect to tune the ramp slope (about 7 to 10 degrees). Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 91,
     title: 'Flexi Dragon',
     bundle: 'flexi',
@@ -807,6 +816,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/battery-dispenser.svg',
     programUrl: 'programs/battery-dispenser.html',
     description: 'A battery-shaped storage block with two slots on top, one for AA and one for AAA. Each slot feeds a gravity stack lying on its side; the bottom battery rolls down a ramp and rests against a small lip, half out of the front. Lift it over the lip and pull, and the stack drops the next one into place. Set the stack height, fit clearance, lip height, wall, divider, sleeve band and terminal nub. The front windows are arches, so it prints as one part with no supports and no moving pieces; battery clearances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 113,
+    title: 'Gingerbread House',
+    bundle: 'christmas',
+    category: 'CHRISTMAS // HOUSES',
+    thumbnailUrl: 'assets/thumbnails/gingerbread-house.svg',
+    programUrl: 'programs/gingerbread-house.html',
+    description: 'A gingerbread house that prints as one piece with nothing to assemble. Set the length, depth, wall height and roof pitch, pick a raised door or open doorway, pointed, diamond or teardrop windows (with a centre bar), tile rows on the roof, a chimney, gumdrops and a snow base with a scalloped edge. It is hollow and open underneath, so it stands over an LED tea light. The eaves sit on 45 degree corbels and every window top is pointed, so it prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,
