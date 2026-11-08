@@ -776,9 +776,42 @@
     });
   }
 
+  // Plate placement: the plate is centred on the origin and sized by the model's reach (plateFor), so every model is moved
+  // to sit centred in x and z and rest on y = 0, whatever coordinates build() used. The view, plate, exports, print check
+  // and Workshop see the placed model; the generator keeps working in its own coordinates (pick and hover points are moved
+  // back by placeOffset, setPreview geometry is moved forward). Copies are made: a generator may reuse its arrays.
+  var placeOffset = [0, 0, 0];
+  function placed(entries, offset) {
+    var min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    entries.forEach(function (e) {
+      var p = e.positions;
+      for (var i = 0; i < p.length; i += 3) for (var k = 0; k < 3; k++) { if (p[i + k] < min[k]) min[k] = p[i + k]; if (p[i + k] > max[k]) max[k] = p[i + k]; }
+    });
+    if (!isFinite(min[0])) return { entries: entries, offset: offset || [0, 0, 0] };
+    var off = offset || [-(min[0] + max[0]) / 2, -min[1], -(min[2] + max[2]) / 2];
+    if (Math.abs(off[0]) < 1e-6 && Math.abs(off[1]) < 1e-6 && Math.abs(off[2]) < 1e-6) return { entries: entries, offset: off };
+    return { offset: off, entries: entries.map(function (e) {
+      var c = Object.assign({}, e), p = c.positions = new Float32Array(e.positions);
+      for (var i = 0; i < p.length; i += 3) { p[i] += off[0]; p[i + 1] += off[1]; p[i + 2] += off[2]; }
+      return c;
+    }) };
+  }
+  // The world-space shift of the placed model (a generator may turn modelGroup, as Gift Box 2.0's turntable does).
+  function placeShift() { return new T.Vector3(placeOffset[0], placeOffset[1], placeOffset[2]).applyQuaternion(modelGroup.quaternion); }
+  // A pick for the generator's handlers, in build() coordinates.
+  function buildHit(hit) {
+    if (!hit) return hit;
+    var h = Object.assign({}, hit);
+    h.point = hit.point.clone().sub(placeShift());
+    return h;
+  }
+
   function rebuild() {
     applyShowIf();
-    var output = cfg.build(params, api) || [];
+    // Once the model is sculpted it stays where it is on the plate, so it does not jump under the cursor.
+    var place = placed(cfg.build(params, api) || [], cfg.sculpt && sculptEdited() ? placeOffset : null);
+    placeOffset = place.offset;
+    var output = place.entries;
     if (cfg.sculpt) {
       // Work on copies: a generator may keep and reuse its arrays between builds.
       output = output.map(function (e) { var c = Object.assign({}, e); c.positions = e.positions.slice(); return c; });
@@ -942,7 +975,7 @@
     if (e.data.type === 'mm-pick') {   // a click on the model in the Workshop's own view, in this page's coordinates
       var handler = tabHandlers(), d = e.data;
       if (handler && typeof handler.onPick === 'function') {
-        handler.onPick({ point: new T.Vector3(d.point[0], d.point[1], d.point[2]), normal: new T.Vector3(d.normal[0], d.normal[1], d.normal[2]), meshName: d.meshName, part: null }, api);
+        handler.onPick({ point: new T.Vector3(d.point[0] - placeOffset[0], d.point[1] - placeOffset[1], d.point[2] - placeOffset[2]), normal: new T.Vector3(d.normal[0], d.normal[1], d.normal[2]), meshName: d.meshName, part: null }, api);
       }
       return;
     }
@@ -967,7 +1000,7 @@
   var printCache = null, printView = null, printViewFor = null;
   function printEntries() {
     if (!printOn()) return modelData;
-    if (!printCache) printCache = cfg.printMeshes(params, api, modelData);
+    if (!printCache) printCache = placed(cfg.printMeshes(params, api, modelData) || []).entries;
     return printCache;
   }
 
@@ -1502,6 +1535,7 @@
     geometry.setAttribute('position', new T.BufferAttribute(entry.positions, 3));
     geometry.computeVertexNormals();
     previewMesh = new T.Mesh(geometry, previewMaterial);
+    previewGroup.position.copy(placeShift());   // preview geometry is in build() coordinates, like the picks
     previewGroup.add(previewMesh);
   }
 
@@ -1568,7 +1602,7 @@
     var dy = e.clientY - downAt.y;
     if (dx * dx + dy * dy > 36) dragged = true;
     var h = tabHandlers();
-    if (h && typeof h.onHover === 'function') h.onHover(pickAt(e.clientX, e.clientY), api);
+    if (h && typeof h.onHover === 'function') h.onHover(buildHit(pickAt(e.clientX, e.clientY)), api);
   });
 
   renderer.domElement.addEventListener('pointerleave', function () {
@@ -1586,7 +1620,7 @@
       return;
     }
     var picker = tabHandlers();
-    if (picker && typeof picker.onPick === 'function') picker.onPick(hit, api);
+    if (picker && typeof picker.onPick === 'function') picker.onPick(buildHit(hit), api);
   });
 
   // ---------------------------------------------------------------------------

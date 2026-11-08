@@ -44,6 +44,9 @@
     ],
     "Arch window": [
       "overhang"
+    ],
+    "Pointed arch": [
+      "overhang"
     ]
   },
   "bunny-builder": {
@@ -283,6 +286,12 @@
       "overhang"
     ],
     "Sci-fi pylon": [
+      "overhang"
+    ],
+    "Round tower": [
+      "overhang"
+    ],
+    "Round keep": [
       "overhang"
     ],
     "Default tower": [
@@ -894,6 +903,12 @@
     "Cut corner cove": [
       "overhang"
     ],
+    "Ogee gallery": [
+      "overhang"
+    ],
+    "Double bead square": [
+      "overhang"
+    ],
     "Slim desk frame": [
       "overhang"
     ]
@@ -1156,7 +1171,16 @@
     "Starry square": [
       "overhang"
     ],
+    "Slotted tower": [
+      "overhang"
+    ],
     "Leafy garden": [
+      "overhang"
+    ],
+    "Tapered tower": [
+      "overhang"
+    ],
+    "Flared bowl": [
       "overhang"
     ],
     "Hearts and a lid": [
