@@ -10,7 +10,7 @@
 │   ├── programs.js          GENERATORS list, BUNDLES (map regions) and the PROGRAMS slot array built from them
 │   ├── worldmap.js          Homepage world map: layout, camera, selection, hologram hover tiles, minimap, sort, rearrange
 │   ├── workshop.js          Workshop: free-range 3D editor (shape catalog, STL import, booleans, STL / OBJ export)
-│   └── app.js               Router, viewer, idea queue, printer map
+│   └── app.js               Router, viewer, printing guides, printer map
 ├── data/
 │   ├── public-printers.json Verified printer listings (solid dots, directory)
 │   └── osm-candidates.json  Unverified OSM makerspace candidates (dimmed, toggled)
