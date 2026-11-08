@@ -840,3 +840,13 @@ body.mm-gen.mm-embed .mm-panel { height: 100vh; width: 100%; max-width: none; bo
   padding: 0.15rem 0.45rem; border: 1px solid var(--bp-amber); background: rgba(6, 21, 45, 0.85);
   color: var(--bp-amber); font-size: 0.8rem; letter-spacing: 0.04em;
 }
+
+/* Part-edit mini window (cfg.partEdit): settings of the selected piece, over the 3D view. */
+.mm-pe { position: absolute; top: 46px; left: 12px; z-index: 6; width: min(290px, calc(100% - 24px)); max-height: calc(100% - 130px); display: flex; flex-direction: column; overflow: hidden; background: rgba(6, 21, 45, 0.94); border: 1px solid var(--mm-cyan, #22e0ff); padding: 10px 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.mm-pe[hidden] { display: none; }
+.mm-pe-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.mm-pe-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; }
+.mm-pe-x { background: none; border: 1px solid currentColor; color: inherit; width: 32px; height: 32px; font-size: 18px; line-height: 1; cursor: pointer; }
+.mm-pe-foot { display: flex; gap: 8px; margin-top: 8px; }
+.mm-pe-foot .mm-btn { flex: 1; }
+@media (max-width: 860px) { .mm-pe { top: 40px; left: 8px; width: calc(100% - 16px); max-height: 46%; padding: 6px 10px; } .mm-pe-x { width: 28px; height: 28px; } .mm-pe-head { margin-bottom: 2px; } }

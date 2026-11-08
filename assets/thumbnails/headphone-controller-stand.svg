@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#14407f"/><stop offset="0.6" stop-color="#0d2b59"/><stop offset="1" stop-color="#06152d"/></radialGradient>
+    <radialGradient id="plate" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#1b4c92"/><stop offset="1" stop-color="#081c3b"/></radialGradient>
+    <radialGradient id="mat" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffffff"/><stop offset="0.3" stop-color="#e3ecf9"/><stop offset="0.7" stop-color="#a9bcdc"/><stop offset="1" stop-color="#667fa8"/></radialGradient>
+    <radialGradient id="mint" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#e6ffef"/><stop offset="0.3" stop-color="#bbf7d0"/><stop offset="0.7" stop-color="#6fd39a"/><stop offset="1" stop-color="#2f8a5c"/></radialGradient>
+    <pattern id="gridMinor" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#00e5ff" stroke-opacity="0.05"/></pattern>
+    <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#00e5ff" stroke-opacity="0.12"/></pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect width="400" height="300" fill="url(#gridMinor)"/>
+  <rect width="400" height="300" fill="url(#gridMajor)"/>
+  <ellipse cx="200" cy="262" rx="150" ry="20" fill="url(#plate)" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <!-- Headphone stand: base, post with honeycomb panel, domed cradle -->
+  <ellipse cx="130" cy="256" rx="58" ry="12" fill="url(#mat)" stroke="#00e5ff" stroke-width="2"/>
+  <path d="M120 252V92" stroke="#00e5ff" stroke-width="26" stroke-linecap="round" fill="none"/>
+  <path d="M120 252V92" stroke="url(#mat)" stroke-width="22" stroke-linecap="round" fill="none"/>
+  <path d="M92 60Q130 38 168 60L160 82H100Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M106 112h8l4 7-4 7h-8l-4-7zM122 112h8l4 7-4 7h-8l-4-7zM114 126h8l4 7-4 7h-8l-4-7zM106 140h8l4 7-4 7h-8l-4-7zM122 140h8l4 7-4 7h-8l-4-7z" fill="none" stroke="#00e5ff" stroke-width="1.4" stroke-opacity="0.8"/>
+  <!-- headphones hanging -->
+  <path d="M84 112Q130 36 176 112" fill="none" stroke="#a7f3d0" stroke-width="6" stroke-linecap="round"/>
+  <rect x="72" y="106" width="22" height="44" rx="9" fill="url(#mint)" stroke="#00e5ff" stroke-width="2"/>
+  <rect x="166" y="106" width="22" height="44" rx="9" fill="url(#mint)" stroke="#00e5ff" stroke-width="2"/>
+  <!-- controller rack -->
+  <path d="M232 252V196L350 236V252Z" fill="url(#mat)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M232 196V150H244V200M274 210V160H286V214M316 224V176H328V228" fill="none" stroke="#00e5ff" stroke-width="2"/>
+  <rect x="244" y="150" width="30" height="60" fill="url(#mat)" opacity="0.55"/>
+  <rect x="286" y="160" width="30" height="64" fill="url(#mat)" opacity="0.55"/>
+  <rect x="251" y="120" width="16" height="42" rx="7" fill="#fda4af" stroke="#00e5ff" stroke-width="2"/>
+  <rect x="293" y="130" width="16" height="42" rx="7" fill="#d8b4fe" stroke="#00e5ff" stroke-width="2"/>
+</svg>

@@ -711,6 +711,29 @@
       "overhang"
     ]
   },
+  "gravity-walker": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default duck": [
+      "overhang"
+    ],
+    "Robot": [
+      "overhang"
+    ],
+    "Cat": [
+      "overhang"
+    ],
+    "Walker and ramp together": [
+      "overhang"
+    ],
+    "Small walker": [
+      "overhang"
+    ],
+    "Big walker": [
+      "overhang"
+    ]
+  },
   "hex-terrain-tile": {
     "Magnet tile": [
       "overhang"
