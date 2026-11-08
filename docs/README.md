@@ -28,6 +28,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [paper-towel-holder.md](paper-towel-holder.md) | The Paper Towel Holder (slot 104): three mounts, base shapes, rod styles, stamps, split rod |
 | [marble-run.md](marble-run.md) | The Marble Run (slot 109): zigzag tower layout, support-free track profile, the ball simulation |
 | [nutcracker.md](nutcracker.md) | The Nutcracker (slot 108): print-in-place jaw (quarter disc in a concentric bowl on diamond pins), hats, tolerance, how it was checked. |
+| [stamp-maker.md](stamp-maker.md) | The Stamp Maker (slot 115): mirrored relief text and icons on a plate with a one-piece tapered grip, layouts, icon list |
 | [gravity-walker.md](gravity-walker.md) | The Gravity Walker (slot 122): a ramp-walking toy with print-in-place rear legs, the walking simulation and how to retune it |
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |

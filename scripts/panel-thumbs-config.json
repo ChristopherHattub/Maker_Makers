@@ -771,5 +771,15 @@
     "#f08a3c"
    ]
   }
+ },
+ "stamp-maker": {
+  "colors": {
+   "body": "#e8d9c0",
+   "border": "#c0392b",
+   "icon": "#c0392b",
+   "lettering": "#c0392b"
+  },
+  "yaw": 35,
+  "elev": 30
  }
 }

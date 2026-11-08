@@ -818,6 +818,15 @@ const GENERATORS = [
     description: 'A decorative faceplate or cover panel at a fixed size for a Switch dock, Switch 2 dock, PS5 side panel or Xbox Series X front, with eight original designs for each: honeycomb, stripes, circuit traces, broken rings, pixel fade, mountains and sun, starburst, or a plain bezel. Set the plate thickness, rim, pattern size and height, and optionally cut vent slots. It prints flat with no supports. The console sizes are estimates, not measured, so test-print one before a long print; the PS5 panel and the Xbox front are larger than a small printer bed. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 115,
+    title: 'Stamp Maker',
+    bundle: 'personal',
+    category: 'PERSONALISED // STAMPS',
+    thumbnailUrl: 'assets/thumbnails/stamp-maker.svg',
+    programUrl: 'programs/stamp-maker.html',
+    description: 'Design a rubber-stamp style hand stamp: type your text in 10 open-licence fonts, add one of 18 icons (heart, paw, star, flower, cat and more), and pick a layout (icon above or beside the text, text only, icon only, or a round seal with text around the icon). Choose the plate shape and border; the design is mirrored for you. It prints design-up with a tapered one-piece grip underneath, so there are no supports and nothing to assemble: flip it over to stamp. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 111,
     title: 'Battery Dispenser',
     bundle: 'organization',
