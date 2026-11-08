@@ -31,6 +31,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [stamp-maker.md](stamp-maker.md) | The Stamp Maker (slot 115): mirrored relief text and icons on a plate with a one-piece tapered grip, layouts, icon list |
 | [gravity-walker.md](gravity-walker.md) | The Gravity Walker (slot 122): a ramp-walking toy with print-in-place rear legs, the walking simulation and how to retune it |
 | [sedan-maker.md](sedan-maker.md) | The Sedan Maker (slot 105): lofted car body, print-in-place wheels and axles, Car parts stamps, how to add car types |
+| [fidget-spinner.md](fidget-spinner.md) | The Fidget Spinner (slot 114): six outline styles, print-in-place hub or 608 bearing, arm pockets, raised name |
 | [console-faceplate.md](console-faceplate.md) | The Console Faceplate (slot 106): devices, estimated sizes, eight designs, how to add a console |
 | [wall-panel.md](wall-panel.md) | The Wall Panel Maker (slot 116): text panel with a drag-and-drop Elements tab, print-in-place checkboxes, sliders, progress bars and dials |
 | [battery-dispenser.md](battery-dispenser.md) | The Battery Dispenser (slot 111): AA and AAA gravity stacks, ramp and lip, arched front windows, the dispense checks |

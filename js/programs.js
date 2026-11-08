@@ -800,6 +800,15 @@ const GENERATORS = [
     description: 'A toy sedan with four wheels that are printed in place: each wheel sits in a round wheel well and spins on a hidden axle pin with clearance, straight off the bed. Set length, width, hood, trunk and cabin shape, windshield slope, wheel size, tread and hub caps, and the print clearance, then use the Car parts tab to click mirrors, spoilers, scoops, antennas, roof racks, lights and handles onto the car. Needs only a short bridge over each wheel, with no supports; the wheel tolerance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 114,
+    title: 'Fidget Spinner',
+    bundle: 'fidgets',
+    category: 'FIDGETS // SPINNERS',
+    thumbnailUrl: 'assets/thumbnails/fidget-spinner.svg',
+    programUrl: 'programs/fidget-spinner.html',
+    description: 'A personalised hand spinner in six styles (classic lobes, flower, star, gear, blade and disc) with 2 to 10 arms. The centre disc prints already captive in its ring and spins by hand, straight off the bed with no supports, or switch to a 608 skate bearing with two printed thumb pads. Add weight pockets for steel balls or bearings, or through holes, at the arm ends, choose a thumb dish, flat or dome hub, and type a name or initials that are raised on the arms. The print clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 109,
     title: 'Marble Run',
     bundle: 'toys',

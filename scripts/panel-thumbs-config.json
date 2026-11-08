@@ -796,5 +796,14 @@
   },
   "yaw": 0,
   "elev": 55
+ },
+ "fidget-spinner": {
+  "colors": {
+   "body": "#a78bfa",
+   "core": "#60a5fa",
+   "hub": "#ffd23f",
+   "text": "#ffffff",
+   "pads": "#ffd23f"
+  }
  }
 }
