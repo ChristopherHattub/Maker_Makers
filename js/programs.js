@@ -824,7 +824,7 @@ const GENERATORS = [
     category: 'HOME // PET CARE',
     thumbnailUrl: 'assets/thumbnails/pet-bowl-housing.svg',
     programUrl: 'programs/pet-bowl-housing.html',
-    description: 'A housing that holds your own pet bowl, single or double. Enter the bowl rim, body, bottom and height and it makes a snug pocket with a rim seat. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, an outer lip, and a flat, anti-tip flange or raised pedestal base. Double sets can have different sizes and join with a link bar, a spill tray or a raised platform. Prints with no supports. Paint parts in the Color tool and export .STL.'
+    description: 'A housing that holds your own pet bowl, single or double. Enter the bowl rim, body, bottom and height and it makes a snug pocket with a rim seat. Pick the outline (round, rounded square, hexagon, octagon, oval, flower, heart), four side profiles, smooth, fluted, twisted, ringed or quilted walls, an outer lip, and a flat, anti-tip flange or raised pedestal base. Put the pet's name front and centre on a sloped name ramp in front or a board behind, in five fonts and six plate shapes. Double sets can have different sizes and join with a link bar, a spill tray or a raised platform. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
     slot: 76,

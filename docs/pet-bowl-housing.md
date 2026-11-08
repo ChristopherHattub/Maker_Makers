@@ -1,6 +1,6 @@
 # Pet Bowl Housing (slot 112)
 
-`programs/pet-bowl-housing.html`. A housing (holder or feeder stand) with a pocket for the visitor's own pet bowl, one or two. Checked only by `check-mesh.mjs` (defaults, all nine presets) and a slider-extreme sweep; **not printed yet**, and the pocket fit is unproven.
+`programs/pet-bowl-housing.html`. A housing (holder or feeder stand) with a pocket for the visitor's own pet bowl, one or two. Checked only by `check-mesh.mjs` (defaults, all ten presets) and a sweep of 800 combinations (every slider at min and max with single, tray, platform and pedestal; five fonts, five names, six plate shapes, all plate positions); **not printed yet**, and the pocket fit is unproven.
 
 ## What the sliders mean
 
@@ -20,6 +20,15 @@ Each housing is one lathe-style surface: a ring list (bottom pole, outside up, r
 - The outer lip has a shallow bevel underneath; the pedestal flare is about 42 degrees; the flange has a flat bottom and a sloping top.
 - A raised platform lifts the housings; the housings start 0.8 mm inside the platform so the slicer unions them. The Base style is ignored with a platform.
 - The bed edge has a 0.6 mm chamfer against elephant foot.
+
+## Name plate (Name tab)
+
+The pet's name is the main feature. The **Name** tab holds the text box (two lines at most), a font (Bold block, Bubble, Slab serif, Script, Chunky caps) and capitals. **Name plate position** puts a sloped plate in front of the housing (a ramp, low at the front, rising towards the bowl), behind it (a board, rising away from the bowl), or both. Plate shapes: rounded rectangle, oval, pill, arch, hexagon, heart. Sliders set plate width (% of the housing set), depth up the slope, slope angle (15 to 45 degrees), edge height, border, letter height, how far the letters stand up, spacing and space around the name. Letters shrink to fit; a longer name needs a wider or deeper plate.
+
+- The plate is a solid wedge (vertical walls down to the bed) whose top leans back at most 45 degrees from flat, and the letters and border stand along the plate normal, so their walls lean at most 45 degrees from vertical and nothing needs supports.
+- The plate is placed as close to the housing as it can be without entering any bowl pocket (`plateClear` checks outline points against the pocket radius at the plate height). A 3 mm thick tongue per housing, kept below the pocket floor, ties the plate to the housing base.
+- Lettering, triangulation and the extruder are copied from the Text Generator (`programs/text-generator.html`); only a subset of five fonts and the characters a pet name needs is embedded (`FONTDATA`, SIL OFL 1.1, see [text-generator.md](text-generator.md)). To change the fonts, regenerate the subset from the Text Generator's data.
+- Color tool parts: Name ramp, Ramp border, Pet name (ramp), Ramp link, and the same four for the board. The name is not a slider, so presets keep whatever name is typed.
 
 ## Double sets
 
