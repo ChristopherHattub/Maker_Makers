@@ -4,74 +4,7 @@ function escapeHTML(str) {
 
 function initSplash() {
   initWorldMap();
-  renderIdeasLog();
-}
-
-function getSavedIdeas() {
-  try {
-    return JSON.parse(localStorage.getItem('mm_generator_ideas')) || [];
-  } catch {
-    return [];
-  }
-}
-
-var ideaModalReturnFocus = null;
-function toggleIdeaModal(show) {
-  const modal = document.getElementById('idea-modal');
-  modal.classList.toggle('open', show);
-  if (show) {
-    ideaModalReturnFocus = document.activeElement;
-    const first = modal.querySelector('input, textarea, button');
-    if (first) first.focus();
-  } else if (ideaModalReturnFocus && ideaModalReturnFocus.focus) {
-    ideaModalReturnFocus.focus();
-  }
-}
-document.addEventListener('keydown', function (e) {
-  const modal = document.getElementById('idea-modal');
-  if (e.key === 'Escape' && modal && modal.classList.contains('open')) toggleIdeaModal(false);
-});
-
-function handleIdeaSubmit(e) {
-  e.preventDefault();
-  const title = document.getElementById('idea-title').value.trim();
-  const desc = document.getElementById('idea-desc').value.trim();
-  if (!title || !desc) return;
-
-  const ideas = getSavedIdeas();
-  ideas.unshift({ title, desc, date: new Date().toLocaleDateString() });
-  try {
-    localStorage.setItem('mm_generator_ideas', JSON.stringify(ideas));
-  } catch (err) {}
-
-  document.getElementById('idea-form').reset();
-  renderIdeasLog();
-}
-
-function renderIdeasLog() {
-  const ideas = getSavedIdeas();
-  const container = document.getElementById('ideas-log-container');
-  if (ideas.length === 0) {
-    container.innerHTML = `<div style="font-size:0.74rem; color:#8ab4e1; margin-top:0.4rem;">No generator ideas submitted yet.</div>`;
-    return;
-  }
-  container.innerHTML = ideas.slice(0, 5).map(item => `
-    <div class="idea-item">
-      <strong style="color: var(--bp-white);">${item.title}</strong>
-      <span style="float:right; color: var(--bp-cyan); font-size:0.68rem;">${item.date}</span>
-      <p style="color:#b8d4f2; margin-top:0.2rem;">${item.desc}</p>
-    </div>
-  `).join('');
-}
-
-function exportIdeasJSON() {
-  const ideas = getSavedIdeas();
-  const url = URL.createObjectURL(new Blob([JSON.stringify(ideas, null, 2)], { type: 'application/json' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'maker-makers-generator-ideas.json';
-  a.click();
-  URL.revokeObjectURL(url);
+  initGuides();
 }
 
 let activeProgram = PROGRAMS[0];
@@ -81,12 +14,13 @@ function hideAllScreens() {
   document.getElementById('splash-screen').style.display = 'none';
   document.getElementById('viewer-screen').style.display = 'none';
   document.getElementById('map-screen').style.display = 'none';
+  document.getElementById('guides-screen').style.display = 'none';
   document.getElementById('workshop-screen').style.display = 'none';
   document.body.classList.remove('on-workshop');
 }
 
 // Navigation is driven by the URL hash so the browser Back and Forward buttons work:
-// '' = generators grid, '#/generator/SLOT-01' = viewer, '#/map' = printer map.
+// '' = generators grid, '#/generator/SLOT-01' = viewer, '#/map' = printer map, '#/guides' = printing guides.
 function goTo(hash) {
   if (location.hash === hash || (!hash && !location.hash)) {
     renderRoute();
@@ -102,6 +36,8 @@ function renderRoute() {
     renderProgram(decodeURIComponent(genMatch[1]));
   } else if (hash === '#/workshop') {
     renderWorkshop();
+  } else if (hash === '#/guides') {
+    renderGuides();
   } else if (hash === '#/map') {
     renderPrinterMap();
   } else {
@@ -112,6 +48,7 @@ function renderRoute() {
 function showSplashScreen() { goTo(''); }
 function openProgram(progId) { goTo(`#/generator/${encodeURIComponent(progId)}`); }
 function showPrinterMapScreen() { goTo('#/map'); }
+function showGuidesScreen() { goTo('#/guides'); }
 
 // Assigning iframe.src adds a browser history entry, which would make Back reload the frame
 // instead of leaving the generator. location.replace swaps the frame without one.

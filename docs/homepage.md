@@ -8,7 +8,7 @@ The whole home screen is one big pannable, zoomable 2D map. Every group of gener
 - **Zoom:** pinch on touch screens, Ctrl+scroll (or trackpad pinch), the + and minus buttons, or the + and - keys. The square button (or key 0) shows the whole map. The minimap at bottom left jumps the camera.
 - **Select a tile:** the camera snaps to it and a details panel opens with the group (description, counts, a strip of its generators) and the tile (picture, category, description).
 - **Open it:** select the tile again, or press "Open generator" in the panel. This goes to the generator editor.
-- **Select an empty planned group's slot:** the panel explains it is reserved, and offers "Suggest a generator", which opens the idea form.
+- **Select an empty planned group's slot:** the panel explains it is reserved.
 - **Select a region heading:** frames the whole group and shows the group panel.
 - **Search:** the box in the top left dims every tile that does not match (title, category, description or group) and pans to the first match.
 - **Keyboard:** Tab moves between tiles and selects the focused one, Enter opens it, Esc closes the panel.
