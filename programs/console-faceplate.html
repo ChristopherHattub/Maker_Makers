@@ -226,9 +226,9 @@
           }
           R.z1 -= rows * 6 + 4;
         }
-        out.push({ name: 'plate', positions: extrude(THREE, rrectPts(0, 0, hw, hd, rad, N), holes, 0, t), smoothGroup: 'plate' });
+        out.push({ name: 'plate', positions: extrude(THREE, rrectPts(0, 0, hw, hd, rad, N), holes, 0, t), smoothGroup: 'plate', color: '#2b2f3a' });
         if (p.rimH > 0.05) {
-          out.push({ name: 'rim', positions: ringPrism(rrectPts(0, 0, hw, hd, rad, N), rrectPts(0, 0, hw - rimW, hd - rimW, Math.max(0.6, rad - rimW), N), t - 0.4, t + p.rimH), smoothGroup: 'rim' });
+          out.push({ name: 'rim', positions: ringPrism(rrectPts(0, 0, hw, hd, rad, N), rrectPts(0, 0, hw - rimW, hd - rimW, Math.max(0.6, rad - rimW), N), t - 0.4, t + p.rimH), smoothGroup: 'rim', color: '#93c5fd' });
         }
         var gen = PATTERNS[Math.round(p.design)];
         if (gen && R.x1 - R.x0 > 10 && R.z1 - R.z0 > 10) {
@@ -242,7 +242,7 @@
             }
             list.push(fanPrism(q, t - 0.4, t + p.reliefH));
           });
-          if (list.length) out.push({ name: 'pattern', positions: concat(list), smoothGroup: 'pattern' });
+          if (list.length) out.push({ name: 'pattern', positions: concat(list), smoothGroup: 'pattern', color: '#a7f3d0' });
         }
         return out;
       }
@@ -271,8 +271,7 @@
           { name: 'Berry Sorbet', color: '#fda4af' }, { name: 'Lavender Mist', color: '#d8b4fe' },
           { name: 'Sunny Yellow', color: '#fde047' }, { name: 'Pumpkin Matte', color: '#fdba74' }
         ],
-        defaultColor: '#2b2f3a',
-        partNames: { plate: 'Plate', rim: 'Raised rim', pattern: 'Pattern' },
+                partNames: { plate: 'Plate', rim: 'Raised rim', pattern: 'Pattern' },
         parameters: [
           choice('Console', 'device', 'Console (fixed size)', DEVICES.map(function (d) { return d.name; }), DEFAULTS.device),
           choice('Console', 'design', 'Design', DESIGNS, DEFAULTS.design),

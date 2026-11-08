@@ -17,6 +17,8 @@ The plate sizes in `DEVICES` are rough values taken from published console dimen
 
 `plate` (rounded slab, optional through-cut vent slots), `rim` (raised bezel, 0 mm height turns it off) and `pattern` (raised convex tiles, each embedded 0.4 mm into the plate). Pattern shapes are generated as convex polygons, clipped to the inner rectangle, and dropped when any corner would leave the rounded plate corner. Shapes never share an edge (that would be non-manifold), so keep gaps between neighbours.
 
+The three parts have their own default colors so they read apart while customizing: plate Shadow Black, rim Phantom Ice, pattern Glow Mint (mesh `color` fields; the Color tab still repaints them).
+
 ## Designs
 
 0 Plain bezel, 1 Honeycomb, 2 Diagonal stripes, 3 Circuit traces, 4 Broken rings, 5 Pixel fade, 6 Mountains and sun, 7 Starburst. Pattern size and shuffle (seed) change them.
