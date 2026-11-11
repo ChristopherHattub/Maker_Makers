@@ -1,6 +1,6 @@
 # Agent handoff
 
-Status as of 2026-11-02 (after Chris approved shipping everything to `main`: all of `testing` was merged into `main` and pushed, so both branches point at the same commit; the thread table below describes work that is now live on the site unless it says otherwise). Read [../CLAUDE.md](../CLAUDE.md) first; this page covers workflow and what is in flight. Verify every status line against `git log` before relying on it, because threads move fast.
+Status as of 2026-11-02 (after Chris approved shipping everything to `main`: all of `testing` was merged into `main` and pushed, so both branches point at the same commit; the thread table below describes work that is now live on the site unless it says otherwise). Read [../CLAUDE.md](../CLAUDE.md) first; this page covers workflow and what is in flight. **Update 2026-11-11:** the thread table below is a 2026-11-02 snapshot and is partly stale. Since then slots 106-123 shipped (see [slot-registry.md](slot-registry.md)), the idea-submission button was replaced by the Printing Guides page, and the engine centres every model on the plate. Work now lands through pull requests to `main`. Verify every status line against `git log` before relying on it, because threads move fast.
 
 ## Workflow rules (from Chris)
 

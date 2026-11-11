@@ -37,7 +37,7 @@ The full list of built slots, reserved ranges and the next free slot is in [slot
 
 ## Active slots
 
-A slot is **active** when it has a `programUrl`, and only active slots get a homepage tile. Slots in use today: 1 to 102, except 14 and 39 (see [slot-registry.md](slot-registry.md)). The homepage tile shows the generator's hologram (`assets/thumbnails/sprites/holo-<id>.webp`, see [hologram-tiles.md](hologram-tiles.md)); a tile with no hologram and no `thumbnailUrl` shows a plus sign. The viewer reads `programUrl` directly.
+A slot is **active** when it has a `programUrl`, and only active slots get a homepage tile. Slots in use today: 1 to 123, except 14 and 39 (see [slot-registry.md](slot-registry.md)). The homepage tile shows the generator's hologram (`assets/thumbnails/sprites/holo-<id>.webp`, see [hologram-tiles.md](hologram-tiles.md)); a tile with no hologram and no `thumbnailUrl` shows a plus sign. The viewer reads `programUrl` directly.
 
 ## The generator contract
 
@@ -45,7 +45,7 @@ A generator is a page in `programs/` that loads the shared engine. The page hold
 
 - Put the page in `programs/` (for example `programs/ghost-builder.html`) and load `programs/shared/generator.css` and `programs/shared/generator-core.js`.
 - It is loaded in an `<iframe>` in the viewer. Its sliders, Color tool and export buttons appear inside that frame.
-- It must work with no server and no build step. It can fetch three.js from its CDN, and nothing else.
+- It must work with no server and no build step. It loads three.js from the self-hosted `vendor/three/` copy (relative path `../vendor/three/...`) and contacts nothing else; the site uses no CDN.
 - The generator's "Download standalone .html generator" button (Print tab) saves one self-contained file with the shared files inlined.
 - Exporting happens inside the generator. The viewer's **Save STL** just presses the generator's Export .STL button, and **Send to Workshop** hands the model to the Workshop (see [workshop.md](workshop.md)).
 
@@ -59,7 +59,7 @@ Use relative paths only, such as `programs/ghost-builder.html`, never a path sta
 
    ```js
    {
-     slot: 103,   // use the next free slot
+     slot: 124,   // use the next free slot
      title: 'Honeycomb Wall Hook',
      bundle: 'organization',
      category: 'HOOKS & WALL STORAGE',

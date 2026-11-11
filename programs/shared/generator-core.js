@@ -1,9 +1,17 @@
 /* Maker Makers shared generator engine.
  *
  * A generator defines window.MM_GENERATOR (see docs/generator-styling.md) and then loads
- * this file. The engine draws the page layout, the 3D viewport, the Parametric and Color
- * tabs, the export buttons and the standalone download. The generator supplies only
- * parameters, presets, a palette and a build() function that returns triangles.
+ * this file. The engine draws the page layout, the 3D viewport, the Parametric, Sculpt,
+ * Color and Print tabs, the live print-check chip (print-check.js), the STL / OBJ-zip
+ * exports and the standalone download. The generator supplies only parameters, presets,
+ * a palette and a build() function that returns triangles.
+ *
+ * Model placement: after every build() the engine moves the model so it is centred in x
+ * and z and rests on y = 0 (see placed()); picks and previews are converted back to the
+ * generator's own coordinates. The build plate size comes from PLATE_SIZES.
+ *
+ * Shared helpers live in export-utils.js (MMExport), mesh-utils.js (MMMesh) and
+ * print-check.js. Never restyle a generator page; change this engine and generator.css.
  */
 (function () {
   'use strict';

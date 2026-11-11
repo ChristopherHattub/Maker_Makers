@@ -9,6 +9,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 1-75 | Built, except **slots 14 and 39, which are unused** (gaps; the homepage only shows slots with a `programUrl`; 39 was the Balloon Twister, removed). 73 generators. |
 | 76-90 | Built: the fifteen animal generators ([animals.md](animals.md)). |
 | 91-100 | Built: the ten Flexi Creatures. |
+| 101 | Built: Text Generator. |
 | 102 | Built: Fancy Ring. |
 | 103 | Built: Pin Maker. |
 | 104 | Built: Paper Towel Holder. |
@@ -33,11 +34,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
 | 124+ | Free (check open PRs first). Any number works. |
 
-Total built: 121 generators in 21 groups. Each generator's `code` in its config (`MM-00N`) matches its slot number.
-
-
-
-
+Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 

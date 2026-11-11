@@ -43,6 +43,8 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [energy-saber.md](energy-saber.md) | The Energy Saber (slot 110): telescoping print-in-place blade tubes, catch and clearance geometry, hilt styles, how it is tested |
 | [gingerbread-house.md](gingerbread-house.md) | The Gingerbread House (slot 113): one-piece hollow house, corbel eaves, pointed openings, no supports |
 | [pet-bowl-housing.md](pet-bowl-housing.md) | The Pet Bowl Housing (slot 112): a holder with a pocket for your own bowl, single or double, outlines, profiles, wall patterns, base, tray, link bar and platform |
+| [headphone-controller-stand.md](headphone-controller-stand.md) | The Headphone & Controller Stand (slot 119): desk and wall headphone stands, controller rack and shelf, Console Faceplate designs |
+| [holiday-tree.md](holiday-tree.md) | The Holiday Tree (slot 8): tiered tree and its decorating options |
 | [fancy-ring.md](fancy-ring.md) | The Fancy Ring (slot 102): real jewellery options, the studio render and how it prints in parts |
 | [text-generator.md](text-generator.md) | The Text Generator (slot 101): packed OFL fonts, build styles, triangulation, offsets and the checks |
 | [dice-tower.md](dice-tower.md) | The Dice Tower (slot 66): shapes, themes, tray shapes, stamps |
