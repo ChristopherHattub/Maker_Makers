@@ -924,5 +924,26 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "peacock-flamingo": {
+  "colors": {
+   "base": "#e2e8f0",
+   "body": "#2f6fb5",
+   "wing": "#14b8a6",
+   "neck": "#2f6fb5",
+   "head": "#2f6fb5",
+   "beak": "#fcd34d",
+   "beakTip": "#334155",
+   "eye": "#1e293b",
+   "crest": "#fcd34d",
+   "legs": "#c9a27a",
+   "feet": "#c9a27a",
+   "stalk": "#14866f",
+   "fanbase": "#14866f",
+   "feathers": "#34d399",
+   "eyeRim": "#fcd34d",
+   "eyeIris": "#2563eb",
+   "eyePupil": "#1e3a8a"
+  }
  }
 }

@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-133 Peacock & Flamingo // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Peacock & Flamingo: an elegant display bird on a pedestal. Pick a peacock with a fanned tail (feather count, spread,
+      // length and eye pattern) or a flamingo (one-leg or two-leg stance, neck curve, bent beak).
+      // Everything is built from a few closed primitives (ring solids: tubes, ellipsoids, leaf lenses, domes) that overlap
+      // each other; slicers union the shells. Y up, millimetres, the bird faces +X.
+      // Support-free rules: the body is a dome over a 45-degree cone that grows out of the hips (so the belly never
+      // overhangs), the neck tangent never leans more than 42 degrees from vertical, and the peacock's feathers fan out in
+      // the vertical plane behind the body from a hub on a tail stalk, so the outer feathers lean at half the fan spread.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function smooth(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vmul(a, s) { return [a[0] * s, a[1] * s, a[2] * s]; }
+      function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vnorm(a) { var l = Math.sqrt(vdot(a, a)) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+      function tri(o, a, b, c) {
+        // skip a triangle with two coincident corners (a collapsed ring); its edges cancel out anyway
+        if ((a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) || (b[0] === c[0] && b[1] === c[1] && b[2] === c[2]) ||
+            (a[0] === c[0] && a[1] === c[1] && a[2] === c[2])) return;
+        o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // A closed solid from a list of rings. Every ring has the same number of points (wound the same way) or is a single
+      // point (a pole). capA / capB close a first / last ring that is not a pole with a flat fan.
+      function ringSolid(rings, capA, capB) {
+        var o = [], n = rings.length, i, j, k, K, A, B;
+        for (i = 0; i < n - 1; i++) {
+          A = rings[i]; B = rings[i + 1];
+          if (A.length === 1 && B.length === 1) continue;
+          if (A.length === 1) {
+            K = B.length;
+            for (j = 0; j < K; j++) { k = (j + 1) % K; tri(o, A[0], B[k], B[j]); }
+          } else if (B.length === 1) {
+            K = A.length;
+            for (j = 0; j < K; j++) { k = (j + 1) % K; tri(o, A[j], A[k], B[0]); }
+          } else {
+            K = A.length;
+            for (j = 0; j < K; j++) { k = (j + 1) % K; tri(o, A[j], A[k], B[k]); tri(o, A[j], B[k], B[j]); }
+          }
+        }
+        function cap(ring, start) {
+          if (ring.length < 3) return;
+          var c = [0, 0, 0], m = ring.length, q, r;
+          for (q = 0; q < m; q++) c = vadd(c, ring[q]);
+          c = vmul(c, 1 / m);
+          for (q = 0; q < m; q++) { r = (q + 1) % m; if (start) tri(o, c, ring[r], ring[q]); else tri(o, c, ring[q], ring[r]); }
+        }
+        if (capA) cap(rings[0], true);
+        if (capB) cap(rings[n - 1], false);
+        return orient(new Float32Array(o));
+      }
+
+      // A tube along a polyline with a radius per point (array or function of 0..1). Rounded ends add a small dome.
+      function tube(pts, rad, o) {
+        o = o || {};
+        var K = o.K || 14, n = pts.length, T = [], i, j, r, rings = [], Nn, Bn, P, ring, a;
+        function radius(i) { return typeof rad === 'function' ? rad(i / (n - 1)) : rad[i]; }
+        for (i = 0; i < n; i++) T.push(vnorm(vsub(pts[Math.min(i + 1, n - 1)], pts[Math.max(i - 1, 0)])));
+        var ax = Math.abs(T[0][0]) < 0.8 ? [1, 0, 0] : [0, 1, 0];
+        Nn = vnorm(vsub(ax, vmul(T[0], vdot(ax, T[0]))));
+        var frames = [];
+        for (i = 0; i < n; i++) {
+          if (i > 0) Nn = vnorm(vsub(Nn, vmul(T[i], vdot(Nn, T[i]))));
+          frames.push([Nn, vcross(T[i], Nn)]);
+        }
+        function ringAt(c, rr, f) {
+          var out = [];
+          for (j = 0; j < K; j++) {
+            a = TAU * j / K;
+            out.push(vadd(c, vadd(vmul(f[0], rr * Math.cos(a)), vmul(f[1], rr * Math.sin(a)))));
+          }
+          return out;
+        }
+        if (o.roundStart) {
+          r = radius(0);
+          rings.push([vsub(pts[0], vmul(T[0], r))]);
+          [70, 45, 20].forEach(function (d) {
+            rings.push(ringAt(vsub(pts[0], vmul(T[0], r * Math.sin(d * DEG))), r * Math.cos(d * DEG), frames[0]));
+          });
+        }
+        for (i = 0; i < n; i++) rings.push(ringAt(pts[i], radius(i), frames[i]));
+        if (o.roundEnd) {
+          r = radius(n - 1);
+          [20, 45, 70].forEach(function (d) {
+            rings.push(ringAt(vadd(pts[n - 1], vmul(T[n - 1], r * Math.sin(d * DEG))), r * Math.cos(d * DEG), frames[n - 1]));
+          });
+          rings.push([vadd(pts[n - 1], vmul(T[n - 1], r))]);
+        }
+        return ringSolid(rings, !o.roundStart, !o.roundEnd);
+      }
+
+      // Ellipsoid with axes ex (long), ey, ez = ex x ey and radii rx, ry, rz.
+      function ellipsoid(c, ex, ey, rx, ry, rz, nu, K) {
+        var ez = vcross(ex, ey), rings = [], i, j, th, x, rr, ring, a;
+        nu = nu || 10; K = K || 18;
+        for (i = 0; i <= nu; i++) {
+          th = Math.PI * i / nu; x = -Math.cos(th) * rx; rr = Math.sin(th);
+          if (i === 0 || i === nu) { rings.push([vadd(c, vmul(ex, x))]); continue; }
+          ring = [];
+          for (j = 0; j < K; j++) {
+            a = TAU * j / K;
+            ring.push(vadd(c, vadd(vmul(ex, x), vadd(vmul(ey, ry * rr * Math.cos(a)), vmul(ez, rz * rr * Math.sin(a))))));
+          }
+          rings.push(ring);
+        }
+        return ringSolid(rings, false, false);
+      }
+
+      // A raised dome (an eye layer) on a face. O is on the face, n its outward normal, u and c span the face.
+      function dome(O, u, c, n, ru, rc, h, embed, shape) {
+        var K = 22, rings = [], k, phi;
+        function ringAt(f, off) {
+          var out = [], j, a, sh;
+          for (j = 0; j < K; j++) {
+            a = TAU * j / K; sh = shape(a);
+            out.push(vadd(O, vadd(vadd(vmul(u, ru * f * Math.cos(a) * sh[0]), vmul(c, rc * f * Math.sin(a) * sh[1])), vmul(n, off))));
+          }
+          return out;
+        }
+        rings.push(ringAt(1, -embed));
+        rings.push(ringAt(1, 0));
+        for (k = 1; k <= 4; k++) { phi = k / 5 * Math.PI / 2; rings.push(ringAt(Math.cos(phi), h * Math.sin(phi))); }
+        rings.push([vadd(O, vmul(n, h))]);
+        return ringSolid(rings, true, false);
+      }
+      var SHAPES = [null,
+        function () { return [1, 1]; },
+        function (a) { var cs = Math.cos(a); return [1, 1 - 0.66 * Math.pow(Math.max(0, cs), 1.2)]; },
+        function () { return [1, 1]; }];
+
+      // A leaf-shaped lens: a blade along d, width across c, thickness along n. prof(u) is the half width 0..1 along the blade.
+      function leaf(O, d, c, n, r0, L, hwMax, T, off, prof, poleA) {
+        var I = 26, J = 8, rings = [], i, j, u, hw, s, tau, side, ring;
+        function at(u, s, side) {
+          var hw = hwMax * prof(u), t = side ? side * (T / 2) * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(s), 2.6)), 1 / 2.6) : 0;
+          return vadd(O, vadd(vmul(d, r0 + L * u), vadd(vmul(c, s * hw), vmul(n, off + t))));
+        }
+        for (i = 0; i <= I; i++) {
+          u = i / I;
+          if (i === I || (poleA && i === 0)) { rings.push([at(u, 0, 0)]); continue; }
+          ring = [];
+          for (j = 0; j <= J; j++) ring.push(at(u, -1 + 2 * j / J, 1));
+          for (j = J - 1; j >= 1; j--) ring.push(at(u, -1 + 2 * j / J, -1));
+          rings.push(ring);
+        }
+        return ringSolid(rings, !poleA, false);
+      }
+      function featherProf(u) {
+        var u0 = 0.7;
+        if (u <= u0) return 0.2 + 0.8 * smooth(u / u0);
+        return Math.sqrt(Math.max(0, 1 - Math.pow((u - u0) / (1 - u0), 2)));
+      }
+      function wingProf(u) { return Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(u, 0.72))), 0.7); }
+
+      // A flat plate from a polygon in two coordinates; levels are [offset along axis 0, scale about the centroid].
+      // axis: 'x' plate in the Y-Z plane at x = base + offset.
+      function plateX(poly, x0, levels) {
+        var cy = 0, cz = 0, rings = [];
+        poly.forEach(function (q) { cy += q[0]; cz += q[1]; });
+        cy /= poly.length; cz /= poly.length;
+        levels.forEach(function (lv) {
+          rings.push(poly.map(function (q) { return [x0 + lv[0], cy + (q[0] - cy) * lv[1], cz + (q[1] - cz) * lv[1]]; }));
+        });
+        return ringSolid(rings, true, true);
+      }
+
+      // The body: a dome over a cone that grows out of the hips at slope k, so its underside never overhangs.
+      // S: xc centre, rr / rf rear and front half length, rz half width, H dome height over the hips, pw dome exponent,
+      // pitch (front higher), hipY, hips [[x, z]], k cone slope, soft (rounding of the cone tip).
+      function domeBody(S) {
+        var rr2 = S.soft * S.soft;
+        function up(x, z) {
+          var s = (x - S.xc) / (x < S.xc ? S.rr : S.rf), zz = z / S.rz, q = s * s + zz * zz;
+          if (q >= 1) return -1e9;
+          return S.hipY + S.H * Math.pow(1 - q, S.pw) + S.pitch * s * (1 - zz * zz);
+        }
+        function dn(x, z) {
+          var m = 1e9, i, d;
+          for (i = 0; i < S.hips.length; i++) {
+            d = Math.sqrt(Math.pow(x - S.hips[i][0], 2) + Math.pow(z - S.hips[i][1], 2) + rr2) - S.soft;
+            if (d < m) m = d;
+          }
+          return S.hipY - 0.4 + S.k * m;
+        }
+        function f(x, z) { return up(x, z) - dn(x, z); }
+        // x extent along the centre line
+        var xa = S.xc - S.rr, xb = S.xc + S.rf, N = 400, i, xmin = null, xmax = null, x;
+        for (i = 0; i <= N; i++) {
+          x = lerp(xa, xb, i / N);
+          if (f(x, 0) > 0.05) { if (xmin === null) xmin = x; xmax = x; }
+        }
+        function refine(inside, outside) {
+          var q, mid;
+          for (q = 0; q < 30; q++) { mid = (inside + outside) / 2; if (f(mid, 0) > 0.0) inside = mid; else outside = mid; }
+          return inside;
+        }
+        xmin = refine(xmin, xmin - (xb - xa) / N);
+        xmax = refine(xmax, xmax + (xb - xa) / N);
+        function zStar(x) {
+          var lo = 0, hi = S.rz, q, mid;
+          if (f(x, 0) <= 0) return 0;
+          for (q = 0; q < 26; q++) { mid = (lo + hi) / 2; if (f(x, mid) > 0) lo = mid; else hi = mid; }
+          return lo;
+        }
+        var NS = 36, J = 12, rings = [], zs, ring, j, y;
+        for (i = 0; i <= NS; i++) {
+          x = xmin + (xmax - xmin) * (1 - Math.cos(Math.PI * i / NS)) / 2;
+          if (i === 0 || i === NS) { rings.push([[x, (up(x, 0) + dn(x, 0)) / 2, 0]]); continue; }
+          zs = zStar(x);
+          ring = [];
+          for (j = 0; j <= J; j++) {
+            var z = zs * Math.cos(Math.PI * j / J);
+            y = (j === 0 || j === J) ? dn(x, z) : up(x, z);
+            ring.push([x, y, z]);
+          }
+          for (j = J - 1; j >= 1; j--) { var z2 = zs * Math.cos(Math.PI * j / J); ring.push([x, dn(x, z2), z2]); }
+          rings.push(ring);
+        }
+        return { shell: ringSolid(rings, false, false), up: up, dn: dn, xmin: xmin, xmax: xmax, zStar: zStar };
+      }
+      // Outward normal of the dome top at (x, z).
+      function topNormal(B, x, z) {
+        var e = 0.05, dx = (B.up(x + e, z) - B.up(x - e, z)) / (2 * e), dz = (B.up(x, z + e) - B.up(x, z - e)) / (2 * e);
+        return vnorm([-dx, 1, -dz]);
+      }
+
+      // A wing (and optionally a darker tip) lying on each flank.
+      function wings(B, add, L, hw, withTip, xAt) {
+        [1, -1].forEach(function (sg) {
+          var x = xAt, z = sg * 0.5 * B.zStar(x), y = B.up(x, z), n = topNormal(B, x, z), u0 = [-1, -0.12, 0];
+          var d = vnorm(vsub(u0, vmul(n, vdot(u0, n)))), c = vcross(n, d);
+          var P = [x, y, z], O = vsub(P, vmul(d, L * 0.38));
+          add('wing', leaf(O, d, c, n, 0, L, hw, 4.2, -1.0, wingProf, true));
+          if (withTip) add('wingTip', leaf(vadd(O, vmul(d, L * 0.6)), d, c, n, 0, L * 0.42, hw * 0.62, 4.6, -0.55, wingProf, true));
+        });
+      }
+
+      // A webbed foot: a star-shaped plate around the ankle, built from polar lobes.
+      function footPlate(cx, cz, base, lobes, thick, contacts) {
+        var K = 56, poly = [], j, th, r, q, d, rings = [];
+        for (j = 0; j < K; j++) {
+          th = TAU * j / K; r = base;
+          for (q = 0; q < lobes.length; q++) {
+            d = Math.abs(((th / DEG - lobes[q][0] + 540) % 360) - 180);
+            r += lobes[q][1] * Math.exp(-Math.pow(d / lobes[q][2], 2));
+          }
+          poly.push([r * Math.cos(th), r * Math.sin(th)]);
+        }
+        [[-0.4, 0.9], [0.3, 1], [thick - 0.6, 1], [thick, 0.9]].forEach(function (lv) {
+          rings.push(poly.map(function (q) { return [cx + q[0] * lv[1], lv[0], cz + q[1] * lv[1]]; }));
+        });
+        poly.forEach(function (q) { contacts.push([cx + q[0], cz + q[1]]); });
+        return ringSolid(rings, true, true);
+      }
+
+      // Neck centre line: tangent angle from vertical (forward positive) lean + amp * sin(2 pi t).
+      function neckPath(base, Ln, lean, amp) {
+        var n = 16, pts = [[base[0], base[1], 0]], x = base[0], y = base[1], i, t, phi = lean, ds = Ln / n;
+        for (i = 0; i < n; i++) {
+          t = (i + 0.5) / n; phi = lean + amp * Math.sin(TAU * t);
+          x += Math.sin(phi) * ds; y += Math.cos(phi) * ds; pts.push([x, y, 0]);
+        }
+        return { pts: pts, phi: phi };
+      }
+
+      // ---------------------------------------------------------------------------------------------------------------
+      // Peacock
+      // ---------------------------------------------------------------------------------------------------------------
+      function peacock(p, add, contacts) {
+        var hipY = 19, hx = 1.5, hips = [[hx, -4.4], [hx, 4.4]], i, sg;
+        var B = domeBody({ xc: 0, rr: 19, rf: 22, rz: 12.5, H: 21, pw: 0.55, pitch: 3.5, hipY: hipY, hips: hips, k: 0.95, soft: 1.5 });
+        add('body', B.shell);
+        wings(B, add, 19, 6.4, false, -1.5);
+
+        // legs and feet
+        [-4.4, 4.4].forEach(function (z) {
+          var zf = z * 1.25;
+          add('legs', tube([[hx, hipY + 5, z], [hx, hipY - 3, z], [hx - 0.3, hipY * 0.5, z * 1.1], [hx - 0.8, 1.2, zf]], [3.4, 3.0, 2.2, 1.9], { K: 14 }));
+          add('feet', footPlate(hx - 0.8, zf, 3, [[0, 9, 13], [36, 8, 13], [-36, 8, 13], [180, 5, 14]], 1.8, contacts));
+        });
+
+        // neck and head
+        var xn = B.xmax - 7, base = [xn, B.up(xn, 0) - 2.5], Ln = 30 * p.neck / 100, lean = 8 * DEG;
+        var amp = p.curve / 100 * (42 * DEG - lean);
+        var np = neckPath(base, Ln, lean, amp);
+        add('neck', tube(np.pts, function (t) { return lerp(4.8, 2.9, smooth(t)); }, { K: 16, roundEnd: false }));
+        var end = np.pts[np.pts.length - 1], hd = 8 * DEG;
+        var ex = [Math.cos(hd), Math.sin(hd), 0], ey = [-Math.sin(hd), Math.cos(hd), 0];
+        var Hc = vadd(end, vmul([Math.sin(np.phi), Math.cos(np.phi), 0], 1.5));
+        add('head', ellipsoid(Hc, ex, ey, 5.6, 4.0, 3.7, 10, 18));
+        var bd = -50 * DEG, bdir = [Math.cos(bd), Math.sin(bd), 0], b0 = vadd(Hc, vmul(ex, 4.4));
+        add('beak', tube([b0, vadd(b0, vmul(bdir, 2.8)), vadd(b0, vmul(bdir, 5.5))], [2.1, 1.4, 0.55], { K: 12, roundEnd: true }));
+        [1, -1].forEach(function (s2) {
+          add('eye', ellipsoid(vadd(Hc, vadd(vmul(ex, 2.4), vadd(vmul(ey, 1.0), [0, 0, s2 * 3.3]))), [1, 0, 0], [0, 1, 0], 1.0, 1.0, 1.0, 6, 10));
+        });
+        // crest plumes: stalks with a bead, fanned out
+        var nc = Math.round(p.crest), f, dir, h, cb, pts2;
+        for (i = 0; i < nc; i++) {
+          f = nc === 1 ? 0 : (i - (nc - 1) / 2) / ((nc - 1) / 2);
+          dir = vnorm([-0.3, 1, 0.5 * f]);
+          h = 9.5 - 2.2 * Math.abs(f);
+          cb = vadd(Hc, vadd(vmul(ey, 3.0), [-1.2, 0, 0.5 * f * 2]));
+          pts2 = [0, 1, 2, 3, 4, 5].map(function (k) { return vadd(cb, vmul(dir, h * k / 5)); });
+          add('crest', tube(pts2, function (t) {
+            var y = t * h;
+            if (y < h - 3.2) return 0.8;
+            if (y < h - 2.1) return lerp(0.8, 1.9, (y - (h - 3.2)) / 1.1);
+            return 1.9 * Math.sqrt(Math.max(0.0, 1 - Math.pow((y - (h - 2.1)) / 2.1, 2))) + 0.02;
+          }, { K: 12, roundEnd: false }));
+        }
+
+        // tail stalk, fan base and feathers
+        var hubX = B.xmin - 1.2, hubY = hipY + 12;
+        var stack = [];
+        [[-0.4, 4.4, 6.5], [hubY * 0.5, 4.0, 6.0], [hubY - 6, 4.2, 7.2], [hubY + 3, 4.6, 10]].forEach(function (lv) {
+          var ring = [], j, a;
+          for (j = 0; j < 28; j++) { a = TAU * j / 28; ring.push([hubX + lv[1] * Math.cos(a), lv[0], lv[2] * Math.sin(a)]); }
+          stack.push(ring);
+        });
+        add('stalk', ringSolid(stack, true, true));
+        contacts.push([hubX - 4.4, -6.5], [hubX - 4.4, 6.5], [hubX + 4.4, -6.5], [hubX + 4.4, 6.5]);
+        fan(p, [hubX, hubY, 0], add);
+      }
+
+      function fan(p, hub, add) {
+        var N = Math.round(p.feathers), spread = p.spread * DEG, L = p.featherLen, r0 = 9, T = 3.0, i, sg;
+        var half = spread / 2 - 4 * DEG, step = 2 * half / (N - 1), spacing = step * (r0 + L);
+        var hwMax = clamp(0.5 * spacing * 1.12 * p.featherW / 100, 2.4, 6.4);
+        var kind = Math.round(p.eye), E = Math.max(2.2, Math.min(0.8 * hwMax, 0.1 * L)) * p.eyeSize / 100;
+        var n = [1, 0, 0], th, d, c, off, Pe, nn, face, dims;
+        // sector base so the feather roots merge into one solid
+        var poly = [[hub[1], 0]], R0 = r0 + 7, j, a;
+        for (j = 0; j <= 14; j++) { a = -half + 2 * half * j / 14; poly.push([hub[1] + R0 * Math.cos(a), R0 * Math.sin(a)]); }
+        add('fanbase', plateX(poly, hub[0], [[-2.7, 0.9], [-1.9, 1], [1.9, 1], [2.7, 0.9]]));
+        for (i = 0; i < N; i++) {
+          th = -half + step * i;
+          d = [0, Math.cos(th), Math.sin(th)]; c = vcross(n, d); off = (i % 2) * 0.45;
+          add('feathers', leaf(hub, d, c, n, r0, L, hwMax, T, off, featherProf, false));
+          if (kind > 0) {
+            Pe = vadd(hub, vmul(d, r0 + L * 0.76));
+            dims = kind === 1 ? [1.45 * E, 0.95 * E] : kind === 2 ? [1.5 * E, 1.0 * E] : [1.1 * E, 1.1 * E];
+            [1, -1].forEach(function (s2) {
+              nn = vmul(n, s2); face = vadd(Pe, vmul(n, off + s2 * T / 2));
+              add('eyeRim', dome(face, d, c, nn, dims[0], dims[1], 0.55, 0.8, SHAPES[kind]));
+              add('eyeIris', dome(face, d, c, nn, dims[0] * 0.66, dims[1] * 0.66, 0.95, 0.8, SHAPES[kind]));
+              add('eyePupil', dome(face, d, c, nn, dims[0] * 0.38, dims[1] * 0.38, 1.35, 0.8, SHAPES[kind]));
+            });
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------------------------------------
+      // Flamingo
+      // ---------------------------------------------------------------------------------------------------------------
+      function flamingo(p, add, contacts) {
+        var two = Math.round(p.stance) === 1, legL = p.legLen, hipY = legL + 2.2, hx = 1.0, sw = p.stanceW / 2, i;
+        var hips = two ? [[hx, -sw], [hx, sw]] : [[hx, 0]];
+        var B = domeBody({ xc: 0, rr: 20, rf: 22, rz: Math.max(11, two ? sw + 4.5 : 0), H: 21, pw: 0.55, pitch: 3, hipY: hipY, hips: hips, k: 0.95, soft: 1.2 });
+        add('body', B.shell);
+        if (Math.round(p.wings) === 1) wings(B, add, 19, 6.4, true, -0.5);
+
+        // standing leg(s): a long thin leg with a knee bulge and a webbed foot
+        hips.forEach(function (h) {
+          var z = h[1], pts = [], k, t, m = 8;
+          for (k = 0; k <= m; k++) {
+            t = k / m;
+            pts.push([hx + 1.6 * Math.sin(Math.PI * t) - 0.4 * t, lerp(hipY + 4, 1.2, t), z]);
+          }
+          add('legs', tube(pts, function (t) { return t < 0.12 ? lerp(3.4, 2.4, t / 0.12) : lerp(2.4, 1.6, (t - 0.12) / 0.88); }, { K: 12 }));
+          add('legs', ellipsoid([pts[4][0], pts[4][1], z], [0, 1, 0], [1, 0, 0], 3.4, 2.7, 2.7, 8, 12));
+          add('feet', footPlate(pts[m][0], z, 3.4, [[0, 11, 19], [40, 10, 19], [-40, 10, 19], [180, 4, 16]], 1.5, contacts));
+        });
+        // the lifted leg, folded up along the belly
+        if (!two) {
+          var zt = 3.0, xs = [0.5, -2, -5, -8, -11.5, -15];
+          add('legs', tube(xs.map(function (x) { return [hx + x, B.dn(hx + x, zt) + 1.0, zt]; }), [2.0, 1.9, 1.8, 1.8, 1.7, 1.6], { K: 12, roundEnd: true }));
+        }
+
+        // neck, head, beak
+        var xn = B.xmax - 6, base = [xn, B.up(xn, 0) - 2.5], Ln = 50 * p.neck / 100, lean = 12 * DEG;
+        var amp = p.curve / 100 * (42 * DEG - lean);
+        var np = neckPath(base, Ln, lean, amp);
+        add('neck', tube(np.pts, function (t) { return lerp(3.7, 2.4, smooth(t)); }, { K: 14 }));
+        var end = np.pts[np.pts.length - 1], hd = -8 * DEG;
+        var ex = [Math.cos(hd), Math.sin(hd), 0], ey = [-Math.sin(hd), Math.cos(hd), 0];
+        var Hc = vadd(end, vmul([Math.sin(np.phi), Math.cos(np.phi), 0], 1.4));
+        add('head', ellipsoid(Hc, ex, ey, 5.0, 3.4, 3.1, 10, 18));
+        // beak: bends down along a smooth arc
+        var bend = p.beakBend * DEG, b0 = vadd(Hc, vmul(ex, 3.2)), bp = [b0], ang = -40 * DEG, ds = 11 / 14, bx = b0[0], by = b0[1];
+        for (i = 0; i < 14; i++) {
+          ang = -40 * DEG - bend * smooth((i + 0.5) / 14);
+          bx += Math.cos(ang) * ds; by += Math.sin(ang) * ds; bp.push([bx, by, 0]);
+        }
+        var br = function (t) { return lerp(2.6, 1.0, t); };
+        add('beak', tube(bp.slice(0, 9), function (t) { return br(t * 8 / 14); }, { K: 12 }));
+        add('beakTip', tube(bp.slice(8), function (t) { return br(8 / 14 + t * 6 / 14) + 0.04; }, { K: 12, roundEnd: true }));
+        [1, -1].forEach(function (s2) {
+          add('eye', ellipsoid(vadd(Hc, vadd(vmul(ex, 1.7), vadd(vmul(ey, 0.9), [0, 0, s2 * 2.9]))), [1, 0, 0], [0, 1, 0], 0.85, 0.85, 0.85, 6, 10));
+        });
+      }
+
+      // ---------------------------------------------------------------------------------------------------------------
+      // Pedestal
+      // ---------------------------------------------------------------------------------------------------------------
+      function pedestal(kind, cx, cz, A, B, H) {
+        var K = kind === 1 ? 6 : 72, poly = [], j, a, ca, sa, ch = Math.min(1.6, H / 3), rings = [];
+        for (j = 0; j < K; j++) {
+          a = TAU * j / K; ca = Math.cos(a); sa = Math.sin(a);
+          if (kind === 0) poly.push([ca, sa]);
+          else if (kind === 1) poly.push([ca, sa]);
+          else poly.push([(ca < 0 ? -1 : 1) * Math.pow(Math.abs(ca), 0.4), (sa < 0 ? -1 : 1) * Math.pow(Math.abs(sa), 0.4)]);
+        }
+        [[0, -ch], [ch, 0], [H - ch, 0], [H, -ch]].forEach(function (lv) {
+          rings.push(poly.map(function (q) {
+            var m = kind === 1 ? 1 : 1;
+            return [cx + q[0] * (A + lv[1]), lv[0], cz + q[1] * (B + lv[1])];
+          }));
+        });
+        return ringSolid(rings, true, true);
+      }
+
+      var ORDER = ['base', 'body', 'wing', 'wingTip', 'neck', 'head', 'beak', 'beakTip', 'eye', 'crest', 'legs', 'feet', 'stalk', 'fanbase', 'feathers', 'eyeRim', 'eyeIris', 'eyePupil'];
+
+      function build(p) {
+        var parts = {}, contacts = [], s = p.size / 100, i, k;
+        function add(name, shell) { (parts[name] = parts[name] || []).push(shell); }
+        if (p.bird < 0.5) peacock(p, add, contacts); else flamingo(p, add, contacts);
+        var baseKind = Math.round(p.base), hasBase = baseKind !== 3, yP = hasBase ? p.baseH : 0, shift = hasBase ? yP : 0.4 * s;
+        var minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+        contacts.forEach(function (q) {
+          minX = Math.min(minX, q[0] * s); maxX = Math.max(maxX, q[0] * s); minZ = Math.min(minZ, q[1] * s); maxZ = Math.max(maxZ, q[1] * s);
+        });
+        var out = [];
+        if (hasBase) {
+          var f = baseKind === 0 ? 1.41 : baseKind === 1 ? 1.2 : 1.0;
+          var A = Math.max(20, (maxX - minX) / 2 * f + p.margin), Bz = Math.max(20, (maxZ - minZ) / 2 * f + p.margin);
+          out.push({ name: 'base', positions: pedestal(baseKind, (minX + maxX) / 2, (minZ + maxZ) / 2, A, Bz, yP), smoothGroup: 'base' });
+        }
+        ORDER.forEach(function (name) {
+          if (!parts[name]) return;
+          var pos = concat(parts[name]);
+          for (i = 0; i < pos.length; i += 3) { pos[i] *= s; pos[i + 1] = pos[i + 1] * s + shift; pos[i + 2] *= s; }
+          out.push({ name: name, positions: pos });
+        });
+        return out;
+      }
+
+      // ---------------------------------------------------------------------------------------------------------------
+      function choice(group, key, label, names, value, showIf) {
+        var c = { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+        if (showIf) c.showIf = showIf;
+        return c;
+      }
+      function isPeacock(p) { return p.bird < 0.5; }
+      function isFlamingo(p) { return p.bird >= 0.5; }
+      function twoLegs(p) { return p.bird >= 0.5 && Math.round(p.stance) === 1; }
+      var PARAMS = [
+        choice('Bird', 'bird', 'Bird', ['Peacock', 'Flamingo'], 0),
+        { group: 'Bird', key: 'size', label: 'Overall size', unit: '%', min: 60, max: 110, step: 1, value: 100 },
+        { group: 'Bird', key: 'neck', label: 'Neck length', unit: '%', min: 60, max: 150, step: 1, value: 100 },
+        { group: 'Bird', key: 'curve', label: 'Neck curve (S bend, 100% still prints clean)', unit: '%', min: 0, max: 100, step: 1, value: 70 },
+
+        { group: 'Peacock tail', key: 'feathers', label: 'Feathers', unit: '', min: 5, max: 25, step: 1, value: 15, showIf: isPeacock },
+        { group: 'Peacock tail', key: 'spread', label: 'Fan spread (over 100° needs supports)', unit: '°', min: 50, max: 150, step: 1, value: 90, showIf: isPeacock },
+        { group: 'Peacock tail', key: 'featherLen', label: 'Feather length', unit: ' mm', min: 40, max: 90, step: 1, value: 64, showIf: isPeacock },
+        { group: 'Peacock tail', key: 'featherW', label: 'Feather width (under 100% leaves gaps)', unit: '%', min: 80, max: 140, step: 1, value: 105, showIf: isPeacock },
+        choice('Peacock tail', 'eye', 'Eye pattern', ['None', 'Oval', 'Teardrop', 'Round'], 1, isPeacock),
+        { group: 'Peacock tail', key: 'eyeSize', label: 'Eye size', unit: '%', min: 60, max: 140, step: 1, value: 100, showIf: function (p) { return isPeacock(p) && Math.round(p.eye) > 0; } },
+        { group: 'Peacock tail', key: 'crest', label: 'Crest plumes (0 = none)', unit: '', min: 0, max: 7, step: 1, value: 5, showIf: isPeacock },
+
+        choice('Flamingo', 'stance', 'Stance', ['One leg', 'Two legs'], 0, isFlamingo),
+        { group: 'Flamingo', key: 'legLen', label: 'Leg length', unit: ' mm', min: 22, max: 60, step: 1, value: 40, showIf: isFlamingo },
+        { group: 'Flamingo', key: 'stanceW', label: 'Leg spacing', unit: ' mm', min: 8, max: 24, step: 1, value: 14, showIf: twoLegs },
+        { group: 'Flamingo', key: 'beakBend', label: 'Beak bend', unit: '°', min: 20, max: 80, step: 1, value: 60, showIf: isFlamingo },
+        choice('Flamingo', 'wings', 'Wing detail', ['Off', 'On'], 1, isFlamingo),
+
+        choice('Pedestal', 'base', 'Pedestal', ['Round', 'Hexagon', 'Rounded square', 'None'], 0),
+        { group: 'Pedestal', key: 'baseH', label: 'Pedestal height', unit: ' mm', min: 3, max: 14, step: 1, value: 7, showIf: function (p) { return Math.round(p.base) !== 3; } },
+        { group: 'Pedestal', key: 'margin', label: 'Pedestal margin around the feet', unit: ' mm', min: 6, max: 26, step: 1, value: 14, showIf: function (p) { return Math.round(p.base) !== 3; } }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (q) { DEFAULTS[q.key] = q.value; });
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over || {}).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-133',
+        category: 'ANIMALS // DISPLAY BIRDS',
+        title: 'Peacock & Flamingo',
+        fileName: 'Peacock_Flamingo',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Flamingo Pink', color: '#f9a8c4' },
+          { name: 'Peacock Teal', color: '#5eead4' }, { name: 'Sapphire Blue', color: '#7aa7f7' },
+          { name: 'Gold Leaf', color: '#fcd34d' }, { name: 'Leaf Green', color: '#9bd77e' },
+          { name: 'Coral Red', color: '#fb8a7a' }, { name: 'Ink Black', color: '#334155' }
+        ],
+        partNames: {
+          base: 'Pedestal', body: 'Body', wing: 'Wings', wingTip: 'Wing tips', neck: 'Neck', head: 'Head', beak: 'Beak',
+          beakTip: 'Beak tip', eye: 'Eyes', crest: 'Crest', legs: 'Legs', feet: 'Feet', stalk: 'Tail stalk',
+          fanbase: 'Fan base', feathers: 'Tail feathers', eyeRim: 'Feather eye ring', eyeIris: 'Feather eye middle', eyePupil: 'Feather eye centre'
+        },
+        parameters: PARAMS,
+        presets: [
+          presetOf('Default peacock'),
+          presetOf('Grand fan', { feathers: 21, spread: 94, featherLen: 74, featherW: 110, eyeSize: 110 }),
+          presetOf('Slim fan, teardrop eyes', { feathers: 11, spread: 80, featherLen: 60, featherW: 100, eye: 2 }),
+          presetOf('Round-eyed peacock', { feathers: 17, eye: 3, eyeSize: 115, crest: 7 }),
+          presetOf('Plain feathers', { eye: 0, crest: 3, curve: 55 }),
+          presetOf('Flamingo on one leg', { bird: 1 }),
+          presetOf('Flamingo wading', { bird: 1, stance: 1, legLen: 36, stanceW: 16, beakBend: 55 }),
+          presetOf('Tall elegant flamingo', { bird: 1, legLen: 52, neck: 125, curve: 85, base: 1 })
+        ],
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
