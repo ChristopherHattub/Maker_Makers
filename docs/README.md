@@ -20,6 +20,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [slot-registry.md](slot-registry.md) | Every built slot, reserved ranges and groups |
 | [generator-styling.md](generator-styling.md) | The shared generator engine: layout, config fields, build() output, Parametric / Sculpt / Color / Print tabs, print check, exports, and the visual rules |
 | [animals.md](animals.md) | The fifteen animal generators (slots 76-90): sculpted kit, build script, support-free rules and print-check notes |
+| [fox-wolf.md](fox-wolf.md) | Fox & Wolf (slot 127): bust or full body, sitting or howling, ear shapes, tail curl, smooth to low-poly style |
 | [flexi-creatures.md](flexi-creatures.md) | The ten print-in-place flexi animals (slots 91-100): ball-joint kit, clearance rules and the check script |
 | [workshop.md](workshop.md) | The Workshop 3D editor and the `?embed=workshop` generator hook |
 | [spinner-ring.md](spinner-ring.md) | The Spinner Ring (slot 46): two-piece snap-fit band, 11 fonts, five relief patterns, the Print tab demo animation |

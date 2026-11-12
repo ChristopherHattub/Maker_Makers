@@ -128,6 +128,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 88 | Elephant Builder | animals | `elephant-builder.html` |
 | 89 | Alien & Monster Maker | animals | `monster-maker.html` |
 | 90 | Horse Builder | animals | `horse-builder.html` |
+| 127 | Fox & Wolf | animals | `fox-wolf.html` |
 | 91 | Flexi Dragon | flexi | `flexi-dragon.html` |
 | 92 | Flexi Gecko | flexi | `flexi-gecko.html` |
 | 93 | Flexi Crocodile | flexi | `flexi-crocodile.html` |

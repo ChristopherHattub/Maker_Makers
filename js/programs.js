@@ -1052,6 +1052,15 @@ const GENERATORS = [
     description: 'A horse, pony or unicorn, standing, kneeling or rearing: tune neck, head, legs, mane, tail and face markings. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 127,
+    title: 'Fox & Wolf',
+    bundle: 'animals',
+    category: 'ANIMALS // WILDLIFE',
+    thumbnailUrl: 'assets/thumbnails/fox-wolf.svg',
+    programUrl: 'programs/fox-wolf.html',
+    description: 'A sitting or howling fox, wolf, fennec or arctic fox as a bust or a full body: pick fox, wolf or fennec ears, tail curl and size, and a smooth, soft or low-poly style. Prints with no supports. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 108,
     title: 'Nutcracker',
     bundle: 'christmas',
