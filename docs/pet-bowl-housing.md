@@ -27,7 +27,7 @@ The pet's name is the main feature. The **Name** tab holds the text box (two lin
 
 - The plate is a solid wedge (vertical walls down to the bed) whose top leans back at most 45 degrees from flat, and the letters and border stand along the plate normal, so their walls lean at most 45 degrees from vertical and nothing needs supports.
 - The plate is placed as close to the housing as it can be without entering any bowl pocket (`plateClear` checks outline points against the pocket radius at the plate height). A 3 mm thick tongue per housing, kept below the pocket floor, ties the plate to the housing base.
-- Lettering, triangulation and the extruder are copied from the Text Generator (`programs/text-generator.html`); only a subset of five fonts and the characters a pet name needs is embedded (`FONTDATA`, SIL OFL 1.1, see [text-generator.md](text-generator.md)). To change the fonts, regenerate the subset from the Text Generator's data.
+- Lettering, triangulation and the extruder are copied from the Text Generator (`programs/text-generator.html`); only a subset of five fonts and the characters a pet name needs is loaded from `programs/shared/fonts-pet.js` (`FONTDATA`, SIL OFL 1.1, see [text-generator.md](text-generator.md)). To change the fonts, regenerate the subset from the Text Generator's data.
 - Color tool parts: Name ramp, Ramp border, Pet name (ramp), Ramp link, and the same four for the board. The name is not a slider, so presets keep whatever name is typed.
 
 ## Double sets

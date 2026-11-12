@@ -22,7 +22,7 @@ python3 scripts/build-holo.py /tmp/holo
 
 `build-holo.py` writes `assets/thumbnails/sprites/holo-<id>.webp` plus a 192 px still of frame 0, `poster-<id>.webp`
 (~10 KB), and updates `manifest-v2.json`. Commit all three. `python3 scripts/build-holo.py --posters` backfills posters
-for atlases already in the manifest.
+for atlases already in the manifest. Atlases and posters are saved at WebP quality 70 / alpha 60 (about half the bytes of the old 80 / 80, no visible change at tile size); keep those settings for new renders. The Workshop's Generators cards use the poster only and never fetch an atlas.
 
 ## Loading
 

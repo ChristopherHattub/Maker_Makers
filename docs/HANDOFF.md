@@ -37,9 +37,10 @@ Status as of 2026-11-02 (after Chris approved shipping everything to `main`: all
 
 ## Recommendations backlog
 
+Done 2026-11-12: page weight. Atlases recompressed (35 MB to 18 MB, build-holo.py now writes q70), Workshop cards use posters instead of atlases (was every atlas, now ~0.2 MB), and the font outlines moved out of five generator pages into `programs/shared/fonts-*.js` (text-generator 510 KB to 50 KB, spinner-ring 320 KB to 55 KB). Homepage first load fetches about 0.8 MB of sprites.
+
 Done 2026-11-02: self-hosting (privacy), accessibility pass (skip link, keyboard brand button, dialog focus and Escape, focus rings, meta description and share tags), and a small engine split (`export-utils.js`, `mesh-utils.js`). Still open:
 
-- Lazy-load or downsize the 38 MB of tile sprites in `assets/thumbnails/sprites/`; `text-generator.html` (510 KB) and `spinner-ring.html` (320 KB) inline large data.
 - The rest of `generator-core.js` (about 2,500 lines) is one closure; the Sculpt tab (about 750 lines) is the best next split but shares much state, so it needs a context object rather than a cut-and-paste.
 - Fix the animal printability gaps (Snake, Cat loaf), and consider a "tested prints" marker for generators Chris has actually printed.
 - Screen-reader and keyboard review of the generator pages' tabs and sliders; phone check of Sculpt and Stamps tabs.

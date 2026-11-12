@@ -32,7 +32,7 @@ The print check needs `printCheckOptions: { bridgeGap: 0.8 }` (an option added t
 
 ## Text
 
-Text uses a subset of the Text Generator fonts (`block`, `tall`, `slab`, `bubble`, `arcade`, `comic`, `swash`; SIL OFL 1.1, see [text-generator.md](text-generator.md)), copied between `FONTDATA-BEGIN` and `FONTDATA-END` and shown by the same glyph and triangulation code. Each Label element has its own text (up to 40 characters, one line), font and letter height; **Boldness** and **Letter spacing** are global. Add a font by copying its entry from the Text Generator page.
+Text uses a subset of the Text Generator fonts (`block`, `tall`, `slab`, `bubble`, `arcade`, `comic`, `swash`; SIL OFL 1.1, see [text-generator.md](text-generator.md)), copied into `programs/shared/fonts-wall.js` (a `var FONTDATA` script the page loads) and shown by the same glyph and triangulation code. Each Label element has its own text (up to 40 characters, one line), font and letter height; **Boldness** and **Letter spacing** are global. Add a font by copying its entry from the Text Generator page.
 
 ## Meshes and colours
 
