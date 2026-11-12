@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paw Print Models</title>
+<link rel="stylesheet" href="../../vendor/fonts/fonts.css">
+<style>
+  :root {
+    --bg: #1b1d22;
+    --panel: rgba(30, 33, 40, 0.92);
+    --line: #3a3f4b;
+    --text: #eceae4;
+    --muted: #a3a7b0;
+    --accent: #f2a65a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Nunito', system-ui, sans-serif; overflow: hidden; }
+  #view { position: fixed; inset: 0; }
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 2;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  h1 { font-family: 'Fredoka', 'Nunito', sans-serif; font-weight: 400; font-size: 20px; margin: 0 8px 0 0; }
+  .group { display: flex; flex-wrap: wrap; gap: 6px; }
+  button, a.btn {
+    font: inherit; font-size: 14px; color: var(--text); background: transparent; text-decoration: none;
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer;
+  }
+  button:hover, a.btn:hover { border-color: var(--muted); }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #1b1d22; }
+  .spacer { flex: 1; }
+  #info {
+    position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 2; pointer-events: none;
+    font-size: 13px; color: var(--muted); text-shadow: 0 1px 2px #000;
+  }
+  #info b { color: var(--text); font-weight: 400; }
+  #photo {
+    position: fixed; right: 16px; bottom: 56px; z-index: 2; width: 180px; max-width: 38vw;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px; display: none;
+  }
+  #photo img { display: block; width: 100%; border-radius: 4px; }
+  #photo span { display: block; font-size: 12px; color: var(--muted); padding-top: 4px; text-align: center; }
+  body.show-photo #photo { display: block; }
+  #busy { position: fixed; inset: 0; display: grid; place-items: center; z-index: 3; color: var(--muted); pointer-events: none; }
+  @media (max-width: 560px) {
+    header { padding: 10px 12px; }
+    h1 { font-size: 17px; width: 100%; }
+    button, a.btn { padding: 6px 10px; font-size: 13px; }
+    .spacer { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Paw print</h1>
+  <div class="group" id="models" role="group" aria-label="Model"></div>
+  <span class="spacer"></span>
+  <div class="group">
+    <button type="button" id="photoBtn" aria-pressed="false">Photo</button>
+    <button type="button" id="lightBtn">Light</button>
+    <button type="button" id="dlBtn">Download STL</button>
+  </div>
+</header>
+<div id="view"></div>
+<div id="busy">Building…</div>
+<div id="photo"><img src="source.png" alt="The original inked paw print"><span>Original print</span></div>
+<div id="info"></div>
+
+<script src="../../vendor/three/three.min.js"></script>
+<script src="../../vendor/three/OrbitControls.js"></script>
+<script src="mesher.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = window.PawMesher;
+  var view = document.getElementById('view'), info = document.getElementById('info'), busy = document.getElementById('busy');
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  view.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1b1d22);
+  var camera = new THREE.PerspectiveCamera(35, 1, 1, 2000);
+  camera.up.set(0, 0, 1);
+  camera.position.set(0, -150, 150);
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.target.set(0, 0, 2);
+
+  scene.add(new THREE.HemisphereLight(0xfff4e8, 0x30343c, 0.45));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.95);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -70; sun.shadow.camera.right = 70; sun.shadow.camera.top = 70; sun.shadow.camera.bottom = -70;
+  sun.shadow.bias = -0.0005;
+  scene.add(sun);
+  // Raking light angles (azimuth, elevation in degrees): low light shows the ink texture.
+  var lights = [[-40, 28], [140, 22], [60, 55], [-120, 70]], lightIx = 0;
+  function placeSun() {
+    var a = lights[lightIx][0] * Math.PI / 180, e = lights[lightIx][1] * Math.PI / 180;
+    sun.position.set(Math.cos(a) * Math.cos(e) * 150, Math.sin(a) * Math.cos(e) * 150, Math.sin(e) * 150);
+  }
+  placeSun();
+
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: 0.35 }));
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  var material = new THREE.MeshStandardMaterial({ color: 0xe9e2d4, roughness: 0.78, metalness: 0 });
+
+  // Heightmap: red = relief, green = outline mask.
+  var hm = null, cache = {}, current = null, group = null, kind = 'plaque';
+
+  function loadHeightmap(cb) {
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      var d = ctx.getImageData(0, 0, c.width, c.height).data, n = c.width * c.height;
+      hm = { w: c.width, h: c.height, relief: new Float32Array(n), mask: new Uint8Array(n) };
+      for (var k = 0; k < n; k++) { hm.relief[k] = d[k * 4] / 255; hm.mask[k] = d[k * 4 + 1] > 127 ? 1 : 0; }
+      cb();
+    };
+    img.onerror = function () { busy.textContent = 'Could not load models/heightmap.png. Run build.py.'; };
+    img.src = 'models/heightmap.png';
+  }
+
+  // Top surface smooth-shaded (shared normals); walls and bottom flat so the edges stay crisp.
+  function toObject(m) {
+    var g = new THREE.Group();
+    var topG = new THREE.BufferGeometry();
+    topG.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
+    topG.setIndex(new THREE.BufferAttribute(m.idx.subarray(0, m.topTris * 3), 1));
+    topG.computeVertexNormals();
+    var restIdx = m.idx.subarray(m.topTris * 3), flat = new Float32Array(restIdx.length * 3);
+    for (var i = 0; i < restIdx.length; i++) {
+      flat[i * 3] = m.pos[restIdx[i] * 3]; flat[i * 3 + 1] = m.pos[restIdx[i] * 3 + 1]; flat[i * 3 + 2] = m.pos[restIdx[i] * 3 + 2];
+    }
+    var restG = new THREE.BufferGeometry();
+    restG.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+    restG.computeVertexNormals();
+    [topG, restG].forEach(function (geo) {
+      var mesh = new THREE.Mesh(geo, material);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      g.add(mesh);
+    });
+    return g;
+  }
+
+  function show(k) {
+    kind = k;
+    Array.prototype.forEach.call(document.querySelectorAll('#models button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.kind === k));
+    });
+    busy.style.display = '';
+    setTimeout(function () {
+      if (!cache[k]) cache[k] = M.build(k, hm);
+      current = cache[k];
+      if (group) { scene.remove(group); group.children.forEach(function (c) { c.geometry.dispose(); }); }
+      group = toObject(current);
+      scene.add(group);
+      controls.target.set(0, 0, current.size[2] / 2);
+      var s = current.size;
+      info.innerHTML = '<b>' + M.MODELS[k].label + '</b> · ' + s[0].toFixed(1) + ' × ' + s[1].toFixed(1) + ' × ' + s[2].toFixed(1) +
+        ' mm · ' + current.tris.toLocaleString() + ' triangles<br>' + M.MODELS[k].note;
+      busy.style.display = 'none';
+    }, 20);
+  }
+
+  var bar = document.getElementById('models');
+  Object.keys(M.MODELS).forEach(function (k) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.dataset.kind = k; b.textContent = M.MODELS[k].label;
+    b.addEventListener('click', function () { show(k); });
+    bar.appendChild(b);
+  });
+
+  document.getElementById('photoBtn').addEventListener('click', function () {
+    var on = document.body.classList.toggle('show-photo');
+    this.setAttribute('aria-pressed', String(on));
+  });
+  document.getElementById('lightBtn').addEventListener('click', function () {
+    lightIx = (lightIx + 1) % lights.length; placeSun();
+  });
+  document.getElementById('dlBtn').addEventListener('click', function () {
+    if (!current) return;
+    var url = URL.createObjectURL(new Blob([M.toSTL(current)], { type: 'model/stl' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = M.MODELS[kind].file + '.stl';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+  });
+
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    // Fit a 100 mm disc on narrow screens.
+    var dist = w < h ? 212 * Math.min(1.9, h / w) : 212;
+    camera.position.sub(controls.target).setLength(dist).add(controls.target);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  (function loop() {
+    requestAnimationFrame(loop);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+
+  loadHeightmap(function () { show('plaque'); });
+})();
+</script>
+</body>
+</html>
