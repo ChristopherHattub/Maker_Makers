@@ -1095,6 +1095,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bee-beetle-bugs.svg',
     programUrl: 'programs/bee-beetle-bugs.html',
     description: 'A bug picker: a honey bee, a ladybug, a stag beetle or a dragonfly, each lying on its belly so it prints with no supports. Choose the wing style (flat on the bed, raised in a V, or folded on the back as wing covers), wing size, shape and veins, the antenna length, thickness and spread, the number of body segments with their grooves, and a plain, striped or spotted pattern with the spot count and size. Stag beetles get adjustable mandibles; legs lie flat and can be switched off. Unprinted. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 132,
+    title: 'Crab & Lobster',
+    bundle: 'animals',
+    category: 'ANIMALS // SEA LIFE',
+    thumbnailUrl: 'assets/thumbnails/crab-lobster.svg',
+    programUrl: 'programs/crab-lobster.html',
+    description: 'A claw-forward crab or lobster that prints with no supports and a pincer that really moves: each claw rests on the bed and its pincer swings on a print-in-place hinge with a clearance you set. Pick crab or lobster, claw size and pose (guarding, spread, pinching together, arms wide), a matching pair or a big-claw fiddler, 2 to 5 legs per side, eye stalk length, and a smooth, ribbed, bumpy, plated or spiky shell. Unprinted: the hinge clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
   }
 ];
 
