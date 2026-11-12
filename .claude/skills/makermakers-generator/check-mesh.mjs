@@ -37,7 +37,9 @@ const seededMath = Object.assign(Object.create(Math), {
   random() { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
 });
 const win = {};
-vm.runInNewContext(m[1], { window: win, document: {}, console, Math: seededMath, THREE });
+// Pages may load shared font outlines (shared/fonts-*.js) in a plain <script src> before the config script.
+const pre = [...html.matchAll(/<script src="(shared\/fonts-[\w-]+\.js)"><\/script>/g)].map((x) => readFileSync(new URL(x[1], 'file://' + file.replace(/[^/]*$/, '').replace(/^(?!\/)/, process.cwd() + '/')), 'utf8')).join('\n');
+vm.runInNewContext(pre + '\n' + m[1], { window: win, document: {}, console, Math: seededMath, THREE });
 const cfg = win.MM_GENERATOR;
 if (!cfg) { console.error('window.MM_GENERATOR not set'); process.exit(2); }
 

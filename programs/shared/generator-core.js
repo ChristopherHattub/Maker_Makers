@@ -25,6 +25,15 @@
     { id: 'wire', label: 'Wireframe', hint: 'Only the triangle edges the model is built from' },
     { id: 'edges', label: 'Solid + edges', hint: 'Shaded model with the triangle edges drawn on top' }
   ];
+  // Lighting for the 3D preview (viewer only, exports are unchanged): 'soft' = shadowless soft light (default),
+  // 'flat' = unlit vertex colours with crease outlines. The choice is remembered per browser.
+  var LIGHT_MODES = [
+    { id: 'soft', label: 'Soft light', hint: 'Shadowless, even light. Brightness does not change as you orbit' },
+    { id: 'flat', label: 'Flat + outlines', hint: 'Flat colours with outlines on creases. Best for reading the build and painting parts' }
+  ];
+  var LIGHT_STORE = 'mm-lighting';
+  var EDGE_CREASE_DEG = 30;            // Flat mode: outline edges where faces turn more than this
+  var EDGE_MAX_TRIS = 400000;          // Flat mode: skip outlines on models denser than this (perf)
   var PALETTE = cfg.palette || [{ name: 'Bone White', color: '#f1f5f9' }];
   var DEFAULT_COLOR = cfg.defaultColor || PALETTE[0].color;
 
@@ -374,6 +383,12 @@
     }
     dom.modelBody.appendChild(accordion('View', el('div', {}, [
       el('div', { class: 'mm-slider' }, [
+        el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Lighting' })]),
+        el('select', { id: 'mm-light-modes', 'aria-label': 'Lighting', onchange: function (e) { setLightMode(e.target.value); } }, LIGHT_MODES.map(function (mode) {
+          return el('option', { value: mode.id, text: mode.label, title: mode.hint });
+        }))
+      ]),
+      el('div', { class: 'mm-slider' }, [
         el('div', { class: 'mm-slider-head' }, [el('label', { text: 'Display' })]),
         el('select', { id: 'mm-view-modes', 'aria-label': 'Display', onchange: function (e) { setViewMode(e.target.value); } }, VIEW_MODES.map(function (mode) {
           return el('option', { value: mode.id, text: mode.label, title: mode.hint });
@@ -677,7 +692,7 @@
   var camera = new T.PerspectiveCamera(40, 1, 1, 2000);
   var renderer = new T.WebGLRenderer({ antialias: true, alpha: !!cfg.customStage, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = false;   // shadows only in the Print tab's realistic render (see applyLighting)
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
@@ -706,6 +721,37 @@
   var rim = new T.DirectionalLight(0xa78bfa, 0.42);
   rim.position.set(-110, 90, -95);
   scene.add(rim);
+  var ambient = new T.AmbientLight(0xffffff, 0);
+  scene.add(ambient);
+  var fill = new T.DirectionalLight(0xffffff, 0);   // rides on the camera, so it lights what you look at from any angle
+  fill.position.set(0, 0, 1);
+  camera.add(fill);
+  scene.add(camera);
+
+  var lightMode = 'soft';
+  try { var savedLight = localStorage.getItem(LIGHT_STORE); if (savedLight === 'soft' || savedLight === 'flat') lightMode = savedLight; } catch (e) { /* storage blocked */ }
+  var flatMaterial = new T.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  var edgeMaterial = new T.LineBasicMaterial({ color: 0x0b1120, transparent: true, opacity: 0.6 });
+
+  // Set every light for the current lighting mode and tab. The Print tab keeps its realistic studio look.
+  function applyLighting() {
+    var print = activeTab === 'print';
+    var shadows = print;
+    if (renderer.shadowMap.enabled !== shadows) {
+      renderer.shadowMap.enabled = shadows;
+      scene.traverse(function (o) { if (o.material) [].concat(o.material).forEach(function (m) { m.needsUpdate = true; }); });
+    }
+    key.castShadow = shadows;
+    if (print) {
+      hemi.intensity = 0.5; key.intensity = 0.85; rim.intensity = 0.3; ambient.intensity = 0; fill.intensity = 0;
+    } else if (lightMode === 'flat') {
+      hemi.intensity = 0; key.intensity = 0; rim.intensity = 0; ambient.intensity = 0; fill.intensity = 0;   // unlit material
+    } else {
+      hemi.intensity = 0.65; ambient.intensity = 0.25;   // about 0.9 combined, so no side is dark
+      key.intensity = 0; rim.intensity = 0;
+      fill.intensity = 0.3;                              // weak, camera-attached
+    }
+  }
 
   // Build plate: the smallest common bed the model fits on (see PLATE_SIZES), resized after every build.
   // The mesh is a unit box scaled to size, so stages that restyle plateMesh / grid keep working.
@@ -1030,7 +1076,18 @@
 
   function currentModelMaterial(name) {
     if (showcaseOn()) return showcaseMaterial(name);
-    return activeTab === 'print' ? printMaterial : modelMaterial;
+    if (activeTab === 'print') return printMaterial;
+    return lightMode === 'flat' ? flatMaterial : modelMaterial;
+  }
+
+  function setLightMode(mode) {
+    lightMode = mode === 'flat' ? 'flat' : 'soft';
+    try { localStorage.setItem(LIGHT_STORE, lightMode); } catch (e) { /* storage blocked */ }
+    var sel = $('mm-light-modes');
+    if (sel) sel.value = lightMode;
+    applyLighting();
+    applyModelMaterial();
+    rebuildWire();
   }
 
   // cfg.printMeshes(params, api, built) returns the meshes that are really printed when they differ from the display
@@ -1215,9 +1272,7 @@
     }
     printMaterial.envMap = on ? studioEnv : null;
     printMaterial.needsUpdate = true;
-    hemi.intensity = on ? 0.5 : 0.75;
-    key.intensity = on ? 0.85 : 0.85;
-    rim.intensity = on ? 0.3 : 0.42;
+    applyLighting();
     if (!cfg.customStage) {
       scene.background = new T.Color(on ? 0x161d2c : 0x0b1120);
       plateMesh.material.color.set(on ? 0x3a4250 : 0x1e293b);
@@ -1240,7 +1295,17 @@
     modelMaterial.polygonOffset = mode === 'edges';
     modelMaterial.polygonOffsetFactor = 1;
     modelMaterial.polygonOffsetUnits = 1;
-    if (mode === 'solid') return;
+    if (mode === 'solid') {
+      // Flat lighting: outline the creases so the form still reads without shading.
+      if (lightMode === 'flat' && activeTab !== 'print' && !showcaseOn()) {
+        var tris = 0;
+        modelMeshes.forEach(function (mesh) { tris += mesh.geometry.attributes.position.count / 3; });
+        if (tris <= EDGE_MAX_TRIS) modelMeshes.forEach(function (mesh) {
+          wireGroup.add(new T.LineSegments(new T.EdgesGeometry(mesh.geometry, EDGE_CREASE_DEG), edgeMaterial));
+        });
+      }
+      return;
+    }
     modelMeshes.forEach(function (mesh) {
       wireGroup.add(new T.LineSegments(new T.WireframeGeometry(mesh.geometry), wireMaterial));
     });
@@ -1936,6 +2001,11 @@
           parts: modelData.map(function (e) { return { name: e.name || 'body', positions: e.positions.slice() }; }) };
       } };   // read by tools/hologram.html
     if (typeof cfg.onStage === 'function') cfg.onStage({ THREE: T, scene: scene, camera: camera, renderer: renderer, controls: controls, hemi: hemi, key: key, rim: rim, plateMesh: plateMesh, grid: grid, container: container, modelGroup: modelGroup });
+    applyLighting();
+    var lsel = $('mm-light-modes');
+    if (lsel) lsel.value = lightMode;
+    applyModelMaterial();
+    rebuildWire();
     animate();
   }
 

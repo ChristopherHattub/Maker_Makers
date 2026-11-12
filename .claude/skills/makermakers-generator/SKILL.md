@@ -102,6 +102,7 @@ The Color tool paints **parts** the engine detects per mesh: triangles that shar
 So, to make a feature independently paintable:
 - Put it in **its own mesh entry** (own `name`), even if it touches or overlaps another. Ghost Builder: `body`, `face` (eyes/mouth, smooth walls, still split out by triangle membership), `detail` (one entry per stamp).
 - Give split-surface entries the same `smoothGroup` so lighting has no seam.
+- Lighting is engine-owned: a View > Lighting select switches between Soft light (default, shadowless) and Flat + outlines. Never add lights, shadows or your own materials; rely on the palette / vertex colours, and check both modes in the live preview (see docs/generator-styling.md, "Lighting modes").
 - A feature on the same mesh only becomes its own part if there is a sharp (>50°) edge and at least 200 triangles. Use a finer mesh or a separate entry otherwise.
 - Largest part of a mesh takes the `partNames` label, the rest are `Part 2`, `Part 3`... Verify the list in the Color tab reads sensibly and that no tiny parts appear.
 - Paint is stored by part centre and re-matched within 40 mm when sliders change; it resets on reload (by design). The Parametric tab also shows the part colors and Color-tab paint; its **Colors** button (bottom right of the viewport) hides them for a neutral grey view.

@@ -11,7 +11,7 @@ The grip widens along a gentle curve (about 1.2 times 45 degrees at its steepest
 ## Design
 
 - **Layouts:** icon above text, icon beside text, text only, icon only, and a round seal (line 1 of the text runs over the top, line 2 under the icon, auto-sizing the ring to fit the text; the plate is forced round).
-- **Fonts:** the ten fonts of the Text Generator (`FONTDATA` block copied from it; regenerate with `tools/text-fonts/build.mjs`, see [text-generator.md](text-generator.md)).
+- **Fonts:** the ten fonts of the Text Generator (`programs/shared/fonts-text.js`, shared with it; regenerate with `tools/text-fonts/build.mjs`, see [text-generator.md](text-generator.md)).
 - **Icons:** 18 hand-drawn outlines in `ICONS` (heart, star, paw, flower, smiley, moon, sun, house, crown, music note, fish, cat, bolt, key, tree, gear, check mark, butterfly). Each icon is a list of pieces `[outer, holes...]` in a unit box; pieces may overlap (slicers union them). To add one, add an entry to `ICONS`; the picker and chip pictures are built from it.
 - **Mirroring:** on by default, so the imprint reads correctly on paper. "Reads normally" is a preview-only option.
 - **Plate:** rounded rectangle, square, circle, oval, pill, hexagon, scallop badge, heart, with an optional border line. The design sits 1.6 mm proud by default.
