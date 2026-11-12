@@ -23,7 +23,7 @@
 │                            loaded on hover / tap / idle), base-tile.webp, manifest-v2.json
 │                            (obj-*.webp, sheet-*.webp and manifest.json are the older Gemini frames)
 ├── programs/                Generator pages, one per slot (ghost-builder.html, ...)
-│   └── shared/              Shared generator engine and styles (generator-core.js, export-utils.js, mesh-utils.js, print-check.js, generator.css, plus fonts-text/ring/wall/pet.js: the big font outline tables that Text Generator, Stamp Maker, Spinner Ring, Wall Panel and Pet Bowl Housing load as plain scripts)
+│   └── shared/              Shared generator engine and styles (generator-core.js, export-utils.js, mesh-utils.js, sculpt.js, print-check.js, generator.css, plus fonts-text/ring/wall/pet.js: the big font outline tables that Text Generator, Stamp Maker, Spinner Ring, Wall Panel and Pet Bowl Housing load as plain scripts)
 ├── tools/
 │   ├── hologram.html        Renders a generator's real model as a 24-frame hologram atlas
 │   ├── panel-thumbs.html    Renders the full-colour side-panel previews (assets/thumbnails/panel/)
