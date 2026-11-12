@@ -520,5 +520,12 @@
     "sat": 70,
     "light": 78,
     "stand": true
+  },
+  "crab-lobster": {
+    "hue": 8,
+    "sat": 75,
+    "light": 74,
+    "stand": false,
+    "fill": 1.2
   }
 }

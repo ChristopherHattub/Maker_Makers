@@ -924,5 +924,21 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "crab-lobster": {
+  "colors": {
+   "shell": "#e8604f",
+   "tail": "#ef7a68",
+   "legs": "#f09283",
+   "arms": "#f09283",
+   "claws": "#e8604f",
+   "pincers": "#fdba74",
+   "spines": "#fdba74",
+   "eyes": "#f8fafc",
+   "pupils": "#1e293b"
+  },
+  "yaw": 24,
+  "elev": 34,
+  "fill": 0.82
  }
 }
