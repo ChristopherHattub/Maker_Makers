@@ -90,7 +90,7 @@ The bezels are sized from the gems (`bezelExtent`). Raising the core adds a 1.8 
 ### Limits and known issues
 
 - Unprinted. The wearable fit (the cuff clip, the ease, whether the finger plates stay put), the 0.3 mm seat clearance and the thin side walls of the spike fingertips are untested. Print the cuff alone first (set the plate and fingers small) to check the fit.
-- Height. The default wearable is about 200 mm tall (a 50 mm cuff, 90 mm from wrist to knuckles, 62 mm fingers), so it needs a printer with a build height of 220 mm or more. Shorten the cuff, the palm and the fingers for a smaller printer; the Overall size slider only works on the display piece.
+- Height. The default wearable is about 210 mm tall (a 50 mm cuff, 90 mm from wrist to knuckles, 62 mm fingers, and the rounded tips), so it needs a printer with a build height of 230 mm or more. Shorten the cuff, the palm and the fingers for a smaller printer; the Overall size slider only works on the display piece.
 - Measure the hand flat, across the widest part. The default hand is 84 mm wide, 30 mm thick and 62 mm at the wrist. If the clip is too tight, raise the cuff opening or the ease.
 - A few unusual gem shape and setting mixes, a few slider extremes (a very wide hand with a long palm, a very short cuff, a curved finger plate) and the Cross, Row and Crescent layouts at large gem sizes can show a small amber overhang chip (a few mm2, depending on the voxel grid). The Row layout at the largest gems shrinks them a lot to fit.
 - Over 25 degrees of finger lean or curl, over 50 degrees of thumb angle (display piece) and a plate thicker than 6 mm are outside the support-free range; their slider labels say so.
