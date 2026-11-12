@@ -521,6 +521,11 @@
     "light": 78,
     "stand": true
   },
+  "bee-beetle-bugs": {
+    "hue": 48,
+    "sat": 80,
+    "light": 76
+  },
   "crab-lobster": {
     "hue": 8,
     "sat": 75,

@@ -1088,6 +1088,15 @@ const GENERATORS = [
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 129,
+    title: 'Bee & Beetle Bugs',
+    bundle: 'animals',
+    category: 'CRITTERS // BUGS',
+    thumbnailUrl: 'assets/thumbnails/bee-beetle-bugs.svg',
+    programUrl: 'programs/bee-beetle-bugs.html',
+    description: 'A bug picker: a honey bee, a ladybug, a stag beetle or a dragonfly, each lying on its belly so it prints with no supports. Choose the wing style (flat on the bed, raised in a V, or folded on the back as wing covers), wing size, shape and veins, the antenna length, thickness and spread, the number of body segments with their grooves, and a plain, striped or spotted pattern with the spot count and size. Stag beetles get adjustable mandibles; legs lie flat and can be switched off. Unprinted. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 132,
     title: 'Crab & Lobster',
     bundle: 'animals',
