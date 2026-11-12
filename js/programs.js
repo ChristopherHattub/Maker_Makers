@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 131,
+    title: 'Whale & Dolphin',
+    bundle: 'animals',
+    category: 'ANIMALS // SEA LIFE',
+    thumbnailUrl: 'assets/thumbnails/whale-dolphin.svg',
+    programUrl: 'programs/whale-dolphin.html',
+    description: 'A humpback whale, an orca or a dolphin swimming in a wave base, sculpted as one surface that prints with no supports. Pick the creature, body length, tail pose (flukes flat, curled tail or a diving tail up), back arch, fin and fluke size, base shape, wave height and wave length, and type a name that is engraved in the front of the base. Paint parts in the Color tool and export .STL.'
   }
 ];
 

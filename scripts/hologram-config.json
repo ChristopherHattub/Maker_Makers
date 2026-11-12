@@ -520,5 +520,16 @@
     "sat": 70,
     "light": 78,
     "stand": true
+  },
+  "whale-dolphin": {
+    "hue": 200,
+    "sat": 80,
+    "light": 70,
+    "hide": [
+      "base",
+      "water",
+      "foam"
+    ],
+    "fill": 0.9
   }
 }

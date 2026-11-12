@@ -924,5 +924,22 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "whale-dolphin": {
+  "colors": {
+   "body": "#64748b",
+   "belly": "#e2e8f0",
+   "dorsal": "#475569",
+   "flippers": "#f1f5f9",
+   "flukes": "#475569",
+   "water": "#38bdf8",
+   "foam": "#f8fafc",
+   "base": "#f1f5f9",
+   "eyes": "#475569",
+   "pupils": "#0f172a",
+   "glints": "#f8fafc"
+  },
+  "yaw": 24,
+  "elev": 22
  }
 }
