@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 130,
+    title: 'Giraffe & Zebra Stackers',
+    bundle: 'toys',
+    category: 'TOYS // ANIMALS',
+    thumbnailUrl: 'assets/thumbnails/giraffe-zebra-stacker.svg',
+    programUrl: 'programs/giraffe-zebra-stacker.html',
+    description: 'A ring-stacker toy: a base with a keyed rod, a neck of loose rings that slide down it (3 to 12, any height and taper), and a head that tops it off. Stamp spots or zebra stripes on every ring and the head, choose a giraffe, zebra or baby head, add horns, a mane or both, and pick a flat plate, savanna hill or small foot. Rings print flat and the head prints chin down, so there are no supports; set the fit gap for your printer. Unprinted. Paint each ring in the Color tool and export .STL.'
   }
 ];
 

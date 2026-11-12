@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-130 Giraffe &amp; Zebra Stackers // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Giraffe & Zebra Stackers: a ring-stacker toy. A base with a keyed rod, a neck of loose rings that slide down
+      // the rod, and a head with a socket on top. Rings carry raised spot or stripe stamps and an optional mane fin.
+      // The viewport shows the toy assembled; the print layout (printMeshes) lays every part flat on the bed.
+      // Y up, millimetres. Front is +Z. Every solid is a closed shell.
+
+      var TAU = Math.PI * 2, DEG = Math.PI / 180, BACK = -Math.PI / 2;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      function rnd(a, b) { var s = Math.sin(a * 127.1 + b * 311.7 + 7.7) * 43758.5453; return s - Math.floor(s); }
+
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+
+      // Scale, then rotate about X, Z and Y (radians), then move. o = { s, rx, ry, rz, t }.
+      function xform(pos, o) {
+        var s = o.s == null ? [1, 1, 1] : (typeof o.s === 'number' ? [o.s, o.s, o.s] : o.s);
+        var rx = o.rx || 0, ry = o.ry || 0, rz = o.rz || 0, t = o.t || [0, 0, 0];
+        var cx = Math.cos(rx), sx = Math.sin(rx), cz = Math.cos(rz), sz = Math.sin(rz), cy = Math.cos(ry), sy = Math.sin(ry);
+        var out = new Float32Array(pos.length), i, x, y, z, nx, ny, nz;
+        for (i = 0; i < pos.length; i += 3) {
+          x = pos[i] * s[0]; y = pos[i + 1] * s[1]; z = pos[i + 2] * s[2];
+          ny = y * cx - z * sx; nz = y * sx + z * cx; y = ny; z = nz;
+          nx = x * cz - y * sz; ny = x * sz + y * cz; x = nx; y = ny;
+          nx = x * cy + z * sy; nz = -x * sy + z * cy; x = nx; z = nz;
+          out[i] = x + t[0]; out[i + 1] = y + t[1]; out[i + 2] = z + t[2];
+        }
+        if (s[0] * s[1] * s[2] < 0) {
+          for (i = 0; i < out.length; i += 9) {
+            for (var k = 0; k < 3; k++) { var q = out[i + 3 + k]; out[i + 3 + k] = out[i + 6 + k]; out[i + 6 + k] = q; }
+          }
+        }
+        return out;
+      }
+      function shift(pos, dx, dy, dz) {
+        var out = new Float32Array(pos.length), i;
+        for (i = 0; i < pos.length; i += 3) { out[i] = pos[i] + dx; out[i + 1] = pos[i + 1] + dy; out[i + 2] = pos[i + 2] + dz; }
+        return out;
+      }
+
+      // Grid surface: prof = [[r, y]] rows (r ~ 0 = pole); pt(i, j, theta) -> [x, y, z].
+      function surface(prof, seg, pt, wrap) {
+        var R = prof.length, P = [], i, j, o = [], row;
+        for (i = 0; i < R; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) row.push(pt(i, j, (j / seg) * TAU));
+          P.push(row);
+        }
+        var last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var i2 = (i + 1) % R, d0 = !wrap && prof[i][0] < 1e-6, d1 = !wrap && prof[i2][0] < 1e-6;
+          if (d0 && d1) continue;
+          for (j = 0; j < seg; j++) {
+            var k = (j + 1) % seg, a = P[i][j], b = P[i][k], c = P[i2][k], d = P[i2][j];
+            if (d0) tri(o, a, d, c);
+            else if (d1) tri(o, a, c, b);
+            else { tri(o, a, d, c); tri(o, a, c, b); }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Revolve rows about Y. A row is { r: number | function (theta) -> number, y }. r === 0 makes a pole.
+      function revolve(rows, seg, wrap) {
+        var prof = rows.map(function (q) { return [typeof q.r === 'number' ? q.r : 1, q.y]; });
+        return surface(prof, seg, function (i, j, th) {
+          var q = rows[i], r = typeof q.r === 'number' ? q.r : q.r(th);
+          return [r * Math.cos(th), q.y, r * Math.sin(th)];
+        }, wrap);
+      }
+
+      // Ellipsoid centred on the origin.
+      var BALL_PROF = (function () {
+        var prof = [], i, n = 10, a;
+        for (i = 0; i <= n; i++) {
+          a = -Math.PI / 2 + (Math.PI * i) / n;
+          prof.push([i === 0 || i === n ? 0 : Math.cos(a), Math.sin(a)]);
+        }
+        return prof;
+      })();
+      function ball(rx, ry, rz, seg) {
+        var rows = BALL_PROF.map(function (q) { return { r: q[0], y: q[1] }; });
+        return xform(revolve(rows, seg || 20), { s: [rx, ry, rz] });
+      }
+
+      // Keyed hole / rod outline: a circle of radius R with a flat on the back at distance f from the axis.
+      function dShape(R, f) {
+        return function (th) { var c = Math.cos(th - BACK); return c > f / R ? f / c : R; };
+      }
+
+      // Loft: rows of closed loops (equal length) or single points (poles).
+      function loft(rows) {
+        var o = [], i, j, A, B, n, k, a, b, c, d;
+        for (i = 0; i < rows.length - 1; i++) {
+          A = rows[i]; B = rows[i + 1];
+          if (A.length === 1 && B.length === 1) continue;
+          n = Math.max(A.length, B.length);
+          for (j = 0; j < n; j++) {
+            k = (j + 1) % n;
+            if (A.length === 1) tri(o, A[0], B[j], B[k]);
+            else if (B.length === 1) tri(o, A[j], B[0], A[k]);
+            else {
+              a = A[j]; b = A[k]; c = B[k]; d = B[j];
+              tri(o, a, d, c); tri(o, a, c, b);
+            }
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Prism of a convex or star-shaped polygon [[a, b]] extruded t0..t1; map(a, b, t) -> [x, y, z].
+      function prism(poly, t0, t1, map) {
+        var n = poly.length, o = [], i, cx = 0, cy = 0, j;
+        for (i = 0; i < n; i++) { cx += poly[i][0] / n; cy += poly[i][1] / n; }
+        for (i = 0; i < n; i++) {
+          j = (i + 1) % n;
+          var a0 = map(poly[i][0], poly[i][1], t0), a1 = map(poly[j][0], poly[j][1], t0);
+          var b0 = map(poly[i][0], poly[i][1], t1), b1 = map(poly[j][0], poly[j][1], t1);
+          tri(o, map(cx, cy, t1), b0, b1);
+          tri(o, map(cx, cy, t0), a1, a0);
+          tri(o, a0, a1, b1); tri(o, a0, b1, b0);
+        }
+        return orient(new Float32Array(o));
+      }
+
+      // Raised stamp on a surface: outline [[a, b]] (star-shaped around 0,0), height H, embedded EMB below the surface.
+      // map(a, b, w) maps stamp-plane coordinates plus a height above the surface to 3D.
+      var EMB = 0.55;
+      var STAMP_S = [1, 1, 0.88, 0.74, 0.6, 0.46];
+      var STAMP_W = [-1, 0, 0.3, 0.62, 0.86, 1];
+      function stamp(outline, H, map) {
+        var n = outline.length, rings = [], k, j, o = [];
+        for (k = 0; k < STAMP_S.length; k++) {
+          var row = [], w = STAMP_W[k] < 0 ? -EMB : STAMP_W[k] * H;
+          for (j = 0; j < n; j++) row.push(map(outline[j][0] * STAMP_S[k], outline[j][1] * STAMP_S[k], w));
+          rings.push(row);
+        }
+        var bot = map(0, 0, -EMB), top = map(0, 0, H);
+        for (j = 0; j < n; j++) {
+          var m = (j + 1) % n;
+          tri(o, top, rings[rings.length - 1][j], rings[rings.length - 1][m]);
+          tri(o, bot, rings[0][m], rings[0][j]);
+          for (k = 0; k < rings.length - 1; k++) {
+            var a = rings[k][j], a2 = rings[k][m], b = rings[k + 1][j], b2 = rings[k + 1][m];
+            tri(o, a, a2, b2); tri(o, a, b2, b);
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      function blobOutline(R, seed) {
+        var pts = [], n = 14, i, ph1 = rnd(seed, 1) * TAU, ph2 = rnd(seed, 2) * TAU, th, r;
+        for (i = 0; i < n; i++) {
+          th = (i / n) * TAU;
+          r = R * (1 + 0.2 * Math.sin(2 * th + ph1) + 0.1 * Math.sin(3 * th + ph2));
+          pts.push([r * Math.cos(th), r * Math.sin(th)]);
+        }
+        return pts;
+      }
+      // Pointed lens (a zebra stripe) of half-width hw and length L, tilted by tilt radians.
+      function lensOutline(hw, L, tilt) {
+        var right = [], left = [], i, t, w, c = Math.cos(tilt), s = Math.sin(tilt), pts = [];
+        for (i = 1; i <= 5; i++) {
+          t = i / 6; w = hw * Math.pow(Math.sin(Math.PI * t), 0.7);
+          right.push([w, L * (t - 0.5)]); left.push([-w, L * (t - 0.5)]);
+        }
+        pts.push([0, -L / 2]);
+        right.forEach(function (q) { pts.push(q); });
+        pts.push([0, L / 2]);
+        left.reverse().forEach(function (q) { pts.push(q); });
+        return pts.map(function (q) { return [q[0] * c - q[1] * s, q[0] * s + q[1] * c]; });
+      }
+
+      // ---------------------------------------------------------------------
+      // Parameters
+      // ---------------------------------------------------------------------
+      function choice(group, key, label, names, value, showIf) {
+        var c = { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+        if (showIf) c.showIf = showIf;
+        return c;
+      }
+      function toggle(group, key, label, off, on, value, showIf) {
+        var c = { group: group, key: key, label: label, unit: '', min: 0, max: 1, step: 1, value: value,
+          format: function (v) { return v >= 1 ? on : off; } };
+        if (showIf) c.showIf = showIf;
+        return c;
+      }
+      var HEADS = ['Giraffe', 'Zebra', 'Baby'];
+      var COATS = ['Spots', 'Stripes', 'Plain'];
+      var TOPPERS = ['Horns', 'Mane', 'Horns + mane', 'Bare'];
+      var BASES = ['Flat plate', 'Savanna hill', 'Small foot'];
+
+      var PARAMS = [
+        { group: 'Neck', key: 'rings', label: 'Neck rings', unit: '', min: 3, max: 12, step: 1, value: 6 },
+        { group: 'Neck', key: 'ringH', label: 'Ring height', unit: ' mm', min: 8, max: 16, step: 0.5, value: 11 },
+        { group: 'Neck', key: 'neckW', label: 'Neck width at the base', unit: ' mm', min: 11, max: 18, step: 0.5, value: 15 },
+        { group: 'Neck', key: 'taper', label: 'Neck taper (top vs base)', unit: '%', min: 55, max: 100, step: 1, value: 72 },
+        choice('Coat', 'coat', 'Stamps on rings', COATS, 0),
+        { group: 'Coat', key: 'stampSize', label: 'Spot size / stripe width', unit: ' mm', min: 2.4, max: 5.5, step: 0.1, value: 3.6, showIf: function (p) { return p.coat < 2; } },
+        { group: 'Coat', key: 'density', label: 'Stamp density', unit: '%', min: 60, max: 150, step: 5, value: 100, showIf: function (p) { return p.coat < 2; } },
+        { group: 'Coat', key: 'relief', label: 'Stamp relief', unit: ' mm', min: 0.4, max: 1, step: 0.05, value: 0.7, showIf: function (p) { return p.coat < 2; } },
+        toggle('Coat', 'headMarks', 'Stamps on the head', 'Plain head', 'Marked head', 1, function (p) { return p.coat < 2; }),
+        choice('Head', 'head', 'Head shape', HEADS, 0),
+        { group: 'Head', key: 'headSize', label: 'Head size', unit: '%', min: 80, max: 130, step: 1, value: 100 },
+        { group: 'Head', key: 'muzzle', label: 'Muzzle length', unit: '%', min: 60, max: 150, step: 5, value: 100 },
+        { group: 'Head', key: 'eyeR', label: 'Eye size', unit: ' mm', min: 1.6, max: 3.2, step: 0.1, value: 2.3 },
+        { group: 'Head', key: 'ears', label: 'Ear size', unit: '%', min: 50, max: 150, step: 5, value: 100 },
+        choice('Topper', 'topper', 'Horns or mane', TOPPERS, 0),
+        { group: 'Topper', key: 'hornLen', label: 'Horn length', unit: ' mm', min: 5, max: 16, step: 0.5, value: 9, showIf: function (p) { return p.topper === 0 || p.topper === 2; } },
+        { group: 'Topper', key: 'maneH', label: 'Mane height', unit: ' mm', min: 3, max: 8, step: 0.5, value: 5, showIf: function (p) { return p.topper === 1 || p.topper === 2; } },
+        choice('Base', 'base', 'Base', BASES, 0),
+        { group: 'Base', key: 'baseR', label: 'Base radius', unit: ' mm', min: 22, max: 46, step: 1, value: 30, showIf: function (p) { return p.base < 2; } },
+        { group: 'Fit & size', key: 'size', label: 'Overall size', unit: '%', min: 60, max: 140, step: 5, value: 100 },
+        { group: 'Fit & size', key: 'fit', label: 'Ring fit gap (higher = looser)', unit: ' mm', min: 0.3, max: 0.7, step: 0.05, value: 0.4 }
+      ];
+      var DEFAULTS = {};
+      PARAMS.forEach(function (q) { DEFAULTS[q.key] = q.value; });
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over || {}).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+
+      // Head shapes: skull is a dome, the muzzle a flat-bottomed loft out of the front of it.
+      var SPEC = [
+        { skullR: 12.5, skullH: 21, mLen: 20, mW0: 5.8, mW1: 4.3, mH0: 12.5, mH1: 9.5, ear: 5.2, earT: 1.6, earW: 3, earUp: 58, earY: 0.74, eyeA: 58, eyeY: 0.46 },
+        { skullR: 13.2, skullH: 23, mLen: 25, mW0: 6.4, mW1: 5.3, mH0: 15, mH1: 12, ear: 6.4, earT: 1.8, earW: 3.1, earUp: 72, earY: 0.78, eyeA: 60, eyeY: 0.48 },
+        { skullR: 15, skullH: 22, mLen: 10, mW0: 7, mW1: 5.6, mH0: 11, mH1: 9.5, ear: 4, earT: 2.6, earW: 3.6, earUp: 58, earY: 0.74, eyeA: 52, eyeY: 0.5 }
+      ];
+
+      // Every size in one place so build() and printMeshes() agree.
+      function dims(p) {
+        var d = { sc: p.size / 100 }, sc = d.sc;
+        d.n = Math.round(p.rings);
+        d.H = p.ringH * sc;
+        d.rodR = Math.max(3.4, 4.2 * sc);
+        d.flat = d.rodR * 0.8;
+        d.clr = p.fit;
+        d.rb = p.neckW * sc;
+        d.rt = Math.max(d.rb * p.taper / 100, d.rodR + d.clr + 3.4);
+        d.rb = Math.max(d.rb, d.rt);
+        d.ch = 0.9 * Math.min(1, sc + 0.1);
+        d.bulge = 0.8 * Math.min(1, sc + 0.1);
+        d.sd = Math.max(9, 11 * sc);
+        d.stackH = d.n * d.H;
+        d.baseT = Math.max(3, 3.6 * sc);
+        d.hillH = 9 * sc;
+        d.seatY = p.base === 1 ? d.hillH : d.baseT;
+        d.relief = p.relief;
+        return d;
+      }
+
+      // Wall radius of ring i at fraction u (0..1) of its height.
+      function wallRadius(d, i, u) {
+        var f0 = lerp(d.rb, d.rt, i / d.n), f1 = lerp(d.rb, d.rt, (i + 1) / d.n);
+        return lerp(f0, f1, u) + d.bulge * Math.sin(Math.PI * u);
+      }
+
+      // Exclusion test for stamps: list of [x, y, z, r].
+      function blocked(list, x, y, z, r) {
+        for (var i = 0; i < list.length; i++) {
+          var e = list[i], dx = x - e[0], dy = y - e[1], dz = z - e[2];
+          if (Math.sqrt(dx * dx + dy * dy + dz * dz) < e[3] + r) return true;
+        }
+        return false;
+      }
+
+      // ---------------------------------------------------------------------
+      // Parts (each in its own local frame, y = 0 on the bed)
+      // ---------------------------------------------------------------------
+      function buildBase(p, d) {
+        var meshes = { base: [] }, R, t = d.baseT, rows = [];
+        var seat = d.rb + 2.2;
+        if (p.base === 1) {
+          R = Math.max(p.baseR * d.sc, seat + 6);
+          var h = d.hillH, k, u;
+          rows.push({ r: 0, y: 0 }); rows.push({ r: R - 0.45, y: 0 }); rows.push({ r: R, y: 0.7 });
+          for (k = 0; k <= 12; k++) {
+            u = k / 12;
+            rows.push({ r: seat + (R - seat) * (1 + Math.cos(Math.PI * u)) / 2, y: 0.7 + (h - 0.7) * Math.sin(Math.PI * u / 2) });
+          }
+          rows.push({ r: 0, y: h });
+          // remove the duplicate first hill point (r = R at y = 0.6)
+          rows.splice(3, 1);
+        } else {
+          R = p.base === 2 ? seat + 4 : Math.max(p.baseR * d.sc, seat + 5);
+          rows = [{ r: 0, y: 0 }, { r: R - 0.5, y: 0 }, { r: R, y: 0.7 }, { r: R, y: t - 1.4 }, { r: R - 1.4, y: t }, { r: 0, y: t }];
+        }
+        meshes.base.push(revolve(rows, 96));
+        // keyed rod, standing in the base
+        var seatY = d.seatY, yTop = seatY + d.stackH + d.sd - 1;
+        var rod = dShape(d.rodR, d.flat);
+        var rodTop = function (th) { return Math.max(0.3, rod(th) - 1); };
+        meshes.base.push(revolve([{ r: 0, y: seatY - 1.5 }, { r: rod, y: seatY - 1.5 }, { r: rod, y: yTop - 1 }, { r: rodTop, y: yTop }, { r: 0, y: yTop }], 64));
+        return meshes;
+      }
+
+      function buildRing(p, d, i) {
+        var m = { rings: [], pattern: [], mane: [] }, H = d.H, ch = d.ch;
+        var hole = dShape(d.rodR + d.clr, d.flat + d.clr);
+        var us = [0, ch / H, 0.25, 0.5, 0.75, 1 - ch / H, 1], rows = [{ r: hole, y: 0 }];
+        us.forEach(function (u) { rows.push({ r: u === 0 ? wallRadius(d, i, ch / H) - ch * 1.45 : u === 1 ? wallRadius(d, i, 1 - ch / H) - ch * 1.45 : wallRadius(d, i, u), y: u * H }); });
+        rows.push({ r: hole, y: H });
+        m.rings.push(revolve(rows, 64, true));
+        var maneOn = p.topper === 1 || p.topper === 2;
+        // mane fin on the back
+        if (maneOn) {
+          var L = Math.min(p.maneH * d.sc, (H - 1.3) / 1.4 - 1.6), r0 = wallRadius(d, i, 0.5) + d.bulge * 0.2;
+          var ya = 0.6, poly = [[-1.6, ya], [L, ya + (L + 1.6) * 1.4], [L * 0.45, H - 0.5], [-1.6, H - 0.5]];
+          m.mane.push(prism(poly, -1.5, 1.5, function (a, y, t) { return [t, y, -(r0 + a)]; }));
+        }
+        if (p.coat < 2) {
+          var rm = wallRadius(d, i, 0.5), C = TAU * rm, S = p.stampSize * d.sc, den = p.density / 100;
+          var rel = d.relief, count, j, th0, yc, hs, rr, rows2 = 1, rw;
+          function mapFor(th0c, ycc) {
+            var r0c = wallRadius(d, i, ycc / H);
+            return function (a, b, w) {
+              var y = ycc + b, u = clamp(y / H, 0, 1), r = wallRadius(d, i, u);
+              var dr = (wallRadius(d, i, clamp(u + 0.01, 0, 1)) - wallRadius(d, i, clamp(u - 0.01, 0, 1))) / (0.02 * H) * 1;
+              var nl = Math.sqrt(1 + dr * dr), th = th0c + a / r0c;
+              var rad = r + w / nl;
+              return [rad * Math.cos(th), y - w * dr / nl, rad * Math.sin(th)];
+            };
+          }
+          var backBlock = maneOn ? (Math.max(1.6, 2.2 + 1.5) / rm) : 0;
+          if (p.coat === 0) {
+            hs = Math.min(S, H / 2 - 1.5);
+            rows2 = Math.max(1, Math.floor((H - 2) / (hs * 2.7 / den)));
+            count = Math.max(3, Math.round(C / (hs * 2.9 / den)));
+            for (rw = 0; rw < rows2; rw++) {
+              for (j = 0; j < count; j++) {
+                th0 = (j + 0.5 * ((i + rw) % 2)) / count * TAU + (rnd(i, j + rw * 31) - 0.5) * 0.25;
+                rr = hs * (0.75 + 0.5 * rnd(j, i * 7 + rw));
+                yc = H * (rows2 === 1 ? 0.5 : (rw + 0.5) / rows2) + (rnd(i * 3, j + rw) - 0.5) * Math.max(0, H - 2 * rr - 2.6) * 0.5;
+                yc = clamp(yc, rr + 1.3, H - rr - 1.3);
+                if (backBlock && Math.abs(Math.atan2(Math.sin(th0 - BACK), Math.cos(th0 - BACK))) < backBlock + rr / rm) continue;
+                m.pattern.push(stamp(blobOutline(rr, i * 97 + j + rw * 13), Math.min(rel, rr * 0.5), mapFor(th0, yc)));
+              }
+            }
+          } else {
+            var hw = Math.max(0.95, S * 0.28), len = H - 2.8;
+            count = Math.max(4, Math.round(C / (hw * 4.4 / den)));
+            for (j = 0; j < count; j++) {
+              th0 = (j + 0.5 * (i % 2)) / count * TAU + (rnd(i, j) - 0.5) * 0.08;
+              if (backBlock && Math.abs(Math.atan2(Math.sin(th0 - BACK), Math.cos(th0 - BACK))) < backBlock + hw / rm) continue;
+              var w2 = hw * (0.85 + 0.3 * rnd(j, i + 3));
+              m.pattern.push(stamp(lensOutline(w2, len * (0.9 + 0.1 * rnd(i, j + 5)), (i % 2 ? 1 : -1) * 0.2 + (rnd(i, j + 9) - 0.5) * 0.12), Math.min(rel, w2 * 0.55), mapFor(th0, H / 2)));
+            }
+          }
+        }
+        return m;
+      }
+
+      function skullGeom(p, d, spec, hs) {
+        var g = {};
+        g.R = Math.max(spec.skullR * hs, d.rt + 2.4);
+        g.hole = d.rodR + d.clr;
+        g.cone = g.hole;
+        g.H = Math.max(spec.skullH * hs, d.sd + g.cone + 4);
+        g.rF = Math.max(d.rt + 0.6, g.hole + 3.3);
+        g.R = Math.max(g.R, g.rF + 2);
+        g.yw = (g.R - g.rF) * 1.45;
+        g.r = function (y) {
+          if (y <= 0) return g.rF;
+          if (y < g.yw) return g.rF + y / 1.45;
+          var t = (y - g.yw) / (g.H - g.yw);
+          return g.R * Math.sqrt(Math.max(0, 1 - t * t));
+        };
+        g.y = function (rho) { // height of the dome at radius rho
+          if (rho >= g.R) return g.yw;
+          return g.yw + (g.H - g.yw) * Math.sqrt(Math.max(0, 1 - (rho / g.R) * (rho / g.R)));
+        };
+        return g;
+      }
+
+      function buildHead(p, d) {
+        var m = { head: [], ears: [], horns: [], mane: [], eyes: [], pupils: [], nose: [], pattern: [] };
+        var spec = SPEC[Math.round(p.head)], hs = p.headSize / 100 * d.sc, k;
+        var g = skullGeom(p, d, spec, hs);
+        var hole = dShape(g.hole, d.flat + d.clr);
+        // skull with the keyed socket (cone roof, so it prints facing down with no bridge)
+        var rows = [{ r: 0, y: d.sd + g.cone }];
+        rows.push({ r: function (th) { return hole(th) * 0.5; }, y: d.sd + g.cone * 0.5 });
+        rows.push({ r: hole, y: d.sd });
+        rows.push({ r: hole, y: 0 });
+        rows.push({ r: g.rF, y: 0 });
+        rows.push({ r: lerp(g.rF, g.R, 0.5), y: g.yw * 0.5 });
+        for (k = 0; k <= 10; k++) {
+          var a = (k / 10) * (Math.PI / 2 - 0.12);
+          rows.push({ r: g.R * Math.cos(a), y: g.yw + (g.H - g.yw) * Math.sin(a) });
+        }
+        rows.push({ r: 0, y: g.H });
+        m.head.push(revolve(rows, 72));
+
+        // muzzle: flat bottom, a 49 degree chin where it rises, rounded nose
+        var z0 = g.hole + 1.8, zTip = g.R * 0.6 + spec.mLen * hs * (p.muzzle / 100);
+        var mH0 = spec.mH0 * hs, mH1 = spec.mH1 * hs, w0 = spec.mW0 * hs, w1 = spec.mW1 * hs, mS = 1.4;
+        var rise = 2.4 * hs, capL;
+        var ybTip = rise, ymTip = (ybTip + mH1) / 2;
+        capL = Math.min(w1 * 0.9, (ymTip - ybTip) / mS * 0.6);
+        var zb = zTip - capL, zr = zb - rise / mS, mrows = [], i, z, s;
+        function sect(hw, yb, yt) {
+          var h = yt - yb, cd = Math.min(h * 0.45, hw * 0.55), yc2 = yb + cd + (h - cd) * 0.3, wb = hw - cd * 0.7, K = 8, R2 = [], c;
+          R2.push([wb * 0.5, yb], [wb, yb], [(wb + hw) / 2, yb + cd * 0.5], [hw, yb + cd], [hw, (yb + cd + yc2) / 2], [hw, yc2]);
+          for (c = 1; c < K; c++) R2.push([hw * Math.cos(c * Math.PI / 2 / K), yc2 + (yt - yc2) * Math.sin(c * Math.PI / 2 / K)]);
+          var pts = [[0, yb]].concat(R2, [[0, yt]]);
+          for (c = R2.length - 1; c >= 0; c--) pts.push([-R2[c][0], R2[c][1]]);
+          return pts;
+        }
+        mrows.push([[0, mH0 * 0.5, z0 - 0.6]]);
+        var NB = 9, zl = [];
+        for (i = 0; i < NB; i++) zl.push(lerp(z0, zr, i / NB));
+        zl.push(zr, zb); // the chin rises between the last two rows, so its slope is exact
+        for (i = 0; i < zl.length; i++) {
+          z = zl[i]; s = (z - z0) / (zb - z0);
+          var yb = Math.max(0, mS * (z - zr)), yt = lerp(mH0, mH1 + rise * 0.4, Math.pow(s, 0.9));
+          mrows.push(sect(lerp(w0, w1, s), yb, yt).map(function (q) { return [q[0], q[1], z]; }));
+        }
+        var ybB = Math.max(0, mS * (zb - zr)), ytB = mH1 + rise * 0.4, ymB = (ybB + ytB) / 2;
+        for (i = 1; i <= 4; i++) {
+          var an = i * 18 * DEG, kk = Math.cos(an);
+          var ybc = ybB + mS * capL * Math.sin(an) + (ymB - ybB - mS * capL) * (1 - kk);
+          var ytc = ymB + (ytB - ymB) * kk;
+          mrows.push(sect(w1 * kk, ybc, ytc).map(function (q) { return [q[0], q[1], zb + capL * Math.sin(an)]; }));
+        }
+        mrows.push([[0, ymB, zb + capL]]);
+        m.head.push(loft(mrows));
+        var noseZ = function (x) { return zb + capL * Math.sqrt(Math.max(0, 1 - (x / w1) * (x / w1))); };
+        [-1, 1].forEach(function (sx) {
+          var x = sx * w1 * 0.42, nr = 0.95 * hs;
+          m.nose.push(xform(ball(nr, nr * 0.85, nr * 0.8, 14), { t: [x, ymB + 1.1 * hs, noseZ(x) - nr * 0.3] }));
+        });
+
+        var excl = [];
+        // eyes
+        var er = p.eyeR * hs, ea = spec.eyeA * DEG, ey = g.yw + (g.H - g.yw) * spec.eyeY, er0 = g.r(ey);
+        [-1, 1].forEach(function (sx) {
+          var nx = sx * Math.sin(ea), nz = Math.cos(ea), c = [nx * (er0 - er * 0.25), ey, nz * (er0 - er * 0.25)];
+          m.eyes.push(xform(ball(er, er, er, 22), { t: c }));
+          var fx = nx + sx * 0.0, fz = nz + 0.5, fl = Math.sqrt(fx * fx + fz * fz);
+          var pr = er * 0.58;
+          m.pupils.push(xform(ball(pr, pr, pr, 14), { t: [c[0] + fx / fl * er * 0.8, ey, c[2] + fz / fl * er * 0.8] }));
+          excl.push([c[0], c[1], c[2], er * 1.6]);
+        });
+        // ears
+        var eL = spec.ear * hs * p.ears / 100, eT = spec.earT * hs, eW = spec.earW * hs * (0.8 + 0.2 * p.ears / 100), eAng = spec.earUp * DEG;
+        var eyy = g.yw + (g.H - g.yw) * spec.earY, ear0 = g.r(eyy), earA = 105 * DEG;
+        [-1, 1].forEach(function (sx) {
+          var ax = sx * Math.sin(earA) * (ear0 - 0.6), az = Math.cos(earA) * (ear0 - 0.6);
+          var dx = sx * Math.cos(eAng) * eL * 0.55, dy = Math.sin(eAng) * eL * 0.55;
+          // long axis along +x, tilted up by eAng; mirrored for the other side
+          m.ears.push(xform(ball(eL, eT, eW, 20), { rz: sx > 0 ? eAng : Math.PI - eAng, ry: sx * 0.35, t: [ax + dx, eyy + dy, az] }));
+          excl.push([ax, eyy, az, eL * 0.7]);
+        });
+        // horns (ossicones) with ball tips
+        var horn = p.topper === 0 || p.topper === 2, mane = p.topper === 1 || p.topper === 2;
+        if (horn) {
+          var hL = p.hornLen * hs, hr = 1.9 * hs, hx = g.R * 0.36;
+          [-1, 1].forEach(function (sx) {
+            var by = g.y(hx) - 1.8 * hs;
+            var prof = [{ r: 0, y: 0 }, { r: hr, y: 0 }, { r: hr * 0.78, y: hL }, { r: hr * 1.3, y: hL + hr * 0.75 }, { r: hr * 1.28, y: hL + hr * 1.25 }, { r: hr * 1.0, y: hL + hr * 1.75 }, { r: hr * 0.55, y: hL + hr * 2.1 }, { r: 0, y: hL + hr * 2.2 }];
+            m.horns.push(xform(revolve(prof, 24), { rz: -sx * 0.2, ry: 0, t: [sx * hx, by, -g.R * 0.05] }));
+            excl.push([sx * hx, g.y(hx), 0, hr * 2.4]);
+          });
+        }
+        // mane crest along the middle of the skull
+        if (mane) {
+          var mL = p.maneH * hs, nb = 5;
+          for (i = 0; i < nb; i++) {
+            var zS = lerp(g.R * 0.2, -g.R * 0.85, i / (nb - 1)), rho = Math.abs(zS), yS = g.y(rho) - 1.2;
+            var lean = 0.12 + 0.28 * (i / (nb - 1)), poly = [[zS + 2.2, yS - 3], [zS - 2.2, yS - 3], [zS - 1.4 - lean * mL, yS + 3 + mL], [zS - 0.1 - lean * mL, yS + 3 + mL]];
+            m.mane.push(prism(poly, -1.4, 1.4, function (a, y, t) { return [t, y, a]; }));
+            excl.push([0, yS, zS, 2.4]);
+          }
+        }
+        excl.push([0, mH0, g.R * 0.7, g.R * 0.75]);
+        // coat stamps on the head
+        if (p.coat < 2 && p.headMarks >= 1) {
+          var S = p.stampSize * d.sc * 0.85, den = p.density / 100, rel = d.relief, j, cnt, yy, rowsY = p.coat === 0 ? [0.3, 0.52, 0.72] : [0.46];
+          function skullMap(th0c, ycc) {
+            var r0c = g.r(ycc);
+            return function (a, b, w) {
+              var y = clamp(ycc + b, 0.5, g.H - 1.5), r = g.r(y), dr = (g.r(y + 0.05) - g.r(y - 0.05)) / 0.1, nl = Math.sqrt(1 + dr * dr), th = th0c + a / r0c, rad = r + w / nl;
+              return [rad * Math.cos(th), y - w * dr / nl, rad * Math.sin(th)];
+            };
+          }
+          rowsY.forEach(function (fy, ri) {
+            yy = g.yw + (g.H - g.yw) * fy * (p.coat === 0 ? 0.9 : 1);
+            var hw = Math.max(0.95, S * 0.3), sl = (g.H - g.yw) * 0.62;
+            cnt = Math.max(3, Math.round(TAU * g.r(yy) / (p.coat === 0 ? S * 2.9 / den : hw * 4.4 / den)));
+            for (j = 0; j < cnt; j++) {
+              var th0 = (j + 0.5 * (ri % 2)) / cnt * TAU + (rnd(ri, j) - 0.5) * 0.1, rr = S * (0.75 + 0.5 * rnd(j, ri + 4));
+              var px = g.r(yy) * Math.cos(th0), pz = g.r(yy) * Math.sin(th0);
+              if (blocked(excl, px, yy, pz, p.coat === 0 ? rr : sl * 0.2)) continue;
+              if (p.coat === 0) m.pattern.push(stamp(blobOutline(rr, ri * 53 + j), Math.min(rel, rr * 0.5), skullMap(th0, yy)));
+              else m.pattern.push(stamp(lensOutline(hw * (0.85 + 0.3 * rnd(j, 6)), sl * (0.85 + 0.15 * rnd(j, 8)), (rnd(ri, j + 2) - 0.5) * 0.3), Math.min(rel, hw * 0.55), skullMap(th0, yy)));
+            }
+          });
+        }
+        return m;
+      }
+
+      // ---------------------------------------------------------------------
+      // Assemble: display pose and print layout
+      // ---------------------------------------------------------------------
+      var COLORS = {
+        gold: '#f4c05a', brown: '#8b5a2b', cream: '#f5efe0', ink: '#2f3440', green: '#9ccc8b'
+      };
+      function parts(p) {
+        var d = dims(p), i, ringsList = [];
+        for (i = 0; i < d.n; i++) ringsList.push(buildRing(p, d, i));
+        return { d: d, base: buildBase(p, d), rings: ringsList, head: buildHead(p, d) };
+      }
+      function colorsFor(p) {
+        var stripes = p.coat === 1, body = stripes ? COLORS.cream : COLORS.gold;
+        return {
+          base: COLORS.green, rings: body, head: body, ears: body, pattern: stripes ? COLORS.ink : COLORS.brown,
+          horns: COLORS.brown, mane: stripes ? COLORS.ink : COLORS.brown, eyes: COLORS.cream, pupils: COLORS.ink, nose: COLORS.ink
+        };
+      }
+      var ORDER = ['base', 'rings', 'pattern', 'head', 'ears', 'horns', 'mane', 'eyes', 'pupils', 'nose'];
+      function pack(p, placed) {
+        var col = colorsFor(p), out = [];
+        ORDER.forEach(function (name) {
+          var list = placed[name];
+          if (!list || !list.length) return;
+          var e = { name: name, positions: concat(list), smoothGroup: name, color: col[name] };
+          if (name !== 'base' && name !== 'rings' && name !== 'head') e.singlePart = true;
+          out.push(e);
+        });
+        return out;
+      }
+      function build(p) {
+        var r = parts(p), d = r.d, placed = {}, i;
+        function add(name, list, dx, dy, dz) {
+          placed[name] = placed[name] || [];
+          list.forEach(function (q) { placed[name].push(shift(q, dx, dy, dz)); });
+        }
+        add('base', r.base.base, 0, 0, 0);
+        for (i = 0; i < d.n; i++) {
+          ['rings', 'pattern', 'mane'].forEach(function (nm) { add(nm, r.rings[i][nm], 0, d.seatY + i * (d.H + 0.03), 0); });
+        }
+        Object.keys(r.head).forEach(function (nm) { add(nm, r.head[nm], 0, d.seatY + d.stackH + d.n * 0.03, 0); });
+        return pack(p, placed);
+      }
+
+      function bounds(lists) {
+        var b = [1e9, 1e9, -1e9, -1e9];
+        lists.forEach(function (q) {
+          for (var i = 0; i < q.length; i += 3) {
+            b[0] = Math.min(b[0], q[i]); b[1] = Math.min(b[1], q[i + 2]);
+            b[2] = Math.max(b[2], q[i]); b[3] = Math.max(b[3], q[i + 2]);
+          }
+        });
+        return b;
+      }
+      // Print plate: base with rod, head and every ring laid out in rows on the bed.
+      function printMeshes(p) {
+        var r = parts(p), d = r.d, items = [], i;
+        items.push({ parts: { base: r.base.base } });
+        var headParts = {};
+        Object.keys(r.head).forEach(function (nm) { headParts[nm] = r.head[nm]; });
+        items.push({ parts: headParts });
+        for (i = 0; i < d.n; i++) {
+          items.push({ parts: { rings: r.rings[i].rings, pattern: r.rings[i].pattern, mane: r.rings[i].mane } });
+        }
+        items.forEach(function (it) {
+          var all = [];
+          Object.keys(it.parts).forEach(function (nm) { all = all.concat(it.parts[nm]); });
+          var b = bounds(all);
+          it.cx = (b[0] + b[2]) / 2; it.cz = (b[1] + b[3]) / 2; it.w = b[2] - b[0]; it.h = b[3] - b[1];
+        });
+        var gap = 6, maxW = 160, rows = [], cur = null, total = 0;
+        items.forEach(function (it) {
+          if (!cur || cur.w + gap + it.w > maxW) { cur = { w: 0, items: [], depth: 0 }; rows.push(cur); }
+          cur.w += (cur.items.length ? gap : 0) + it.w;
+          cur.items.push(it);
+          cur.depth = Math.max(cur.depth, it.h);
+        });
+        rows.forEach(function (row) { total += row.depth; });
+        total += gap * (rows.length - 1);
+        var z = -total / 2, placed = {};
+        rows.forEach(function (row) {
+          var x = -row.w / 2;
+          row.items.forEach(function (it) {
+            var tx = x + it.w / 2 - it.cx, tz = z + row.depth / 2 - it.cz;
+            Object.keys(it.parts).forEach(function (nm) {
+              placed[nm] = placed[nm] || [];
+              it.parts[nm].forEach(function (q) { placed[nm].push(shift(q, tx, 0, tz)); });
+            });
+            x += it.w + gap;
+          });
+          z += row.depth + gap;
+        });
+        return pack(p, placed);
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-130',
+        category: 'TOYS // ANIMALS',
+        title: 'Giraffe & Zebra Stackers',
+        fileName: 'Giraffe_Zebra_Stacker',
+        palette: [
+          { name: 'Savanna Gold', color: '#f4c05a' }, { name: 'Spot Brown', color: '#8b5a2b' },
+          { name: 'Zebra Cream', color: '#f5efe0' }, { name: 'Stripe Ink', color: '#2f3440' },
+          { name: 'Acacia Green', color: '#9ccc8b' }, { name: 'Sky Blue', color: '#9ecbf0' },
+          { name: 'Sunset Coral', color: '#f4978e' }, { name: 'Plum', color: '#b9a2e0' }
+        ],
+        defaultColor: '#f4c05a',
+        partNames: { base: 'Base & rod', rings: 'Neck ring', pattern: 'Spots / stripes', head: 'Head', ears: 'Ears', horns: 'Horns', mane: 'Mane', eyes: 'Eyes', pupils: 'Pupils', nose: 'Nostrils' },
+        creaseShading: 50,
+        parameters: PARAMS,
+        presets: [
+          presetOf('Default giraffe'),
+          presetOf('Zebra', { coat: 1, head: 1, topper: 1, rings: 5, taper: 82, neckW: 14, stampSize: 3.6, maneH: 5, ears: 110 }),
+          presetOf('Tall giraffe', { rings: 10, ringH: 11, taper: 62, topper: 2, hornLen: 11 }),
+          presetOf('Baby giraffe', { head: 2, rings: 4, ringH: 10, headSize: 110, eyeR: 2.8, muzzle: 90, topper: 0, hornLen: 6, stampSize: 3, base: 1 }),
+          presetOf('Baby zebra', { coat: 1, head: 2, rings: 4, ringH: 10, headSize: 110, eyeR: 2.8, taper: 85, topper: 1, maneH: 4, base: 1 }),
+          presetOf('Savanna hill pair', { base: 1, baseR: 36, rings: 7, topper: 2 }),
+          presetOf('Plain rainbow rings', { coat: 2, head: 2, topper: 3, rings: 7, taper: 90 })
+        ],
+        build: build,
+        printMeshes: printMeshes
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
