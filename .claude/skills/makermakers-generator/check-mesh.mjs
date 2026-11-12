@@ -19,7 +19,7 @@ const ALL = flags.includes('--all'), JSON_OUT = flags.includes('--json'), STRICT
 if (!file) { console.error('usage: check-mesh.mjs programs/<name>.html [preset label] [--all] [--json] [--strict]'); process.exit(2); }
 
 const html = readFileSync(file, 'utf8');
-const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*)?<script src="shared\/generator-core\.js">/);
+const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*(?:<script src="shared\/sculpt\.js"><\/script>\s*)?)?<script src="shared\/generator-core\.js">/);
 if (!m) { console.error('Could not find the config <script> before the engine tag.'); process.exit(2); }
 
 // three.js r128 (global build), only for generators that use api.THREE.

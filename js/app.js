@@ -171,14 +171,14 @@ async function downloadStandaloneHTML() {
     text(new URL('shared/print-check.js', pageUrl)),
     text(new URL('../vendor/three/three.min.js', pageUrl)),
     text(new URL('../vendor/three/OrbitControls.js', pageUrl)),
-    ...['export-utils.js', 'mesh-utils.js', 'generator-core.js'].map(f => text(new URL('shared/' + f, pageUrl)))
+    ...['export-utils.js', 'mesh-utils.js', 'sculpt.js', 'generator-core.js'].map(f => text(new URL('shared/' + f, pageUrl)))
   ]);
   const inlined = page
     .replace(/<link rel="stylesheet" href="shared\/generator\.css"\s*\/?>/, () => `<style>\n${css}\n</style>`)
     .replace(/<link rel="stylesheet" href="\.\.\/vendor\/fonts\/fonts\.css">\s*/, '')
     .replace(/<script src="\.\.\/vendor\/three\/three\.min\.js"><\/script>/, () => `<script>\n${three}\n</script>`)
     .replace(/<script src="\.\.\/vendor\/three\/OrbitControls\.js"><\/script>/, () => `<script>\n${orbit}\n</script>`)
-    .replace(/<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*<script src="shared\/generator-core\.js"><\/script>/,
+    .replace(/<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*(?:<script src="shared\/sculpt\.js"><\/script>\s*)?<script src="shared\/generator-core\.js"><\/script>/,
       () => `<script>\n${printCheck}\n${shared.join('\n')}\n</script>`);
   const url = URL.createObjectURL(new Blob([inlined], { type: 'text/html' }));
   const a = document.createElement('a');

@@ -16,7 +16,7 @@ while (args.length) {
   else presetLabel = a;
 }
 const html = readFileSync(file, 'utf8');
-const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*)?<script src="shared\/generator-core\.js">/);
+const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*(?:<script src="shared\/sculpt\.js"><\/script>\s*)?)?<script src="shared\/generator-core\.js">/);
 const win = {};
 vm.runInNewContext(m[1], { window: win, document: {}, console, Math });
 const cfg = win.MM_GENERATOR;

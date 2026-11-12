@@ -9,7 +9,7 @@ import vm from 'node:vm';
 const file = process.argv[2], limit = +(process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : 45);
 const meshOnly = (process.argv.find((a) => a.startsWith('--mesh=')) || '').slice(7);
 const html = readFileSync(file, 'utf8');
-const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*)?<script src="shared\/generator-core\.js">/);
+const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*(?:<script src="shared\/sculpt\.js"><\/script>\s*)?)?<script src="shared\/generator-core\.js">/);
 const w = {}; vm.runInNewContext(m[1], { window: w, document: {}, console, Math });
 const G = w.MM_GENERATOR, base = Object.fromEntries(G.parameters.map((q) => [q.key, q.value]));
 export function overhang(p, lim) {

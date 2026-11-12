@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const args = process.argv.slice(2), file = args.shift(), sets = {}; let only = null, preset = null;
 while (args.length) { const a = args.shift(); if (a === '--set') { const [k, v] = args.shift().split('='); sets[k] = Number(v); } else if (a === '--only') only = args.shift().split(','); else if (a === '--preset') preset = args.shift(); }
 const html = readFileSync(file, 'utf8');
-const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*)?<script src="shared\/generator-core\.js">/);
+const m = html.match(/<script>\s*([\s\S]*?)<\/script>\s*(?:<script src="shared\/export-utils\.js"><\/script>\s*<script src="shared\/mesh-utils\.js"><\/script>\s*(?:<script src="shared\/sculpt\.js"><\/script>\s*)?)?<script src="shared\/generator-core\.js">/);
 const win = {};
 vm.runInNewContext(m[1], { window: win, document: {}, console, Math });
 const cfg = win.MM_GENERATOR, params = {};
