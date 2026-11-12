@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-134 Spirograph Art Plate // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Spirograph Art Plate: a flat wall plaque with nested spirograph curves raised on top.
+      // Y up, millimetres. The plate lies on the bed; the curves are tapered ribbons (no overhangs), so it prints with no supports.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(pos) {
+        var v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+      // Plate from a star-shaped outline (loop of [x, z]), spanning y0..y1.
+      function fanPrism(pts, y0, y1) {
+        var o = [], n = pts.length, i, a, b, c0 = [0, y1, 0], c1 = [0, y0, 0];
+        for (i = 0; i < n; i++) {
+          a = pts[i]; b = pts[(i + 1) % n];
+          var at = [a[0], y1, a[1]], bt = [b[0], y1, b[1]], ab = [a[0], y0, a[1]], bb = [b[0], y0, b[1]];
+          tri(o, c0, at, bt); tri(o, c1, bb, ab); tri(o, bt, at, ab); tri(o, bt, ab, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Ring between two loops of equal vertex count.
+      function ringPrism(A, B, y0, y1) {
+        var o = [], n = A.length, i, a, a2, b, b2;
+        for (i = 0; i < n; i++) {
+          a = A[i]; a2 = A[(i + 1) % n]; b = B[i]; b2 = B[(i + 1) % n];
+          var at = [a[0], y1, a[1]], a2t = [a2[0], y1, a2[1]], bt = [b[0], y1, b[1]], b2t = [b2[0], y1, b2[1]];
+          var ab = [a[0], y0, a[1]], a2b = [a2[0], y0, a2[1]], bb = [b[0], y0, b[1]], b2b = [b2[0], y0, b2[1]];
+          tri(o, at, a2t, b2t); tri(o, at, b2t, bt);
+          tri(o, ab, b2b, a2b); tri(o, ab, bb, b2b);
+          tri(o, a2t, at, ab); tri(o, a2t, ab, a2b);
+          tri(o, bt, b2t, b2b); tri(o, bt, b2b, bb);
+        }
+        return orient(new Float32Array(o));
+      }
+      // Solid of revolution about Y whose closed profile [[r, y], ...] loops (a ring section), centred at (cx, cz).
+      function revolveRing(prof, seg, cx, cz) {
+        var R = prof.length, o = [], i, j, k, P = [];
+        for (i = 0; i < R; i++) {
+          var row = [];
+          for (j = 0; j < seg; j++) row.push([cx + prof[i][0] * Math.cos((j / seg) * TAU), prof[i][1], cz + prof[i][0] * Math.sin((j / seg) * TAU)]);
+          P.push(row);
+        }
+        for (i = 0; i < R; i++) {
+          var i2 = (i + 1) % R;
+          for (j = 0; j < seg; j++) {
+            k = (j + 1) % seg;
+            tri(o, P[i][j], P[i2][j], P[i2][k]); tri(o, P[i][j], P[i2][k], P[i][k]);
+          }
+        }
+        return orient(new Float32Array(o));
+      }
+
+      function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { var t = a % b; a = b; b = t; } return a; }
+
+      // --- plate outline (a closed loop of [x, z]), with its top at -Z ---
+      function smoothLoop(pts, passes) {
+        var n = pts.length, i, k, cur = pts;
+        for (k = 0; k < passes; k++) {
+          var nx = new Array(n);
+          for (i = 0; i < n; i++) {
+            var p = cur[(i + n - 1) % n], q = cur[i], r = cur[(i + 1) % n];
+            nx[i] = [(p[0] + 2 * q[0] + r[0]) / 4, (p[1] + 2 * q[1] + r[1]) / 4];
+          }
+          cur = nx;
+        }
+        return cur;
+      }
+      // Polygon with each edge cut into `sub` steps. V = corner list in order.
+      function polyEdges(V, sub) {
+        var out = [], n = V.length, i, k;
+        for (i = 0; i < n; i++) {
+          var a = V[i], b = V[(i + 1) % n];
+          for (k = 0; k < sub; k++) out.push([a[0] + (b[0] - a[0]) * k / sub, a[1] + (b[1] - a[1]) * k / sub]);
+        }
+        return out;
+      }
+      function outlineOf(p) {
+        var shape = Math.round(p.shape), a = p.size / 2, i, pts, V;
+        var rough = clamp(p.corner, 0, 100);
+        if (shape === 0) {
+          pts = [];
+          for (i = 0; i < 180; i++) pts.push([a * Math.cos((i / 180) * TAU), a * Math.sin((i / 180) * TAU)]);
+          return pts;
+        }
+        if (shape === 1) {
+          // Vertices at 0, 60, ... so flats face +-Z (the top and bottom of the plaque). Size is across the flats.
+          var rc = a / Math.cos(30 * DEG);
+          V = [];
+          for (i = 0; i < 6; i++) V.push([rc * Math.cos(i * 60 * DEG), rc * Math.sin(i * 60 * DEG)]);
+          return smoothLoop(polyEdges(V, 36), Math.round(rough * 0.5));
+        }
+        var np = Math.round(p.points), ri = a * p.depth / 100;
+        V = [];
+        for (i = 0; i < np * 2; i++) {
+          var ang = (-90 + 180 / np + i * 180 / np) * DEG;
+          V.push(i % 2 === 0 ? [a * Math.cos(ang), a * Math.sin(ang)] : [ri * Math.cos(ang), ri * Math.sin(ang)]);
+        }
+        // Tips are always eased a little so the thin points stay printable.
+        return smoothLoop(polyEdges(V, 24), 10 + Math.round(rough * 0.4));
+      }
+      // Offset a loop inward by d along per-vertex normals (miter capped).
+      function insetLoop(pts, d) {
+        var n = pts.length, out = [], i;
+        for (i = 0; i < n; i++) {
+          var p = pts[(i + n - 1) % n], q = pts[i], r = pts[(i + 1) % n];
+          var t1x = q[0] - p[0], t1z = q[1] - p[1], l1 = Math.sqrt(t1x * t1x + t1z * t1z) || 1;
+          var t2x = r[0] - q[0], t2z = r[1] - q[1], l2 = Math.sqrt(t2x * t2x + t2z * t2z) || 1;
+          // Outward normal of a ccw loop in the XZ plane: (tz, -tx).
+          var n1x = t1z / l1, n1z = -t1x / l1, n2x = t2z / l2, n2z = -t2x / l2;
+          var mx = n1x + n2x, mz = n1z + n2z, ml = Math.sqrt(mx * mx + mz * mz) || 1;
+          mx /= ml; mz /= ml;
+          var s = 1 / Math.max(0.55, mx * n1x + mz * n1z);
+          out.push([q[0] - mx * d * s, q[1] - mz * d * s]);
+        }
+        return out;
+      }
+      function minRadius(pts) { var m = 1e9, i; for (i = 0; i < pts.length; i++) m = Math.min(m, Math.sqrt(pts[i][0] * pts[i][0] + pts[i][1] * pts[i][1])); return m; }
+      // Distance from the centre to the outline straight up the -Z axis.
+      function topRadius(pts) {
+        var best = 0, n = pts.length, i;
+        for (i = 0; i < n; i++) {
+          var a = pts[i], b = pts[(i + 1) % n];
+          if ((a[0] <= 0 && b[0] > 0) || (a[0] >= 0 && b[0] < 0)) {
+            var t = (0 - a[0]) / (b[0] - a[0]), z = a[1] + (b[1] - a[1]) * t;
+            if (z < 0) best = Math.max(best, -z);
+          }
+        }
+        return best;
+      }
+
+      // --- the spirograph curve ---
+      // Hypotrochoid (wheel inside the ring) or epitrochoid (wheel outside). R = ring teeth, r = wheel teeth,
+      // d = pen distance in wheel units. The curve closes after r / gcd(R, r) turns of the pen arm.
+      function curveDense(outside, R, r, d, N) {
+        var g = gcd(R, r), T = TAU * (r / g), i, t, pts = new Array(N);
+        var diff = outside ? R + r : R - r, k = diff / r;
+        for (i = 0; i < N; i++) {
+          t = (i / N) * T;
+          pts[i] = outside
+            ? [diff * Math.cos(t) - d * Math.cos(k * t), diff * Math.sin(t) - d * Math.sin(k * t)]
+            : [diff * Math.cos(t) + d * Math.cos(k * t), diff * Math.sin(t) - d * Math.sin(k * t)];
+        }
+        return pts;
+      }
+      // Keep points by arc length and turning angle, so smooth parts stay light and tight parts stay round.
+      function resample(P, step, turn, maxPts) {
+        var n = P.length, out = [P[0]], acc = 0, ang = 0, i, prevH = null, len = 0, tot = 0, h0 = null;
+        for (i = 1; i < n; i++) {
+          var ex = P[i][0] - P[i - 1][0], ez = P[i][1] - P[i - 1][1], el = Math.sqrt(ex * ex + ez * ez);
+          if (el < 1e-6) continue;
+          var eh = Math.atan2(ez, ex);
+          if (h0 !== null) { var de = eh - h0; while (de > Math.PI) de -= TAU; while (de < -Math.PI) de += TAU; tot += Math.abs(de); }
+          h0 = eh; len += el;
+        }
+        // Very busy curves get a longer step and a wider turn limit so the model stays light.
+        step = Math.max(step, len / maxPts);
+        turn = Math.max(turn, tot / maxPts);
+        for (i = 1; i < n; i++) {
+          var q = P[i], dx = q[0] - P[i - 1][0], dz = q[1] - P[i - 1][1], l = Math.sqrt(dx * dx + dz * dz);
+          if (l < 1e-6) continue;
+          var h = Math.atan2(dz, dx);
+          if (prevH !== null) { var dh = h - prevH; while (dh > Math.PI) dh -= TAU; while (dh < -Math.PI) dh += TAU; ang += Math.abs(dh); }
+          prevH = h; acc += l;
+          if (acc >= step || ang >= turn) {
+            out.push(q);
+            acc = 0; ang = 0;
+          }
+        }
+        return out;
+      }
+      function wob(i, k) { var v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return (v - Math.floor(v) - 0.5) * 0.01; }
+      function curveLoop(p, k, A) {
+        var outside = Math.round(p.kind) === 1, R = Math.round(p.ring), L = Math.round(p.layers);
+        var r = Math.round(p.wheel) + Math.round(p.ratioStep) * k;
+        if (!outside) r = clamp(r, 2, R - 1);
+        r = Math.max(2, r);
+        var pen = clamp(p.pen + p.penStep * k, 10, 95) / 100;
+        var dense = curveDense(outside, R, r, pen * r, 18000), i, maxR = 0, c = Math.cos(p.twist * k * DEG), s = Math.sin(p.twist * k * DEG);
+        for (i = 0; i < dense.length; i++) maxR = Math.max(maxR, Math.sqrt(dense[i][0] * dense[i][0] + dense[i][1] * dense[i][1]));
+        var frac = L > 1 ? 1 - (1 - p.inner / 100) * (k / (L - 1)) : 1;
+        var target = Math.max(2, A * frac - p.lineW / 2), sc = target / maxR;
+        // A deterministic 0.005 mm wobble keeps two crossings of the curve from landing on exactly the same point,
+        // which would weld into a non-manifold edge.
+        var pts = [], list = resample(dense, 1.5 / sc, 5 * DEG, clamp(Math.round(12000 / L), 1500, 3000)), q, x, z, lp = null;
+        for (i = 0; i < list.length; i++) {
+          x = list[i][0] * sc; z = list[i][1] * sc;
+          q = [x * c - z * s + wob(i, k), x * s + z * c + wob(i, k + 11)];
+          // Drop points closer than 0.15 mm (the tip of a very tight loop) so ribbon sections never collapse.
+          if (lp && Math.abs(q[0] - lp[0]) + Math.abs(q[1] - lp[1]) < 0.15) continue;
+          pts.push(q); lp = q;
+        }
+        return pts;
+      }
+      // A closed ribbon with a tapered (trapezoid) section following a closed polyline.
+      function ribbon(pts, w, y0, y1) {
+        var n = pts.length, i, o = [], hw = w / 2, top = Math.max(0.2, hw - Math.min((y1 - y0) * 0.55, w * 0.3));
+        var bl = [], tl = [], tr = [], br = [], fw = new Array(n);
+        // Where the curve turns tighter than half the line width, the ribbon narrows instead of folding over itself.
+        for (i = 0; i < n; i++) {
+          var a0 = pts[(i + n - 1) % n], b0 = pts[i], c0 = pts[(i + 1) % n];
+          var ab = Math.sqrt(Math.pow(b0[0] - a0[0], 2) + Math.pow(b0[1] - a0[1], 2)), bc = Math.sqrt(Math.pow(c0[0] - b0[0], 2) + Math.pow(c0[1] - b0[1], 2));
+          var ca = Math.sqrt(Math.pow(a0[0] - c0[0], 2) + Math.pow(a0[1] - c0[1], 2));
+          var area2 = Math.abs((b0[0] - a0[0]) * (c0[1] - a0[1]) - (c0[0] - a0[0]) * (b0[1] - a0[1]));
+          var rad = area2 > 1e-9 ? (ab * bc * ca) / (2 * area2) : 1e9;
+          fw[i] = clamp(rad * 0.9 / hw, 0.3, 1);
+        }
+        for (var pass = 0; pass < 3; pass++) {
+          var f2 = fw.slice();
+          for (i = 0; i < n; i++) fw[i] = Math.min(f2[(i + n - 1) % n], f2[i], f2[(i + 1) % n]);
+        }
+        for (i = 0; i < n; i++) {
+          var p = pts[(i + n - 1) % n], q = pts[i], r = pts[(i + 1) % n];
+          var t1x = q[0] - p[0], t1z = q[1] - p[1], l1 = Math.sqrt(t1x * t1x + t1z * t1z) || 1;
+          var t2x = r[0] - q[0], t2z = r[1] - q[1], l2 = Math.sqrt(t2x * t2x + t2z * t2z) || 1;
+          var n1x = -t1z / l1, n1z = t1x / l1, n2x = -t2z / l2, n2z = t2x / l2;
+          var mx = n1x + n2x, mz = n1z + n2z, ml = Math.sqrt(mx * mx + mz * mz);
+          if (ml < 0.3) { mx = n1x; mz = n1z; ml = 1; }   // a hairpin turn: keep the incoming side
+          mx /= ml; mz /= ml;
+          var s = fw[i] / Math.max(0.6, mx * n1x + mz * n1z);
+          bl.push([q[0] + mx * hw * s + wob(i, 31) * 5, y0, q[1] + mz * hw * s + wob(i, 32) * 5]);
+          br.push([q[0] - mx * hw * s + wob(i, 33) * 5, y0, q[1] - mz * hw * s + wob(i, 34) * 5]);
+          tl.push([q[0] + mx * top * s + wob(i, 35) * 5, y1, q[1] + mz * top * s + wob(i, 36) * 5]);
+          tr.push([q[0] - mx * top * s + wob(i, 37) * 5, y1, q[1] - mz * top * s + wob(i, 38) * 5]);
+        }
+        for (i = 0; i < n; i++) {
+          var j = (i + 1) % n;
+          tri(o, bl[i], bl[j], tl[j]); tri(o, bl[i], tl[j], tl[i]);
+          tri(o, tl[i], tl[j], tr[j]); tri(o, tl[i], tr[j], tr[i]);
+          tri(o, tr[i], tr[j], br[j]); tri(o, tr[i], br[j], br[i]);
+          tri(o, br[i], br[j], bl[j]); tri(o, br[i], bl[j], bl[i]);
+        }
+        return orient(new Float32Array(o));
+      }
+
+      function mesh(name, pos) { return { name: name, positions: pos, smoothGroup: name }; }
+
+      var DEFAULTS = {
+        shape: 0, size: 110, corner: 40, points: 8, depth: 62, thick: 3, rimW: 3, rimH: 1.6,
+        kind: 0, ring: 105, wheel: 40, pen: 72, layers: 4, lineW: 1.6, lineH: 1.4, inner: 38, penStep: -8, ratioStep: 0, twist: 9,
+        hang: 1, holeD: 6
+      };
+      var SHAPES = ['Circle', 'Hexagon', 'Star'];
+      var KINDS = ['Inside the ring', 'Outside the ring'];
+
+      function build(p) {
+        var out = [], t = p.thick, i;
+        var outline = outlineOf(p);
+        out.push(mesh('plate', fanPrism(outline, 0, t)));
+        // The star's eased tips are only a few mm round, so its rim is kept to 4 mm to stay clean.
+        var rw = Math.round(p.shape) === 2 ? Math.min(p.rimW, 4) : p.rimW;
+        var inner = rw > 0 ? insetLoop(outline, rw) : outline;
+        if (rw > 0 && p.rimH > 0) out.push(mesh('rim', ringPrism(outline, inner, t - 0.3, t + p.rimH)));
+        // Space left for the curves: inside the rim with a small margin.
+        var A = Math.max(6, minRadius(inner) - (rw > 0 ? 1.5 : 1.0));
+        if (Math.round(p.hang) >= 1) {
+          var hr = p.holeD / 2, lr = hr + 3, c = topRadius(outline) + hr + 1, bw = Math.min(1.6, lr - hr - 0.8);
+          var prof = (p.rimH > 0)
+            ? [[hr, 0], [lr, 0], [lr, t], [hr + bw, t], [hr + bw, t + p.rimH], [hr, t + p.rimH]]
+            : [[hr, 0], [lr, 0], [lr, t], [hr, t]];
+          out.push(mesh('lug', revolveRing(prof, 64, 0, -c)));
+        }
+        var L = Math.round(p.layers);
+        for (i = 0; i < L; i++) out.push(mesh('curve' + (i + 1), ribbon(curveLoop(p, i, A), p.lineW, t - 0.3, t + p.lineH)));
+        return out;
+      }
+
+      function choice(group, key, label, names, value, extra) {
+        var o = { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+        if (extra) Object.keys(extra).forEach(function (k) { o[k] = extra[k]; });
+        return o;
+      }
+      function slider(group, key, label, unit, min, max, step, value, extra) {
+        var o = { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+        if (extra) Object.keys(extra).forEach(function (k) { o[k] = extra[k]; });
+        return o;
+      }
+      function presetOf(label, over) {
+        var values = {};
+        Object.keys(DEFAULTS).forEach(function (k) { values[k] = DEFAULTS[k]; });
+        Object.keys(over).forEach(function (k) { values[k] = over[k]; });
+        return { label: label, values: values };
+      }
+      var isStar = function (p) { return Math.round(p.shape) === 2; };
+      var notCircle = function (p) { return Math.round(p.shape) >= 1; };
+
+      window.MM_GENERATOR = {
+        code: 'MM-134',
+        category: 'HOME // WALL ART',
+        title: 'Spirograph Art Plate',
+        fileName: 'Spirograph_Art_Plate',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        defaultColor: '#f1f5f9',
+        partNames: {
+          plate: 'Plate', rim: 'Rim', lug: 'Hanging hole',
+          curve1: 'Line 1 (outer)', curve2: 'Line 2', curve3: 'Line 3', curve4: 'Line 4', curve5: 'Line 5', curve6: 'Line 6 (inner)'
+        },
+        openGroups: ['Gears'],
+        parameters: [
+          slider('Gears', 'ring', 'Ring gear teeth (fixed outer gear)', '', 30, 150, 1, DEFAULTS.ring),
+          slider('Gears', 'wheel', 'Wheel gear teeth (small ↔ big)', '', 6, 120, 1, DEFAULTS.wheel),
+          slider('Gears', 'pen', 'Pen hole (centre ↔ edge of wheel)', '%', 10, 95, 1, DEFAULTS.pen),
+          choice('Gears', 'kind', 'Wheel runs', KINDS, DEFAULTS.kind),
+          slider('Lines', 'layers', 'Nested lines (curves)', '', 1, 6, 1, DEFAULTS.layers),
+          slider('Lines', 'lineW', 'Line thickness', ' mm', 1, 4, 0.1, DEFAULTS.lineW),
+          slider('Lines', 'lineH', 'Line height', ' mm', 0.8, 3, 0.1, DEFAULTS.lineH),
+          slider('Lines', 'inner', 'Innermost line size', '%', 15, 95, 1, DEFAULTS.inner),
+          slider('Lines', 'penStep', 'Pen hole change per line', '%', -20, 20, 1, DEFAULTS.penStep),
+          slider('Lines', 'ratioStep', 'Wheel teeth change per line', '', -6, 6, 1, DEFAULTS.ratioStep),
+          slider('Lines', 'twist', 'Twist per line', '°', 0, 90, 1, DEFAULTS.twist),
+          choice('Plate', 'shape', 'Outline', SHAPES, DEFAULTS.shape),
+          slider('Plate', 'size', 'Size across', ' mm', 70, 160, 1, DEFAULTS.size),
+          slider('Plate', 'points', 'Star points', '', 5, 12, 1, DEFAULTS.points, { showIf: isStar }),
+          slider('Plate', 'depth', 'Star depth (spiky ↔ round)', '%', 45, 85, 1, DEFAULTS.depth, { showIf: isStar }),
+          slider('Plate', 'corner', 'Corner rounding', '%', 0, 100, 1, DEFAULTS.corner, { showIf: notCircle }),
+          slider('Plate', 'thick', 'Plate thickness', ' mm', 2, 6, 0.2, DEFAULTS.thick),
+          slider('Plate', 'rimW', 'Rim width (0 = none, star max 4)', ' mm', 0, 8, 0.5, DEFAULTS.rimW),
+          slider('Plate', 'rimH', 'Rim height (0 = none)', ' mm', 0, 3, 0.2, DEFAULTS.rimH),
+          choice('Hanging hole', 'hang', 'Hanging hole', ['None', 'Top hole'], DEFAULTS.hang),
+          slider('Hanging hole', 'holeD', 'Hole diameter', ' mm', 3, 12, 0.5, DEFAULTS.holeD, { showIf: function (p) { return Math.round(p.hang) >= 1; } })
+        ],
+        presets: [
+          presetOf('Default plaque', {}),
+          presetOf('Classic spiro rings', { ring: 96, wheel: 40, pen: 80, layers: 3, inner: 45, penStep: -10, twist: 0, lineW: 1.4 }),
+          presetOf('Flower bloom', { kind: 1, ring: 64, wheel: 40, pen: 55, layers: 3, inner: 35, penStep: 5, twist: 15 }),
+          presetOf('Fine lace', { layers: 6, lineW: 1.0, lineH: 1.0, ring: 120, wheel: 56, pen: 60, inner: 22, penStep: 5, twist: 6 }),
+          presetOf('Bold single curve', { layers: 1, lineW: 3, lineH: 1.8, ring: 84, wheel: 36, pen: 78 }),
+          presetOf('Hexagon lattice', { shape: 1, size: 100, corner: 25, ring: 90, wheel: 33, pen: 70, layers: 4, ratioStep: 1, twist: 0 }),
+          presetOf('Star medal', { shape: 2, size: 120, points: 8, depth: 68, ring: 75, wheel: 35, pen: 75, layers: 3, lineW: 1.4, inner: 30, penStep: -8, twist: 12, hang: 1 }),
+          presetOf('Pocket coin (no hole)', { size: 70, ring: 72, wheel: 21, layers: 3, lineW: 1.2, rimW: 2, hang: 0, thick: 2.4 })
+        ],
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>
