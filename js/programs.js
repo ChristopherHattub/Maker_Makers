@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 135,
+    title: 'Mandala Coaster',
+    bundle: 'decor',
+    category: 'HOME // COASTERS & ORNAMENTS',
+    thumbnailUrl: 'assets/thumbnails/mandala-coaster.svg',
+    programUrl: 'programs/mandala-coaster.html',
+    description: 'A layered mandala coaster or hanging ornament with rotational symmetry. Set the symmetry from 6 to 24 petals, the number of petal rings (2 to 6), five petal shapes (round, leaf, teardrop, arch, fan), how the layers stack (centre high or low) and how they overlap. Choose a solid relief look with inner petals, or a cut-through lace look made of petal outlines and ribs, and add a hanging loop for ornament mode. Prints flat in one piece with no supports. Unprinted. Paint each ring in the Color tool and export .STL.'
   }
 ];
 

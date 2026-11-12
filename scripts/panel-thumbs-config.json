@@ -513,6 +513,19 @@
    "holder": "#2f3a52"
   }
  },
+ "mandala-coaster": {
+  "colors": {
+   "plate": "#1f3b57",
+   "rim": "#d9ad4a",
+   "hub": "#f472b6",
+   "ring": ["#f472b6", "#fb923c", "#fcd34d", "#7dd3c0", "#60a5fa", "#c084fc"],
+   "lines": "#f8fafc",
+   "detail": "#fff3c4",
+   "loop": "#d9ad4a"
+  },
+  "yaw": 20,
+  "elev": 42
+ },
  "photo-frame": {
   "colors": {
    "frame": "#7a4b26",
