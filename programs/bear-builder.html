@@ -1412,7 +1412,7 @@
           S.ell('body', [3, 49, 0], [9.5, 8, 10.5 * k], fur, 5);
           S.ell('body', [-19 * k, 25, 0], [5.2, 5.2, 5.2], fur, 3); // tail
           S.ell('body', [-1, 10, 0], [8, 10.5, 4], fur, 3); // fills the slot between the legs
-          if (patch) bearPatch(S, patch, [13, 29, 0], p.patchSize * 0.92, sp.light);
+          if (patch && pose !== 3) bearPatch(S, patch, [13, 29, 0], p.patchSize * 0.92, sp.light);
           [-1, 1].forEach(function (s) {
             S.piece(s < 0 ? 'legL' : 'legR');
             S.path('legs', [[-1, 19, s * 9.8 * k, 9.4], [0, 10, s * 10.3 * k, 9], [1, 4.4, s * 10.3 * k, 8.4]], sp.limbs, 3);
@@ -1422,6 +1422,24 @@
             S.piece(s < 0 ? 'armL' : 'armR');
             S.path('arms', [[-1, 47, s * 11 * k, 6.5], [4, 41.5, s * 18.5 * k, 6.3], [10, 34, s * 17.5 * k, 6], [14.5, 28.5, s * 10 * k, 5.6]], sp.limbs, 3);
           });
+        } else if (pose === 3) { // on all fours: a long chunky body on four stout legs, head carried low and forward
+          hx = 25; hy = 40 + (hs - 1) * 6; shoulderY = 38;
+          k = Math.max(k, 0.95); // a slimmer body opens the belly arches too wide to print without a bridge
+          S.ell('body', [-3, 30, 0], [23 * k, 16.5, 16.5 * k], fur, 6);
+          S.ell('body', [17, 11, 0], [7, 12, 4], fur, 3); // fills the slots between the legs
+          S.ell('body', [-10, 11, 0], [7, 12, 4], fur, 3);
+          S.ell('body', [-1, 20, 0], [13, 11, 11 * k], fur, 4); // belly between the legs
+          S.ell('body', [10, 35, 0], [15, 16, 15 * k], fur, 7); // shoulder hump
+          S.ell('body', [30, 25, 0], [15, 19, 13 * k], fur, 5); // chest, under the chin
+          S.ell('body', [-25 * k, 35, 0], [4.8, 4.8, 4.8], fur, 3); // tail
+          [-1, 1].forEach(function (s) {
+            S.piece(s < 0 ? 'armL' : 'armR');
+            S.path('arms', [[16, 28, s * 10 * k, 8.6], [17, 14, s * 10.5 * k, 8.2], [18, 6.6, s * 10.5 * k, 7.6]], sp.limbs, 3);
+            S.ell('arms', [24, 4.4, s * 10.5 * k], [8.2, 4.8, 6.6], sp.limbs, 2);
+            S.piece(s < 0 ? 'legL' : 'legR');
+            S.path('legs', [[-9, 28, s * 11.5 * k, 9.6], [-10, 14, s * 12 * k, 9], [-10, 6.8, s * 12 * k, 8.2]], sp.limbs, 3);
+            S.ell('legs', [-3, 4.6, s * 12 * k], [9.5, 4.8, 7.2], sp.limbs, 2);
+          });
         } else { // sitting (also the waving pose)
           hx = 4; hy = 58 + (hs - 1) * 8; shoulderY = 43;
           S.ell('body', [-3, 15, 0], [20 * k, 17, 19.5 * k], fur, 6);
@@ -1429,7 +1447,7 @@
           S.ell('body', [4, 41, 0], [10.5, 9, 11 * k], fur, 5);
           S.ell('body', [-22 * k, 10, 0], [5.4, 5.4, 5.4], fur, 3); // tail
           S.ell('body', [8, 2, 0], [13, 6.5, 14 * k], fur, 4); // seat between the thighs, so the underside is one flat base
-          if (patch) bearPatch(S, patch, [12, 23, 0], p.patchSize * 0.95, sp.light);
+          if (patch && pose !== 3) bearPatch(S, patch, [12, 23, 0], p.patchSize * 0.95, sp.light);
           [-1, 1].forEach(function (s) {
             S.piece(s < 0 ? 'legL' : 'legR');
             S.path('legs', [[0, 12, s * 13.5 * k, 9.2], [12, 8.2, s * 15 * k, 8.6], [23, 7.6, s * 16.5 * k, 8.2]], sp.limbs, 3);
@@ -1447,38 +1465,48 @@
         }
         if (sp.band) { // the panda's dark shoulder band
           S.piece('torso');
-          S.paint('arms', [0, shoulderY - 3, 0], [17, 4.4, 26 * k], sp.limbs);
+          if (pose === 3) S.paint('arms', [14, 24, 0], [5, 25, 24 * k], sp.limbs);
+          else S.paint('arms', [0, shoulderY - 3, 0], [17, 4.4, 26 * k], sp.limbs);
         }
         // ---- head ----
-        S.piece('head');
-        S.ell('head', [hx, hy, 0], [ha, hb, hc], fur, 7);
-        S.ell('body', [hx + 2, hy - hb * 0.78, 0], [ha * 0.8, hb * 0.5, hc * 0.8], fur, 5); // chin and neck, so the head is held up from below
-        S.ell('body', [hx + ha * 0.55, hy - hb * 0.82, 0], [ha * 0.55, hb * 0.42, hc * 0.55], fur, 4); // under the chin
         var sn = p.snout * sp.snout, mcx = hx + ha * 0.84 + (sn - 1) * 2, mcy = hy - hb * 0.26, ma = ha * 0.6 * sn + 1, mb = hb * 0.42, mc = hc * 0.56;
-        S.piece('muzzle', 'head');
-        S.ell('muzzle', [mcx, mcy, 0], [ma, mb, mc], sp.light, 4);
-        S.ell('muzzle', [mcx - 1, mcy - mb * 0.5, 0], [ma * 0.9, mb * 0.8, mc * 0.86], sp.light, 3); // lower jaw
         var nrx = 4, nry = 3.5 * sp.noseK, nrz = 4.8 * sp.noseK;
         if (sp.noseK > 1.5) { nry = 6; nrz = 4.2; }
-        S.piece('nose', 'muzzle');
-        S.ell('nose', [mcx + ma - 1.6, mcy + mb * 0.3, 0], [nrx, nry, nrz], sp.nose, 1.6);
-        function mzx(y, z) { return mcx + ma * Math.sqrt(Math.max(0.04, 1 - Math.pow((y - mcy) / mb, 2) - Math.pow(z / mc, 2))) - 0.3; }
-        var my1 = mcy - mb * 0.1, my2 = mcy - mb * 0.62;
-        S.piece('muzzle', 'head');
-        S.path('mouth', [[mzx(my1, 0), my1, 0, 1.1], [mzx(my2, 0), my2, 0, 1.1]], null, 0, 2).carve(0.5);
-        [-1, 1].forEach(function (s) {
-          S.path('mouth', [[mzx(my2, 0), my2, 0, 0.9], [mzx(my2 - 0.8, s * mc * 0.18), my2 - 0.8, s * mc * 0.18, 0.9], [mzx(my2 + 0.6, s * mc * 0.4), my2 + 0.6, s * mc * 0.4, 0.9]], null, 0, 3).carve(0.5);
-        });
-        S.piece('head');
-        if (Math.round(p.species) === 2) { // panda eye patches: two tilted ovals
+        var shellHead = false; // on all fours the head is built from self-limiting lofts, so it can reach forward and still print
+        if (!shellHead) {
+          S.piece('head');
+          S.ell('head', [hx, hy, 0], [ha, hb, hc], fur, 7);
+          S.ell('body', [hx + 2, hy - hb * 0.78, 0], [ha * 0.8, hb * 0.5, hc * 0.8], fur, 5); // chin and neck, so the head is held up from below
+          S.ell('body', [hx + ha * 0.55, hy - hb * 0.82, 0], [ha * 0.55, hb * 0.42, hc * 0.55], fur, 4); // under the chin
+          S.piece('muzzle', 'head');
+          S.ell('muzzle', [mcx, mcy, 0], [ma, mb, mc], sp.light, 4);
+          S.ell('muzzle', [mcx - 1, mcy - mb * 0.5, 0], [ma * 0.9, mb * 0.8, mc * 0.86], sp.light, 3); // lower jaw
+          S.piece('nose', 'muzzle');
+          if (pose === 3) S.ell('nose', [mcx + ma - 5, mcy + mb * 0.62, 0], [nrx + 1, nry, nrz], sp.nose, 1.6); // the lower muzzle is trimmed on all fours, so the nose sits higher
+          else S.ell('nose', [mcx + ma - 1.6, mcy + mb * 0.3, 0], [nrx, nry, nrz], sp.nose, 1.6);
+          function mzx(y, z) { return mcx + ma * Math.sqrt(Math.max(0.04, 1 - Math.pow((y - mcy) / mb, 2) - Math.pow(z / mc, 2))) - 0.3; }
+          var my1 = mcy - mb * 0.1, my2 = mcy - mb * 0.62;
+          S.piece('muzzle', 'head');
+          S.path('mouth', [[mzx(my1, 0), my1, 0, 1.1], [mzx(my2, 0), my2, 0, 1.1]], null, 0, 2).carve(0.5);
           [-1, 1].forEach(function (s) {
-            S.paint('patch', [hx + ha * 0.8, hy + hb * 0.34, s * hc * 0.46], [ha * 0.3, hb * 0.2, hc * 0.17], sp.limbs);
-            S.paint('patch', [hx + ha * 0.8, hy + hb * 0.24, s * hc * 0.53], [ha * 0.3, hb * 0.2, hc * 0.17], sp.limbs);
+            S.path('mouth', [[mzx(my2, 0), my2, 0, 0.9], [mzx(my2 - 0.8, s * mc * 0.18), my2 - 0.8, s * mc * 0.18, 0.9], [mzx(my2 + 0.6, s * mc * 0.4), my2 + 0.6, s * mc * 0.4, 0.9]], null, 0, 3).carve(0.5);
           });
+          S.piece('head');
+          if (Math.round(p.species) === 2) { // panda eye patches: two tilted ovals
+            [-1, 1].forEach(function (s) {
+              S.paint('patch', [hx + ha * 0.8, hy + hb * 0.34, s * hc * 0.46], [ha * 0.3, hb * 0.2, hc * 0.17], sp.limbs);
+              S.paint('patch', [hx + ha * 0.8, hy + hb * 0.24, s * hc * 0.53], [ha * 0.3, hb * 0.2, hc * 0.17], sp.limbs);
+            });
+          }
         }
         // ---- scarf (sculpted into the neck) ----
         var sy = hy - hb * 0.74;
-        if (Math.round(p.scarf) === 1) {
+        if (Math.round(p.scarf) === 1 && pose === 3) {
+          S.piece('scarf');
+          var sring = [], sx = hx - ha * 0.9, sry = hb * 0.8 + 3.4, srz = hc * 0.8 + 3.4;
+          for (i = 0; i <= 20; i++) { var th2 = (i / 20) * TAU; sring.push([sx - 2 + 2 * Math.sin(th2), hy - 3 + sry * Math.cos(th2), srz * Math.sin(th2), 4]); }
+          S.path('scarf', sring, '#e11d48', 2.2, 2);
+        } else if (Math.round(p.scarf) === 1) {
           S.piece('scarf');
           var ring = [], rx = ha * 0.7 + 3.8, rz = hc * 0.7 + 3.8;
           for (i = 0; i <= 20; i++) { var th = (i / 20) * TAU; ring.push([hx + 2 + rx * Math.cos(th), sy + (Math.cos(th) > 0 ? -2.2 * Math.cos(th) : 0), rz * Math.sin(th), 4]); }
@@ -1487,22 +1515,41 @@
           S.plate('scarf', [[-4.2, sy + 3], [4.2, sy + 3], [5, sy - 14], [-0.5, sy - 18], [-4.8, sy - 13]], [fxx - 3.4, 0, 5.4 * k], [0, 0, 1], 3.4, '#be123c', 2.2, 1.2);
         }
         // ---- ears are rigid shells added after run() ----
-        S.reach = 1.15;
+        S.reach = pose === 3 ? 0.72 : 1.15;
         S.run();
         // eyes and nose sit on the finished surface
-        [-1, 1].forEach(function (s) {
-          softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [hx + 80, hy + hb * 0.3, s * hc * 0.46], [-1, 0, 0], 'head', p.eye * hs, '#1e293b');
-        });
+        if (shellHead) {
+          // head, muzzle and nose: smooth lofts that grow outward at no more than 45 degrees from the chest
+          var headL = pod([hx, hy, 0], ha, hb, hc, { anchor: [hx - 2, 14, 0], anchorR: 3, rings: 44, seg: 56 });
+          S.shell(sc, 'head', 'head', 'b', headL.tris, fur);
+          var muzL = pod([mcx, mcy, 0], ma, mb, mc, { rings: 26, seg: 40 });
+          S.shell(sc, 'muzzle', 'muzzle', 'b', muzL.tris, sp.light, 'head');
+          var noseL = pod([mcx + ma - 2, mcy + mb * 0.25, 0], nrx, nry, nrz, { rings: 20, seg: 32 });
+          S.shell(sc, 'nose', 'nose', 'b', noseL.tris, sp.nose, 'muzzle');
+          if (Math.round(p.species) === 2) { // panda eye patches: dark discs on the face
+            [-1, 1].forEach(function (s) {
+              var pc = headL.surf(s * 27, hy + hb * 0.3);
+              sc.add('patch', 'b', dome(vadd(pc.p, [0, -hb * 0.04, 0]), pc.n, hc * 0.26, { angle: 22, seg: 28, sink: 1.6 }), sp.limbs);
+            });
+          }
+          [-1, 1].forEach(function (s) {
+            softEyeOn(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', headL, s * 27, hy + hb * 0.3, 'head', p.eye * hs, '#1e293b');
+          });
+        } else {
+          [-1, 1].forEach(function (s) {
+            softEye(sc, S, s < 0 ? 'eyeL' : 'eyeR', s < 0 ? 'pupilL' : 'pupilR', [hx + 80, hy + hb * 0.3, s * hc * 0.46], [-1, 0, 0], 'head', p.eye * hs, '#1e293b');
+          });
+        }
         // ears: rounded domes (or pointed plates) with an inner ear
         var ER = 7 * p.earSize * sp.earK * hs * (earStyle === 1 ? 0.72 : earStyle === 2 ? 1.45 : 1);
         var phi = deg(earStyle === 2 ? 60 : 51), onHat = hat ? 1.8 : 0.4;
         [-1, 1].forEach(function (s) {
           var id = s < 0 ? 'earL' : 'earR';
-          var cy = hy + hb * Math.cos(phi) * 0.97 + onHat, cz = s * hc * Math.sin(phi) * 0.97 + s * onHat, cx = hx - ha * 0.12, c = [cx, cy, cz], R = ER;
+          var cy = hy + hb * Math.cos(phi) * 0.97 + onHat, cz = s * hc * Math.sin(phi) * 0.97 + s * onHat, cx = hx - ha * 0.12, c = [cx, cy, cz], R = earStyle === 3 ? Math.min(ER, 9 * p.earSize * hs) : ER; // pointed plates stay a sensible size on the big-eared koala
           var anc = [hx - ha * 0.12, hy + hb * 0.2, s * hc * 0.42], tris, inner;
           if (earStyle === 3) { // pointed ear: a rounded triangle plate
-            var W = R * 1.05, H = R * 2.3, by = c[1] - R * 1.6;
-            tris = vslab([[-0.9 * W * s, by], [0.3 * W * s, by], [0.9 * W * s, by + 1.1 * W], [0.55 * W * s, by + H * 0.78], [0.1 * W * s, by + H], [-0.35 * W * s, by + H * 0.82], [-0.85 * W * s, by + H * 0.4]], [c[0] - 1.5, 0, c[2]], [0, 0, 1], R * 0.8, 1);
+            var W = R * 1.05, H = R * 2.3 + (hat && sp.earK > 1.3 ? R * 0.5 : 0), by = c[1] - R * (pose === 3 ? 1.9 : 1.6) - (hat && sp.earK > 1.3 ? R * 0.9 : 0), ec = pose === 3 ? [0.05, 1.3] : [0.3, 1.1]; // on all fours the head sits closer to the shoulders, so the plate's base needs to sit lower
+            tris = vslab([[-0.9 * W * s, by], [ec[0] * W * s, by], [0.9 * W * s, by + ec[1] * W], [0.55 * W * s, by + H * 0.78], [0.1 * W * s, by + H], [-0.35 * W * s, by + H * 0.82], [-0.85 * W * s, by + H * 0.4]], [c[0] - 1.5, 0, c[2]], [0, 0, 1], R * 0.8, 1);
             inner = vslab([[-0.5 * W * s, by + R * 0.9], [0.4 * W * s, by + R * 0.9], [0.4 * W * s, by + H * 0.55], [0.05 * W * s, by + H * 0.88], [-0.4 * W * s, by + H * 0.55]], [c[0] + R * 0.1, 0, c[2]], [0, 0, 1], R * 0.8, 0.6);
           } else {
             tris = pod(c, R * 0.6, R, R, { anchor: anc, anchorR: 2.5, rings: 24, seg: 36 }).tris;
@@ -1578,11 +1625,11 @@
 
       var BEAR_PARAMS = [
         { group: 'Bear', key: 'species', label: 'Species', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Brown', 'Polar', 'Panda', 'Koala'] },
-        { group: 'Bear', key: 'pose', label: 'Pose', unit: '', min: 0, max: 2, step: 1, value: 0, options: ['Sitting', 'Standing', 'Waving'] },
+        { group: 'Bear', key: 'pose', label: 'Pose', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Sitting', 'Standing', 'Waving', 'On all fours'] },
         { group: 'Bear', key: 'size', label: 'Overall size', unit: '%', min: 60, max: 130, step: 1, value: 100 },
         { group: 'Bear', key: 'chunk', label: 'Body (slim ↔ chunky)', unit: '×', min: 0.85, max: 1.25, step: 0.05, value: 1.05 },
-        { group: 'Bear', key: 'patch', label: 'Belly patch', unit: '', min: 0, max: 3, step: 1, value: 1, options: ['None', 'Oval', 'Heart', 'Round'] },
-        { group: 'Bear', key: 'patchSize', label: 'Belly patch size', unit: '×', min: 0.6, max: 1.2, step: 0.05, value: 1, showIf: function (q) { return q.patch > 0; } },
+        { group: 'Bear', key: 'patch', label: 'Belly patch (not on all fours)', unit: '', min: 0, max: 3, step: 1, value: 1, options: ['None', 'Oval', 'Heart', 'Round'], showIf: function (q) { return q.pose !== 3; } },
+        { group: 'Bear', key: 'patchSize', label: 'Belly patch size', unit: '×', min: 0.6, max: 1.2, step: 0.05, value: 1, showIf: function (q) { return q.patch > 0 && q.pose !== 3; } },
         { group: 'Head', key: 'headSize', label: 'Head size', unit: '×', min: 0.85, max: 1.25, step: 0.05, value: 1 },
         { group: 'Head', key: 'snout', label: 'Snout (short ↔ long)', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 },
         { group: 'Head', key: 'ears', label: 'Ear shape', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Round', 'Small', 'Big fluffy', 'Pointy'] },
@@ -1608,6 +1655,7 @@
           ['Koala', { species: 3, ears: 2, patch: 3, headSize: 1.15 }],
           ['Standing bear', { pose: 1 }],
           ['Waving bear', { pose: 2, patch: 2 }],
+          ['Bear on all fours', { pose: 3 }],
           ['Winter bear', { scarf: 1, hat: 1, patch: 0 }],
           ['Party bear', { hat: 2, patch: 2, ears: 3 }],
           ['Cub', { size: 70, headSize: 1.25, earSize: 1.2, eye: 3.8, snout: 0.8, chunk: 1.2 }]

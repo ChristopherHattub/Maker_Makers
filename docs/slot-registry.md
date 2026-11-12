@@ -164,9 +164,9 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 124 | Bear Builder | animals | `bear-builder.html` (brown, polar, panda and koala bears; sitting, standing, waving or on all fours; ears, belly patch, scarf, beanie or party hat; built from `tools/animals/bear-builder.js`; unprinted) |
 | 129 | Bee & Beetle Bugs | animals | `bee-beetle-bugs.html` (bug picker: honey bee, ladybug, stag beetle, dragonfly; flat, raised or folded wings, patterns, antennae, legs; unprinted) |
 | 132 | Crab & Lobster | animals | `crab-lobster.html` (crab or lobster with print-in-place pincers on a post hinge, 2-5 legs per side, eye stalks, five shell textures) |
-| 124 | Bear Builder | animals | `bear-builder.html` (brown, polar, panda and koala bears; sitting, standing or waving; ears, belly patch, scarf, beanie or party hat; built from `tools/animals/bear-builder.js`; unprinted) |
 
 ## Groups (BUNDLES)
 

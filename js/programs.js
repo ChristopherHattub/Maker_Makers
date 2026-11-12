@@ -1112,7 +1112,7 @@ const GENERATORS = [
     category: 'ANIMALS // CUDDLY',
     thumbnailUrl: 'assets/thumbnails/bear-builder.svg',
     programUrl: 'programs/bear-builder.html',
-    description: 'A chunky, cuddly bear that prints with no supports. Pick a brown, polar, panda or koala bear, sit it, stand it or have it wave, then choose round, small, big fluffy or pointy ears, a belly patch (oval, heart or round), a scarf and a beanie or party hat. Tune size, chunkiness, head, snout, ears and eyes. Paint parts in the Color tool and export .STL.'
+    description: 'A chunky, cuddly bear that prints with no supports. Pick a brown, polar, panda or koala bear, sit it, stand it, have it wave or put it on all fours, then choose round, small, big fluffy or pointy ears, a belly patch (oval, heart or round), a scarf and a beanie or party hat. Tune size, chunkiness, head, snout, ears and eyes. Paint parts in the Color tool and export .STL.'
   }
 ];
 
