@@ -32,7 +32,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 121 | Built: Zoetrope. |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
-| 124+ | Free (check open PRs first). Any number works. |
+| 125 | Built: Frog & Toad (tree frog, bullfrog, toad; open mouth, tongue and fly, lily pad). |
+| 124, 126+ | Free (check open PRs first). Any number works. |
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -161,6 +162,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 125 | Frog & Toad | animals | `frog-toad.html` (sculpted tree frog, bullfrog or toad; open mouth, tongue and fly, lily pad; unprinted) |
 
 ## Groups (BUNDLES)
 
@@ -187,7 +189,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | toys | Toys & Games | 2 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
-| animals | Animals & Creatures | 15 |
+| animals | Animals & Creatures | 16 |
 | jewelry | Jewellery & Wearables | 1 |
 | tabletop | Tabletop & Gaming | 10 |
 A generator in no group lands in an automatic "More" region, so a missing `bundle` is visible on the map.

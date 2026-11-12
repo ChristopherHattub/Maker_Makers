@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 125,
+    title: 'Frog & Toad',
+    bundle: 'animals',
+    category: 'ANIMALS // AMPHIBIANS',
+    thumbnailUrl: 'assets/thumbnails/frog-toad.svg',
+    programUrl: 'programs/frog-toad.html',
+    description: 'A squat, big-eyed frog sculpted in one piece. Pick a slim tree frog with orange toe pads, a heavy bullfrog with eardrums and back ridges, or a warty toad, then set eye size and spacing, body and back-leg size, and a closed smile or an open mouth. Turn on the tongue and a fly rides the tip, with the lift, length and fly size adjustable. A lily pad base is optional. Everything prints with no supports: the open mouth is a pointed arch and the tongue climbs steeply. Unprinted, so expect to tune the thin tongue and toes. Paint parts in the Color tool and export .STL.'
   }
 ];
 

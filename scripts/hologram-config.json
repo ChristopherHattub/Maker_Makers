@@ -520,5 +520,11 @@
     "sat": 70,
     "light": 78,
     "stand": true
+  },
+  "frog-toad": {
+    "hue": 105,
+    "sat": 70,
+    "light": 68,
+    "hide": ["pad"]
   }
 }
