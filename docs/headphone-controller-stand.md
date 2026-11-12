@@ -26,4 +26,4 @@ The helpers and `PATTERNS` are copied from the Console Faceplate page; keep them
 
 ## Open items
 
-No hologram tile or side-panel render yet. Nothing printed: check the cradle width against your headphones, the slot width against your controllers and the screw head against the 4.5 mm hole (no countersink).
+Hologram tile and side-panel render done (12 Nov). Nothing printed: check the cradle width against your headphones, the slot width against your controllers and the screw head against the 4.5 mm hole (no countersink).
