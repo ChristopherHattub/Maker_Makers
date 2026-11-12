@@ -25,7 +25,9 @@ PREVIEW = os.path.join(HERE, 'models', 'heightmap-preview.png')
 PX_MM = 0.25          # output resolution, mm per pixel (keep in step with index.html)
 PAW_LONG_MM = 82.0    # length of the paw's longer side in the 100 mm plaque
 CROP_X = (40, 924)    # photo has black bars left and right
-GAMMA = 1.0          # 1 = height follows ink darkness linearly (raw)
+GAMMA = 1.0          # 1 = height follows ink darkness linearly
+TEXTURE = 0.22       # share of the height from the raw ink (speckle, creases); the rest is the domed pads
+PAD_LEVEL = (0.34, 0.54)  # blurred ink density that counts as pad (soft edge between the two)
 
 
 def box_blur(a, r):
@@ -147,7 +149,19 @@ def main():
 
     # Soft-fade the ink outside the outline (stray pen marks, paper grain) to zero.
     feather = np.clip(gauss_blur(msk.astype(np.float64), 4) * 2.0, 0, 1)
-    rel = np.clip(rel, 0, 1) ** GAMMA * feather
+    raw = np.clip(rel, 0, 1) ** GAMMA * feather
+
+    # 5. Domed pads: where the ink is dense over a few millimetres it is a pad. Blur that pad shape
+    #    again to round it into a cushion, so pads rise smoothly instead of as flat ink plateaus.
+    soft = gauss_blur(raw, 12)
+    soft = soft / max(np.percentile(soft, 99.5), 1e-6)
+    t = np.clip((soft - PAD_LEVEL[0]) / (PAD_LEVEL[1] - PAD_LEVEL[0]), 0, 1)
+    pads = t * t * (3 - 2 * t)
+    cushion = gauss_blur(pads, 9)
+    cushion = np.clip(cushion / max(cushion.max(), 1e-6), 0, 1) ** 0.6
+    dome = np.minimum(pads, 1) * 0.35 + cushion * 0.65
+    dome = dome / max(dome.max(), 1e-6)
+    rel = np.clip((1 - TEXTURE) * dome + TEXTURE * raw, 0, 1) * feather
 
     rgb = np.zeros((oh, ow, 3), np.uint8)
     rgb[..., 0] = np.round(rel * 255)

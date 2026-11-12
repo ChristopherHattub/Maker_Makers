@@ -7,7 +7,7 @@ Pick Plaque / Paw only / Stamp, drag to orbit, **Light** moves the raking light,
 
 ## Models
 
-The height is the raw ink darkness of `source.png`: dark pad ink is highest, the speckled fur is lower texture, bare paper is flat. Every speckle and crease is kept.
+The pads are traced from where the ink in `source.png` is densest and rounded into domes (78% of the height). The raw ink darkness rides on top as a light texture (22%), so the speckled fur, pad creases and cracks from the print still show. Bare paper is flat. Change the mix with `TEXTURE` in `build.py` (1.0 = the raw ink only).
 
 | Model | Size | Notes |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ All three print face up with no supports and are checked watertight. **None has 
 ## Files
 
 - `source.png`: the photo.
-- `build.py`: photo to `models/heightmap.png` (red = relief, green = paw outline) and `heightmap-preview.png` (the relief as a greyscale picture). Flattens the paper lighting, keeps the ink raw (3x3 median only), traces the outline, scales the paw to 82 mm long. Needs numpy and Pillow.
+- `build.py`: photo to `models/heightmap.png` (red = relief, green = paw outline) and `heightmap-preview.png` (the relief as a greyscale picture). Flattens the paper lighting, domes the pads and keeps the raw ink as texture, traces the outline, scales the paw to 82 mm long. Needs numpy and Pillow.
 - `mesher.js`: heightmap to watertight meshes and binary STL, shared by the viewer and the check.
 - `check.mjs`: `node check.mjs` builds all three and checks edges (open / non-manifold / flipped) and volume; `--stl` also writes `models/*.stl` (git-ignored).
 - `index.html`: the viewer.
