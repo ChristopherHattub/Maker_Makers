@@ -32,9 +32,11 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 121 | Built: Zoetrope. |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
-| 124+ | Free (check open PRs first). Any number works. |
+| 124-136 | In open pull requests on 12 Nov (animals, the two spirograph-style plates, the gem gauntlet); see the open PRs. |
+| 137 | Built: Mangle Rack Walker (print-in-place racetrack rack and gear). |
+| 138+ | Free (check open PRs first). Any number works. |
 
-Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 122 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -161,6 +163,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 137 | Mangle Rack Walker | toys | `mangle-walker.html` (crank gear in a racetrack rack, two pins in base grooves; duck, sailboat or flag topper; print-in-place, no supports) |
 
 ## Groups (BUNDLES)
 

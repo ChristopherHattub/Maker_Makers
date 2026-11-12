@@ -924,5 +924,20 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "mangle-walker": {
+  "colors": {
+   "base": "#2f3a52",
+   "rack": "#3b82f6",
+   "pinion": "#e63946",
+   "axle": "#cbd5e1",
+   "knob": "#c084fc",
+   "topper": "#ffd23f",
+   "topper2": "#f1f5f9",
+   "beak": "#ff8a1f",
+   "eyes": "#1b1f2a"
+  },
+  "yaw": 28,
+  "elev": 38
  }
 }

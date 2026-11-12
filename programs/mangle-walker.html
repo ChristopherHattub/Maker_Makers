@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-137 Mangle Rack Walker // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Mangle Rack Walker: a crank turns one small gear that sits inside a racetrack-shaped rack, a closed loop
+    // of teeth with a straight run on each side and a half circle at each end (Brown's 507 Mechanical Movements,
+    // the mangle wheel and rack). The gear never changes direction, yet the rack runs one way along the top row,
+    // slides sideways while the gear rolls round the end, and comes back along the bottom row. The topper on the
+    // rack therefore paddles back and forth and bobs at each end.
+    //
+    // How it works: the gear spins on a fixed axle. The rack is free to move in the plane, but two pins under
+    // its end caps ride in two stadium-shaped grooves in the base plate, and those grooves are exactly the path
+    // the rack must take. The end arcs have 10 more teeth than the gear (centre distance 5 modules), which is the
+    // smallest step that keeps involute teeth from fouling each other. Everything prints in place, flat, with no
+    // supports: the rack and gear float 0.4 mm above the base, and the pins hang into the grooves.
+    // The page layout, the viewport, the Color tool and the exports come from shared/generator-core.js.
+    (function () {
+      'use strict';
+
+      // -----------------------------------------------------------------------
+      // Mesh toolkit (same as the Gear Train Spinner). A mesh is a flat array of triangle corners (x,y,z per
+      // corner, 9 per triangle), Y-up, millimetres, counter-clockwise seen from outside. The mechanism lies in
+      // the x/z plane (u = x, v = z) and is stacked along y.
+      // -----------------------------------------------------------------------
+      var PI = Math.PI, TAU = Math.PI * 2;
+
+      function tri(m, a, b, c) {
+        if ((a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) || (b[0] === c[0] && b[1] === c[1] && b[2] === c[2]) ||
+            (a[0] === c[0] && a[1] === c[1] && a[2] === c[2])) return;
+        m.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      function quad(m, a, b, c, d) { tri(m, a, b, c); tri(m, a, c, d); }
+      function append(dst, src) { for (var i = 0; i < src.length; i++) dst.push(src[i]); return dst; }
+
+      function xf(m, f, mirror) {
+        var out = new Array(m.length);
+        for (var i = 0; i < m.length; i += 3) {
+          var p = f(m[i], m[i + 1], m[i + 2]);
+          out[i] = p[0]; out[i + 1] = p[1]; out[i + 2] = p[2];
+        }
+        if (mirror) {
+          for (var k = 0; k < out.length; k += 9) {
+            for (var q = 0; q < 3; q++) { var t = out[k + 3 + q]; out[k + 3 + q] = out[k + 6 + q]; out[k + 6 + q] = t; }
+          }
+        }
+        return out;
+      }
+      function mv(m, x, y, z) { return xf(m, function (a, b, c) { return [a + x, b + y, c + z]; }); }
+      function scl(m, sx, sy, sz) { return xf(m, function (a, b, c) { return [a * sx, b * sy, c * sz]; }); }
+
+      function box(x0, y0, z0, x1, y1, z1) {
+        var m = [];
+        quad(m, [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]);
+        quad(m, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
+        quad(m, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]);
+        quad(m, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]);
+        quad(m, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
+        quad(m, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]);
+        return m;
+      }
+
+      // Solid of revolution about the Y axis; prof = [[r, y], ...] counter-clockwise in the (r, y) plane.
+      function lathe(prof, seg) {
+        var m = [], n = prof.length, j, k;
+        for (k = 0; k < n; k++) {
+          var p1 = prof[k], p2 = prof[(k + 1) % n];
+          if (p1[0] === 0 && p2[0] === 0) continue;
+          for (j = 0; j < seg; j++) {
+            var f0 = TAU * j / seg, f1 = TAU * (j + 1) / seg;
+            var c0 = Math.cos(f0), s0 = Math.sin(f0), c1 = Math.cos(f1), s1 = Math.sin(f1);
+            if (j === seg - 1) { c1 = 1; s1 = 0; }
+            quad(m, [p1[0] * c0, p1[1], p1[0] * s0], [p2[0] * c0, p2[1], p2[0] * s0],
+                    [p2[0] * c1, p2[1], p2[0] * s1], [p1[0] * c1, p1[1], p1[0] * s1]);
+          }
+        }
+        return m;
+      }
+      function cylY(r, y0, y1, seg) { return lathe([[0, y0], [r, y0], [r, y1], [0, y1]], seg); }
+      function sphere(r, rings, seg) {
+        var prof = [];
+        for (var i = 0; i <= rings; i++) {
+          var a = -PI / 2 + PI * i / rings;
+          prof.push([i === 0 || i === rings ? 0 : r * Math.cos(a), r * Math.sin(a)]);
+        }
+        return lathe(prof, seg);
+      }
+
+      function area2(poly) {
+        var s = 0;
+        for (var i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s;
+      }
+      function cw(poly) { return area2(poly) < 0 ? poly : poly.slice().reverse(); }
+
+      function earClip(P) {
+        var n = P.length, idx = [], i, out = [];
+        for (i = 0; i < n; i++) idx.push(i);
+        var guard = 0;
+        function cross(a, b, c) { return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); }
+        while (idx.length > 3 && guard++ < 20000) {
+          var clipped = false;
+          for (i = 0; i < idx.length; i++) {
+            var ia = idx[(i + idx.length - 1) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+            var a = P[ia], b = P[ib], c = P[ic];
+            if (cross(a, b, c) > -1e-9) continue;
+            var inside = false;
+            for (var k = 0; k < idx.length && !inside; k++) {
+              var id = idx[k];
+              if (id === ia || id === ib || id === ic) continue;
+              var p = P[id];
+              if (cross(a, b, p) <= 1e-9 && cross(b, c, p) <= 1e-9 && cross(c, a, p) <= 1e-9) inside = true;
+            }
+            if (inside) continue;
+            out.push([ia, ib, ic]);
+            idx.splice(i, 1);
+            clipped = true;
+            break;
+          }
+          if (!clipped) idx.splice(0, 1);
+        }
+        if (idx.length === 3) out.push([idx[0], idx[1], idx[2]]);
+        return out;
+      }
+
+      // Prism: a simple polygon [x, z] extruded from y0 to y1.
+      function extrude(poly, y0, y1) {
+        var P = cw(poly), m = [], n = P.length, i;
+        var T = earClip(P);
+        for (i = 0; i < T.length; i++) {
+          var t = T[i];
+          tri(m, [P[t[0]][0], y1, P[t[0]][1]], [P[t[1]][0], y1, P[t[1]][1]], [P[t[2]][0], y1, P[t[2]][1]]);
+          tri(m, [P[t[0]][0], y0, P[t[0]][1]], [P[t[2]][0], y0, P[t[2]][1]], [P[t[1]][0], y0, P[t[1]][1]]);
+        }
+        for (i = 0; i < n; i++) {
+          var a = P[i], b = P[(i + 1) % n];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        return m;
+      }
+      // Profile (u, h) extruded sideways: u along x, h up, thickness along z from z0 to z1.
+      function extrudeUH(poly, z0, z1) {
+        return xf(extrude(poly, z0, z1), function (x, y, z) { return [x, z, y]; }, true);
+      }
+
+      // Star-shaped ring between two loops [x, z] around the origin, extruded from y0 to y1.
+      function ring(outer, inner, y0, y1) {
+        var O = cw(outer), I = cw(inner), m = [], i, j;
+        var ang = function (p) { return Math.atan2(p[1], p[0]); };
+        var a0 = ang(O[0]);
+        var prog = function (p) { var d = a0 - ang(p); d = d % TAU; if (d < 0) d += TAU; return d; };
+        var j0 = 0, best = 1e9;
+        for (j = 0; j < I.length; j++) { var pr = prog(I[j]); if (pr < best) { best = pr; j0 = j; } }
+        var nO = O.length, nI = I.length, oi = 0, ii = 0;
+        var ip = function (k) { var p = prog(I[(j0 + k) % nI]); if (k >= nI) p += TAU; else if (k > 0 && p < prog(I[j0])) p += TAU; return p; };
+        var op = function (k) { return k >= nO ? TAU : prog(O[k % nO]); };
+        function strip(y, up) {
+          oi = 0; ii = 0;
+          while (oi < nO || ii < nI) {
+            var po = oi < nO ? op(oi + 1) : 1e9, pi = ii < nI ? ip(ii + 1) : 1e9;
+            var o0 = O[oi % nO], o1 = O[(oi + 1) % nO], i0 = I[(j0 + ii) % nI], i1 = I[(j0 + ii + 1) % nI];
+            var A, B, C;
+            if (oi < nO && (po <= pi || ii >= nI)) { A = o0; B = o1; C = i0; oi++; }
+            else { A = o0; B = i1; C = i0; ii++; }
+            var pa = [A[0], y, A[1]], pb = [B[0], y, B[1]], pc = [C[0], y, C[1]];
+            if (up) tri(m, pa, pb, pc); else tri(m, pa, pc, pb);
+          }
+        }
+        strip(y1, true);
+        strip(y0, false);
+        for (i = 0; i < nO; i++) {
+          var a = O[i], b = O[(i + 1) % nO];
+          quad(m, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+        }
+        for (i = 0; i < nI; i++) {
+          var c = I[i], d = I[(i + 1) % nI];
+          quad(m, [c[0], y0, c[1]], [c[0], y1, c[1]], [d[0], y1, d[1]], [d[0], y0, d[1]]);
+        }
+        return m;
+      }
+      function circlePts(r, n, rot) {
+        var pts = [];
+        for (var i = 0; i < n; i++) { var a = (rot || 0) + TAU * i / n; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+      // Axis-aligned rectangle outline with n points per edge (keeps the ring strips short).
+      function rectPts(x0, z0, x1, z1, n) {
+        var pts = [], i;
+        for (i = 0; i < n; i++) pts.push([x0 + (x1 - x0) * i / n, z0]);
+        for (i = 0; i < n; i++) pts.push([x1, z0 + (z1 - z0) * i / n]);
+        for (i = 0; i < n; i++) pts.push([x1 - (x1 - x0) * i / n, z1]);
+        for (i = 0; i < n; i++) pts.push([x0, z1 - (z1 - z0) * i / n]);
+        return pts;
+      }
+      // Stadium (two straight runs of half length hl joined by half circles of radius r), counter-clockwise.
+      function stadiumPts(hl, r, nSeg) {
+        var pts = [], i, a;
+        for (i = 0; i <= nSeg; i++) { a = -PI / 2 + PI * i / nSeg; pts.push([hl + r * Math.cos(a), r * Math.sin(a)]); }
+        for (i = 0; i <= nSeg; i++) { a = PI / 2 + PI * i / nSeg; pts.push([-hl + r * Math.cos(a), r * Math.sin(a)]); }
+        return pts;
+      }
+
+      function toF32(m) { return new Float32Array(m); }
+      function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+      // -----------------------------------------------------------------------
+      // Gear geometry. Pressure angle 20 degrees, full depth teeth.
+      // -----------------------------------------------------------------------
+      var ALPHA = 20 * PI / 180;
+      function inv(a) { return Math.tan(a) - a; }
+
+      // External gear outline [x, z], tooth centres at phi + i * 2pi/z, counter-clockwise.
+      function gearOutline(z, mod, phi, backlash) {
+        var rp = mod * z / 2, ra = rp + mod, rd = Math.max(rp - 1.25 * mod, rp * 0.45);
+        var rb = rp * Math.cos(ALPHA);
+        var thP = PI / (2 * z) - backlash / (4 * rp);
+        var half = function (r) {
+          if (r <= rb) return thP + inv(ALPHA);
+          return thP - (inv(Math.acos(rb / r)) - inv(ALPHA));
+        };
+        var radii = [rd];
+        var r0 = Math.max(rd, rb), k;
+        for (k = 0; k <= 5; k++) radii.push(r0 + (ra - r0) * k / 5);
+        var pts = [], pitch = TAU / z, i;
+        for (i = 0; i < z; i++) {
+          var c = phi + i * pitch;
+          for (k = 0; k < radii.length; k++) { var a = c - half(radii[k]); pts.push([radii[k] * Math.cos(a), radii[k] * Math.sin(a)]); }
+          for (k = radii.length - 1; k >= 0; k--) { var b = c + half(radii[k]); pts.push([radii[k] * Math.cos(b), radii[k] * Math.sin(b)]); }
+          var rs = c + half(rd), re = c + pitch - half(rd);
+          for (k = 1; k <= 2; k++) { var t = rs + (re - rs) * k / 3; pts.push([rd * Math.cos(t), rd * Math.sin(t)]); }
+        }
+        return pts;
+      }
+
+      // All the numbers of one mechanism. The end arcs have TWO_K more teeth than the gear.
+      var TWO_K = 10;
+      var WALL = 4;       // thickness of the rack frame outside the teeth
+      var PIN_R = 1.6;    // radius of the guide pins under the rack
+      var BASE_T = 4;     // base plate thickness
+      function derive(p) {
+        var D = {};
+        D.m = p.module;
+        D.zp = 2 * Math.round(p.teeth / 2);
+        D.N = 2 * Math.round(p.rackTeeth / 2);
+        D.zi = D.zp + TWO_K;
+        D.rp = D.m * D.zp / 2;
+        D.R = D.m * D.zi / 2;
+        D.d = D.R - D.rp;                    // how far the gear centre sits from the rack's centre line
+        D.pitch = PI * D.m;
+        D.Lh = D.N * D.pitch / 2;            // half length of the straight rows
+        D.rootR = D.R + 1.25 * D.m;
+        D.tipR = D.R - D.m;
+        D.Ho = D.rootR + WALL;
+        D.deck = p.deck;
+        D.HoTop = D.Ho + D.deck;
+        D.b = p.backlash;
+        D.tf = p.thickness;
+        D.gz = p.zGap;
+        D.gc = p.grooveClear;
+        D.gd = p.grooveDepth;               // depth of the guide grooves; the rack's underside bridges them (4 mm wide)
+        D.pinR = clamp(D.rp * 0.2, 1.6, 3.2);
+        D.holeR = D.pinR + p.pinClear;
+        D.yF0 = BASE_T + D.gz;
+        D.yF1 = D.yF0 + D.tf;
+        D.fx = D.Lh + (D.rootR + D.Ho) / 2;  // x of each guide pin in the rack frame
+        return D;
+      }
+
+      // Half angle of a ring tooth (material) at radius r around an arc centre.
+      function ringHalf(D, r) {
+        var rb = D.R * Math.cos(ALPHA), ht = (D.pitch - D.b) / (4 * D.R);
+        if (r <= rb) return ht - inv(ALPHA);
+        return ht + inv(Math.acos(rb / r)) - inv(ALPHA);
+      }
+      // Top row of the cavity boundary, left to right, in rack coordinates (u, v), v up. ext lengthens both ends
+      // along the root line (used for the frame pieces so they overlap the end caps a little).
+      function rowTop(D, ext) {
+        var t20 = Math.tan(ALPHA), h0 = (D.pitch / 2 - D.b / 2) / 2;
+        var hRoot = h0 + 1.25 * D.m * t20, hTip = h0 - D.m * t20;
+        var pts = [[-D.Lh - ext, D.rootR]], j;
+        for (j = D.N - 1; j >= 0; j--) {
+          var xc = D.Lh - (j + 0.5) * D.pitch;
+          pts.push([xc - hRoot, D.rootR], [xc - hTip, D.tipR], [xc + hTip, D.tipR], [xc + hRoot, D.rootR]);
+        }
+        pts.push([D.Lh + ext, D.rootR]);
+        return pts;
+      }
+      function mirrorV(pts) { return pts.map(function (q) { return [q[0], -q[1]]; }); }
+      // Teeth round one end. cx = arc centre x, th0 = angle of the junction. Runs clockwise (angle decreasing).
+      function arcPts(D, cx, th0) {
+        var zh = D.zi / 2, k, i, a, pts = [], radii = [D.rootR];
+        for (i = 1; i <= 4; i++) radii.push(D.rootR + (D.tipR - D.rootR) * i / 4);
+        for (k = 0; k < zh; k++) {
+          var th = th0 - (k + 0.5) * D.pitch / D.R;
+          for (i = 0; i < radii.length; i++) { a = th + ringHalf(D, radii[i]); pts.push([cx + radii[i] * Math.cos(a), radii[i] * Math.sin(a)]); }
+          for (i = radii.length - 1; i >= 0; i--) { a = th - ringHalf(D, radii[i]); pts.push([cx + radii[i] * Math.cos(a), radii[i] * Math.sin(a)]); }
+        }
+        return pts;
+      }
+      // The whole toothed opening as one loop (clockwise): top row, right arc, bottom row, left arc.
+      function cavityLoop(D) {
+        var top = rowTop(D, 0), bot = mirrorV(top).reverse();
+        return top.concat(arcPts(D, D.Lh, PI / 2), bot, arcPts(D, -D.Lh, -PI / 2));
+      }
+
+      // The rack frame as four simple pieces (top bar, bottom bar, two end caps) that overlap a little.
+      function rackPieces(D) {
+        var top = rowTop(D, 0.5), bot = mirrorV(top);
+        var topPoly = top.concat([[D.Lh + 0.5, D.HoTop], [-D.Lh - 0.5, D.HoTop]]);
+        var botPoly = bot.concat([[D.Lh + 0.5, -D.Ho], [-D.Lh - 0.5, -D.Ho]]);
+        var outer = [], i, a;
+        for (i = 0; i <= 28; i++) { a = -PI / 2 + PI * i / 28; outer.push([D.Lh + D.Ho * Math.cos(a), D.Ho * Math.sin(a)]); }
+        var cap = outer.concat(arcPts(D, D.Lh, PI / 2));
+        var capL = cap.map(function (q) { return [-q[0], -q[1]]; });
+        return [topPoly, botPoly, cap, capL];
+      }
+
+      // -----------------------------------------------------------------------
+      // The model. World frame: the gear axle is at the origin, rack coordinates are shifted by (0, -d) so the
+      // gear starts meshed with the top row, mid-stroke.
+      // -----------------------------------------------------------------------
+      var TOPPER_NAMES = ['None', 'Duck', 'Sailboat', 'Flag'];
+
+      function domeProfile(y0, n) {
+        var prof = [[0, y0], [1, y0], [1, 0]], i;
+        for (i = 1; i <= n; i++) { var t = (PI / 2) * i / n; prof.push([Math.cos(t), Math.sin(t)]); }
+        prof[prof.length - 1] = [0, 1];
+        return prof;
+      }
+
+      function buildTopper(D, p, y1) {
+        var out = [], kind = Math.round(p.topper);
+        if (kind === 0) return out;
+        var sc = p.topperSize * D.deck / 12;
+        var ux = 0, uz = D.Ho + D.deck / 2 - D.d;   // topper foot centre in world coordinates
+        var base = y1 - 0.8;                          // sink the foot into the deck
+        var m = [], eyes = [], beak = [], i;
+        if (kind === 1) {
+          // Duck: a dome body, a round head, a wedge beak.
+          m = mv(scl(lathe(domeProfile(-0.1, 8), 32), 9 * sc, 8 * sc, 5.4 * sc), ux, y1, uz);
+          var rh = 3.7 * sc, hc = [4.6 * sc, 0];
+          var hp = [[0, 2.5 * sc], [rh, 2.5 * sc], [rh, 8.5 * sc]];
+          for (i = 1; i <= 6; i++) { var t = (PI / 2) * i / 6; hp.push([rh * Math.cos(t), 8.5 * sc + rh * 0.95 * Math.sin(t)]); }
+          hp[hp.length - 1] = [0, 8.5 * sc + rh * 0.95];
+          append(m, mv(lathe(hp, 28), ux + hc[0], y1, uz));
+          var bk = [[2.6 * sc, 5.2 * sc], [5.6 * sc, 8.2 * sc], [2.6 * sc, 8.2 * sc]];
+          beak = mv(extrudeUH(bk, -1.7 * sc, 1.7 * sc), ux + hc[0], y1, uz);
+          eyes = mv(sphere(0.75 * sc, 6, 12), ux + hc[0] + 2.2 * sc, y1 + 9.2 * sc, uz + 2.4 * sc);
+          append(eyes, mv(sphere(0.75 * sc, 6, 12), ux + hc[0] + 2.2 * sc, y1 + 9.2 * sc, uz - 2.4 * sc));
+        } else if (kind === 2) {
+          // Sailboat: a pointed hull, a cabin, a mast and a triangular sail.
+          var hull = [[-9, -5], [4, -5], [11, 0], [4, 5], [-9, 5]].map(function (q) { return [q[0] * sc + ux, q[1] * sc + uz]; });
+          m = extrude(hull, base, y1 + 4.5 * sc);
+          append(m, box(ux - 6 * sc, y1 + 4 * sc, uz - 3 * sc, ux + 0.5 * sc, y1 + 8 * sc, uz + 3 * sc));
+          append(m, mv(cylY(0.9 * sc, 0, 21 * sc, 14), ux + 3 * sc, y1 + 4 * sc, uz));
+          var sail = [[3.9 * sc, 4 * sc], [3.9 * sc, 20 * sc], [9.5 * sc, 4 * sc]];
+          beak = mv(extrudeUH(sail, -0.7 * sc, 0.7 * sc), ux, y1, uz);
+        } else {
+          // Flag: a pole on a round foot with a right-angled pennant.
+          m = mv(cylY(3.6 * sc, -0.8, 2 * sc, 28), ux, y1, uz);
+          append(m, mv(cylY(1.1 * sc, 0, 24 * sc, 14), ux, y1, uz));
+          var pen = [[0.6 * sc, 24 * sc], [0.6 * sc, 17 * sc], [8 * sc, 24 * sc]];
+          beak = mv(extrudeUH(pen, -0.8 * sc, 0.8 * sc), ux, y1, uz);
+        }
+        out.push({ name: 'topper', positions: toF32(m) });
+        if (beak.length) out.push({ name: kind === 1 ? 'beak' : 'topper2', positions: toF32(beak) });
+        if (eyes.length) out.push({ name: 'eyes', positions: toF32(eyes) });
+        return out;
+      }
+
+      function buildWalker(p) {
+        var D = derive(p), out = [], i, s;
+        var yG = BASE_T - D.gd;                        // groove floor
+        var pitchOff = -D.d;                               // rack centre sits d below the gear axle at the start
+
+        // ---- Base plate: a solid slab, plus a top layer with two stadium grooves (blind, the islands stay attached).
+        var gw = 2 * (PIN_R + D.gc), ro = D.d + gw / 2, ri = D.d - gw / 2;
+        var c = D.fx, xEdge = c + D.Lh + ro + 5;
+        var vLo = -(D.d + D.Ho + 3), vHi = D.d + D.HoTop + 3;
+        var base = box(-xEdge, 0, vLo, xEdge, yG, vHi);
+        var yTop0 = yG - 0.4;
+        for (s = -1; s <= 1; s += 2) {
+          // loop-centred coordinates: the plate rectangle runs from just past x = 0 out to the edge
+          var x0 = s > 0 ? -c - 0.3 : -xEdge + c, x1 = s > 0 ? xEdge - c : c + 0.3;
+          var outer = rectPts(x0, vLo, x1, vHi, 10);
+          var layer = ring(outer, stadiumPts(D.Lh, ro, 28), yTop0, BASE_T);
+          var island = extrude(stadiumPts(D.Lh, ri, 28), yTop0, BASE_T);
+          append(base, mv(layer, s * c, 0, 0));
+          append(base, mv(island, s * c, 0, 0));
+        }
+        out.push({ name: 'base', positions: toF32(base) });
+
+        // ---- Rack frame: four pieces, plus a guide pin under each end cap.
+        var rack = [], pcs = rackPieces(D);
+        for (i = 0; i < pcs.length; i++) append(rack, mv(extrude(pcs[i], D.yF0, D.yF1), 0, 0, pitchOff));
+        for (s = -1; s <= 1; s += 2) append(rack, mv(cylY(PIN_R, yG + D.gz, D.yF0 + 0.8, 24), s * D.fx, 0, pitchOff));
+        out.push({ name: 'rack', positions: toF32(rack) });
+
+        // ---- Crank gear: tooth 0 points along +v (towards the top row). It floats on the axle.
+        var gear = ring(gearOutline(D.zp, D.m, PI / 2, D.b), circlePts(D.holeR, 40, 0), D.yF0, D.yF1);
+        out.push({ name: 'pinion', positions: toF32(gear) });
+
+        // ---- Axle post with a cone head (45 degree underside, no supports).
+        var head0 = D.yF1 + D.gz, hr = D.pinR + 1.7;
+        var axle = lathe([[0, BASE_T - 0.6], [D.pinR, BASE_T - 0.6], [D.pinR, head0], [hr, head0 + (hr - D.pinR)],
+                          [hr, head0 + (hr - D.pinR) + 0.8], [0, head0 + (hr - D.pinR) + 0.8]], 28);
+        out.push({ name: 'axle', positions: toF32(axle) });
+
+        // ---- Crank knob on the gear's top face.
+        // The knob must clear the axle head and stand inside the tooth tips; very small gears get no knob.
+        var kr = clamp((D.rp + D.m - 0.4 - hr - 0.6) / 2, 0, 2.4);
+        if (p.crank >= 1 && kr >= 1.2) {
+          var off = Math.min(Math.max(D.rp * 0.62, hr + kr + 0.6), D.rp + D.m - 0.4 - kr), ky0 = D.yF1 - 1.2, kh = 9;
+          var kn = lathe([[0, ky0], [kr, ky0], [kr, ky0 + kh + 0.2], [kr - 0.9, ky0 + kh + 1.2], [0, ky0 + kh + 1.2]], 28);
+          out.push({ name: 'knob', positions: toF32(mv(kn, off, 0, 0)) });
+        }
+
+        append(out, buildTopper(D, p, D.yF1));
+        return out;
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-137',
+        category: 'TOYS // MECHANISMS',
+        title: 'Mangle Rack Walker',
+        fileName: 'Mangle_Rack_Walker',
+        palette: [
+          { name: 'Bone White', color: '#f1f5f9' }, { name: 'Glow Mint', color: '#a7f3d0' },
+          { name: 'Pumpkin Matte', color: '#fdba74' }, { name: 'Lavender Mist', color: '#d8b4fe' },
+          { name: 'Phantom Ice', color: '#93c5fd' }, { name: 'Berry Sorbet', color: '#fda4af' },
+          { name: 'Shadow Black', color: '#334155' }, { name: 'Sunny Yellow', color: '#fde047' }
+        ],
+        defaultColor: 'Bone White',
+        partNames: { base: 'Base plate', rack: 'Rack frame', pinion: 'Crank gear', axle: 'Axle post', knob: 'Crank knob',
+                     topper: 'Topper', topper2: 'Topper (sail or flag)', beak: 'Beak', eyes: 'Eyes' },
+        parameters: [
+          { group: 'Mechanism', key: 'rackTeeth', label: 'Rack teeth per row (longer = longer stroke)', unit: '', min: 6, max: 10, step: 2, value: 8 },
+          { group: 'Mechanism', key: 'teeth', label: 'Gear teeth', unit: '', min: 10, max: 16, step: 2, value: 12 },
+          { group: 'Mechanism', key: 'module', label: 'Tooth size', unit: ' mm', min: 1.2, max: 1.8, step: 0.1, value: 1.5 },
+          { group: 'Mechanism', key: 'thickness', label: 'Gear and rack height', unit: ' mm', min: 4, max: 8, step: 0.5, value: 5 },
+          { group: 'Mechanism', key: 'crank', label: 'Crank knob', unit: '', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+          { group: 'Topper', key: 'topper', label: 'Topper', unit: '', min: 0, max: 3, step: 1, value: 1, format: function (v) { return TOPPER_NAMES[Math.round(v)]; } },
+          { group: 'Topper', key: 'topperSize', label: 'Topper size', unit: '', min: 0.7, max: 1.4, step: 0.05, value: 1, showIf: function (q) { return q.topper >= 1; }, format: function (v) { return Math.round(v * 100) + '%'; } },
+          { group: 'Topper', key: 'deck', label: 'Deck depth (the topper stands on it)', unit: ' mm', min: 8, max: 16, step: 1, value: 12 },
+          { group: 'Fit', key: 'backlash', label: 'Tooth play (looser = easier)', unit: ' mm', min: 0.25, max: 0.7, step: 0.05, value: 0.4 },
+          { group: 'Fit', key: 'grooveClear', label: 'Groove play (sideways, per side)', unit: ' mm', min: 0.3, max: 0.8, step: 0.05, value: 0.45 },
+          { group: 'Fit', key: 'grooveDepth', label: 'Groove depth (deeper = firmer guide)', unit: ' mm', min: 0.8, max: 1.2, step: 0.1, value: 1 },
+          { group: 'Fit', key: 'pinClear', label: 'Axle gap (sideways)', unit: ' mm', min: 0.25, max: 0.7, step: 0.05, value: 0.4 },
+          { group: 'Fit', key: 'zGap', label: 'Gap above and below (height)', unit: ' mm', min: 0.25, max: 0.6, step: 0.05, value: 0.4 }
+        ],
+        presets: [
+          { label: 'Default duck', values: { rackTeeth: 8, teeth: 12, module: 1.5, thickness: 5, crank: 1, topper: 1, topperSize: 1, deck: 12, backlash: 0.4, grooveClear: 0.45, grooveDepth: 1, pinClear: 0.4, zGap: 0.4 } },
+          { label: 'Long sailboat', values: { rackTeeth: 10, teeth: 12, module: 1.5, thickness: 5, crank: 1, topper: 2, topperSize: 1, deck: 12, backlash: 0.4, grooveClear: 0.45, grooveDepth: 1, pinClear: 0.4, zGap: 0.4 } },
+          { label: 'Small flag', values: { rackTeeth: 6, teeth: 10, module: 1.2, thickness: 4.5, crank: 1, topper: 3, topperSize: 1, deck: 10, backlash: 0.4, grooveClear: 0.45, grooveDepth: 1, pinClear: 0.35, zGap: 0.4 } },
+          { label: 'Chunky duck', values: { rackTeeth: 6, teeth: 12, module: 1.8, thickness: 7, crank: 1, topper: 1, topperSize: 1.2, deck: 15, backlash: 0.45, grooveClear: 0.5, grooveDepth: 1, pinClear: 0.45, zGap: 0.4 } }
+        ],
+        // The rack floats 0.4 mm above the base and bridges the 4 mm wide guide grooves; the voxel grid reads that as air.
+        printCheckOptions: { bridgeGap: 1.8 },
+        build: function (p) { return buildWalker(p); },
+        // Used by tools/mangle-walker/mesh-sim.mjs only; the engine ignores it.
+        sim: { derive: derive, cavityLoop: cavityLoop, gearOutline: gearOutline, ringHalf: ringHalf }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

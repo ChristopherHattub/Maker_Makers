@@ -520,5 +520,10 @@
     "sat": 70,
     "light": 78,
     "stand": true
+  },
+  "mangle-walker": {
+    "hue": 190,
+    "sat": 70,
+    "light": 74
   }
 }

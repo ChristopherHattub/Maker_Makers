@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 137,
+    title: 'Mangle Rack Walker',
+    bundle: 'toys',
+    category: 'TOYS // MECHANISMS',
+    thumbnailUrl: 'assets/thumbnails/mangle-walker.svg',
+    programUrl: 'programs/mangle-walker.html',
+    description: 'A mangle wheel and rack from the old mechanical-movements books, printed in place. Turn the crank and one small gear that never changes direction drives a racetrack-shaped rack of teeth: the rack runs along the top row, slides sideways while the gear rolls round the end, and comes back along the bottom row, so the duck, sailboat or flag on its deck paddles back and forth and bobs at each end. Two pins under the rack ride in grooves in the base plate. Choose the gear and rack tooth counts (stroke length), tooth size, topper and deck, and the fit gaps. It prints flat with no supports, but the gaps, the grooves and the tooth play are untested on a real printer. Paint parts in the Color tool and export .STL.'
   }
 ];
 
