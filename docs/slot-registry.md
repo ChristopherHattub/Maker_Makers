@@ -32,9 +32,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 121 | Built: Zoetrope. |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
+| 124 | Built: Bear Builder. |
 | 129 | Built: Bee & Beetle Bugs (bee, ladybug, stag beetle, dragonfly; no supports). |
 | 132 | Built: Crab & Lobster (print-in-place pincers, no supports). |
-| 124+ | Free (check open PRs first). Any number works. |
+| 125+ | Free (check open PRs first). Any number works. |
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -165,6 +166,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
 | 129 | Bee & Beetle Bugs | animals | `bee-beetle-bugs.html` (bug picker: honey bee, ladybug, stag beetle, dragonfly; flat, raised or folded wings, patterns, antennae, legs; unprinted) |
 | 132 | Crab & Lobster | animals | `crab-lobster.html` (crab or lobster with print-in-place pincers on a post hinge, 2-5 legs per side, eye stalks, five shell textures) |
+| 124 | Bear Builder | animals | `bear-builder.html` (brown, polar, panda and koala bears; sitting, standing or waving; ears, belly patch, scarf, beanie or party hat; built from `tools/animals/bear-builder.js`; unprinted) |
 
 ## Groups (BUNDLES)
 

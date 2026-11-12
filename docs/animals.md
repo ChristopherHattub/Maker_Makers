@@ -1,5 +1,7 @@
 # Animal generators (slots 76-90)
 
+Slot 124, the Bear Builder, is also built with this kit: see [bear-builder.md](bear-builder.md).
+
 Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Horse Builder.
 
 The Crab & Lobster (slot 132, [crab-lobster.md](crab-lobster.md)) joins the `animals` group and is built with the same `build.mjs` from `tools/animals/crab-lobster.js`, but from plain shells rather than `Sculpt` forms.

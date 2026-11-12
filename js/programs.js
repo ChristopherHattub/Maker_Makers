@@ -1104,6 +1104,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/crab-lobster.svg',
     programUrl: 'programs/crab-lobster.html',
     description: 'A claw-forward crab or lobster that prints with no supports and a pincer that really moves: each claw rests on the bed and its pincer swings on a print-in-place hinge with a clearance you set. Pick crab or lobster, claw size and pose (guarding, spread, pinching together, arms wide), a matching pair or a big-claw fiddler, 2 to 5 legs per side, eye stalk length, and a smooth, ribbed, bumpy, plated or spiky shell. Unprinted: the hinge clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 124,
+    title: 'Bear Builder',
+    bundle: 'animals',
+    category: 'ANIMALS // CUDDLY',
+    thumbnailUrl: 'assets/thumbnails/bear-builder.svg',
+    programUrl: 'programs/bear-builder.html',
+    description: 'A chunky, cuddly bear that prints with no supports. Pick a brown, polar, panda or koala bear, sit it, stand it or have it wave, then choose round, small, big fluffy or pointy ears, a belly patch (oval, heart or round), a scarf and a beanie or party hat. Tune size, chunkiness, head, snout, ears and eyes. Paint parts in the Color tool and export .STL.'
   }
 ];
 
