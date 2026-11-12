@@ -364,16 +364,16 @@
 
       function fan(p, hub, add) {
         var N = Math.round(p.feathers), spread = p.spread * DEG, L = p.featherLen, r0 = 9, T = 3.0, i, sg;
-        var step = spread / (N - 1), spacing = step * (r0 + L);
+        var half = spread / 2 - 4 * DEG, step = 2 * half / (N - 1), spacing = step * (r0 + L);
         var hwMax = clamp(0.5 * spacing * 1.12 * p.featherW / 100, 2.4, 6.4);
         var kind = Math.round(p.eye), E = Math.max(2.2, Math.min(0.8 * hwMax, 0.1 * L)) * p.eyeSize / 100;
         var n = [1, 0, 0], th, d, c, off, Pe, nn, face, dims;
         // sector base so the feather roots merge into one solid
         var poly = [[hub[1], 0]], R0 = r0 + 7, j, a;
-        for (j = 0; j <= 14; j++) { a = -spread / 2 + spread * j / 14; poly.push([hub[1] + R0 * Math.cos(a), R0 * Math.sin(a)]); }
+        for (j = 0; j <= 14; j++) { a = -half + 2 * half * j / 14; poly.push([hub[1] + R0 * Math.cos(a), R0 * Math.sin(a)]); }
         add('fanbase', plateX(poly, hub[0], [[-2.7, 0.9], [-1.9, 1], [1.9, 1], [2.7, 0.9]]));
         for (i = 0; i < N; i++) {
-          th = -spread / 2 + step * i;
+          th = -half + step * i;
           d = [0, Math.cos(th), Math.sin(th)]; c = vcross(n, d); off = (i % 2) * 0.45;
           add('feathers', leaf(hub, d, c, n, r0, L, hwMax, T, off, featherProf, false));
           if (kind > 0) {
@@ -395,9 +395,9 @@
       function flamingo(p, add, contacts) {
         var two = Math.round(p.stance) === 1, legL = p.legLen, hipY = legL + 2.2, hx = 1.0, sw = p.stanceW / 2, i;
         var hips = two ? [[hx, -sw], [hx, sw]] : [[hx, 0]];
-        var B = domeBody({ xc: 0, rr: 17, rf: 19, rz: Math.max(9.5, two ? sw + 4.5 : 0), H: 18, pw: 0.55, pitch: 3, hipY: hipY, hips: hips, k: 0.95, soft: 1.2 });
+        var B = domeBody({ xc: 0, rr: 20, rf: 22, rz: Math.max(11, two ? sw + 4.5 : 0), H: 21, pw: 0.55, pitch: 3, hipY: hipY, hips: hips, k: 0.95, soft: 1.2 });
         add('body', B.shell);
-        if (Math.round(p.wings) === 1) wings(B, add, 17, 5.6, true, -0.5);
+        if (Math.round(p.wings) === 1) wings(B, add, 19, 6.4, true, -0.5);
 
         // standing leg(s): a long thin leg with a knee bulge and a webbed foot
         hips.forEach(function (h) {
@@ -406,7 +406,7 @@
             t = k / m;
             pts.push([hx + 1.6 * Math.sin(Math.PI * t) - 0.4 * t, lerp(hipY + 4, 1.2, t), z]);
           }
-          add('legs', tube(pts, function (t) { return lerp(2.4, 1.6, t); }, { K: 12 }));
+          add('legs', tube(pts, function (t) { return t < 0.12 ? lerp(3.4, 2.4, t / 0.12) : lerp(2.4, 1.6, (t - 0.12) / 0.88); }, { K: 12 }));
           add('legs', ellipsoid([pts[4][0], pts[4][1], z], [0, 1, 0], [1, 0, 0], 3.4, 2.7, 2.7, 8, 12));
           add('feet', footPlate(pts[m][0], z, 3.4, [[0, 11, 19], [40, 10, 19], [-40, 10, 19], [180, 4, 16]], 1.5, contacts));
         });
@@ -420,7 +420,7 @@
         var xn = B.xmax - 6, base = [xn, B.up(xn, 0) - 2.5], Ln = 50 * p.neck / 100, lean = 12 * DEG;
         var amp = p.curve / 100 * (42 * DEG - lean);
         var np = neckPath(base, Ln, lean, amp);
-        add('neck', tube(np.pts, function (t) { return lerp(3.3, 2.2, smooth(t)); }, { K: 14 }));
+        add('neck', tube(np.pts, function (t) { return lerp(3.7, 2.4, smooth(t)); }, { K: 14 }));
         var end = np.pts[np.pts.length - 1], hd = -8 * DEG;
         var ex = [Math.cos(hd), Math.sin(hd), 0], ey = [-Math.sin(hd), Math.cos(hd), 0];
         var Hc = vadd(end, vmul([Math.sin(np.phi), Math.cos(np.phi), 0], 1.4));
@@ -497,12 +497,12 @@
       function twoLegs(p) { return p.bird >= 0.5 && Math.round(p.stance) === 1; }
       var PARAMS = [
         choice('Bird', 'bird', 'Bird', ['Peacock', 'Flamingo'], 0),
-        { group: 'Bird', key: 'size', label: 'Overall size', unit: '%', min: 60, max: 130, step: 1, value: 100 },
+        { group: 'Bird', key: 'size', label: 'Overall size', unit: '%', min: 60, max: 110, step: 1, value: 100 },
         { group: 'Bird', key: 'neck', label: 'Neck length', unit: '%', min: 60, max: 150, step: 1, value: 100 },
         { group: 'Bird', key: 'curve', label: 'Neck curve (S bend, 100% still prints clean)', unit: '%', min: 0, max: 100, step: 1, value: 70 },
 
         { group: 'Peacock tail', key: 'feathers', label: 'Feathers', unit: '', min: 5, max: 25, step: 1, value: 15, showIf: isPeacock },
-        { group: 'Peacock tail', key: 'spread', label: 'Fan spread (over 95° needs supports)', unit: '°', min: 50, max: 150, step: 1, value: 90, showIf: isPeacock },
+        { group: 'Peacock tail', key: 'spread', label: 'Fan spread (over 100° needs supports)', unit: '°', min: 50, max: 150, step: 1, value: 90, showIf: isPeacock },
         { group: 'Peacock tail', key: 'featherLen', label: 'Feather length', unit: ' mm', min: 40, max: 90, step: 1, value: 64, showIf: isPeacock },
         { group: 'Peacock tail', key: 'featherW', label: 'Feather width (under 100% leaves gaps)', unit: '%', min: 80, max: 140, step: 1, value: 105, showIf: isPeacock },
         choice('Peacock tail', 'eye', 'Eye pattern', ['None', 'Oval', 'Teardrop', 'Round'], 1, isPeacock),
@@ -516,8 +516,8 @@
         choice('Flamingo', 'wings', 'Wing detail', ['Off', 'On'], 1, isFlamingo),
 
         choice('Pedestal', 'base', 'Pedestal', ['Round', 'Hexagon', 'Rounded square', 'None'], 0),
-        { group: 'Pedestal', key: 'baseH', label: 'Pedestal height', unit: ' mm', min: 3, max: 16, step: 1, value: 7, showIf: function (p) { return Math.round(p.base) !== 3; } },
-        { group: 'Pedestal', key: 'margin', label: 'Pedestal margin around the feet', unit: ' mm', min: 6, max: 30, step: 1, value: 14, showIf: function (p) { return Math.round(p.base) !== 3; } }
+        { group: 'Pedestal', key: 'baseH', label: 'Pedestal height', unit: ' mm', min: 3, max: 14, step: 1, value: 7, showIf: function (p) { return Math.round(p.base) !== 3; } },
+        { group: 'Pedestal', key: 'margin', label: 'Pedestal margin around the feet', unit: ' mm', min: 6, max: 26, step: 1, value: 14, showIf: function (p) { return Math.round(p.base) !== 3; } }
       ];
       var DEFAULTS = {};
       PARAMS.forEach(function (q) { DEFAULTS[q.key] = q.value; });

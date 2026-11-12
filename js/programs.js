@@ -1052,6 +1052,15 @@ const GENERATORS = [
     description: 'A horse, pony or unicorn, standing, kneeling or rearing: tune neck, head, legs, mane, tail and face markings. Prints with no supports. Paint parts in the Color tool and export .STL.'
   },
   {
+    slot: 133,
+    title: 'Peacock & Flamingo',
+    bundle: 'animals',
+    category: 'ANIMALS // DISPLAY BIRDS',
+    thumbnailUrl: 'assets/thumbnails/peacock-flamingo.svg',
+    programUrl: 'programs/peacock-flamingo.html',
+    description: 'An elegant display bird on a pedestal: a peacock with a fanned tail (set the feather count, fan spread, feather length and width, and an oval, teardrop or round eye pattern, plus a crest) or a flamingo (stand on one leg or two, set the neck curve, leg length and beak bend). Round, hexagon or rounded-square pedestal, or none. The belly grows from the legs at 45 degrees and the fan is kept narrow enough to print with no supports. Unprinted. Paint parts in the Color tool and export .STL.'
+  },
+  {
     slot: 108,
     title: 'Nutcracker',
     bundle: 'christmas',

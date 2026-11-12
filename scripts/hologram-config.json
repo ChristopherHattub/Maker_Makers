@@ -520,5 +520,9 @@
     "sat": 70,
     "light": 78,
     "stand": true
+  },
+  "peacock-flamingo": {
+    "hue": 172,
+    "yaw0": 50
   }
 }
