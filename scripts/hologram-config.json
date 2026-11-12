@@ -288,6 +288,11 @@
     "sat": 75,
     "light": 62
   },
+  "mandala-coaster": {
+    "hue": 300,
+    "sat": 70,
+    "light": 74
+  },
   "photo-frame": {
     "hue": 38,
     "sat": 80,

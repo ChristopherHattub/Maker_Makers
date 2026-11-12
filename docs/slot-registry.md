@@ -32,6 +32,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 121 | Built: Zoetrope. |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
+| 135 | Built: Mandala Coaster (layered mandala coaster or ornament). |
 | 124+ | Free (check open PRs first). Any number works. |
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
@@ -161,6 +162,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 135 | Mandala Coaster | decor | `mandala-coaster.html` (symmetry 6 to 24, 2 to 6 petal rings, five petal shapes, relief or cut-through look, ornament loop) |
 
 ## Groups (BUNDLES)
 
@@ -178,7 +180,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | fidgets | Fidgets & Clickers | 10 |
 | personal | Personalised | 2 |
 | pottery | Pottery | 1 |
-| decor | Home & Decor | 6 |
+| decor | Home & Decor | 7 |
 | organization | Organisation | 4 |
 | organization | Organisation | 3 |
 | toys | Toys & Games | 1 |
