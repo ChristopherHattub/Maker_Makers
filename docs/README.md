@@ -25,6 +25,7 @@ There is no build step and no dependencies. The site is plain HTML, CSS and Java
 | [spinner-ring.md](spinner-ring.md) | The Spinner Ring (slot 46): two-piece snap-fit band, 11 fonts, five relief patterns, the Print tab demo animation |
 | [pin-maker.md](pin-maker.md) | The Pin Maker (slot 103): picture tracing in the browser, rim, hanging hole, stamps |
 | [paper-towel-holder.md](paper-towel-holder.md) | The Paper Towel Holder (slot 104): three mounts, base shapes, rod styles, stamps, split rod |
+| [bat-builder.md](bat-builder.md) | The Bat Builder (slot 128): flat support-free bat, scalloped wings with bone beads, ears, cute and Halloween faces, hanging loop, checks. |
 | [bird-feeder.md](bird-feeder.md) | The Bird Feeder (slot 123): tray, posts, hopper with arched ports and cone roof kit, hanging, print layout, check notes. |
 | [cable-organizer.md](cable-organizer.md) | The Cable Organizer (slot 117): desk edge clip, under-desk tray and clip strip, slot sizing, snap-in lips |
 | [marble-run.md](marble-run.md) | The Marble Run (slot 109): zigzag tower layout, support-free track profile, the ball simulation |

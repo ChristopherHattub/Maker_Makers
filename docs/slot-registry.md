@@ -161,6 +161,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 128 | Bat Builder | halloween | `bat-builder.html` (flat support-free bat: scalloped wings with 2-6 bone beads, ears, cute or Halloween face, fangs, perched or hanging with a loop; unprinted) |
 
 ## Groups (BUNDLES)
 

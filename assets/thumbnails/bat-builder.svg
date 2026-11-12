@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#14407f"/><stop offset="0.6" stop-color="#0d2b59"/><stop offset="1" stop-color="#06152d"/></radialGradient>
+    <radialGradient id="plate" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#1b4c92"/><stop offset="1" stop-color="#081c3b"/></radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="mat" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffffff"/><stop offset="0.3" stop-color="#e3ecf9"/><stop offset="0.7" stop-color="#a9bcdc"/><stop offset="1" stop-color="#667fa8"/></radialGradient>
+    <radialGradient id="warm" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffe9cc"/><stop offset="0.3" stop-color="#fdba74"/><stop offset="0.7" stop-color="#e08a33"/><stop offset="1" stop-color="#9c5412"/></radialGradient>
+    <radialGradient id="green" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#e6ffef"/><stop offset="0.3" stop-color="#bbf7d0"/><stop offset="0.7" stop-color="#6fd39a"/><stop offset="1" stop-color="#2f8a5c"/></radialGradient>
+    <pattern id="gridMinor" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#00e5ff" stroke-opacity="0.05"/></pattern>
+    <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#00e5ff" stroke-opacity="0.12"/></pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect width="400" height="300" fill="url(#gridMinor)"/>
+  <rect width="400" height="300" fill="url(#gridMajor)"/>
+  <ellipse cx="200" cy="248" rx="128" ry="19" fill="url(#plate)" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <ellipse cx="200" cy="248" rx="104" ry="14" fill="none" stroke="#00e5ff" stroke-opacity="0.18"/>
+  <ellipse cx="200" cy="249" rx="82" ry="11" fill="url(#shadow)"/>
+  <!-- SUBJECT: perched bat, wings spread, front view -->
+  <g transform="translate(0 14)" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M200 150 C176 138 150 118 98 104 C88 118 84 134 90 152 C100 148 108 156 112 170 C122 160 134 166 140 182 C150 170 164 174 170 190 C182 190 192 194 200 204 Z" fill="url(#mat)"/>
+    <path d="M200 150 C224 138 250 118 302 104 C312 118 316 134 310 152 C300 148 292 156 288 170 C278 160 266 166 260 182 C250 170 236 174 230 190 C218 190 208 194 200 204 Z" fill="url(#mat)"/>
+    <ellipse cx="200" cy="192" rx="20" ry="32" fill="url(#mat)"/>
+    <path d="M176 112 L168 62 L196 92 Z" fill="url(#mat)"/>
+    <path d="M224 112 L232 62 L204 92 Z" fill="url(#mat)"/>
+    <ellipse cx="200" cy="128" rx="28" ry="26" fill="url(#mat)"/>
+  </g>
+  <g transform="translate(0 14)">
+  <g fill="none" stroke="#00e5ff" stroke-opacity="0.75" stroke-width="2.2" stroke-linecap="round">
+    <path d="M176 140 L118 118"/><path d="M176 142 L104 150"/><path d="M178 146 L128 178"/><path d="M180 150 L160 188"/>
+    <path d="M224 140 L282 118"/><path d="M224 142 L296 150"/><path d="M222 146 L272 178"/><path d="M220 150 L240 188"/>
+  </g>
+  <path d="M180 108 L172 76" fill="none" stroke="url(#gloss)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M176 138 C164 148 152 160 150 172" fill="none" stroke="url(#gloss)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="188" cy="124" r="6" fill="#06152d"/><circle cx="212" cy="124" r="6" fill="#06152d"/>
+  <circle cx="186.4" cy="122.4" r="1.8" fill="#fff"/><circle cx="210.4" cy="122.4" r="1.8" fill="#fff"/>
+  <ellipse cx="200" cy="134" rx="3.4" ry="2.4" fill="#0a2246"/>
+  <path d="M190 141 Q200 148 210 141" fill="none" stroke="#06152d" stroke-width="2" stroke-linecap="round"/>
+  <path d="M192 142 L194 150 L197 143 Z M203 143 L206 150 L208 142 Z" fill="#fff" stroke="#c084fc" stroke-width="1.2" stroke-linejoin="round"/>
+  </g>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
+    <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
+  </g>
+  <rect x="30" y="26" width="52" height="16" rx="3" fill="#06152d" fill-opacity="0.7" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <text x="56" y="38" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#00e5ff" letter-spacing="1.5">MM-128</text>
+  <text x="200" y="285" text-anchor="middle" font-family="Courier New, monospace" font-size="12" fill="#eef7ff" fill-opacity="0.9" letter-spacing="3">BAT BUILDER</text>
+</svg>

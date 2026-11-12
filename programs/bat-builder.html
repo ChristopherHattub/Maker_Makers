@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-128 Bat Builder // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Bat Builder: a flat-lying bat relief (face up, wings spread) that prints with no supports.
+    // Pieces: body and head domes, a scalloped wing membrane with raised wing bones, ears, eyes, nose, mouth,
+    // fangs and an optional hanging loop. Every piece is its own closed shell; the slicer unions the overlaps.
+    (function () {
+      'use strict';
+
+      var DEG = Math.PI / 180;
+      var THREE_ = null;   // set in build(): only ShapeUtils.triangulateShape is used
+      var HANG = 1;        // 1 = hanging (head toward the viewer), 0 = perched (head away)
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function sq(x) { return x * x; }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+
+      // -----------------------------------------------------------------------
+      // Shell helpers. Shells are built in design space (u across, y up, v toward the head) and mapped at the end.
+      // -----------------------------------------------------------------------
+      function T(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+
+      // Skin a stack of rings (each an array of [u,y,v]); a ring of one point is a pole. wrap joins the last ring to the first.
+      function skin(rings, wrap) {
+        var o = [], R = rings.length, i, j, last = wrap ? R : R - 1;
+        for (i = 0; i < last; i++) {
+          var A = rings[i], B = rings[(i + 1) % R], n = Math.max(A.length, B.length);
+          for (j = 0; j < n; j++) {
+            var a0 = A[A.length === 1 ? 0 : j], a1 = A[A.length === 1 ? 0 : (j + 1) % n];
+            var b0 = B[B.length === 1 ? 0 : j], b1 = B[B.length === 1 ? 0 : (j + 1) % n];
+            if (A.length === 1) T(o, a0, b1, b0);
+            else if (B.length === 1) T(o, a0, a1, b0);
+            else { T(o, a0, a1, b1); T(o, a0, b1, b0); }
+          }
+        }
+        if (!wrap) { cap(o, rings[0], true); cap(o, rings[R - 1], false); }
+        return o;
+      }
+      function cap(o, ring, start) {
+        var n = ring.length, j, c = [0, 0, 0];
+        if (n < 3) return;
+        for (j = 0; j < n; j++) { c[0] += ring[j][0] / n; c[1] += ring[j][1] / n; c[2] += ring[j][2] / n; }
+        for (j = 0; j < n; j++) {
+          if (start) T(o, c, ring[(j + 1) % n], ring[j]);
+          else T(o, c, ring[j], ring[(j + 1) % n]);
+        }
+      }
+
+      // A flat slab: polygon [[u,v],...] extruded from y0 to y1.
+      function polyPrism(poly, y0, y1) {
+        var pts = [], i, k;
+        for (i = 0; i < poly.length; i++) {
+          var q = poly[i], pr = pts[pts.length - 1];
+          if (!pr || Math.abs(pr[0] - q[0]) + Math.abs(pr[1] - q[1]) > 0.02) pts.push(q);
+        }
+        while (pts.length > 2 && Math.abs(pts[0][0] - pts[pts.length - 1][0]) + Math.abs(pts[0][1] - pts[pts.length - 1][1]) <= 0.02) pts.pop();
+        var area = 0;
+        for (i = 0; i < pts.length; i++) { k = (i + 1) % pts.length; area += pts[i][0] * pts[k][1] - pts[k][0] * pts[i][1]; }
+        if (area < 0) pts.reverse();                       // counter-clockwise in (u, v)
+        var contour = pts.map(function (p) { return new THREE_.Vector2(p[0], p[1]); });
+        var tris = THREE_.ShapeUtils.triangulateShape(contour, []);
+        var o = [];
+        tris.forEach(function (t) {
+          var a = pts[t[0]], b = pts[t[1]], c = pts[t[2]];
+          if ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]) < 0) { var s = b; b = c; c = s; }   // ccw in (u,v)
+          T(o, [a[0], y1, a[1]], [c[0], y1, c[1]], [b[0], y1, b[1]]);
+          T(o, [a[0], y0, a[1]], [b[0], y0, b[1]], [c[0], y0, c[1]]);
+        });
+        for (i = 0; i < pts.length; i++) {
+          var p0 = pts[i], p1 = pts[(i + 1) % pts.length];
+          var A = [p0[0], y0, p0[1]], B = [p1[0], y0, p1[1]], C = [p1[0], y1, p1[1]], D = [p0[0], y1, p0[1]];
+          T(o, A, C, B); T(o, A, D, C);
+        }
+        return o;
+      }
+
+      // Half-ellipsoid dome with a flat base at y0. spec = { cu, cv, a, b, y0, top, rot }
+      function domeAt(d, u, v) {
+        var x = u - d.cu, z = v - d.cv, c = Math.cos(d.rot || 0), s = Math.sin(d.rot || 0);
+        var lx = x * c + z * s, lz = -x * s + z * c;
+        var q = 1 - sq(lx / d.a) - sq(lz / d.b);
+        return q > 0 ? d.y0 + (d.top - d.y0) * Math.sqrt(q) : d.y0;
+      }
+      function dome(d, rings, seg) {
+        rings = rings || 12; seg = seg || 40;
+        if (d.y0 < 0.15) d = { cu: d.cu, cv: d.cv, a: d.a, b: d.b, y0: 0.15, top: d.top, rot: d.rot };   // never below the bed
+        var R = [[[d.cu, d.top, d.cv]]], i, j, c = Math.cos(d.rot || 0), s = Math.sin(d.rot || 0);
+        for (i = 1; i <= rings; i++) {
+          var ph = (1 - i / rings) * Math.PI / 2, r = Math.cos(ph), y = d.y0 + (d.top - d.y0) * Math.sin(ph), ring = [];
+          for (j = 0; j < seg; j++) {
+            var th = (j / seg) * Math.PI * 2, lx = d.a * r * Math.cos(th), lz = d.b * r * Math.sin(th);
+            ring.push([d.cu + lx * c - lz * s, y, d.cv + lx * s + lz * c]);
+          }
+          R.push(ring);
+        }
+        return skin(R, false);
+      }
+
+      // A raised bead that follows a surface: path [[u,v],...], widths and heights by t, base sunk into surf(u,v).
+      function ridge(path, hwF, hgF, sink, surf) {
+        var n = path.length, K = 9, rings = [], i, k, ends = [[70, 0], [45, 0], [20, 0]];
+        function frame(i) {
+          var a = path[Math.max(i - 1, 0)], b = path[Math.min(i + 1, n - 1)];
+          var du = b[0] - a[0], dv = b[1] - a[1], l = Math.hypot(du, dv) || 1;
+          return [du / l, dv / l];
+        }
+        function ringAt(i, sc, shift) {
+          var t = i / (n - 1), hw = hwF(t), hg = hgF(t), f = frame(i), nu = -f[1], nv = f[0];
+          var p = path[i], c0 = surf(p[0], p[1]);
+          var base = Math.min(c0, surf(p[0] + nu * hw, p[1] + nv * hw), surf(p[0] - nu * hw, p[1] - nv * hw)) - sink;
+          base = Math.max(base, 0.15);
+          var H = hg + c0 - base, ring = [];
+          for (k = 0; k <= K; k++) {
+            var ang = Math.PI * (1 - k / K), off = hw * Math.cos(ang) * sc, up = H * Math.sin(ang) * sc;
+            ring.push([p[0] + nu * off + f[0] * shift, base + up, p[1] + nv * off + f[1] * shift]);
+          }
+          return { ring: ring, hw: hw, base: base, f: f, p: p };
+        }
+        var first = ringAt(0, 1, 0), lastR = ringAt(n - 1, 1, 0);
+        var head = [[[first.p[0] - first.f[0] * first.hw, first.base, first.p[1] - first.f[1] * first.hw]]];
+        for (i = 0; i < ends.length; i++) {
+          var ang = ends[i][0] * DEG;
+          head.push(ringAt(0, Math.cos(ang), -first.hw * Math.sin(ang)).ring);
+        }
+        var tail = [];
+        for (i = ends.length - 1; i >= 0; i--) {
+          var ang2 = ends[i][0] * DEG;
+          tail.push(ringAt(n - 1, Math.cos(ang2), lastR.hw * Math.sin(ang2)).ring);
+        }
+        tail.push([[lastR.p[0] + lastR.f[0] * lastR.hw, lastR.base, lastR.p[1] + lastR.f[1] * lastR.hw]]);
+        rings = head;
+        for (i = 0; i < n; i++) rings.push(i === 0 ? first.ring : (i === n - 1 ? lastR.ring : ringAt(i, 1, 0).ring));
+        rings = rings.concat(tail);
+        return skin(rings, false);
+      }
+
+      // A curved tapered cone that starts on the bed and leans: used for the ears.
+      function earShapes(spec) {
+        var R = 22, seg = 28, i, j, P = [[spec.bu, 0, spec.bv]], tans = [];
+        var hu = spec.hu, hv = spec.hv, step = spec.L / R;
+        for (i = 0; i <= R; i++) {
+          var t = i / R, tau = spec.tau * Math.pow(t, 1.5);
+          var d = [hu * Math.sin(tau), Math.cos(tau), hv * Math.sin(tau)];
+          tans.push(d);
+          if (i < R) P.push([P[i][0] + d[0] * step, P[i][1] + d[1] * step, P[i][2] + d[2] * step]);
+        }
+        var A0 = [-hv, 0, hu];
+        function e2Of(d) {   // cross(d, A0)
+          return [d[1] * A0[2] - d[2] * A0[1], d[2] * A0[0] - d[0] * A0[2], d[0] * A0[1] - d[1] * A0[0]];
+        }
+        var tipE = e2Of(tans[R]), sgn = tipE[1] >= 0 ? 1 : -1;
+        function rad(t) { return [spec.a * Math.pow(Math.max(1 - Math.pow(t, 1.35), 0), 0.9), spec.b * Math.pow(1 - t, 0.95)]; }
+        function loft(t0, t1, aF, bF, offF) {
+          var rings = [], k0 = Math.round(t0 * R), k1 = Math.round(t1 * R);
+          for (i = k0; i <= k1; i++) {
+            var t = i / R, e2 = e2Of(tans[i]), l = Math.hypot(e2[0], e2[1], e2[2]) || 1, r = rad(t), a = aF(t, r), b = bF(t, r), off = offF(t, r), ring = [];
+            e2 = [sgn * e2[0] / l, sgn * e2[1] / l, sgn * e2[2] / l];
+            if (i === k1) { rings.push([[P[i][0] + e2[0] * off, P[i][1] + e2[1] * off, P[i][2] + e2[2] * off]]); continue; }
+            for (j = 0; j < seg; j++) {
+              var th = (j / seg) * Math.PI * 2, c = Math.cos(th) * a, s = Math.sin(th) * b;
+              ring.push([P[i][0] + A0[0] * c + e2[0] * (s + off), P[i][1] + A0[1] * c + e2[1] * (s + off), P[i][2] + A0[2] * c + e2[2] * (s + off)]);
+            }
+            rings.push(ring);
+          }
+          return skin(rings, false);
+        }
+        var outer = loft(0, 1, function (t, r) { return r[0]; }, function (t, r) { return r[1]; }, function () { return 0; });
+        var inner = null;
+        if (spec.inner) {
+          var t0 = 0.32, t1 = 0.84;
+          inner = loft(t0, t1,
+            function (t, r) { var f = clamp((t1 - t) / (t1 - t0), 0, 1); return r[0] * 0.5 * Math.pow(f, 0.55); },
+            function (t, r) { var f = clamp((t1 - t) / (t1 - t0), 0, 1); return Math.max(0.3, r[1] * 0.5) * Math.pow(f, 0.5); },
+            function (t, r) { var f = clamp((t1 - t) / (t1 - t0), 0, 1); return r[1] * 0.5 + 0.55 * Math.pow(f, 0.5); });
+          // close the inner ear: its last ring is a small ellipse, cap it
+        }
+        return { outer: outer, inner: inner };
+      }
+
+      // -----------------------------------------------------------------------
+      // The bat
+      // -----------------------------------------------------------------------
+      function dims(p) {
+        var s = p.body / 100;
+        return {
+          s: s,
+          tor: { cu: 0, cv: -4 * s, a: 9.6 * s, b: 14.5 * s, y0: 0, top: 8.6 * s, rot: 0 },
+          head: { cu: 0, cv: 11.5 * s, a: 13 * s, b: 12 * s, y0: 0, top: 12 * s, rot: 0 }
+        };
+      }
+
+      function faceSurf(D) {
+        return function (u, v) { return Math.max(domeAt(D.tor, u, v), domeAt(D.head, u, v), 0); };
+      }
+
+      // Rounds flagged corners of a polygon (list of { p, r }).
+      function roundPoly(list) {
+        var out = [], n = list.length, i, k;
+        for (i = 0; i < n; i++) {
+          var c = list[i];
+          if (!c.r) { out.push(c.p); continue; }
+          var a = list[(i + n - 1) % n].p, b = list[(i + 1) % n].p, p = c.p;
+          var la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+          var t = Math.min(c.r, 0.42 * la, 0.42 * lb);
+          if (t < 0.05) { out.push(p); continue; }
+          var A = [p[0] + (a[0] - p[0]) / la * t, p[1] + (a[1] - p[1]) / la * t];
+          var B = [p[0] + (b[0] - p[0]) / lb * t, p[1] + (b[1] - p[1]) / lb * t];
+          for (k = 0; k <= 5; k++) {
+            var f = k / 5, m = 1 - f;
+            out.push([m * m * A[0] + 2 * m * f * p[0] + f * f * B[0], m * m * A[1] + 2 * m * f * p[1] + f * f * B[1]]);
+          }
+        }
+        return out;
+      }
+
+      function bez(a, c, b, n) {
+        var o = [], k;
+        for (k = 1; k < n; k++) {
+          var f = k / n, m = 1 - f;
+          o.push([m * m * a[0] + 2 * m * f * c[0] + f * f * b[0], m * m * a[1] + 2 * m * f * c[1] + f * f * b[1]]);
+        }
+        return o;
+      }
+
+      // Wing layout (right side, u >= 0): wrist, finger tips, arm path, outline.
+      function wingGeom(p, D) {
+        var s = D.s, S = p.span / 2, n = Math.round(p.fingers), sgp = p.scallop / 100, DELTA = 2.7, EXT = 2.6;
+        var P0 = [0, 3.5 * s];
+        var uw = Math.max(0.40 * S, 15 * s + 4);
+        var W = [uw, P0[1] + 0.20 * S + 2 * s];
+        var phi1 = 9 * DEG, phin = 80 * DEG, k, f;
+        var L1 = Math.max((S - uw - DELTA * Math.sin(phi1)) / Math.cos(phi1) - EXT, 8);
+        var dirs = [], tips = [], outs = [];
+        var F = [7.4 * s, -14 * s], Rr = [0, -19.6 * s];
+        for (k = 0; k < n; k++) {
+          f = n > 1 ? k / (n - 1) : 0;
+          var ph = lerp(phi1, phin, f), Lk = L1 * (1 - 0.34 * Math.pow(f, 0.9)), d = [Math.cos(ph), -Math.sin(ph)];
+          if (ph > 40 * DEG) Lk = Math.min(Lk, (W[1] - F[1] - 6 * s) / Math.sin(ph) - EXT);   // keep every tip above the hip
+          dirs.push(d);
+          tips.push([W[0] + d[0] * Lk, W[1] + d[1] * Lk]);
+          var o = [W[0] + d[0] * (Lk + EXT), W[1] + d[1] * (Lk + EXT)];
+          if (k === 0) { o[0] += DELTA * Math.sin(ph); o[1] += DELTA * Math.cos(ph); }
+          outs.push(o);
+        }
+        // Arm bone: from the shoulder to the wrist along a bowed line.
+        var bow = 0.05 * S, arm = [], i, m = 9;
+        for (i = 0; i <= m; i++) {
+          f = i / m;
+          arm.push([P0[0] + (W[0] - P0[0]) * f, P0[1] + (W[1] - P0[1]) * f + bow * Math.sin(Math.PI * f)]);
+        }
+        // Leading edge: the arm and first finger line, offset outward by DELTA with mitred corners.
+        var lead = arm.slice(), a1 = tips[0];
+        lead.push(a1);
+        var edge = [];
+        for (i = 0; i < lead.length; i++) {
+          var pa = lead[Math.max(i - 1, 0)], pb = lead[i], pc = lead[Math.min(i + 1, lead.length - 1)];
+          var d1 = [pb[0] - pa[0], pb[1] - pa[1]], d2 = [pc[0] - pb[0], pc[1] - pb[1]];
+          var l1 = Math.hypot(d1[0], d1[1]) || 1, l2 = Math.hypot(d2[0], d2[1]) || 1;
+          var n1 = [-d1[1] / l1, d1[0] / l1], n2 = [-d2[1] / l2, d2[0] / l2];
+          if (i === 0) n1 = n2; if (i === lead.length - 1) n2 = n1;
+          var nm = [n1[0] + n2[0], n1[1] + n2[1]], ln = Math.hypot(nm[0], nm[1]) || 1;
+          nm = [nm[0] / ln, nm[1] / ln];
+          var cs = Math.max(nm[0] * n1[0] + nm[1] * n1[1], 0.62);
+          // the leading side of a path running left to right (+u) is its left normal (-dv, du)
+          edge.push([pb[0] + nm[0] * DELTA / cs, pb[1] + nm[1] * DELTA / cs]);
+        }
+        edge[0][0] = 0;
+        // the last offset point is the first finger's tip; replace it with the extended outline tip
+        edge.pop();
+        var right = [], idx;
+        for (i = 0; i < edge.length; i++) right.push({ p: edge[i], r: i === arm.length - 1 ? 3 : 0 });
+        // scallops
+        var chain = outs.concat([F]);
+        for (k = 0; k < chain.length; k++) {
+          right.push({ p: chain[k], r: k < n ? 1.7 : 1.5 });
+          if (k < chain.length - 1) {
+            var A = chain[k], B = chain[k + 1], mid = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+            var ch = Math.hypot(B[0] - A[0], B[1] - A[1]), toW = [W[0] - mid[0], W[1] - mid[1]], lw = Math.hypot(toW[0], toW[1]) || 1;
+            var dep = sgp * ch * (k === chain.length - 2 ? 0.8 : 1), C, tries = 0;
+            // keep the edge leaving each tip at 30 degrees or more from the finger bone, so no bone ends over a notch
+            for (;;) {
+              C = [mid[0] + toW[0] / lw * 2 * dep, mid[1] + toW[1] / lw * 2 * dep];
+              var okA = angleBetween(A, C, W) >= 30 * DEG, okB = k === chain.length - 2 || angleBetween(B, C, W) >= 30 * DEG;
+              if ((okA && okB) || ++tries > 60) break;
+              dep *= 0.92;
+            }
+            bez(A, C, B, 9).forEach(function (q) { right.push({ p: q, r: 0 }); });
+          }
+        }
+        bez(F, [6.4 * s, -20.5 * s], Rr, 6).forEach(function (q) { right.push({ p: q, r: 0 }); });
+        right.push({ p: Rr, r: 0 });
+        return { right: right, W: W, tips: tips, dirs: dirs, arm: arm, S: S, P0: P0, rear: Rr, n: n };
+      }
+
+      function angleBetween(P, X, Y) {
+        var ax = X[0] - P[0], ay = X[1] - P[1], bx = Y[0] - P[0], by = Y[1] - P[1];
+        return Math.acos(clamp((ax * bx + ay * by) / ((Math.hypot(ax, ay) * Math.hypot(bx, by)) || 1), -1, 1));
+      }
+
+      function mirror(list) { return list.map(function (c) { return { p: [-c.p[0], c.p[1]], r: c.r }; }); }
+
+      function wingPolygon(G) {
+        var r = G.right, left = mirror(r).slice(1, r.length - 1).reverse();
+        return roundPoly(r.concat(left));
+      }
+
+      function build(p, api) {
+        THREE_ = api.THREE;
+        HANG = p.hang >= 1 ? 1 : 0;
+        var D = dims(p), s = D.s, E = p.ears / 100, hb = p.boneH, TH = p.thick;
+        var surf = faceSurf(D);
+        var G = wingGeom(p, D);
+        var shells = {};
+        function add(name, arr) { if (arr && arr.length) (shells[name] = shells[name] || []).push(arr); }
+
+        // Wing membrane (one slab under both wings, the body and the tail).
+        add('wings', polyPrism(wingPolygon(G), 0, TH));
+        var wsurf = function (u, v) { return Math.max(TH, surf(u, v)); };
+
+        // Body and head domes.
+        add('body', dome(D.tor, 14, 44));
+        add('body', dome(D.head, 14, 44));
+
+        // Chest fur: three small chevrons on the belly.
+        [-1.5, -6, -10.5].forEach(function (dv) {
+          var vc = D.tor.cv + dv * s, half = 0.48 * D.tor.a * Math.sqrt(Math.max(1 - sq((vc - D.tor.cv) / D.tor.b), 0.05)), path = [], k;
+          for (k = 0; k <= 8; k++) { var uu = lerp(-half, half, k / 8); path.push([uu, vc + 2.6 * s * sq(uu / half)]); }
+          add('fur', ridge(path, function (t) { return 0.8 * (1 - 0.25 * Math.abs(2 * t - 1)); }, function () { return 0.9; }, 0.9, surf));
+        });
+
+        // Wing bones.
+        [1, -1].forEach(function (sd) {
+          function mp(path) { return path.map(function (q) { return [q[0] * sd, q[1]]; }); }
+          var arm = G.arm.slice(4), pts = [], i;
+          // arm bone, sampled finely
+          for (i = 0; i < arm.length - 1; i++) {
+            for (var j = 0; j < 3; j++) pts.push([lerp(arm[i][0], arm[i + 1][0], j / 3), lerp(arm[i][1], arm[i + 1][1], j / 3)]);
+          }
+          pts.push(arm[arm.length - 1]);
+          add('bones', ridge(mp(pts), function (t) { return lerp(1.8, 1.6, t); }, function () { return hb; }, 1.0, wsurf));
+          G.tips.forEach(function (tip, k) {
+            var path = [], m = 8, q;
+            for (q = 0; q <= m; q++) path.push([lerp(G.W[0], tip[0], q / m), lerp(G.W[1], tip[1], q / m)]);
+            add('bones', ridge(mp(path), function (t) { return lerp(1.55, 0.75, t); }, function (t) { return hb * lerp(1, 0.7, t); }, 1.0, wsurf));
+          });
+          add('bones', dome({ cu: G.W[0] * sd, cv: G.W[1], a: 3.4, b: 3.4, y0: TH - 1.0, top: TH + hb + 1.0, rot: 0 }, 8, 24));
+        });
+
+        // Ears.
+        var flare = p.flare * DEG;
+        [1, -1].forEach(function (sd) {
+          var sp = {
+            bu: sd * 0.60 * D.head.a, bv: D.head.cv + 0.58 * D.head.b,
+            hu: sd * Math.sin(flare), hv: Math.cos(flare),
+            L: 21 * E * Math.max(s, 0.85), tau: 34 * DEG,
+            a: 6.4 * Math.pow(E, 0.6), b: 3.3 * Math.pow(E, 0.4), inner: true
+          };
+          var e = earShapes(sp);
+          add('ears', e.outer);
+          add('innerEars', e.inner);
+        });
+
+        // Face.
+        var H = D.head, fu = H.a, fv = H.b, halloween = p.face >= 1;
+        var eyeU = (halloween ? 0.45 : 0.41) * fu, eyeV = H.cv + (halloween ? 0.12 : 0.10) * fv;
+        [1, -1].forEach(function (sd) {
+          var ex = sd * eyeU;
+          if (!halloween) {
+            var ea = 4.2 * s, eb = 4.6 * s, yb = Math.min(surf(ex - ea, eyeV), surf(ex + ea, eyeV), surf(ex, eyeV - eb), surf(ex, eyeV + eb)) - 0.8;
+            var et = surf(ex, eyeV) + 2.4;
+            var eye = { cu: ex, cv: eyeV, a: ea, b: eb, y0: yb, top: et, rot: 0 };
+            add('eyes', dome(eye, 10, 36));
+            var pup = { cu: ex + sd * -0.2, cv: eyeV - 0.2, a: ea * 0.66, b: eb * 0.66, y0: et - 1.6, top: et + 0.9, rot: 0 };
+            add('pupils', dome(pup, 8, 28));
+            var gu = pup.cu - sd * 0.9, gv = pup.cv + 1.1;
+            var glint = { cu: gu, cv: gv, a: 0.85, b: 0.85, y0: domeAt(pup, gu, gv) - 0.6, top: domeAt(pup, gu, gv) + 0.45, rot: 0 };
+            add('glints', dome(glint, 5, 16));
+          } else {
+            var A28 = 28 * DEG, ea2 = 5.6 * s, eb2 = 3.3 * s;
+            // long axis rises outward; domeAt/dome rot is the angle of the long axis from +u toward +v
+            var rot = sd * A28;
+            var ym = Math.min(surf(ex, eyeV), surf(ex + ea2, eyeV), surf(ex - ea2, eyeV), surf(ex, eyeV + eb2), surf(ex, eyeV - eb2)) - 0.8;
+            var et2 = surf(ex, eyeV) + 2.2;
+            var eye2 = { cu: ex, cv: eyeV, a: ea2, b: eb2, y0: ym, top: et2, rot: rot };
+            add('eyes', dome(eye2, 10, 36));
+            var slit = { cu: ex, cv: eyeV, a: 0.95, b: 2.5, y0: et2 - 1.8, top: et2 + 0.8, rot: 0 };
+            add('pupils', dome(slit, 8, 24));
+            // angry brow above the eye
+            var cd = [sd * Math.cos(A28), Math.sin(A28)], perp = [-sd * Math.sin(A28), Math.cos(A28)];
+            var bc = [ex + perp[0] * (eb2 + 2.2), eyeV + perp[1] * (eb2 + 2.2)], path = [], q;
+            for (q = 0; q <= 8; q++) {
+              var x = lerp(-ea2 * 0.12, ea2 + 0.9, q / 8);
+              path.push([bc[0] + cd[0] * x, bc[1] + cd[1] * x]);
+            }
+            add('brows', ridge(path, function (t) { return 1.5 * (1 - 0.35 * t); }, function () { return 1.5; }, 1.0, surf));
+          }
+        });
+        // nose
+        var nv = H.cv - 0.17 * fv;
+        var nose = halloween
+          ? { cu: 0, cv: nv, a: 2.2, b: 1.5, y0: surf(0, nv) - 1.0, top: surf(0, nv) + 1.5, rot: 0 }
+          : { cu: 0, cv: nv, a: 2.4, b: 1.7, y0: surf(0, nv) - 1.0, top: surf(0, nv) + 1.9, rot: 0 };
+        add('nose', dome(nose, 8, 24));
+
+        // mouth and fangs
+        var mv = H.cv - 0.50 * fv, half = halloween ? 0.60 * fu : 0.40 * fu, curve = halloween ? 3.2 : 1.7, mp = [], q2;
+        function lip(u) { return mv + curve * sq(u / half); }
+        for (q2 = 0; q2 <= 14; q2++) { var uu = lerp(-half, half, q2 / 14); mp.push([uu, lip(uu)]); }
+        add('mouth', ridge(mp, function () { return 0.8; }, function () { return 1.0; }, 0.9, surf));
+        var FL = Math.min(p.fang, 0.75 * H.b);   // a fang never runs off the head
+        function fang(u, len, w) {
+          if (len < 0.8) return;
+          var path = [], m = 7, k;
+          for (k = 0; k <= m; k++) path.push([u * (1 + 0.04 * k / m), lip(u) - 0.6 - len * k / m]);
+          add('fangs', ridge(path, function (t) { return Math.max(w * (1 - t), 0.2); }, function (t) { return lerp(2.2, 0.7, t); }, 1.0, surf));
+        }
+        if (halloween) {
+          var fu1 = 0.215 * fu * 1;
+          fang(-fu1 * 1.0, FL, 1.8); fang(fu1 * 1.0, FL, 1.8);
+          fang(0, FL * 0.45, 1.3);
+          fang(-half * 0.8, FL * 0.5, 1.3); fang(half * 0.8, FL * 0.5, 1.3);
+        } else {
+          fang(-half * 0.55, FL * 0.85, 1.5); fang(half * 0.55, FL * 0.85, 1.5);
+        }
+
+        // Hanging loop on the feet end.
+        if (HANG && p.loop >= 1) {
+          var Rc = 5.6, rw = 2.2, hh = 3.2, cvL = G.rear[1] - 3.2, rings = [], a, K = 9, ps, kk, SEGL = 40;
+          for (ps = 0; ps < SEGL; ps++) {
+            var psi = (ps / SEGL) * Math.PI * 2, ring = [];
+            for (kk = 0; kk <= K; kk++) {
+              a = Math.PI * (1 - kk / K);
+              var rho = Rc + rw * Math.cos(a);
+              ring.push([rho * Math.cos(psi), hh * Math.sin(a), cvL + rho * Math.sin(psi)]);
+            }
+            rings.push(ring);
+          }
+          add('loop', skin(rings, true));
+        }
+
+        return finish(shells);
+      }
+
+      // Map design space to the printed pose, orient each shell and pack the meshes.
+      function finish(shells) {
+        var out = [];
+        Object.keys(shells).forEach(function (name) {
+          var total = 0;
+          var parts = shells[name].map(function (arr) {
+            var f = new Float32Array(arr.length), i, vol = 0;
+            for (i = 0; i < arr.length; i += 3) {
+              var u = arr[i], y = arr[i + 1], v = arr[i + 2];
+              f[i] = HANG ? -u : u; f[i + 1] = y; f[i + 2] = HANG ? v : -v;
+            }
+            for (i = 0; i < f.length; i += 9) {
+              vol += f[i] * (f[i + 4] * f[i + 8] - f[i + 5] * f[i + 7])
+                - f[i + 1] * (f[i + 3] * f[i + 8] - f[i + 5] * f[i + 6])
+                + f[i + 2] * (f[i + 3] * f[i + 7] - f[i + 4] * f[i + 6]);
+            }
+            if (vol < 0) {
+              for (i = 0; i < f.length; i += 9) {
+                for (var t = 0; t < 3; t++) { var sv = f[i + 3 + t]; f[i + 3 + t] = f[i + 6 + t]; f[i + 6 + t] = sv; }
+              }
+            }
+            total += f.length;
+            return f;
+          });
+          var pos = new Float32Array(total), at = 0;
+          parts.forEach(function (f) { pos.set(f, at); at += f.length; });
+          out.push({ name: name, positions: pos });
+        });
+        return out;
+      }
+
+      var DEFAULTS = { span: 130, fingers: 4, scallop: 28, thick: 2.4, boneH: 1.4, ears: 100, flare: 22, face: 0, fang: 3.5, hang: 0, loop: 1, body: 100 };
+
+      window.MM_GENERATOR = {
+        code: 'MM-128',
+        category: 'SPOOKY // CREATURES',
+        title: 'Bat Builder',
+        fileName: 'Bat_Builder',
+        palette: [
+          { name: 'Night Charcoal', color: '#3b3a4f' },
+          { name: 'Bone White', color: '#f1f5f9' },
+          { name: 'Bat Plum', color: '#8b5fbf' },
+          { name: 'Pumpkin Matte', color: '#fdba74' },
+          { name: 'Blush Pink', color: '#fda4af' },
+          { name: 'Slime Green', color: '#a3e635' },
+          { name: 'Ember Red', color: '#f0584a' },
+          { name: 'Moon Yellow', color: '#fde047' }
+        ],
+        partNames: {
+          body: 'Body & head', wings: 'Wing membrane', bones: 'Wing bones', ears: 'Ears', innerEars: 'Inner ears', fur: 'Chest fur',
+          eyes: 'Eyes', pupils: 'Pupils', glints: 'Eye glints', brows: 'Brows', nose: 'Nose', mouth: 'Mouth',
+          fangs: 'Fangs', loop: 'Hanging loop'
+        },
+        parameters: [
+          { group: 'Wings', key: 'span', label: 'Wingspan', unit: ' mm', min: 80, max: 170, step: 1, value: DEFAULTS.span },
+          { group: 'Wings', key: 'fingers', label: 'Wing bones per wing', unit: '', min: 2, max: 6, step: 1, value: DEFAULTS.fingers },
+          { group: 'Wings', key: 'scallop', label: 'Scallop depth (shallow ↔ deep)', unit: '%', min: 8, max: 45, step: 1, value: DEFAULTS.scallop },
+          { group: 'Wings', key: 'thick', label: 'Membrane thickness', unit: ' mm', min: 1.6, max: 4, step: 0.1, value: DEFAULTS.thick },
+          { group: 'Wings', key: 'boneH', label: 'Bone height', unit: ' mm', min: 0.6, max: 2.4, step: 0.1, value: DEFAULTS.boneH },
+          { group: 'Head & face', key: 'face', label: 'Face', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.face, options: ['Cute', 'Halloween'] },
+          { group: 'Head & face', key: 'ears', label: 'Ear size', unit: '%', min: 50, max: 160, step: 5, value: DEFAULTS.ears },
+          { group: 'Head & face', key: 'flare', label: 'Ear flare (upright ↔ spread)', unit: '°', min: 0, max: 35, step: 1, value: DEFAULTS.flare },
+          { group: 'Head & face', key: 'fang', label: 'Fang length (0 = none)', unit: ' mm', min: 0, max: 10, step: 0.5, value: DEFAULTS.fang },
+          { group: 'Body & pose', key: 'hang', label: 'Pose', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.hang, options: ['Perched', 'Hanging'] },
+          { group: 'Body & pose', key: 'loop', label: 'Hanging loop (hanging only)', unit: '', min: 0, max: 1, step: 1, value: DEFAULTS.loop, options: ['Off', 'On'], showIf: function (q) { return q.hang >= 1; } },
+          { group: 'Body & pose', key: 'body', label: 'Body size', unit: '%', min: 70, max: 140, step: 5, value: DEFAULTS.body }
+        ],
+        presets: [
+          { label: 'Default cute bat', values: { span: 130, fingers: 4, scallop: 28, thick: 2.4, boneH: 1.4, ears: 100, flare: 22, face: 0, fang: 3.5, hang: 0, loop: 1, body: 100 } },
+          { label: 'Cute hanger', values: { span: 130, fingers: 4, scallop: 28, thick: 2.4, boneH: 1.4, ears: 100, flare: 22, face: 0, fang: 3.5, hang: 1, loop: 1, body: 100 } },
+          { label: 'Halloween hanger', values: { span: 140, fingers: 4, scallop: 32, thick: 2.4, boneH: 1.4, flare: 22, face: 1, fang: 6, ears: 115, hang: 1, loop: 1, body: 100 } },
+          { label: 'Spooky perched bat', values: { span: 135, fingers: 4, scallop: 34, thick: 2.4, boneH: 1.4, face: 1, fang: 5.5, ears: 110, flare: 24, hang: 0, loop: 1, body: 100 } },
+          { label: 'Big-eared perched bat', values: { span: 110, fingers: 3, scallop: 24, thick: 2.4, boneH: 1.4, face: 0, fang: 2, ears: 130, flare: 18, hang: 0, body: 110 } },
+          { label: 'Vampire bat', values: { span: 165, fingers: 5, scallop: 40, face: 1, fang: 9, ears: 120, flare: 28, hang: 1, loop: 1, body: 100 } },
+          { label: 'Tiny charm', values: { span: 80, fingers: 3, scallop: 22, thick: 2.4, boneH: 1.0, face: 0, fang: 0, ears: 100, hang: 1, loop: 1, body: 80 } },
+          { label: 'Big-eared fruit bat', values: { span: 150, fingers: 4, scallop: 26, face: 0, fang: 0, ears: 155, flare: 12, hang: 1, loop: 0, body: 100 } }
+        ],
+        onStage: function (st) {
+          // Look down on the flat bat from a higher angle than the default front view.
+          var t = st.controls.target, d = st.camera.position.distanceTo(t) * 0.92;
+          st.camera.position.set(t.x, t.y + d * 0.93, t.z + d * 0.36);
+          st.camera.lookAt(t);
+          st.controls.update();
+        },
+        build: build
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

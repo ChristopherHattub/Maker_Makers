@@ -924,5 +924,25 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "bat-builder": {
+  "colors": {
+   "body": "#4b3f6b",
+   "wings": "#7a58a8",
+   "bones": "#3a2f57",
+   "ears": "#4b3f6b",
+   "innerEars": "#fda4af",
+   "eyes": "#fde68a",
+   "pupils": "#1b1530",
+   "glints": "#ffffff",
+   "brows": "#3a2f57",
+   "nose": "#fda4af",
+   "mouth": "#1b1530",
+   "fangs": "#f8fafc",
+   "fur": "#6d5a8a",
+   "loop": "#fdba74"
+  },
+  "elev": 58,
+  "yaw": 0
  }
 }
