@@ -24,7 +24,7 @@ Status as of 2026-11-02 (after Chris approved shipping everything to `main`: all
 | Holiday tree decorating editor (`d39f408`) | Blocked, awaiting Chris. |
 | Pin Maker (slot 103, `1c67c82`) | Blocked, awaiting Chris. |
 | Text Generator (`de29d38`) | Review-ready. |
-| Animals and creatures | Kept open by Chris. Known: Snake "needs supports", Cat loaf has a floating bit, slider lag. |
+| Animals and creatures | Kept open by Chris. Snake and Cat loaf print-check gaps fixed and slider lag reduced (see animals.md); Sleeping curl keeps one small warning. |
 | Fidget ring | Shipped to `main` with everything else. |
 
 ## Loose ends nobody owns yet

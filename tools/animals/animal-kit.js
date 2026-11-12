@@ -442,7 +442,7 @@
       // Reads the editor's state. scale is what finishSculpt scales the model by.
       Sculpt.prototype.useEdits = function (api, scale) {
         this.st = api && api.sculpt; this.outScale = scale || 1; this.addons = []; this.parents = this.parents || {};
-        if (this.st && this.st.draft) this.h *= 1.7;
+        if (this.st && this.st.draft) this.h *= 2;
         return this;
       };
       Sculpt.prototype._edit = function (id) { return (this.st && this.st.edits && this.st.edits[id]) || null; };

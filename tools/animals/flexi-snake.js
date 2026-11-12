@@ -21,14 +21,14 @@
           Sk.ell('head', [hx + 2, hR * 0.56, s * hR * 0.72], [hL * 0.34, hR * 0.5, hR * 0.46], hc, 2.5);
           Sk.path('head', [[hx + hL * 0.25, hR * 1.14, s * hR * 0.56, 1.3], [hx - hL * 0.18, hR * 1.02, s * hR * 0.5, 1]], hc, 1.2);
           Sk.ell('head', [rear - hL * 0.88, hR * 0.56, s * hR * 0.2], [1.3, 1.1, 1.1], hc, 0.8);
-          Sk.path(null, [[rear - hL * 1.02, hR * 0.22, s * hR * 0.22, 0.55], [hx + 2, hR * 0.28, s * hR * 1.1, 0.6]], null, 0).carve(0.5);
+          Sk.path(null, [[rear - hL * 1.02, hR * 0.22, s * hR * 0.22, 0.3], [hx + 2, hR * 0.28, s * hR * 1.1, 0.3]], null, 0).carve(0.3);
         });
         Sk.clipX(rear - 0.1);
         Sk.reach = 0.72;
         Sk.run();
         Sk.shell(sc, 'head', 'head', 'head', ch.rootBall, hc);
         [-1, 1].forEach(function (sd) {
-          var id = sd < 0 ? 'eyeL' : 'eyeR', e = Sk.face(id, [hx - hL * 0.14, hR * 0.86, sd * 60], [0, 0, -sd], 'head');
+          var id = sd < 0 ? 'eyeL' : 'eyeR', e = Sk.face(id, [hx - hL * 0.14, hR * 0.98, sd * 60], [0, 0, -sd], 'head');
           if (!e) return;
           Sk.addon(id, e.p, 2.6 * hs * e.k);
           sc.add('eyes', 'head', dome(e.p, e.n, 2.6 * hs * e.k, { angle: 46, seg: 18 }), '#fde047');
