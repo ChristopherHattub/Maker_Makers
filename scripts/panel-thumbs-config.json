@@ -924,5 +924,20 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "bee-beetle-bugs": {
+  "colors": {
+   "body": "#fcd34d",
+   "thorax": "#f4b73f",
+   "stripes": "#334155",
+   "head": "#fcd34d",
+   "eyes": "#334155",
+   "antennae": "#334155",
+   "legs": "#334155",
+   "wings": "#f1f5f9",
+   "veins": "#94a3b8"
+  },
+  "yaw": 32,
+  "elev": 30
  }
 }
