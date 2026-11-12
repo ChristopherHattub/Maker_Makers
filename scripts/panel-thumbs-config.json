@@ -706,6 +706,10 @@
   "yaw": 58,
   "elev": 16
  },
+ "bunny-sitter": {
+  "yaw": 48,
+  "elev": 14
+ },
  "pin-maker": {
   "colors": {
    "pin": "#f9a8d4",

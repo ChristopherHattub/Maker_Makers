@@ -1,6 +1,6 @@
 # Animal generators (slots 76-90)
 
-Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Horse Builder.
+Fifteen generators in the `animals` group (slots 76-90; the Bunny & Hare Sitter, slot 126, joins them: [bunny-sitter.md](bunny-sitter.md)): Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Horse Builder.
 
 ## Files
 

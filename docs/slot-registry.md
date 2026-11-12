@@ -32,6 +32,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 121 | Built: Zoetrope. |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
+| 126 | Built: Bunny & Hare Sitter (animal kit; sitting bunny, standing hare, loaf). |
 | 124+ | Free (check open PRs first). Any number works. |
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
@@ -128,6 +129,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 88 | Elephant Builder | animals | `elephant-builder.html` |
 | 89 | Alien & Monster Maker | animals | `monster-maker.html` |
 | 90 | Horse Builder | animals | `horse-builder.html` |
+| 126 | Bunny & Hare Sitter | animals, easter | `bunny-sitter.html` (sitting bunny, standing long-legged hare or loaf; upright or lop ears, tail styles, carrot, tulip or daisy; unprinted) |
 | 91 | Flexi Dragon | flexi | `flexi-dragon.html` |
 | 92 | Flexi Gecko | flexi | `flexi-gecko.html` |
 | 93 | Flexi Crocodile | flexi | `flexi-crocodile.html` |
@@ -168,7 +170,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | --- | --- | --- |
 | halloween | Halloween | 5 |
 | christmas | Christmas | 8 |
-| easter | Easter & Spring | 6 |
+| easter | Easter & Spring | 7 |
 | valentines | Valentine's | 2 |
 | thanksgiving | Thanksgiving & Fall | 7 |
 | newyear | New Year & Party | 4 |
@@ -187,7 +189,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | toys | Toys & Games | 2 |
 | garden | Garden | planned (empty) |
 | flexi | Flexi Creatures | 10 |
-| animals | Animals & Creatures | 15 |
+| animals | Animals & Creatures | 16 |
 | jewelry | Jewellery & Wearables | 1 |
 | tabletop | Tabletop & Gaming | 10 |
 A generator in no group lands in an automatic "More" region, so a missing `bundle` is visible on the map.
