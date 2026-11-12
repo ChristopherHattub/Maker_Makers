@@ -1104,6 +1104,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/crab-lobster.svg',
     programUrl: 'programs/crab-lobster.html',
     description: 'A claw-forward crab or lobster that prints with no supports and a pincer that really moves: each claw rests on the bed and its pincer swings on a print-in-place hinge with a clearance you set. Pick crab or lobster, claw size and pose (guarding, spread, pinching together, arms wide), a matching pair or a big-claw fiddler, 2 to 5 legs per side, eye stalk length, and a smooth, ribbed, bumpy, plated or spiky shell. Unprinted: the hinge clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 136,
+    title: 'Constellation Gauntlet',
+    bundle: 'jewelry',
+    category: 'COSMIC // WEARABLE ART',
+    thumbnailUrl: 'assets/thumbnails/constellation-gauntlet.svg',
+    programUrl: 'programs/constellation-gauntlet.html',
+    description: 'A wearable armoured gauntlet: a forearm clip cuff and a back-of-hand shield sized from your own hand measurements, with finger plates, a hand plate and five gems. Pick a style family (Orrery, Shardcrown, Bloomguard or Cogwork), set your wrist, hand width and thickness in Fit, then edit each part in its own view while the camera swoops to it. Place the gems six ways (Orbit, Cross, Row, Crescent, Pentagon or Zigzag) and set each gem\'s shape, cut, size, colour and setting. It prints standing on its cuff with no supports on the default settings and the gems print as separate pieces for multi-colour builds. A solid display piece is one switch away. Unprinted: the fit on a real hand and the gem fit are untested. Paint parts in the Color tool and export .STL.'
   }
 ];
 

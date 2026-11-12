@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-136 Constellation Gauntlet // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Constellation Gauntlet: an armoured display gauntlet with a hand plate, a core gem and four orbiting gems.
+    // Everything here is original: the name, the five gems (Solis, Lunara, Vesper, Aurelia, Nova), the orrery-style
+    // layout (one core gem and four satellites that orbit it) and the four style families.
+    //
+    // The model stands on its cuff with the fingers up, the way it prints. Every protrusion from a vertical face (plate,
+    // bezels, studs, orbit arcs) is a cone or bevel at 42 degrees from vertical or less, so the body needs no supports.
+    // The gems are separate closed solids: in the Print tab they lie on a flat culet, crown up, next to the gauntlet.
+    // Each editor tab flies the camera to the part it edits (see the camera section at the end).
+    (function () {
+      'use strict';
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+
+      // ---------------------------------------------------------------------------------------------
+      // Data
+      // ---------------------------------------------------------------------------------------------
+      var METALS = [
+        { name: 'Brass Gold', color: '#d4a437' }, { name: 'Silver Steel', color: '#c4ccd8' },
+        { name: 'Rose Copper', color: '#d98a6c' }, { name: 'Night Iron', color: '#3f4756' }
+      ];
+      var GEM_COLORS = [
+        { name: 'Solar Amber', color: '#f59e0b' }, { name: 'Aurora Teal', color: '#14b8a6' },
+        { name: 'Dusk Violet', color: '#8b5cf6' }, { name: 'Nova Rose', color: '#f43f5e' },
+        { name: 'Comet Blue', color: '#3b82f6' }, { name: 'Moon Pearl', color: '#e8eefc' },
+        { name: 'Meadow Green', color: '#4ade80' }, { name: 'Void Black', color: '#1f2937' }
+      ];
+      var GEM_NAMES = ['Solis', 'Lunara', 'Vesper', 'Aurelia', 'Nova'];
+      var GEM_ROLES = ['Core', 'Satellite 1', 'Satellite 2', 'Satellite 3', 'Satellite 4'];
+      var SHAPE_NAMES = ['Round', 'Oval', 'Hexagon', 'Octagon', 'Triangle', 'Cushion'];
+      var CUT_NAMES = ['Brilliant', 'Cabochon', 'Step', 'Spire'];
+      var SET_NAMES = ['Plain bezel', 'Stepped', 'Sunburst', 'Petals', 'Cogs'];
+      var FORM_NAMES = ['Smooth', 'Faceted', 'Fluted', 'Scalloped', 'Cogged'];
+      var PLATE_NAMES = ['Round', 'Hexagon', 'Shield', 'Crown star', 'Scallop'];
+      var TIP_NAMES = ['Dome', 'Spike', 'Flat bevel'];
+      var STUD_NAMES = ['None', 'Cone', 'Spike'];
+      var FORM_AMP = [0, 0.076, 0.04, 0.06, 0.05];
+      var LAYOUT_NAMES = ['Orbit', 'Cross', 'Row', 'Crescent', 'Pentagon', 'Zigzag'];
+      var CORE_CENTRED = [true, true, true, false, false, true];   // layouts that keep Solis on the middle of the plate (a raised core needs that)
+      var CURVE_NAMES = ['Flat', 'Shallow', 'Curved'];
+      var CURVE_R = [200, 38, 30];
+
+      // Unit outline of each gem shape: radius at angle th (world angle, y up), minimum apothem 1 except the oval.
+      function polyR(sides, clip) {
+        var sec = TAU / sides;
+        return function (th) {
+          var phi = ((th % sec) + sec) % sec - sec / 2;
+          return Math.min(1 / Math.cos(phi), clip || 9);
+        };
+      }
+      // q(th): how much longer a straight offset is measured along the radius (1 / cos of the angle to the side's normal).
+      function polyQ(sides, clip) {
+        var sec = TAU / sides;
+        return function (th) {
+          var phi = ((th % sec) + sec) % sec - sec / 2, r = 1 / Math.cos(phi);
+          return r >= (clip || 9) ? 1 : r;
+        };
+      }
+      function one() { return 1; }
+      // A polygon with its corners rounded off smoothly (soft minimum against a circle), and the matching offset factor
+      // q = sqrt(1 + (r'/r)^2) taken from the curve itself, so the offset of the outline has no kink where the corner starts.
+      function softClip(sides, clip) {
+        var f = polyR(sides), k = 16;
+        return function (th) { return -Math.log(Math.exp(-k * f(th)) + Math.exp(-k * clip)) / k; };
+      }
+      function numQ(fn) {
+        return function (th) { var e = 0.002, d = (fn(th + e) - fn(th - e)) / (2 * e), r = fn(th); return Math.sqrt(1 + (d / r) * (d / r)); };
+      }
+      var SHAPES = [
+        { fn: function () { return 1; }, q: one, qmax: 1, rot: 0, aMin: 1, max: 1 },
+        { fn: function (th) { var a = 1.08, b = 0.92, c = Math.cos(th), s = Math.sin(th); return a * b / Math.sqrt(b * b * c * c + a * a * s * s); }, q: one, qmax: 1, rot: 90 * DEG, aMin: 0.92, max: 1.08 },
+        { fn: polyR(6), q: polyQ(6), qmax: 1.155, rot: 0, aMin: 1, max: 1.155 },
+        { fn: polyR(8), q: polyQ(8), qmax: 1.082, rot: 22.5 * DEG, aMin: 1, max: 1.082 },
+        { fn: softClip(3, 1.25), q: numQ(softClip(3, 1.25)), qmax: 1.3, rot: 90 * DEG, aMin: 0.98, max: 1.25 },
+        { fn: softClip(4, 1.25), q: numQ(softClip(4, 1.25)), qmax: 1.3, rot: 45 * DEG, aMin: 0.98, max: 1.25 }
+      ];
+
+      // Hand plate outlines (radius factor at world angle, close to 1 so the gems always sit on the plate).
+      var PLATE_FN = [
+        function () { return 1; },
+        function (th) { var h = polyR(6)(th); return 0.94 * h; },
+        function (th) { return 1.02 - 0.14 * Math.pow(Math.max(0, -Math.sin(th)), 1.6); },
+        function (th) { return 0.95 + 0.07 * Math.cos(8 * th); },
+        function (th) { return 0.94 + 0.06 * Math.abs(Math.cos(4 * th)); }
+      ];
+
+      var PLATE_Q = [one, polyQ(6), one,
+        function (th) { var t = 0.56 * Math.sin(8 * th) / (0.95 + 0.07 * Math.cos(8 * th)); return Math.sqrt(1 + t * t); },
+        function (th) { var t = 0.24 * Math.sin(4 * th) / (0.94 + 0.06 * Math.abs(Math.cos(4 * th))); return Math.sqrt(1 + t * t); }];
+
+      // Fixed dimensions (design millimetres, before the Overall size scale).
+      var WRIST_X = 30, WRIST_Z = 24, PALM_X = 42, PALM_Z = 26, PALM_H = 80;
+      var HT2 = 1.8, WALL = 2.4, CLR = 0.3, KSLOPE = 1.3, W_TOP = 1.2, CULET = 0.6;
+      var PAV = 0.8, SEATX = 0.15;   // the gem pavilion narrows 0.8 mm per mm of depth; the seat is 0.15 wider than that (a 43 degree ceiling)
+      var NB = 96;   // angular samples of the body, plate and bezels
+
+      // ---------------------------------------------------------------------------------------------
+      // Geometry kit: rings of points joined into closed shells (shared vertices, so they are watertight)
+      // ---------------------------------------------------------------------------------------------
+      function frame(t) {
+        var tx = t ? t[0] : 0, ty = t ? t[1] : 1, tz = t ? t[2] : 0;
+        var l = Math.sqrt(tx * tx + ty * ty + tz * tz); tx /= l; ty /= l; tz /= l;
+        var ux = ty, uy = -tx, uz = 0, ul = Math.sqrt(ux * ux + uy * uy);
+        if (ul < 1e-6) { ux = 1; uy = 0; } else { ux /= ul; uy /= ul; }
+        return { u: [ux, uy, uz], v: [uy * tz - uz * ty, uz * tx - ux * tz, ux * ty - uy * tx] };
+      }
+      // A ring: centre c, axis t, points [a, b] in the plane. ph is the angular phase (0 or 0.5 of a step).
+      function ring(c, t, pts, ph) {
+        var f = frame(t), P = pts.map(function (q) {
+          return [c[0] + q[0] * f.u[0] + q[1] * f.v[0], c[1] + q[0] * f.u[1] + q[1] * f.v[1], c[2] + q[0] * f.u[2] + q[1] * f.v[2]];
+        });
+        return { P: P, ph: ph || 0, c: c };
+      }
+      function pole(c) { return { P: [c], pole: true, c: c }; }
+      // Points on a closed curve: fn(th) -> radius, world angle th (y up), so b is negated (the plate maps b to -y).
+      function polarW(n, ph, fn) {
+        var out = [], j, th, r;
+        for (j = 0; j < n; j++) { th = (j + ph) * TAU / n; r = fn(th); out.push([r * Math.cos(th), -r * Math.sin(th)]); }
+        return out;
+      }
+      function polarXY(n, fn) {   // fn(th) -> [a, b]
+        var out = [], j;
+        for (j = 0; j < n; j++) out.push(fn(j * TAU / n));
+        return out;
+      }
+
+      function tri(a, p, q, r, flip) { if (flip) a.push(p[0], p[1], p[2], r[0], r[1], r[2], q[0], q[1], q[2]); else a.push(p[0], p[1], p[2], q[0], q[1], q[2], r[0], r[1], r[2]); }
+      // Triangles between two rings, A below B (outward normal). Handles equal phase, half-step phase and poles.
+      function strip(a, A, B, flip) {
+        var n, j, k, i, steps, aNext, bNext;
+        if (B.pole) { n = A.P.length; for (j = 0; j < n; j++) tri(a, A.P[j], B.P[0], A.P[(j + 1) % n], flip); return; }
+        if (A.pole) { n = B.P.length; for (k = 0; k < n; k++) tri(a, A.P[0], B.P[k], B.P[(k + 1) % n], flip); return; }
+        n = A.P.length;
+        if (A.ph === B.ph) {
+          for (j = 0; j < n; j++) {
+            k = (j + 1) % n;
+            tri(a, A.P[j], B.P[j], B.P[k], flip);
+            tri(a, A.P[j], B.P[k], A.P[k], flip);
+          }
+          return;
+        }
+        i = 0; k = 0;
+        for (steps = 0; steps < 2 * n; steps++) {
+          aNext = i + 1 + A.ph; bNext = k + 1 + B.ph;
+          if (aNext <= bNext) { tri(a, A.P[i % n], B.P[k % n], A.P[(i + 1) % n], flip); i++; }
+          else { tri(a, A.P[i % n], B.P[k % n], B.P[(k + 1) % n], flip); k++; }
+        }
+      }
+      function centre(R) {
+        if (R.c) return R.c;
+        var s = [0, 0, 0]; R.P.forEach(function (p) { s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; });
+        return [s[0] / R.P.length, s[1] / R.P.length, s[2] / R.P.length];
+      }
+      // Flat cap on a ring. top = the cap faces along the axis, otherwise against it.
+      function cap(a, R, top, flip) {
+        if (R.pole) return;
+        var c = centre(R), n = R.P.length, j;
+        for (j = 0; j < n; j++) {
+          if (top) tri(a, c, R.P[(j + 1) % n], R.P[j], flip); else tri(a, c, R.P[j], R.P[(j + 1) % n], flip);
+        }
+      }
+      function volume(a) {
+        var v = 0, i;
+        for (i = 0; i < a.length; i += 9) {
+          v += a[i] * (a[i + 4] * a[i + 8] - a[i + 5] * a[i + 7]) - a[i + 1] * (a[i + 3] * a[i + 8] - a[i + 5] * a[i + 6]) + a[i + 2] * (a[i + 3] * a[i + 7] - a[i + 4] * a[i + 6]);
+        }
+        return v / 6;
+      }
+      function flipAll(a) {
+        var i, t0, t1, t2;
+        for (i = 0; i < a.length; i += 9) {
+          t0 = a[i + 3]; t1 = a[i + 4]; t2 = a[i + 5];
+          a[i + 3] = a[i + 6]; a[i + 4] = a[i + 7]; a[i + 5] = a[i + 8];
+          a[i + 6] = t0; a[i + 7] = t1; a[i + 8] = t2;
+        }
+        return a;
+      }
+      function orient(a) { if (volume(a) < 0) flipAll(a); return a; }
+
+      // A solid from rings bottom -> top, capped at both ends (a pole needs no cap).
+      function solid(layers) {
+        var a = [], i;
+        for (i = 0; i < layers.length - 1; i++) strip(a, layers[i], layers[i + 1], false);
+        cap(a, layers[0], false, false);
+        cap(a, layers[layers.length - 1], true, false);
+        return orient(a);
+      }
+      // A hollow solid: outer rings, inner rings (both bottom -> top). The bottom is an annulus. The top is an annulus
+      // (a through hole, topHole) or a cap on the outside plus a ceiling on the inside (a cavity open at the bottom).
+      function tube(outer, inner, topHole) {
+        var a = [], i, n = outer[0].P.length, j, k, O, I;
+        for (i = 0; i < outer.length - 1; i++) strip(a, outer[i], outer[i + 1], false);
+        for (i = 0; i < inner.length - 1; i++) strip(a, inner[i], inner[i + 1], true);
+        O = outer[0]; I = inner[0];
+        for (j = 0; j < n; j++) {   // bottom annulus, faces against the axis
+          k = (j + 1) % n;
+          tri(a, O.P[j], O.P[k], I.P[j], false);
+          tri(a, O.P[k], I.P[k], I.P[j], false);
+        }
+        O = outer[outer.length - 1]; I = inner[inner.length - 1];
+        if (topHole) {
+          for (j = 0; j < n; j++) {
+            k = (j + 1) % n;
+            tri(a, O.P[j], I.P[j], O.P[k], false);
+            tri(a, O.P[k], I.P[j], I.P[k], false);
+          }
+        } else {
+          cap(a, O, true, false);
+          cap(a, I, true, true);
+        }
+        return orient(a);
+      }
+      function mapPts(a, fn) {
+        var i, r;
+        for (i = 0; i < a.length; i += 3) { r = fn(a[i], a[i + 1], a[i + 2]); a[i] = r[0]; a[i + 1] = r[1]; a[i + 2] = r[2]; }
+        return a;
+      }
+      function join(list) {
+        var n = 0, out, o = 0;
+        list.forEach(function (a) { n += a.length; });
+        out = new Float32Array(n);
+        list.forEach(function (a) { out.set(a, o); o += a.length; });
+        return out;
+      }
+      function smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+      // ---------------------------------------------------------------------------------------------
+      // Gems. Local frame: axis y, girdle at y = 0, crown above, pavilion below to a flat culet. Outline by world angle.
+      // The pavilion is a 45 degree cone so the gem prints culet down without supports and fits the 45 degree seat.
+      // ---------------------------------------------------------------------------------------------
+      function gemSpec(g) {
+        var sh = SHAPES[g.shape], D = g.size * sh.aMin * (1 - CULET) * 1.05 * (0.9 / PAV), gb = 0.5 + 0.06 * g.size;
+        return { D: D, gb: gb, ch: g.size * g.height, sh: sh };
+      }
+      function gemOutline(g) {
+        var sh = SHAPES[g.shape], spin = sh.rot + g.turn * DEG;
+        return function (th) { return g.size * sh.fn(th - spin); };
+      }
+      function gemQ(g) {
+        var sh = SHAPES[g.shape], spin = sh.rot + g.turn * DEG;
+        return function (th) { return sh.q(th - spin); };
+      }
+      // The culet: the girdle outline moved in by the pavilion depth (a 45 degree cone everywhere).
+      function culetOf(g, spec) {
+        var out = gemOutline(g), q = gemQ(g);
+        return function (th) { return Math.max(out(th) - PAV * spec.D * q(th), 0.25 * g.size); };
+      }
+      function gemShell(g) {
+        var spec = gemSpec(g), out = gemOutline(g), N = g.cut === 1 ? 48 : 24, L = [], D = spec.D, gb = spec.gb, ch = spec.ch;
+        function rg(w, f, ph) { return ring([0, w, 0], null, polarW(N, ph || 0, function (th) { return f * out(th); }), ph || 0); }
+        var cul = culetOf(g, spec);
+        L.push(ring([0, -D, 0], null, polarW(N, 0, cul), 0));
+        L.push(rg(0, 1));
+        L.push(rg(gb, 1));
+        if (g.cut === 0) {
+          L.push(rg(gb + ch * 0.45, 0.8, 0.5));
+          L.push(rg(gb + ch, 0.5));
+        } else if (g.cut === 1) {
+          var k;
+          for (k = 1; k < 6; k++) { var phi = k * 15 * DEG; L.push(rg(gb + ch * 1.15 * Math.sin(phi), Math.cos(phi))); }
+          L.push(pole([0, gb + ch * 1.15, 0]));
+        } else if (g.cut === 2) {
+          L.push(rg(gb + 0.3 * ch, 1));
+          L.push(rg(gb + 0.3 * ch, 0.82));
+          L.push(rg(gb + 0.65 * ch, 0.82));
+          L.push(rg(gb + 0.65 * ch, 0.62));
+          L.push(rg(gb + ch, 0.62));
+        } else {
+          L.push(rg(gb + ch * 0.8, 0.58, 0.5));
+          L.push(pole([0, gb + ch * 1.7, 0]));
+        }
+        return solid(L);
+      }
+
+      // The bezel around a gem, axis y (the plate maps y to world z). Returns { a, ext, h }.
+      function bezelExtent(g) {
+        var spec = gemSpec(g), h = spec.D + spec.gb, base = g.size * spec.sh.max + CLR + SEATX * spec.D * spec.sh.qmax + (PAV + SEATX) * spec.gb * spec.sh.qmax + W_TOP + KSLOPE * h * spec.sh.qmax;
+        var extra = [0, 1.0, 0.3 * g.size + 0.8, 0.25 * g.size + 0.6, 0.15 * g.size + 0.6][g.setting];
+        return base + extra;
+      }
+      function bezelShell(g) {
+        var spec = gemSpec(g), out = gemOutline(g), D = spec.D, gb = spec.gb, h = D + gb, K = 16;
+        function inner(w, f, add) { return ring([0, w, 0], null, polarW(NB, 0, function (th) { return f * out(th) + add; }), 0); }
+        var cul = culetOf(g, spec), q = gemQ(g);
+        function rim(th) { return out(th) + CLR + SEATX * D * q(th); }   // the seat opens faster than the gem widens, and its ceiling stays about 43 degrees from vertical, clear of the 50 degree limit
+        function seatTop(th) { return rim(th) + (PAV + SEATX) * gb * q(th); }   // above the girdle the seat keeps opening at the same slope, so it has no flat ceiling
+        function seatRing(w, fn) { return ring([0, w, 0], null, polarW(NB, 0, fn), 0); }
+        var I = [ring([0, 0, 0], null, polarW(NB, 0, function (th) { return cul(th) + CLR; }), 0), seatRing(D, rim), seatRing(h, seatTop)];
+        function top(th) { return seatTop(th) + W_TOP; }
+        function ringOf(w, fn) { return ring([0, w, 0], null, polarW(NB, 0, fn), 0); }
+        var O;
+        if (g.setting === 1) {
+          var h1 = h * 0.5, h2 = h - h1, sh = 1.0;
+          O = [ringOf(0, function (th) { return top(th) + (KSLOPE * h) * q(th) + sh; }),
+            ringOf(h1, function (th) { return top(th) + KSLOPE * h2 * q(th) + sh; }),
+            ringOf(h1, function (th) { return top(th) + KSLOPE * h2 * q(th); }),
+            ringOf(h, top)];
+        } else {
+          var extra = function () { return 0; };
+          if (g.setting === 2) extra = function (th) { return (0.3 * g.size + 0.8) * Math.pow(Math.max(0, Math.cos(K * th / 2)), 6); };
+          else if (g.setting === 3) extra = function (th) { return (0.25 * g.size + 0.6) * Math.abs(Math.sin(K * th / 2)); };
+          else if (g.setting === 4) extra = function (th) { return (0.15 * g.size + 0.6) * (clamp(2.6 * Math.sin(12 * th), -1, 1) * 0.5 + 0.5); };
+          // The rays, petals and cogs die away over the lower 45% of the height, so their sides are as steep as the cone and need no supports.
+          O = [ringOf(0, function (th) { return top(th) + KSLOPE * h * q(th) + extra(th); }),
+            ringOf(0.45 * h, function (th) { return top(th) + KSLOPE * 0.55 * h * q(th); }),
+            ringOf(h, top)];
+        }
+        return { a: tube(O, I, true), h: h, D: D };
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // Fingers, thumb and studs: a ridged lathe along a leaning, curling axis
+      // ---------------------------------------------------------------------------------------------
+      function limb(o) {
+        var L = o.L, N = o.n || 40, emb = o.emb || 4, nSeg = o.nSeg, A = o.bead || 1.2, Lf = A / 0.32, Lu = 0.9;
+        var keys = [], s, pts = [], k, j;
+        var sinS = Math.sin(o.sigma), cosS = Math.cos(o.sigma);
+        function alpha(s) { return o.curl * smooth((s - 0.3 * L) / (0.7 * L)); }
+        function dirAt(s) { var al = alpha(s); return [sinS * Math.cos(al), cosS * Math.cos(al), Math.sin(al)]; }
+        function bead(s) {
+          var b = o.collar * Math.max(0, 1 - Math.max(0, s) / Lu), j2, sj;
+          if (s < 0) b = o.collar;
+          for (j2 = 1; j2 < nSeg; j2++) {
+            sj = L * j2 / nSeg;
+            if (s >= sj - Lf && s <= sj) b = Math.max(b, A * (s - (sj - Lf)) / Lf);
+            else if (s > sj && s < sj + Lu) b = Math.max(b, A * (1 - (s - sj) / Lu));
+          }
+          return b;
+        }
+        function rad(s) { return o.rb + (o.rt - o.rb) * clamp(s / L, 0, 1) + (s <= L ? bead(s) : 0); }
+        keys.push(-emb, 0, Lu * 0.99, Lu, L);
+        for (j = 1; j < nSeg; j++) { keys.push(L * j / nSeg - Lf, L * j / nSeg, L * j / nSeg + Lu); }
+        for (s = 0; s <= L; s += 2.0) keys.push(s);
+        keys.sort(function (x, y) { return x - y; });
+        var list = [];
+        keys.forEach(function (v) { if (v >= -emb - 1e-6 && v <= L + 1e-6 && (!list.length || v - list[list.length - 1] > 0.15)) list.push(v); });
+        if (list[list.length - 1] < L - 0.1) list.push(L);
+        // path
+        var P = [o.x, o.y, o.z], t0 = dirAt(0), layers = [], prevS = 0, cur = P.slice();
+        var at = {};
+        // before the base: straight back along the starting direction
+        function pos(s) {
+          if (s <= 0) return [P[0] + t0[0] * s, P[1] + t0[1] * s, P[2] + t0[2] * s];
+          return null;
+        }
+        var path = [];
+        list.forEach(function (s2) {
+          if (s2 <= 0) { path.push({ s: s2, c: pos(s2) }); return; }
+          if (!path.some(function (q) { return q.s === 0; })) path.push({ s: 0, c: P.slice() });
+          var last = path[path.length - 1], m = dirAt((last.s + s2) / 2), d = s2 - last.s;
+          path.push({ s: s2, c: [last.c[0] + m[0] * d, last.c[1] + m[1] * d, last.c[2] + m[2] * d] });
+        });
+        path.forEach(function (q) {
+          var r = rad(q.s);
+          layers.push(ring(q.c, dirAt(q.s), polarXY(N, function (th) { return [r * Math.cos(th), r * Math.sin(th)]; }), 0));
+        });
+        // tip
+        var endC = path[path.length - 1].c, tEnd = dirAt(L), rE = rad(L), tip = o.tip;
+        function tipRing(ds, r) { return ring([endC[0] + tEnd[0] * ds, endC[1] + tEnd[1] * ds, endC[2] + tEnd[2] * ds], tEnd, polarXY(N, function (th) { return [r * Math.cos(th), r * Math.sin(th)]; }), 0); }
+        if (tip === 0) {
+          for (k = 1; k < 6; k++) layers.push(tipRing(rE * 0.95 * Math.sin(k * 15 * DEG), rE * Math.cos(k * 15 * DEG)));
+          layers.push(pole([endC[0] + tEnd[0] * rE * 0.95, endC[1] + tEnd[1] * rE * 0.95, endC[2] + tEnd[2] * rE * 0.95]));
+        } else if (tip === 1) {
+          layers.push(tipRing(rE * 1.3, rE * 0.58));
+          layers.push(pole([endC[0] + tEnd[0] * rE * 3.0, endC[1] + tEnd[1] * rE * 3.0, endC[2] + tEnd[2] * rE * 3.0]));
+        } else {
+          layers.push(tipRing(rE * 0.5, rE * 0.55));
+        }
+        return solid(layers);
+      }
+
+      // A squat 45 degree cone along +z (knuckle stud), or a spike tilted up 40 degrees.
+      function stud(style, x, y, z, R, emb, bent) {
+        if (emb === undefined) emb = 3;
+        if (style === 1) {
+          var t = [0, 0, 1];
+          return solid([
+            ring([x, y, z - emb], t, polarXY(24, function (th) { return [R * Math.cos(th), R * Math.sin(th)]; }), 0),
+            ring([x, y, z], t, polarXY(24, function (th) { return [R * Math.cos(th), R * Math.sin(th)]; }), 0),
+            ring([x, y, z + R * 0.62], t, polarXY(24, function (th) { return [R * 0.34 * Math.cos(th), R * 0.34 * Math.sin(th)]; }), 0)
+          ]);
+        }
+        var tilt = bent ? 55 : 40, d = [0, Math.sin(tilt * DEG), Math.cos(tilt * DEG)], c0 = [x - d[0] * emb, y - d[1] * emb, z - d[2] * emb];
+        function at(s, r) { return ring([x + d[0] * s, y + d[1] * s, z + d[2] * s], d, polarXY(24, function (th) { return [r * Math.cos(th), r * Math.sin(th)]; }), 0); }
+        function disc(c, tt, r) { return ring(c, tt, polarXY(24, function (th) { return [r * Math.cos(th), r * Math.sin(th)]; }), 0); }
+        if (bent) {   // a short straight collar first, so the base does not jut out below the wall; the spike turns up after it
+          return solid([disc([x, y, z - emb], [0, 0, 1], R), disc([x, y, z], [0, 0, 1], R), disc([x + d[0] * 1.5, y + d[1] * 1.5, z + d[2] * 1.5], d, R),
+            disc([x + d[0] * 7.5, y + d[1] * 7.5, z + d[2] * 7.5], d, R * 0.55), pole([x + d[0] * 13.5, y + d[1] * 13.5, z + d[2] * 13.5])]);
+        }
+        return solid([ring(c0, d, polarXY(24, function (th) { return [R * Math.cos(th), R * Math.sin(th)]; }), 0), at(0, R), at(5.5, R * 0.55), pole([x + d[0] * 11.5, y + d[1] * 11.5, z + d[2] * 11.5])]);
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // Layout: every number the build needs, from the parameters
+      // ---------------------------------------------------------------------------------------------
+      function gemOf(p, i) {
+        var q = function (k) { return p['g' + i + '_' + k]; };
+        return { on: q('on') > 0, shape: Math.round(q('shape')), cut: Math.round(q('cut')), size: q('size'), height: q('height'), turn: q('turn'), color: Math.round(q('color')), setting: Math.round(q('set')), index: i };
+      }
+      // The seat of a gem: its radius out to the top rim of the bezel (the skirt below it is wider).
+      function seatOf(g) { var spec = gemSpec(g); return g.size * spec.sh.max + CLR + SEATX * spec.D * spec.sh.qmax + (PAV + SEATX) * spec.gb * spec.sh.qmax + W_TOP; }
+
+      // Where the five gems go on the plate (local plate coordinates, x right, y up) and what joins them.
+      // kind: 0 Orbit, 1 Cross, 2 Row, 3 Crescent, 4 Pentagon, 5 Zigzag. Ro is the spread, rot the turn of the whole layout.
+      function placeGems(kind, Ro, rot, seat, on) {
+        var pos = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]], links = [], i, j, ph;
+        function gap(a, b) { var m = clamp(Ro / 24, 0.8, 1.2); return Math.max(seat[a] + seat[b] + 1.2, (seat[a] + seat[b] + 1.6) * m); }
+        if (kind === 0 || kind === 1) {
+          var base = kind === 0 ? 45 * DEG : 0;
+          for (i = 1; i < 5; i++) { ph = rot + base + (i - 1) * Math.PI / 2; pos[i] = [Ro * Math.cos(ph), Ro * Math.sin(ph)]; }
+          for (i = 1; i < 5; i++) {
+            if (kind === 0) {
+              j = i === 4 ? 1 : i + 1;
+              if (on[i] && on[j]) links.push({ t: 'arc', cx: 0, cy: 0, R: Ro, a0: rot + base + (i - 1) * Math.PI / 2, a1: rot + base + i * Math.PI / 2, i: i, j: j });
+            } else if (on[i] && on[0]) links.push({ t: 'line', a: [0, 0], b: pos[i], i: 0, j: i });
+          }
+        } else if (kind === 4) {
+          var Rp = Ro * 0.8;
+          for (i = 0; i < 5; i++) { j = (i + 1) % 5; Rp = Math.max(Rp, (seat[i] + seat[j] + 1.2) / (2 * Math.sin(Math.PI / 5))); }
+          for (i = 0; i < 5; i++) {
+            ph = rot + Math.PI / 2 + i * TAU / 5;
+            pos[i] = [Rp * Math.cos(ph), Rp * Math.sin(ph)];
+          }
+          for (i = 0; i < 5; i++) {
+            j = (i + 1) % 5;
+            if (on[i] && on[j]) links.push({ t: 'arc', cx: 0, cy: 0, R: Rp, a0: rot + Math.PI / 2 + i * TAU / 5, a1: rot + Math.PI / 2 + (i + 1) * TAU / 5, i: i, j: j });
+          }
+        } else {
+          // a chain through the gems in the order Lunara, Vesper, Solis, Aurelia, Nova, with Solis on the origin
+          var order = [1, 2, 0, 3, 4].filter(function (k) { return on[k]; }), ci = order.indexOf(0), s = [], k;
+          if (ci < 0) ci = Math.floor(order.length / 2);
+          var D = 0.35 * Ro * clamp(Ro / 24, 0.8, 1.2);
+          function step(a, b) {
+            var g = gap(a, b);
+            return kind === 5 ? Math.sqrt(Math.max(g * g - D * D, 1)) : g;
+          }
+          s[ci] = 0;
+          for (k = ci + 1; k < order.length; k++) s[k] = s[k - 1] + step(order[k - 1], order[k]);
+          for (k = ci - 1; k >= 0; k--) s[k] = s[k + 1] - step(order[k], order[k + 1]);
+          var c = Math.cos(rot), sn = Math.sin(rot), Rc = 1.45 * Ro, pts = [];
+          order.forEach(function (g, n) {
+            var a, b;
+            if (kind === 2) { a = s[n]; b = 0; }
+            else if (kind === 5) { a = s[n]; b = (Math.abs(n - ci) % 2) * -D; }
+            else { var th = s[n] / Rc; a = Rc * Math.sin(th); b = Rc * (1 - Math.cos(th)); }
+            pts.push([a * c - b * sn, a * sn + b * c]);
+            pos[g] = pts[pts.length - 1];
+          });
+          var shift = [0, 0];
+          if (kind === 3 && order.length) {   // centre the bowl on the plate
+            var lo = [1e9, 1e9], hi = [-1e9, -1e9];
+            pts.forEach(function (q) { lo[0] = Math.min(lo[0], q[0]); lo[1] = Math.min(lo[1], q[1]); hi[0] = Math.max(hi[0], q[0]); hi[1] = Math.max(hi[1], q[1]); });
+            shift = [-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2];
+            order.forEach(function (g) { pos[g] = [pos[g][0] + shift[0], pos[g][1] + shift[1]]; });
+          }
+          for (k = 0; k < order.length - 1; k++) {
+            if (kind === 3) {
+              var cc = [-sn * Rc + shift[0], c * Rc + shift[1]];   // the circle centre, turned with the layout
+              links.push({ t: 'arc', cx: cc[0], cy: cc[1], R: Rc, a0: s[k] / Rc - Math.PI / 2 + rot, a1: s[k + 1] / Rc - Math.PI / 2 + rot, i: order[k], j: order[k + 1] });
+            } else links.push({ t: 'line', a: pos[order[k]], b: pos[order[k + 1]], i: order[k], j: order[k + 1] });
+          }
+        }
+        return { pos: pos, links: links };
+      }
+
+      function layout(p) {
+        var wear = Math.round(p.build) === 0, S = wear ? 1 : p.scale / 100, Lt = { S: S, p: p, wear: wear };
+        var RMAX = 37.3;
+        Lt.Hc = p.cuffH;
+        if (wear) {
+          var wl = 2.6, ez = p.ease;
+          Lt.G = { wall: wl, wx: p.wristW / 2 + ez + wl, wz: 0.66 * p.wristW / 2 + ez + wl, px: p.handW / 2 + ez + wl, pz: p.handT / 2 + ez + wl };
+          Lt.Hp = p.palmH; Lt.yP = Lt.Hc + Lt.Hp / 2 - 1; Lt.zf = Lt.G.pz;
+          RMAX = Math.min(37.3, (Lt.Hp - 7) / 2 - 4.5, Lt.G.px - 6);
+        } else { Lt.Hp = PALM_H; Lt.yP = Lt.Hc + 41; Lt.zf = PALM_Z; }
+        Lt.yT = Lt.Hc + Lt.Hp; Lt.T = p.plateT;
+        var gems = [0, 1, 2, 3, 4].map(function (i) { return gemOf(p, i); });
+        var kind = Math.round(p.gemLayout), rot = p.orbitTurn * DEG, plateFn = PLATE_FN[Math.round(p.plateShape)];
+        var raised = p.core > 0 && gems[0].on && CORE_CENTRED[kind];
+        // Gems shrink together when the layout would not fit on the plate.
+        var fit = 1, it;
+        function measure(f) {
+          var gs = gems.map(function (g) { var c = Object.assign({}, g); c.size = g.size * f; return c; });
+          var e = gs.map(function (g) { return g.on ? bezelExtent(g) : 0; });
+          var on = gs.map(function (g) { return g.on; });
+          var seat = gs.map(function (g, i) { return g.on ? seatOf(g) + (i === 0 && raised ? 0.6 + KSLOPE * HT2 : 0) : 0; });
+          var ro = p.orbitR;
+          if (kind <= 1) {
+            var foot = e[0] + (raised ? 0.6 + KSLOPE * HT2 : 0), satMax = Math.max(e[1], e[2], e[3], e[4]);   // the raised core's skirt is wider than its bezel
+            ro = Math.max(p.orbitR, foot + satMax + 0.8);
+          }
+          var pl = placeGems(kind, ro, rot, seat, on), need = 0, i;
+          for (i = 0; i < 5; i++) {
+            if (!on[i]) continue;
+            need = Math.max(need, (Math.hypot(pl.pos[i][0], pl.pos[i][1]) + e[i] + 0.8) / plateFn(Math.atan2(pl.pos[i][1], pl.pos[i][0])));
+          }
+          if (on[0]) need = Math.max(need, e[0] + 1.2);
+          return { gs: gs, e: e, ro: ro, pl: pl, need: Math.max(need, p.plateR) };
+        }
+        var m = measure(1);
+        for (it = 0; it < 14 && m.need > RMAX; it++) { fit *= 0.93; m = measure(fit); }
+        Lt.gems = m.gs; Lt.ext = m.e; Lt.Ro = m.ro; Lt.R = m.need; Lt.fit = fit; Lt.rot = rot; Lt.plateFn = plateFn; Lt.kind = kind;
+        Lt.pos = m.pl.pos.map(function (q) { return [q[0], Lt.yP + q[1]]; });
+        Lt.links = m.pl.links;
+        Lt.raised = raised;
+        Lt.ht2 = HT2;
+        return Lt;
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // The arm: cuff and palm in one hollow shell
+      // ---------------------------------------------------------------------------------------------
+      function formFactor(form, th) {
+        if (form === 1) { var M = 8, sec = TAU / M, phi = ((th % sec) + sec) % sec - sec / 2; return Math.cos(Math.PI / M) / Math.cos(phi); }
+        if (form === 2) return 1 - 0.04 * (1 - Math.cos(24 * th)) / 2;
+        if (form === 3) return 0.94 + 0.06 * Math.abs(Math.cos(4 * th));
+        if (form === 4) return 1 - 0.05 * (1 - (clamp(2.5 * Math.cos(16 * th), -1, 1) * 0.5 + 0.5));
+        return 1;
+      }
+      function armShell(Lt) {
+        var p = Lt.p, Hc = Lt.Hc, Hp = Lt.Hp, yT = Lt.yT, Hw = 0.86 * Hc, flare = p.flare, form = Math.round(p.cuffForm);
+        var bands = Math.round(p.bands), wallIn = WALL / Lt.S + FORM_AMP[form] * WRIST_X;
+        function halfX(y) {
+          if (y <= Hw) return lerp(WRIST_X + 4 + flare, WRIST_X, 1 - Math.pow(1 - y / Hw, 2));
+          return lerp(WRIST_X, PALM_X, smooth((y - Hw) / (Hc + 0.5 * Hp - Hw)));
+        }
+        function halfZ(y) {
+          if (y <= Hw) return lerp(WRIST_Z + 3 + 0.8 * flare, WRIST_Z, 1 - Math.pow(1 - y / Hw, 2));
+          return lerp(WRIST_Z, PALM_Z, smooth((y - Hw) / Math.max(1, Hc - 2 - Hw)));
+        }
+        function expo(y) { return lerp(2.6, 6, smooth((y - Hw) / (Hc + 4 - Hw))); }
+        function band(y) {
+          var b = 0, k;
+          for (k = 0; k < bands; k++) { var yk = Math.round(Hc * 0.8 * (k + 1) / (bands + 1)); b = Math.max(b, clamp(2.7 - Math.abs(y - yk), 0, 2.2)); }
+          return b;
+        }
+        function pts(y, inset, withForm) {
+          var wx = halfX(y) - inset, wz = halfZ(y) - inset, e = 2 / expo(y), wgt = withForm ? clamp((Hc - 2 - y) / 10, 0, 1) : 0;
+          if (withForm) { var b = band(y); wx += b; wz += b; }
+          return polarXY(NB, function (th) {
+            var c = Math.cos(th), s = Math.sin(th), f = 1 + wgt * (formFactor(form, th) - 1);
+            return [wx * Math.sign(c) * Math.pow(Math.abs(c), e) * f, wz * Math.sign(s) * Math.pow(Math.abs(s), e) * f];
+          });
+        }
+        var outer = [], y, Hv = Hc - 14, ins, inner = [];
+        outer.push(ring([0, 0, 0], null, pts(0, 1, true), 0));
+        for (y = 1; y < Hc + 0.5 * Hp; y += (y < Hc + 12 ? 1 : 3)) outer.push(ring([0, y, 0], null, pts(y, 0, true), 0));
+        for (y = Hc + 0.5 * Hp + 3; y < yT - 4.5; y += 3) outer.push(ring([0, y, 0], null, pts(y, 0, true), 0));
+        for (var k = 0; k <= 4; k++) { var ph = k * 22.5 * DEG; outer.push(ring([0, yT - 4 + 4 * Math.sin(ph), 0], null, pts(yT - 4 + 4 * Math.sin(ph), 4 * (1 - Math.cos(ph)), true), 0)); }
+        // cavity: straight walls, then a 45 degree ceiling
+        for (y = 0; y <= Hv; y += 3) inner.push(ring([0, y, 0], null, pts(y, wallIn, false), 0));
+        if (inner[inner.length - 1].c[1] < Hv - 0.01) inner.push(ring([0, Hv, 0], null, pts(Hv, wallIn, false), 0));
+        for (y = Hv + 2; ; y += 2) {
+          ins = wallIn + 0.85 * (y - Hv);
+          if (halfZ(y) - ins < 4) break;
+          inner.push(ring([0, y, 0], null, pts(y, ins, false), 0));
+        }
+        var yA = y;   // last ring: the ridge of the ceiling, 0.6 mm across
+        for (var it = 0; it < 4; it++) yA = Hv + (halfZ(yA) - 0.3 - wallIn) / 0.85;
+        inner.push(ring([0, yA, 0], null, pts(yA, halfZ(yA) - 0.3, false), 0));
+        return tube(outer, inner, false);
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // The hand plate, orbit arcs and settings, all with 42 degree bevels, then the whole model
+      // ---------------------------------------------------------------------------------------------
+      function plateShell(Lt) {
+        var R = Lt.R, T = Lt.T, fn = Lt.plateFn, bev = T - 0.4, zf = Lt.zf, k = KSLOPE;
+        var wall = R + k * bev;
+        function lay(w, rf) { return ring([0, w, 0], null, polarW(NB, 0, rf), 0); }
+        var E = Lt.wear ? 1.2 : 5, zb = zf - E, L = [];
+        var pq = PLATE_Q[Math.round(Lt.p.plateShape)];
+        function r0(th) { return fn(th) * R + k * bev * pq(th); }
+        L.push(lay(0, r0));
+        L.push(lay(E, r0));
+        L.push(lay(E + T - bev, r0));
+        var topIn = function (th) { return fn(th) * R; };
+        L.push(lay(E + T, topIn));
+        if (Lt.raised) {
+          var e0 = Lt.ext[0] + 0.6, R2 = e0 + k * Lt.ht2;
+          if (R2 < R - 2) {
+            L.push(lay(E + T, function (th) { return fn(th) * R2 / 1 * (1 + 0 * th); }));
+            L.push(lay(E + T + Lt.ht2, function (th) { return fn(th) * (R2 - k * Lt.ht2); }));
+          } else Lt.raised = false;
+        }
+        var a = solid(L);
+        return mapPts(a, function (x, y, z) { return [x, Lt.yP - z, zb + y]; });
+      }
+      // Links between the gems: raised bars with a trapezoid section, along arcs of a circle or straight lines.
+      function linkShell(Lt, zTop) {
+        var out = [], z0 = zTop - 0.5, prof = [[-3.0, 0], [3.0, 0], [0.8, 2.3], [-0.8, 2.3]], yP = Lt.yP;
+        function sweep(pts) {
+          var rings = pts.map(function (q) { return { P: prof.map(function (r) { return [q[0] + q[2] * r[0], q[1] + q[3] * r[0], z0 + r[1]]; }), ph: 0 }; });
+          var a = [], s;
+          for (s = 0; s < rings.length - 1; s++) strip(a, rings[s], rings[s + 1], false);
+          cap(a, rings[0], false, false);
+          cap(a, rings[rings.length - 1], true, false);
+          out.push(orient(a));
+        }
+        Lt.links.forEach(function (lk) {
+          var ei = Lt.ext[lk.i] * 0.55, ej = Lt.ext[lk.j] * 0.55, s, pts = [], steps;
+          if (lk.t === 'arc') {
+            var a0 = lk.a0 + ei / lk.R, a1 = lk.a1 - ej / lk.R;
+            if (a1 - a0 < 0.12) return;
+            steps = Math.max(4, Math.round((a1 - a0) / (3 * DEG)));
+            for (s = 0; s <= steps; s++) {
+              var ph = lerp(a0, a1, s / steps), ex = Math.cos(ph), ey = Math.sin(ph);
+              pts.push([lk.cx + lk.R * ex, yP + lk.cy + lk.R * ey, ex, ey]);
+            }
+          } else {
+            var dx = lk.b[0] - lk.a[0], dy = lk.b[1] - lk.a[1], len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+            var l0 = ei, l1 = len - ej;
+            if (l1 - l0 < 1.5) return;
+            steps = Math.max(2, Math.round((l1 - l0) / 3));
+            for (s = 0; s <= steps; s++) {
+              var d = lerp(l0, l1, s / steps);
+              pts.push([lk.a[0] + ux * d, yP + lk.a[1] + uy * d, uy, -ux]);
+            }
+          }
+          sweep(pts);
+        });
+        return out;
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // The wearable shell: a forearm clip cuff and a back-of-hand shield in one piece, open on the palm side (-z).
+      // Every ring is a C: an outer curve and an inner curve joined at the two edges of the opening. The opening widens
+      // going up, so the free edges only ever step back (they face up and need no supports).
+      // ---------------------------------------------------------------------------------------------
+      function armWear(Lt) {
+        var p = Lt.p, G = Lt.G, Hc = Lt.Hc, yT = Lt.yT, Hw = 0.86 * Hc, flare = p.flare, form = Math.round(p.cuffForm);
+        var bands = Math.round(p.bands), wallIn = G.wall + FORM_AMP[form] * G.wx, M = 72;
+        var phiC = p.cuffOpen * DEG, phiH = Math.max(p.handOpen, p.cuffOpen) * DEG;
+        function halfX(y) {
+          if (y <= Hw) return lerp(G.wx + 4 + flare, G.wx, 1 - Math.pow(1 - y / Hw, 2));
+          return lerp(G.wx, G.px, smooth((y - Hw) / (Hc + 0.5 * Lt.Hp - Hw)));
+        }
+        function halfZ(y) {   // the thickness changes slowly (under 12 degrees), so the inside of the back wall never overhangs
+          var base = lerp(G.wz, G.pz, smooth((y - 0.35 * Hc) / (0.65 * Hc + 2)));
+          return y <= Hw ? base + (3 + 0.8 * flare) * Math.pow(1 - y / Hw, 2) : base;
+        }
+        function expo(y) { return lerp(2.6, 6, smooth((y - Hw) / (Hc + 4 - Hw))); }
+        function band(y) {
+          var b = 0, k;
+          for (k = 0; k < bands; k++) { var yk = Math.round(Hc * 0.8 * (k + 1) / (bands + 1)); b = Math.max(b, clamp(2.7 - Math.abs(y - yk), 0, 2.2)); }
+          return b;
+        }
+        function phi(y) { return lerp(phiC, phiH, smooth((y - (Hc - 8)) / 22)); }
+        function at(th, y, inset, withForm) {
+          var wx = halfX(y) - inset, wz = halfZ(y) - inset, e = 2 / expo(y), wgt = withForm ? clamp((Hc - 2 - y) / 10, 0, 1) : 0;
+          if (withForm) { var b = band(y); wx += b; wz += b; }
+          var c = Math.cos(th), s = Math.sin(th), f = 1 + wgt * (formFactor(form, th) - 1);
+          return [wx * Math.sign(c) * Math.pow(Math.abs(c), e) * f, wz * Math.sign(s) * Math.pow(Math.abs(s), e) * f];
+        }
+        function cRing(y, outerInset) {
+          var ph = phi(y), a0 = -Math.PI / 2 + ph, a1 = 1.5 * Math.PI - ph, O = [], I = [], j, th;
+          for (j = 0; j < M; j++) {
+            th = lerp(a0, a1, j / (M - 1));
+            O.push(at(th, y, outerInset, true));
+            I.push(at(th, y, wallIn, false));
+          }
+          var pts = O.concat(I.reverse());
+          return { ring: ring([0, y, 0], null, pts, 0), O: O, I: I };
+        }
+        var layers = [], y, ys = [0];
+        for (y = 1; y < Hc + 14; y += 1) ys.push(y);
+        for (y = Hc + 14; y < yT - 1; y += 3) ys.push(y);
+        ys.push(yT);
+        ys.forEach(function (yy, n) { layers.push(cRing(yy, n === 0 ? 0.8 : 0)); });
+        var a = [], i, j, k, A, B, O0, I0;
+        for (i = 0; i < layers.length - 1; i++) strip(a, layers[i].ring, layers[i + 1].ring, false);
+        function band3(L, bottom) {   // the flat end of the wall: a strip between the outer and inner curve
+          var Pn = L.ring.P, o, q;
+          for (j = 0; j < M - 1; j++) {
+            k = j + 1;
+            o = [Pn[j], Pn[k]]; q = [Pn[2 * M - 1 - j], Pn[2 * M - 1 - k]];
+            if (bottom) { tri(a, o[0], o[1], q[0], false); tri(a, o[1], q[1], q[0], false); }
+            else { tri(a, o[0], q[0], o[1], false); tri(a, o[1], q[0], q[1], false); }
+          }
+        }
+        band3(layers[0], true);
+        band3(layers[layers.length - 1], false);
+        Lt.dorsalZ = function (x, y) { var e = 2 / expo(y), r = Math.abs(x) / halfX(y); return r >= 1 ? 0 : halfZ(y) * Math.pow(1 - Math.pow(r, 2 / e), e / 2); };
+        return orient(a);
+      }
+
+      // A dorsal finger plate: a shallow arc (the back of the finger), standing up from the shield and leaning toward the hand.
+      // The ring is the arc between two radial cuts: outer curve then inner curve, so the section is a thin banana.
+      function plateLimb(o) {
+        var L = o.L, emb = 1.5, nSeg = o.nSeg, A = o.bead || 1.2, Lf = A / 0.32, Lu = 0.9, M = 11, w0 = o.w, Ro = o.R, Ri = o.R - o.t, tip = o.tip;
+        var sinS = Math.sin(o.sigma), cosS = Math.cos(o.sigma);
+        function alpha(s) { return o.curl * smooth((s - 0.3 * L) / (0.7 * L)); }
+        function dirAt(s) { var al = alpha(s); return [sinS * Math.cos(al), cosS * Math.cos(al), Math.sin(al)]; }
+        function bead(s) {
+          var b = 0, j2, sj;
+          for (j2 = 1; j2 < nSeg; j2++) {
+            sj = L * j2 / nSeg;
+            if (s >= sj - Lf && s <= sj) b = Math.max(b, A * (s - (sj - Lf)) / Lf);
+            else if (s > sj && s < sj + Lu) b = Math.max(b, A * (1 - (s - sj) / Lu));
+          }
+          return b;
+        }
+        var Ld = tip === 0 ? w0 : (tip === 1 ? 1.9 * w0 : 3.0);
+        function wAt(s) {
+          var u = (s - (L - Ld)) / Ld;
+          if (u <= 0) return w0;
+          if (tip === 0) return w0 * Math.sqrt(Math.max(0, 1 - u * u));
+          if (tip === 1) return w0 * (1 - u);
+          return lerp(w0, 0.6 * w0, Math.min(1, u));
+        }
+        var keys = [-emb, 0], s, k, j;
+        for (j = 1; j < nSeg; j++) keys.push(L * j / nSeg - Lf, L * j / nSeg, L * j / nSeg + Lu);
+        for (s = 2; s < L - Ld - 0.5; s += 2) keys.push(s);
+        keys.push(L - Ld);
+        for (k = 1; k < 6; k++) keys.push(tip === 0 ? (L - Ld) + Ld * Math.sin(k * 15 * DEG) : (L - Ld) + Ld * k / 6);
+        if (tip === 2) keys.push(L);
+        keys.sort(function (x, y) { return x - y; });
+        var list = [];
+        keys.forEach(function (v) { if (v >= -emb - 1e-6 && v <= L + 1e-6 && (!list.length || v - list[list.length - 1] > 0.15)) list.push(v); });
+        var P = [o.x, o.y, o.z], t0 = dirAt(0), path = [];
+        list.forEach(function (s2) {
+          if (s2 <= 0) { path.push({ s: s2, c: [P[0] + t0[0] * s2, P[1] + t0[1] * s2, P[2] + t0[2] * s2] }); return; }
+          if (!path.some(function (q) { return q.s === 0; })) path.push({ s: 0, c: P.slice() });
+          var last = path[path.length - 1], m = dirAt((last.s + s2) / 2), d = s2 - last.s;
+          path.push({ s: s2, c: [last.c[0] + m[0] * d, last.c[1] + m[1] * d, last.c[2] + m[2] * d] });
+        });
+        var layers = [];
+        path.forEach(function (q) {
+          var w = wAt(q.s), beta = Math.asin(Math.min(0.97, w / Ro)), ro = Ro + (q.s <= L ? bead(q.s) : 0), O = [], I = [], th;
+          for (j = 0; j < M; j++) {
+            th = lerp(Math.PI / 2 - beta, Math.PI / 2 + beta, j / (M - 1));
+            O.push([ro * Math.cos(th), ro * Math.sin(th)]);
+            I.push([Ri * Math.cos(th), Ri * Math.sin(th)]);
+          }
+          layers.push(ring(q.c, dirAt(q.s), O.concat(I.reverse()), 0));
+        });
+        var a = [], i;
+        for (i = 0; i < layers.length - 1; i++) strip(a, layers[i], layers[i + 1], false);
+        function band3(R, bottom) {
+          var Pn = R.P;
+          for (j = 0; j < M - 1; j++) {
+            k = j + 1;
+            if (bottom) { tri(a, Pn[j], Pn[k], Pn[2 * M - 1 - j], false); tri(a, Pn[k], Pn[2 * M - 1 - k], Pn[2 * M - 1 - j], false); }
+            else { tri(a, Pn[j], Pn[2 * M - 1 - j], Pn[k], false); tri(a, Pn[k], Pn[2 * M - 1 - j], Pn[2 * M - 1 - k], false); }
+          }
+        }
+        band3(layers[0], true);
+        var endR = layers[layers.length - 1];
+        if (tip === 2) band3(endR, false);
+        else {
+          var cs = [0, 0, 0], tE = dirAt(L);
+          endR.P.forEach(function (q) { cs[0] += q[0]; cs[1] += q[1]; cs[2] += q[2]; });
+          cs = [cs[0] / endR.P.length + tE[0] * 0.3, cs[1] / endR.P.length + tE[1] * 0.3, cs[2] / endR.P.length + tE[2] * 0.3];
+          for (j = 0; j < endR.P.length; j++) tri(a, endR.P[j], cs, endR.P[(j + 1) % endR.P.length], false);
+        }
+        return orient(a);
+      }
+
+      function buildModel(p) {
+        var Lt = layout(p), S = Lt.S, body = {}, yT = Lt.yT, wear = Lt.wear;
+        body.arm = [wear ? armWear(Lt) : armShell(Lt)];
+        body.plate = [plateShell(Lt)];
+        var zTop1 = Lt.zf + Lt.T, zTop2 = zTop1 + (Lt.raised ? Lt.ht2 : 0);
+        // settings
+        var settings = [], gemsDisp = [], gemsPrint = [], i;
+        for (i = 0; i < 5; i++) {
+          var g = Lt.gems[i];
+          if (!g.on) { gemsDisp.push(null); gemsPrint.push(null); continue; }
+          var cx = Lt.pos[i][0], cy = Lt.pos[i][1], zr = i === 0 && Lt.raised ? zTop2 : zTop1, bz = zr - 0.4;
+          var bz2 = bezelShell(g);
+          settings.push(mapPts(bz2.a, function (x, y, z) { return [x + cx, cy - z, y + bz]; }));
+          var gs = gemShell(g);
+          gemsPrint.push({ a: gs.slice(), D: bz2.D, size: g.size * SHAPES[g.shape].max });
+          gemsDisp.push(mapPts(gs, function (x, y, z) { return [x + cx, cy - z, y + zr + bz2.D]; }));
+          g.pos = [cx, cy, zr + bz2.D];
+          g.extent = Lt.ext[i];
+        }
+        body.settings = settings;
+        body.orbit = p.orbit > 0 ? linkShell(Lt, zTop1) : [];
+        // fingers
+        var lens = [0.97, 1.08, 1.0, 0.8], rads = [8.4, 9.0, 8.6, 7.4], fingers = [], x = -(PALM_X - 1.8), idx;
+        var tipS = Math.round(p.fTip), nSeg = Math.round(p.fSeg), studs = [];
+        if (wear) {
+          var px = Lt.G.px, gapF = 2.5, sumR = rads[0] + rads[1] + rads[2] + rads[3], k = (2 * (px - 4) - 3 * gapF) / (2 * sumR), Rc = CURVE_R[Math.round(p.fCurve)], xw = -(px - 4);
+          for (idx = 0; idx < 4; idx++) {
+            var w = rads[idx] * k, xc = xw + w, sgw = (idx - 1.5) / 1.5 * p.fSplay * DEG, zA = Lt.dorsalZ(xc, yT);
+            fingers.push(plateLimb({ x: xc, y: yT - 1.5, z: zA - Rc, sigma: sgw, curl: -p.fDrop * DEG, L: p.fLen * lens[idx], w: w, R: Rc, t: 2.4, nSeg: nSeg, tip: tipS, bead: 1.1 + rads[idx] * 0.03 }));
+            if (p.studs > 0) studs.push(stud(Math.round(p.studs), xc, yT - 12, Lt.dorsalZ(xc, yT - 12), 3.4, 1.2, true));
+            xw = xc + w + gapF;
+          }
+          body.fingers = fingers;
+          body.knuckles = studs;
+          body.thumb = [];
+        } else {
+          for (idx = 0; idx < 4; idx++) {
+            var r = rads[idx], cxf = x + r, sg = (idx - 1.5) / 1.5 * p.fSplay * DEG;
+            fingers.push(limb({ x: cxf, y: yT - 4, z: 0, sigma: sg, curl: p.fCurl * DEG, L: p.fLen * lens[idx], rb: r, rt: r * 0.78, nSeg: nSeg, tip: tipS, collar: 1.0, bead: 1.1 + r * 0.03, n: 40 }));
+            if (p.studs > 0) studs.push(stud(Math.round(p.studs), cxf, yT - 8.5, PALM_Z - 2.5, 4.6));
+            x = cxf + r + 3;
+          }
+          body.fingers = fingers;
+          body.knuckles = studs;
+          body.thumb = [limb({ x: -(PALM_X - 24), y: Lt.Hc + 22, z: 3, sigma: -p.tAngle * DEG, curl: 8 * DEG, L: p.tLen, rb: 9.2, rt: 6.8, nSeg: 2, tip: tipS, collar: 0.6, bead: 1.4, n: 40, emb: 3 })];
+        }
+        Lt.body = body; Lt.gemsDisp = gemsDisp; Lt.gemsPrint = gemsPrint;
+        return Lt;
+      }
+
+      // Final placement: shift so the body is centred on the origin and rests on y = 0, then scale and (for a left hand) mirror.
+      function finish(Lt) {
+        var p = Lt.p, S = Lt.S, left = p.hand > 0, lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9], names = {};
+        var order = [['arm', 'Cuff & palm', 0], ['plate', 'Hand plate', 0], ['orbit', 'Orbit arcs', 1], ['settings', 'Gem settings', 1], ['fingers', 'Fingers', 0], ['knuckles', 'Knuckle studs', 1], ['thumb', 'Thumb', 0]];
+        var raw = {};
+        Object.keys(Lt.body).forEach(function (key) {
+          var list = Lt.body[key];
+          raw[key] = list;
+          list.forEach(function (a) { for (var i = 0; i < a.length; i += 3) for (var k = 0; k < 3; k++) { if (a[i + k] < lo[k]) lo[k] = a[i + k]; if (a[i + k] > hi[k]) hi[k] = a[i + k]; } });
+        });
+        var sx = -(lo[0] + hi[0]) / 2, sy = -lo[1], sz = -(lo[2] + hi[2]) / 2;
+        function T(x, y, z) { return [(left ? -1 : 1) * (x + sx) * S, (y + sy) * S, (z + sz) * S]; }
+        function fixArr(a) { var out = new Float32Array(a); mapPts(out, T); return left ? flipAll(out) : out; }
+        Lt.xf = T;
+        Lt.meshes = [];
+        var metal = METALS[Math.round(p.metal)].color, accent = METALS[Math.round(p.accent)].color;
+        order.forEach(function (o) {
+          var list = raw[o[0]];
+          if (!list || !list.length) return;
+          Lt.meshes.push({ name: o[0], positions: join(list.map(fixArr)), color: o[2] ? accent : metal });
+        });
+        Lt.gemMeshes = [];
+        for (var i = 0; i < 5; i++) {
+          if (!Lt.gemsDisp[i]) continue;
+          var g = Lt.gems[i], gp = Lt.gemsPrint[i];
+          var gpos = fixArr(Lt.gemsDisp[i]);
+          Lt.gemMeshes.push({ name: 'gem' + i, index: i, positions: gpos, shade: facetShade(gpos), color: GEM_COLORS[g.color].color, print: gp, size: gp.size * S });
+        }
+        // camera anchors
+        var yP = Lt.yP;
+        Lt.anchor = {
+          H: (hi[1] + sy) * S, W: (hi[0] - lo[0]) * S,
+          cuff: T(0, Lt.Hc * 0.45, 0), plate: T(0, yP, Lt.zf + Lt.T), plateR: Lt.R * S,
+          fingers: T(0, Lt.yT + p.fLen * 0.45, 6), fLen: p.fLen * S, cuffH: Lt.Hc * S,
+          gem: Lt.gems.map(function (g, i) { return g.pos ? T(g.pos[0], g.pos[1], g.pos[2]) : null; }),
+          ext: Lt.ext.map(function (e) { return e * S; })
+        };
+        return Lt;
+      }
+
+      // Facets read as facets in the soft light: each triangle is darkened by how far it faces away from a fixed light.
+      function facetShade(a) {
+        var out = new Float32Array(a.length / 3), i, n, ux, uy, uz, vx, vy, vz, nx, ny, nz, l, d;
+        for (i = 0; i < a.length; i += 9) {
+          ux = a[i + 3] - a[i]; uy = a[i + 4] - a[i + 1]; uz = a[i + 5] - a[i + 2];
+          vx = a[i + 6] - a[i]; vy = a[i + 7] - a[i + 1]; vz = a[i + 8] - a[i + 2];
+          nx = uy * vz - uz * vy; ny = uz * vx - ux * vz; nz = ux * vy - uy * vx;
+          l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+          d = (nx * -0.35 + ny * 0.55 + nz * 0.76) / l;
+          n = clamp(0.55 - d * 0.55, 0, 1) * 0.6;
+          out[i / 3] = out[i / 3 + 1] = out[i / 3 + 2] = n;
+        }
+        return out;
+      }
+
+      var last = null;
+      function fullBuild(p) {
+        var Lt = finish(buildModel(p));
+        last = Lt;
+        return Lt;
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // Config
+      // ---------------------------------------------------------------------------------------------
+      function icon(body) { return '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + body + '</g>'; }
+      var SHAPE_ICONS = [
+        '<circle cx="20" cy="20" r="12"/>', '<ellipse cx="20" cy="20" rx="9" ry="13"/>', '<path d="M8 20 14 9.6H26L32 20 26 30.4H14Z"/>',
+        '<path d="M13 8H27L32 13V27L27 32H13L8 27V13Z"/>', '<path d="M20 7 33 30H7Z"/>', '<rect x="8" y="8" width="24" height="24" rx="8"/>'
+      ];
+      var CUT_ICONS = [
+        '<circle cx="20" cy="20" r="13"/><path d="M20 12 28 20 20 28 12 20Z"/><path d="M20 7V12M33 20H28M20 33V28M7 20H12"/>',
+        '<circle cx="20" cy="20" r="13"/><path d="M13 16Q20 8 27 16"/>',
+        '<rect x="7" y="7" width="26" height="26"/><rect x="12" y="12" width="16" height="16"/><rect x="17" y="17" width="6" height="6"/>',
+        '<circle cx="20" cy="20" r="13"/><path d="M20 7 25 20 20 33 15 20Z"/><path d="M7 20 20 20 33 20"/>'
+      ];
+      var SET_ICONS = [
+        '<circle cx="20" cy="20" r="14"/><circle cx="20" cy="20" r="8"/>', '<circle cx="20" cy="20" r="15"/><circle cx="20" cy="20" r="11"/><circle cx="20" cy="20" r="6"/>',
+        '<circle cx="20" cy="20" r="7"/><path d="M20 3V10M20 30V37M3 20H10M30 20H37M8 8 13 13M27 27 32 32M32 8 27 13M13 27 8 32"/>',
+        '<circle cx="20" cy="20" r="6"/><path d="M20 5Q26 12 20 15Q14 12 20 5ZM20 35Q26 28 20 25Q14 28 20 35ZM5 20Q12 14 15 20Q12 26 5 20ZM35 20Q28 14 25 20Q28 26 35 20Z"/>',
+        '<circle cx="20" cy="20" r="8"/><path d="M17 6H23V10H17ZM17 30H23V34H17ZM6 17H10V23H6ZM30 17H34V23H30Z"/>'
+      ];
+      var STYLE_ICONS = [
+        '<circle cx="20" cy="20" r="6"/><circle cx="20" cy="20" r="14" stroke-dasharray="3 3"/><circle cx="34" cy="20" r="2.5"/>',
+        '<path d="M20 4 24 16 36 20 24 24 20 36 16 24 4 20 16 16Z"/>',
+        '<circle cx="20" cy="20" r="4"/><path d="M20 8Q27 14 20 16Q13 14 20 8ZM20 32Q27 26 20 24Q13 26 20 32ZM8 20Q14 13 16 20Q14 27 8 20ZM32 20Q26 13 24 20Q26 27 32 20Z"/>',
+        '<circle cx="20" cy="20" r="6"/><path d="M17 5H23V9H17ZM17 31H23V35H17ZM5 17H9V23H5ZM31 17H35V23H31Z"/><circle cx="20" cy="20" r="12"/>'
+      ];
+
+      function gemDefault(i) {
+        return [
+          { shape: 0, cut: 0, size: 7.0, height: 0.55, turn: 0, color: 0, set: 0, on: 1 },
+          { shape: 0, cut: 0, size: 3.9, height: 0.55, turn: 0, color: 5, set: 0, on: 1 },
+          { shape: 0, cut: 0, size: 3.9, height: 0.55, turn: 0, color: 2, set: 0, on: 1 },
+          { shape: 0, cut: 0, size: 3.9, height: 0.55, turn: 0, color: 1, set: 0, on: 1 },
+          { shape: 0, cut: 0, size: 3.9, height: 0.55, turn: 0, color: 3, set: 0, on: 1 }
+        ][i];
+      }
+      var DEFAULTS = {
+        scale: 100, hand: 0, metal: 0, accent: 0,
+        build: 0, wristW: 62, handW: 84, handT: 30, ease: 1.5, cuffOpen: 55, handOpen: 72, palmH: 90,
+        cuffH: 50, flare: 6, cuffForm: 0, bands: 2,
+        plateShape: 0, plateR: 33, plateT: 3.5, core: 0, gemLayout: 0, orbit: 1, orbitR: 24, orbitTurn: 0,
+        fLen: 62, fSeg: 3, fTip: 0, fSplay: 3, fCurve: 1, fDrop: 8, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
+      };
+      function gemKeys(i, v) { var o = {}; Object.keys(v).forEach(function (k) { o['g' + i + '_' + k] = v[k]; }); return o; }
+      [0, 1, 2, 3, 4].forEach(function (i) { Object.assign(DEFAULTS, gemKeys(i, gemDefault(i))); });
+
+      // Style families: the part options that make each one look like itself. Everything stays editable in the part tabs.
+      function gemsAll(over, perGem) {
+        var o = {};
+        [0, 1, 2, 3, 4].forEach(function (i) { Object.assign(o, gemKeys(i, Object.assign({}, over, perGem && perGem[i] || {}))); });
+        return o;
+      }
+      var STYLES = [
+        { label: 'Orrery', icon: STYLE_ICONS[0], values: Object.assign({ cuffForm: 0, bands: 2, plateShape: 0, core: 0, gemLayout: 0, orbit: 1, fTip: 0, fCurve: 1, studs: 0, metal: 0, accent: 0 }, gemsAll({ shape: 0, cut: 0, set: 0, turn: 0 })) },
+        { label: 'Shardcrown', icon: STYLE_ICONS[1], values: Object.assign({ cuffForm: 1, bands: 1, plateShape: 3, core: 0, gemLayout: 4, orbitR: 20, orbit: 0, fTip: 1, fCurve: 0, studs: 2, fCurl: 12, fDrop: 6, metal: 3, accent: 1 },
+          gemsAll({ shape: 2, cut: 3, set: 2, turn: 0 }, { 0: { shape: 2, height: 0.8, size: 6 }, 1: { shape: 4, size: 3.1 }, 2: { shape: 4, size: 3.1 }, 3: { shape: 4, size: 3.1 }, 4: { shape: 4, size: 3.1 } })) },
+        { label: 'Bloomguard', icon: STYLE_ICONS[2], values: Object.assign({ cuffForm: 3, bands: 0, plateShape: 4, core: 0, gemLayout: 3, orbit: 1, fTip: 0, fCurve: 2, studs: 1, fCurl: 6, fDrop: 10, metal: 2, accent: 0 }, gemsAll({ shape: 1, cut: 1, set: 3, turn: 0 }, { 0: { shape: 0, size: 5.6 }, 1: { size: 3.0 }, 2: { size: 3.0 }, 3: { size: 3.0 }, 4: { size: 3.0 } })) },
+        { label: 'Cogwork', icon: STYLE_ICONS[3], values: Object.assign({ cuffForm: 4, bands: 3, plateShape: 1, core: 0, gemLayout: 1, orbit: 1, fTip: 2, fCurve: 0, studs: 1, fCurl: 0, fDrop: 4, metal: 1, accent: 2 }, gemsAll({ shape: 3, cut: 2, set: 4, turn: 0 }, { 0: { shape: 2, size: 5.0 }, 1: { size: 2.8 }, 2: { size: 2.8 }, 3: { size: 2.8 }, 4: { size: 2.8 } })) }
+      ];
+
+      function gemParams() {
+        var out = [];
+        [0, 1, 2, 3, 4].forEach(function (i) {
+          var show = function (p) { return Math.round(p.gemSel) === i; };
+          var d = gemDefault(i), pre = 'g' + i + '_', nm = GEM_NAMES[i];
+          out.push(
+            { tab: 'gems', group: 'Stone', key: pre + 'on', label: nm + ': shown', min: 0, max: 1, step: 1, value: d.on, options: ['Hidden', 'Shown'], showIf: show },
+            { tab: 'gems', group: 'Stone', key: pre + 'shape', label: nm + ': shape', min: 0, max: 5, step: 1, value: d.shape, showIf: show,
+              choices: SHAPE_NAMES.map(function (n, k) { return { label: n, svg: icon(SHAPE_ICONS[k]) }; }) },
+            { tab: 'gems', group: 'Stone', key: pre + 'cut', label: nm + ': cut', min: 0, max: 3, step: 1, value: d.cut, showIf: show,
+              choices: CUT_NAMES.map(function (n, k) { return { label: n, svg: icon(CUT_ICONS[k]) }; }) },
+            { tab: 'gems', group: 'Size and colour', key: pre + 'size', label: nm + ': size (radius, shrinks to fit the plate)', unit: ' mm', min: i === 0 ? 5 : 3, max: i === 0 ? 11 : 7, step: 0.1, value: d.size, showIf: show },
+            { tab: 'gems', group: 'Size and colour', key: pre + 'height', label: nm + ': crown height', min: 0.25, max: 1.1, step: 0.05, value: d.height, showIf: show,
+              format: function (v) { return Math.round(v * 100) + '%'; } },
+            { tab: 'gems', group: 'Size and colour', key: pre + 'turn', label: nm + ': turn', unit: '°', min: 0, max: 175, step: 5, value: d.turn, showIf: show },
+            { tab: 'gems', group: 'Size and colour', key: pre + 'color', label: nm + ': colour', min: 0, max: 7, step: 1, value: d.color, showIf: show,
+              format: function (v) { return GEM_COLORS[v].name; } },
+            { tab: 'gems', group: 'Setting', key: pre + 'set', label: nm + ': setting', min: 0, max: 4, step: 1, value: d.set, showIf: show,
+              choices: SET_NAMES.map(function (n, k) { return { label: n, svg: icon(SET_ICONS[k]) }; }) }
+          );
+        });
+        return out;
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      // Camera: a swoop between the views. Each editor tab has a view; picking another gem flies to that gem.
+      // ---------------------------------------------------------------------------------------------
+      var fitNote = null, stage = null, fly = null, curTab = 'style', lastSel = -1, wantGemFly = false, curParams = null;
+      var reduced = false;
+      try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { reduced = false; }
+      function viewFor(tab, p) {
+        var A = last && last.anchor;
+        if (!A) return null;
+        var v;
+        if (tab === 'fit') v = { t: [0, A.H * 0.46, 0], dir: [0.5, 0.28, -0.85], visH: A.H * 1.3, visW: A.W * 1.9 };   // looks at the open palm side
+        else if (tab === 'cuff') v = { t: A.cuff, dir: [0.9, 0.12, 0.55], visH: A.cuffH * 1.7, visW: A.W * 1.1 };
+        else if (tab === 'plate') v = { t: A.plate, dir: [0.2, 0.05, 1], visH: A.plateR * 2.5, visW: A.plateR * 2.5 };
+        else if (tab === 'fingers') v = { t: A.fingers, dir: [-0.4, 0.42, 0.85], visH: A.fLen * 2.0, visW: A.W * 1.3 };
+        else if (tab === 'gems') {
+          var i = Math.round(p.gemSel), g = A.gem[i] || A.gem[0];
+          if (!g) return null;
+          var side = i === 0 ? 0.22 : (g[0] >= 0 ? 0.5 : -0.5);
+          v = { t: g, dir: [side, i === 0 ? 0.1 : (g[1] > A.plate[1] ? 0.28 : -0.05), 1], visH: Math.max(A.ext[i], 6) * 4.2, visW: Math.max(A.ext[i], 6) * 4.2 };
+        } else v = { t: [0, A.H * 0.5, 0], dir: [0.62, 0.22, 0.75], visH: A.H * 1.32, visW: A.W * 1.7 };
+        return v;
+      }
+      function startFly(view) {
+        if (!stage || !view) return;
+        var cam = stage.camera, ctl = stage.controls, T = stage.THREE;
+        var rect = stage.container;
+        var aspect = Math.max(0.4, (rect.clientWidth || 600) / (rect.clientHeight || 450));
+        var half = Math.tan(cam.fov * DEG / 2);
+        var dist = Math.max(view.visH / (2 * half), view.visW / (2 * half * aspect));
+        var d = new T.Vector3(view.dir[0], view.dir[1], view.dir[2]).normalize();
+        var to = { t: new T.Vector3(view.t[0], view.t[1], view.t[2]) };
+        to.pos = to.t.clone().add(d.multiplyScalar(dist));
+        var fromT = ctl.target.clone(), fromOff = cam.position.clone().sub(fromT);
+        var toOff = to.pos.clone().sub(to.t);
+        var r0 = fromOff.length(), r1 = toOff.length();
+        var az0 = Math.atan2(fromOff.x, fromOff.z), az1 = Math.atan2(toOff.x, toOff.z);
+        var pol0 = Math.asin(clamp(fromOff.y / r0, -1, 1)), pol1 = Math.asin(clamp(toOff.y / r1, -1, 1));
+        var daz = az1 - az0;
+        while (daz > Math.PI) daz -= TAU;
+        while (daz < -Math.PI) daz += TAU;
+        var bank = (daz >= 0 ? 1 : -1) * 0.35;   // the swoop: the path bows out sideways and rises before it settles
+        var dur = reduced ? 0 : clamp(850 + Math.abs(daz) * 260 + fromT.distanceTo(to.t) * 3, 900, 1700);
+        fly = { start: performance.now(), dur: dur, fromT: fromT, toT: to.t, r0: r0, r1: r1, az0: az0, daz: daz, pol0: pol0, pol1: pol1, bank: bank, lift: 0.2 };
+        if (dur === 0) { stepFly(performance.now() + 1); }
+        else ctl.enabled = false;
+      }
+      function stepFly(now) {
+        if (!fly || !stage) return;
+        var f = fly, cam = stage.camera, ctl = stage.controls;
+        var t = f.dur ? clamp((now - f.start) / f.dur, 0, 1) : 1;
+        var e = t < 0.5 ? 16 * Math.pow(t, 5) : 1 - Math.pow(-2 * t + 2, 5) / 2;   // quintic ease in and out
+        var arc = Math.sin(Math.PI * t);
+        var r = lerp(f.r0, f.r1, e) * (1 + 0.32 * arc);
+        var az = f.az0 + f.daz * e + f.bank * arc;
+        var pol = lerp(f.pol0, f.pol1, e) + f.lift * arc;
+        pol = Math.min(pol, 1.45);
+        var tx = lerp(f.fromT.x, f.toT.x, e), ty = lerp(f.fromT.y, f.toT.y, e), tz = lerp(f.fromT.z, f.toT.z, e);
+        ctl.target.set(tx, ty, tz);
+        cam.position.set(tx + r * Math.cos(pol) * Math.sin(az), ty + r * Math.sin(pol), tz + r * Math.cos(pol) * Math.cos(az));
+        cam.lookAt(ctl.target);
+        if (t >= 1) { fly = null; ctl.enabled = true; ctl.update(); }
+      }
+
+      // ---------------------------------------------------------------------------------------------
+      var LAYOUT_ICONS = [
+        '<circle cx="20" cy="20" r="3.5"/><circle cx="20" cy="20" r="13" stroke-dasharray="3 3"/><circle cx="29" cy="11" r="2.5"/><circle cx="29" cy="29" r="2.5"/><circle cx="11" cy="29" r="2.5"/><circle cx="11" cy="11" r="2.5"/>',
+        '<path d="M20 9V31M9 20H31"/><circle cx="20" cy="20" r="3.5"/><circle cx="20" cy="7" r="2.5"/><circle cx="33" cy="20" r="2.5"/><circle cx="20" cy="33" r="2.5"/><circle cx="7" cy="20" r="2.5"/>',
+        '<path d="M8 20H32"/><circle cx="20" cy="20" r="3.5"/><circle cx="7" cy="20" r="2.5"/><circle cx="13" cy="20" r="2"/><circle cx="27" cy="20" r="2"/><circle cx="33" cy="20" r="2.5"/>',
+        '<path d="M8 12Q20 40 32 12" stroke-dasharray="3 3"/><circle cx="20" cy="28" r="3.5"/><circle cx="8" cy="12" r="2.5"/><circle cx="13" cy="23" r="2"/><circle cx="27" cy="23" r="2"/><circle cx="32" cy="12" r="2.5"/>',
+        '<path d="M20 7 32 16 27 32 13 32 8 16Z" stroke-dasharray="3 3"/><circle cx="20" cy="7" r="3.5"/><circle cx="32" cy="16" r="2.5"/><circle cx="27" cy="32" r="2.5"/><circle cx="13" cy="32" r="2.5"/><circle cx="8" cy="16" r="2.5"/>',
+        '<path d="M6 14 13 26 20 14 27 26 34 14"/><circle cx="20" cy="14" r="3.5"/><circle cx="6" cy="14" r="2"/><circle cx="13" cy="26" r="2.5"/><circle cx="27" cy="26" r="2.5"/><circle cx="34" cy="14" r="2"/>'
+      ];
+      function wearOnly(p) { return Math.round(p.build) === 0; }
+      function displayOnly(p) { return Math.round(p.build) !== 0; }
+      var PARAMS = [
+        { tab: 'style', group: 'Look', key: 'metal', label: 'Main metal', min: 0, max: 3, step: 1, value: DEFAULTS.metal, format: function (v) { return METALS[v].name; } },
+        { tab: 'style', group: 'Look', key: 'accent', label: 'Accent metal (settings, links, studs)', min: 0, max: 3, step: 1, value: DEFAULTS.accent, format: function (v) { return METALS[v].name; } },
+        { tab: 'style', group: 'Look', key: 'hand', label: 'Hand', min: 0, max: 1, step: 1, value: 0, options: ['Right hand', 'Left hand'] },
+        { tab: 'style', group: 'Look', key: 'scale', label: 'Overall size (display piece only, 100% is about 200 mm tall)', unit: '%', min: 60, max: 130, step: 5, value: 100, showIf: displayOnly },
+
+        { tab: 'fit', group: 'Build', key: 'build', label: 'Build', min: 0, max: 1, step: 1, value: 0, options: ['Wearable', 'Display piece'] },
+        { tab: 'fit', group: 'Your hand (millimetres, measured flat)', key: 'wristW', label: 'Wrist width', unit: ' mm', min: 45, max: 80, step: 1, value: DEFAULTS.wristW, showIf: wearOnly },
+        { tab: 'fit', group: 'Your hand (millimetres, measured flat)', key: 'handW', label: 'Hand width across the knuckles', unit: ' mm', min: 65, max: 105, step: 1, value: DEFAULTS.handW, showIf: wearOnly },
+        { tab: 'fit', group: 'Your hand (millimetres, measured flat)', key: 'handT', label: 'Hand thickness at the palm', unit: ' mm', min: 22, max: 45, step: 1, value: DEFAULTS.handT, showIf: wearOnly },
+        { tab: 'fit', group: 'Your hand (millimetres, measured flat)', key: 'palmH', label: 'Wrist to knuckles', unit: ' mm', min: 70, max: 105, step: 1, value: DEFAULTS.palmH, showIf: wearOnly },
+        { tab: 'fit', group: 'Comfort', key: 'ease', label: 'Room around the hand (each side)', unit: ' mm', min: 0, max: 4, step: 0.5, value: DEFAULTS.ease, showIf: wearOnly },
+        { tab: 'fit', group: 'Comfort', key: 'cuffOpen', label: 'Cuff opening (half angle; smaller grips harder, bigger goes on easier)', unit: '°', min: 35, max: 70, step: 1, value: DEFAULTS.cuffOpen, showIf: wearOnly },
+        { tab: 'fit', group: 'Comfort', key: 'handOpen', label: 'Hand shield opening (half angle)', unit: '°', min: 55, max: 90, step: 1, value: DEFAULTS.handOpen, showIf: wearOnly },
+
+        { tab: 'cuff', group: 'Cuff', key: 'cuffH', label: 'Forearm cuff height', unit: ' mm', min: 34, max: 80, step: 1, value: DEFAULTS.cuffH },
+        { tab: 'cuff', group: 'Cuff', key: 'flare', label: 'Base flare (wider foot)', unit: ' mm', min: 0, max: 12, step: 1, value: DEFAULTS.flare },
+        { tab: 'cuff', group: 'Cuff', key: 'cuffForm', label: 'Surface', min: 0, max: 4, step: 1, value: 0, format: function (v) { return FORM_NAMES[v]; } },
+        { tab: 'cuff', group: 'Cuff', key: 'bands', label: 'Raised bands', min: 0, max: 4, step: 1, value: DEFAULTS.bands },
+
+        { tab: 'plate', group: 'Plate', key: 'plateShape', label: 'Outline', min: 0, max: 4, step: 1, value: 0, format: function (v) { return PLATE_NAMES[v]; } },
+        { tab: 'plate', group: 'Plate', key: 'plateR', label: 'Plate size (grows to hold the gems)', unit: ' mm', min: 28, max: 35, step: 1, value: DEFAULTS.plateR },
+        { tab: 'plate', group: 'Plate', key: 'plateT', label: 'Thickness', unit: ' mm', min: 3, max: 6, step: 0.5, value: DEFAULTS.plateT },
+        { tab: 'plate', group: 'Plate', key: 'core', label: 'Core (Orbit, Cross, Row and Zigzag layouts)', min: 0, max: 1, step: 1, value: 0, options: ['Flat', 'Raised'], showIf: function (p) { return CORE_CENTRED[Math.round(p.gemLayout)]; } },
+
+        { tab: 'fingers', group: 'Fingers', key: 'fLen', label: 'Finger length', unit: ' mm', min: 40, max: 80, step: 1, value: DEFAULTS.fLen },
+        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour plates per finger', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
+        { tab: 'fingers', group: 'Fingers', key: 'fTip', label: 'Fingertip', min: 0, max: 2, step: 1, value: 0, format: function (v) { return TIP_NAMES[v]; } },
+        { tab: 'fingers', group: 'Fingers', key: 'fSplay', label: 'Spread', unit: '°', min: 0, max: 8, step: 1, value: DEFAULTS.fSplay },
+        { tab: 'fingers', group: 'Fingers', key: 'fCurve', label: 'Finger plate curve', min: 0, max: 2, step: 1, value: DEFAULTS.fCurve, format: function (v) { return CURVE_NAMES[v]; }, showIf: wearOnly },
+        { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the hand (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
+        { tab: 'fingers', group: 'Fingers', key: 'fCurl', label: 'Curl forward (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fCurl, showIf: displayOnly },
+        { tab: 'fingers', group: 'Thumb', key: 'tLen', label: 'Thumb length', unit: ' mm', min: 28, max: 55, step: 1, value: DEFAULTS.tLen, showIf: displayOnly },
+        { tab: 'fingers', group: 'Thumb', key: 'tAngle', label: 'Thumb angle out (over 50 needs supports)', unit: '°', min: 20, max: 55, step: 1, value: DEFAULTS.tAngle, showIf: displayOnly },
+        { tab: 'fingers', group: 'Knuckles', key: 'studs', label: 'Knuckle studs', min: 0, max: 2, step: 1, value: 0, format: function (v) { return STUD_NAMES[v]; } },
+
+        { tab: 'gems', group: 'Positions', key: 'gemLayout', label: 'Gem layout', min: 0, max: 5, step: 1, value: DEFAULTS.gemLayout,
+          choices: LAYOUT_NAMES.map(function (n, k) { return { label: n, svg: icon(LAYOUT_ICONS[k]) }; }) },
+        { tab: 'gems', group: 'Positions', key: 'orbit', label: 'Links between the gems', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+        { tab: 'gems', group: 'Positions', key: 'orbitR', label: 'Spread (grows if the gems need room)', unit: ' mm', min: 18, max: 28, step: 1, value: DEFAULTS.orbitR },
+        { tab: 'gems', group: 'Positions', key: 'orbitTurn', label: 'Turn the layout', unit: '°', min: -90, max: 90, step: 5, value: DEFAULTS.orbitTurn },
+        { tab: 'gems', group: 'Gem', key: 'gemSel', label: 'Edit gem', min: 0, max: 4, step: 1, value: 0,
+          choices: GEM_NAMES.map(function (n, i) { return { label: n, svg: icon('<path d="M20 6 31 15 20 34 9 15Z"/><path d="M9 15H31M15 15 20 34 25 15"/>') }; }) }
+      ].concat(gemParams());
+
+      PARAMS.forEach(function (p) { if (p.key === 'metal' || p.key === 'accent') p.value = DEFAULTS[p.key]; });
+
+      window.MM_GENERATOR = {
+        code: 'MM-136',
+        category: 'COSMIC // WEARABLE ART',
+        title: 'Constellation Gauntlet',
+        fileName: 'Constellation_Gauntlet',
+        minFrame: 160,
+        sculpt: false,
+        hideModelTab: true,
+        coloredTabs: ['style', 'fit', 'cuff', 'plate', 'fingers', 'gems'],
+        openGroups: ['Look', 'Build', 'Your hand (millimetres, measured flat)', 'Comfort', 'Cuff', 'Plate', 'Fingers', 'Positions', 'Gem', 'Stone'],
+        palette: [
+          { name: 'Brass Gold', color: '#d4a437' }, { name: 'Silver Steel', color: '#c4ccd8' },
+          { name: 'Night Iron', color: '#3f4756' }, { name: 'Solar Amber', color: '#f59e0b' },
+          { name: 'Aurora Teal', color: '#14b8a6' }, { name: 'Dusk Violet', color: '#8b5cf6' },
+          { name: 'Nova Rose', color: '#f43f5e' }, { name: 'Comet Blue', color: '#3b82f6' }
+        ],
+        defaultColor: '#d4a437',
+        partNames: {
+          arm: 'Cuff & shield', plate: 'Hand plate', orbit: 'Gem links', settings: 'Gem settings', fingers: 'Fingers',
+          knuckles: 'Knuckle studs', thumb: 'Thumb', gem0: 'Solis (core gem)', gem1: 'Lunara gem', gem2: 'Vesper gem', gem3: 'Aurelia gem', gem4: 'Nova gem'
+        },
+        tabs: [
+          { id: 'style', label: 'Style', hint: 'Pick a style family, then edit each part in its own tab',
+            mount: function (box, api) {
+              var note = document.createElement('p');
+              note.className = 'mm-note';
+              note.textContent = 'A style sets every part at once. Then each tab edits one part and the camera flies to it. It is a wearable gauntlet: set your hand size in Fit. Five gems sit on the hand plate: Solis the core, and Lunara, Vesper, Aurelia and Nova. The Gems tab has six layouts for them.';
+              box.appendChild(note);
+              var cards = document.createElement('div');
+              cards.className = 'mm-preset-cards';
+              STYLES.forEach(function (st) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'mm-preset-card mm-preset-card--lines';
+                b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true">' + icon(st.icon) + '</svg><span>' + st.label + '</span>';
+                b.addEventListener('click', function () { api.setParams(st.values); api.toast(st.label + ' style'); });
+                cards.appendChild(b);
+              });
+              box.appendChild(cards);
+              box.appendChild(api.takeParams());
+            } },
+          { id: 'fit', label: 'Fit', hint: 'Your hand size, and how snugly the wearable shell grips' },
+          { id: 'cuff', label: 'Cuff', hint: 'The forearm cuff: height, flare, surface and raised bands' },
+          { id: 'plate', label: 'Plate', hint: 'The hand plate: outline, size, thickness and core' },
+          { id: 'fingers', label: 'Fingers', hint: 'Finger plates, knuckle studs and (on the display piece) the thumb' },
+          { id: 'gems', label: 'Gems', hint: 'Where the gems sit, then each gem\'s shape, cut, size, colour and setting',
+            mount: function (box, api) {
+              var note = document.createElement('p');
+              note.className = 'mm-note';
+              note.textContent = 'Each gem is its own piece. It prints lying on its flat bottom and is glued into its setting.';
+              box.appendChild(note);
+              var row = document.createElement('div');
+              row.className = 'mm-export-row';
+              function copyBtn(text, keys) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'mm-btn';
+                b.textContent = text;
+                b.addEventListener('click', function () {
+                  var sel = Math.round(api.params.gemSel), v = {};
+                  [0, 1, 2, 3, 4].forEach(function (i) { if (i !== sel) keys.forEach(function (k) { v['g' + i + '_' + k] = api.params['g' + sel + '_' + k]; }); });
+                  api.setParams(v);
+                  api.toast('Copied to the other gems');
+                });
+                row.appendChild(b);
+              }
+              fitNote = document.createElement('p');
+              fitNote.className = 'mm-note';
+              box.appendChild(fitNote);
+              copyBtn('Copy shape, cut and setting to all', ['shape', 'cut', 'set', 'turn', 'height']);
+              copyBtn('Copy colour to all', ['color']);
+              box.appendChild(row);
+            } }
+        ],
+        parameters: PARAMS,
+        presets: [{ label: 'Default Orrery', values: DEFAULTS }].concat(STYLES.map(function (st) {
+          var v = Object.assign({}, DEFAULTS, st.values);
+          return { label: st.label + ' style', values: v };
+        })),
+
+        fitInfo: function () { return last ? last.fit : 1; },
+        build: function (p) {
+          var Lt = fullBuild(p);
+          curParams = p;
+          if (fitNote) fitNote.textContent = Lt.fit < 0.999 ? 'The gems are drawn at ' + Math.round(Lt.fit * 100) + '% of their set size so they fit on the plate. Make the plate bigger or the gems smaller to stop this.' : '';
+          if (Math.round(p.gemSel) !== lastSel) { if (lastSel >= 0 && curTab === 'gems') wantGemFly = true; lastSel = Math.round(p.gemSel); }
+          return Lt.meshes.concat(Lt.gemMeshes.map(function (g) { return { name: g.name, positions: g.positions, shade: g.shade, color: g.color }; }));
+        },
+
+        // The print plate: the gauntlet as built, and the gems lying on their flat bottoms in a row in front of it.
+        printMeshes: function () {
+          var Lt = last, out = Lt.meshes.slice(), gems = Lt.gemMeshes, S = Lt.S, i, x, zMax = -1e9, xs = [], total = 0;
+          Lt.meshes.forEach(function (m) { for (var k = 2; k < m.positions.length; k += 3) if (m.positions[k] > zMax) zMax = m.positions[k]; });
+          gems.forEach(function (g) { var w = g.size * 2 + 4; xs.push(w); total += w; });
+          x = -total / 2;
+          var maxR = 0;
+          gems.forEach(function (g) { maxR = Math.max(maxR, g.size); });
+          gems.forEach(function (g, n) {
+            var a = new Float32Array(g.print.a), cx = x + xs[n] / 2, cz = zMax + 8 + maxR;
+            mapPts(a, function (px, py, pz) { return [px * S + cx, (py + g.print.D) * S, pz * S + cz]; });
+            out.push({ name: g.name, positions: a, color: g.color });
+            x += xs[n];
+          });
+          return out;
+        },
+
+        onStage: function (env) {
+          stage = env; env.controls.minDistance = 18;
+          if (last && curParams) startFly(viewFor(curTab === 'color' ? 'style' : curTab, curParams));   // the opening swoop (the engine selects the first tab before the stage exists)
+        },
+        onTab: function (tab, api) {
+          curTab = tab;
+          if (tab === 'print') { fly = null; if (stage) stage.controls.enabled = true; return; }
+          var key = tab === 'color' ? 'style' : tab;
+          startFly(viewFor(key, api.params));
+        },
+        onFrame: function () {
+          if (wantGemFly && stage && curTab === 'gems') { wantGemFly = false; startFly(viewFor('gems', curParams || {})); }
+          if (fly) stepFly(performance.now());
+        }
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

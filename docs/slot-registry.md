@@ -34,7 +34,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
 | 129 | Built: Bee & Beetle Bugs (bee, ladybug, stag beetle, dragonfly; no supports). |
 | 132 | Built: Crab & Lobster (print-in-place pincers, no supports). |
-| 124+ | Free (check open PRs first). Any number works. |
+| 124-135 | Other numbers are with open threads (check open PRs first). |
+| 136 | Built: Constellation Gauntlet (wearable gem gauntlet, six gem layouts, camera swoop editor). |
+| 137+ | Free (check open PRs first). Any number works. |
+
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -165,6 +168,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
 | 129 | Bee & Beetle Bugs | animals | `bee-beetle-bugs.html` (bug picker: honey bee, ladybug, stag beetle, dragonfly; flat, raised or folded wings, patterns, antennae, legs; unprinted) |
 | 132 | Crab & Lobster | animals | `crab-lobster.html` (crab or lobster with print-in-place pincers on a post hinge, 2-5 legs per side, eye stalks, five shell textures) |
+| 136 | Constellation Gauntlet | jewelry | `constellation-gauntlet.html` (wearable gauntlet, six gem layouts; unprinted) |
 
 ## Groups (BUNDLES)
 
