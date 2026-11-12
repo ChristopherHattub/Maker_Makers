@@ -842,5 +842,87 @@
   },
   "yaw": 25,
   "elev": 38
+ },
+ "console-faceplate": {
+  "colors": {
+   "plate": "#2b2f3a",
+   "rim": "#e8e8ee",
+   "pattern": "#4fc3f7"
+  },
+  "yaw": 20,
+  "elev": 30
+ },
+ "energy-saber": {
+  "colors": {
+   "hilt": "#3a3f4b",
+   "seg1": "#9aa4b5",
+   "seg2": "#6b7385",
+   "tip": "#43e0ff"
+  }
+ },
+ "headphone-controller-stand": {
+  "colors": {
+   "base": "#2b2f3a",
+   "post": "#3b4150",
+   "rim": "#e8e8ee",
+   "pattern": "#4fc3f7"
+  },
+  "yaw": 25,
+  "elev": 22
+ },
+ "holiday-tree-topper": {
+  "colors": {
+   "base": "#c8372d",
+   "cap": "#f2c14e",
+   "star": "#ffd84d"
+  },
+  "yaw": 20,
+  "elev": 18
+ },
+ "pet-bowl-housing": {
+  "colors": {
+   "out": "#e8a07a",
+   "rim": "#f6d8c0",
+   "in": "#6d4c3a",
+   "plate": "#f6d8c0",
+   "plborder": "#c8372d",
+   "name": "#3b3f4a",
+   "plink": "#3b3f4a"
+  },
+  "yaw": 30,
+  "elev": 28
+ },
+ "nutcracker": {
+  "colors": {
+   "base": "#6b4329",
+   "coat": "#c8372d",
+   "trim": "#f2c14e",
+   "jewel": "#4aa3e8",
+   "boots": "#2b2f3a",
+   "arms": "#c8372d",
+   "hands": "#f6e8d0",
+   "head": "#f0c9a0",
+   "cheeks": "#e8756f",
+   "eyes": "#2b2f3a",
+   "brows": "#ffffff",
+   "nose": "#e8a07a",
+   "mustache": "#ffffff",
+   "hat": "#c8372d",
+   "hatTrim": "#f2c14e",
+   "topper": "#f2c14e",
+   "jaw": "#f0c9a0"
+  },
+  "yaw": 20,
+  "elev": 10
+ },
+ "self-watering-planter": {
+  "colors": {
+   "saucer": "#a7c4a0",
+   "pot": "#e8a07a",
+   "insert": "#f6e8d0",
+   "tacks": "#8a5a3b"
+  },
+  "yaw": 30,
+  "elev": 25
  }
 }

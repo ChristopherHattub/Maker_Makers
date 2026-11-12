@@ -545,9 +545,15 @@
         params[p.key] = Number(input.value);
         output.textContent = formatParam(p, params[p.key]);
         if (cfg.sculpt && cfg.sculpt.kit) SC.state.draft = true; // sculpted models use a quick coarse mesh while a slider moves
+        sliding = true; // and skip the paint-part analysis, which only matters once the slider settles
+        clearTimeout(slidingTimer);
+        slidingTimer = setTimeout(settleSliding, 700);
         scheduleRebuild();
       },
-      onchange: function () { if (cfg.sculpt && SC.state.draft) SC.commit(); }
+      onchange: function () {
+        if (cfg.sculpt && SC.state.draft) { sliding = false; clearTimeout(slidingTimer); SC.commit(); return; }
+        settleSliding();
+      }
     });
     sliderRefs[p.key] = { input: input, output: output, def: p };
     return el('div', { class: 'mm-slider' }, [
@@ -851,6 +857,15 @@
   // 4. Build, geometry helpers and parts
   // ---------------------------------------------------------------------------
   var rebuildQueued = false;
+  var slidingTimer = 0;
+  function settleSliding() { // the slider has stopped: do the paint-part analysis that was skipped
+    clearTimeout(slidingTimer);
+    if (!sliding) return;
+    sliding = false;
+    refreshColors();
+    renderPartList();
+  }
+  var sliding = false; // a parameter slider is being dragged: rebuilds skip the (slow) paint-part analysis while nothing is painted
   function scheduleRebuild() {
     if (rebuildQueued) return;
     rebuildQueued = true;
@@ -925,7 +940,7 @@
     parts = null;
     if (paints.length) ensureParts();
     refreshColors();
-    renderPartList();
+    if (!sliding || paints.length) renderPartList();
     updateStats();
     rebuildWire();
     if (activeTab === 'print') updatePrintLook();
@@ -1576,16 +1591,20 @@
   // Writes the colors for the current tab. Parametric, Color and Print show the part colors and paint; other tabs show the neutral model.
   function refreshColors() {
     var colorTab = (activeTab === 'model' && !colorsHidden) || activeTab === 'color' || activeTab === 'print' || (cfg.coloredTabs || []).indexOf(activeTab) >= 0; // Print preview (and cfg.coloredTabs) show the painted colors too
-    if (colorTab) ensureParts();
+    var quick = colorTab && sliding && !parts && !paints.length; // dragging a slider on an unpainted model: each mesh gets its entry color, no part analysis
+    if (colorTab && !quick) ensureParts();
     modelMeshes.forEach(function (mesh, meshIndex) {
       var colorAttr = mesh.geometry.attributes.color;
       var data = colorAttr.array;
       var shade = modelData[meshIndex].shade;
       var triCount = data.length / 9;
       var base = new T.Color(NEUTRAL_MODEL_COLOR);
+      var quickColor = quick ? new T.Color(modelData[meshIndex].color || DEFAULT_COLOR) : null;
       for (var t = 0; t < triCount; t++) {
         var c = base;
-        if (colorTab) {
+        if (quick) {
+          c = quickColor;
+        } else if (colorTab) {
           c = new T.Color(parts[globalPartIndex(meshIndex, t)].color || parts[globalPartIndex(meshIndex, t)].def || DEFAULT_COLOR);
         }
         for (var v = 0; v < 3; v++) {
