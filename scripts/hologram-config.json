@@ -135,6 +135,7 @@
   },
   "conversation-hearts": {
     "hue": 335,
+    "yaw0": 50,
     "sat": 90,
     "light": 72
   },
@@ -472,6 +473,12 @@
     "hue": 285,
     "sat": 55,
     "light": 82
+  },
+  "bunny-sitter": {
+    "hue": 335,
+    "yaw0": 50,
+    "sat": 60,
+    "light": 80
   },
   "pin-maker": {
     "hue": 320,

@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 126,
+    title: 'Bunny & Hare Sitter',
+    bundle: ['animals', 'easter'],
+    category: 'ANIMALS // BUNNIES',
+    thumbnailUrl: 'assets/thumbnails/bunny-sitter.svg',
+    programUrl: 'programs/bunny-sitter.html',
+    description: 'A sitting bunny, a loaf or a long-legged standing hare, sculpted as one soft surface that prints with no supports. Choose upright, lop or half-lop ears and their length and spread, the muzzle from cute to hare, a pom-pom, fluffy or hare tail, plain, patched or blaze markings, and a carrot, tulip or daisy prop. Paint parts in the Color tool and export .STL.'
   }
 ];
 
