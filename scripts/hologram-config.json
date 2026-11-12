@@ -520,5 +520,10 @@
     "sat": 70,
     "light": 78,
     "stand": true
+  },
+  "spirograph-plate": {
+    "hue": 200,
+    "sat": 70,
+    "light": 78
   }
 }

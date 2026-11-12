@@ -256,7 +256,8 @@
         return orient(new Float32Array(o));
       }
 
-      function mesh(name, pos) { return { name: name, positions: pos, smoothGroup: name }; }
+      // singlePart: each mesh is one paintable part however many creases it has (a ribbon would otherwise split into walls and top).
+      function mesh(name, pos) { return { name: name, positions: pos, smoothGroup: name, singlePart: true }; }
 
       var DEFAULTS = {
         shape: 0, size: 110, corner: 40, points: 8, depth: 62, thick: 3, rimW: 3, rimH: 1.6,

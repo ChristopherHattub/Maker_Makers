@@ -1086,6 +1086,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bird-feeder.svg',
     programUrl: 'programs/bird-feeder.html',
     description: 'A hanging gazebo bird feeder that prints as a three-part kit with no supports: a tray with posts and drain holes, a seed hopper that lets seed slide out through arched feeding ports, and a cone roof with a finial that rests on the posts. Choose a round, hexagon, octagon or square outline, tray and hopper size, number and size of ports, roof pitch and overhang, or switch the hopper off for an open tray feeder. Hang it from a cord through the roof, hopper and tray. The fit tolerances are untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 134,
+    title: 'Spirograph Art Plate',
+    bundle: 'decor',
+    category: 'HOME // WALL ART',
+    thumbnailUrl: 'assets/thumbnails/spirograph-plate.svg',
+    programUrl: 'programs/spirograph-plate.html',
+    description: 'A wall plaque of nested spirograph curves raised on a plate, printed flat with no supports. Set the gears (ring teeth, wheel teeth, pen hole, wheel running inside or outside the ring), how many nested lines there are, their thickness and height, how they shrink, change and twist from line to line, and pick a circle, hexagon or star outline with an optional rim and a hanging hole. Each line is its own part, so every curve can be painted a different colour and exported as .STL. Unprinted.'
   }
 ];
 
