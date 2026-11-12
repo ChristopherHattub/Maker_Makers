@@ -212,6 +212,16 @@ Some models look right in one pose and print in another. Fancy Ring shows the ri
 
 **Optional print variant.** A generator can offer the print layout only on request (Paper Towel Holder: a tall rod split in two). Keep `printMeshes` and add `printActive(params)`; while it returns false the model prints as shown and the Sculpt tab stays. While it returns true the print layout is used, and `printShowParts(params)` (optional) picks whether the Print tab shows the layout (true) or the assembled model (false); the print check marks only show on the layout. `printPanel(container, api)` (optional) adds the generator's own controls to the Print tab, between Material and the Export block. `check-mesh.mjs` checks both the shown model and the print variant.
 
+### Lighting modes (engine-owned)
+
+The View accordion has a **Lighting** select, remembered in `localStorage` (`mm-lighting`, wrapped in `try/catch`). It only changes the preview; exports are unchanged. Every generator gets it from `generator-core.js`.
+
+- **Soft light** (default): shadows off, hemisphere 0.65 plus ambient 0.25 (about 0.9), key and rim off, and a weak (0.3) directional fill attached to the camera, so brightness does not depend on the orbit angle.
+- **Flat + outlines**: unlit `MeshBasicMaterial` with the vertex colours (so the Color tab and part shading still show), plus `EdgesGeometry` outlines at a 30 degree crease angle. Outlines are skipped above 400,000 triangles.
+- The Print tab keeps its realistic studio render and shadows in both modes.
+
+Generators must not set lights, shadows or materials themselves (`onStage` tweaks to `hemi`, `key` and `rim` colours are tolerated, but the engine sets the intensities after `onStage`). Keep colours in vertex colours / the palette so both modes look right.
+
 ### Showcase render
 
 `cfg.showcase = { tab, materials, look(params) }` shows the model as jewellery while `tab` is open: polished metal, faceted stones (a shader that reflects off virtual pavilion facets, with colored fire) on a dark stage with a slow turntable. `materials` maps a mesh name to `'metal'` or `'gem'`. `look` returns `{ metal: '#hex', roughness, gem: '#hex' }`. `api.setSpin(on)` starts or stops the turntable. It is a preview only; exports never change, and the page's own panels keep the site style. Set `tabsFirst: true` to open the page on that tab.

@@ -25,7 +25,7 @@ def write_poster(im, ident):
     """Frame 0 as a small still, shown until the full 24-frame atlas has been fetched."""
     cell = im.width // 6
     im.crop((0, 0, cell, cell)).resize((POSTER, POSTER), Image.LANCZOS).save(
-        OUT / f'poster-{ident}.webp', 'WEBP', quality=80, alpha_quality=80, method=6)
+        OUT / f'poster-{ident}.webp', 'WEBP', quality=70, alpha_quality=60, method=6)
 
 def backfill():
     """python3 scripts/build-holo.py --posters : posters for every atlas already in the manifest."""
@@ -49,7 +49,7 @@ def main():
         ident = png.stem[len('holo-'):]
         im = Image.open(png).convert('RGBA')
         name = f'holo-{ident}.webp'
-        im.save(OUT / name, 'WEBP', quality=80, alpha_quality=80, method=6)
+        im.save(OUT / name, 'WEBP', quality=70, alpha_quality=60, method=6)
         write_poster(im, ident)
         prev = m['tiles'].get(ident)
         entry = {'slot': slots.get(ident, prev['slot'] if prev else 0), 'file': name, 'width': im.width, 'height': im.height,

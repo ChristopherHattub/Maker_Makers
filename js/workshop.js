@@ -697,6 +697,8 @@ function wsToggle(key) {
 function wsHoloIcon(i) {
   const m = WS.holo, id = i.img && i.img.replace(/^.*\/([^/]+)\.\w+$/, '$1'), e = m && id && m.tiles[id];
   if (!e) return '';
+  // The 192 px poster (frame 0) is a few KB; the 24-frame atlas is hundreds of KB, so cards never fetch it.
+  if (e.poster) return `<span class="ws-ic ws-holo" style="width:84px;height:84px;background-image:url(assets/thumbnails/sprites/${e.poster});background-size:100% 100%"></span>`;
   const sheet = e.file ? e : m.sheets[e.sheet], cols = e.cols || m.cols, rows = e.rowsPerBlock || m.rowsPerBlock, f = (e.order || [0])[0] || 0;
   const S = 84, k = S / m.cell, col = f % cols, row = rows * (e.block || 0) + Math.floor(f / cols);
   return `<span class="ws-ic ws-holo" style="width:${S}px;height:${S}px;background-image:url(assets/thumbnails/sprites/${sheet.file});background-size:${sheet.width * k}px ${sheet.height * k}px;background-position:${-col * S}px ${-row * S}px"></span>`;

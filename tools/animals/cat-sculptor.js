@@ -52,8 +52,8 @@
         // tail on the bed, curling round the feet
         var tl = p.tail, tc;
         if (pose === 0) tc = [[-24, 3.2, 3, 5.4], [-30, 3, 13, 5], [-25, 2.9, 25 * tl, 4.6], [-9, 2.7, 30 * tl, 4.2], [8, 2.5, 28 * tl, 3.9], [19, 2.4, 22 * tl, 3.6]];
-        else if (pose === 1) tc = [[-28, 3.2, 5, 5], [-32, 3, 16, 4.6], [-20, 2.8, 24 * tl, 4.2], [-2, 2.6, 24 * tl, 3.8], [13, 2.4, 19 * tl, 3.5]];
-        else tc = [[-30, 3.2, -8, 5], [-24, 3, -27 * tl, 4.6], [-6, 2.8, -33 * tl, 4.2], [14, 2.6, -27 * tl, 3.8], [26, 2.4, -13 * tl, 3.5]];
+        else if (pose === 1) tc = [[-28, 3.2, 5, 5], [-32, 3, 16 * k, 4.6], [-20, 2.8, 24 * k * tl, 4.2], [-2, 2.6, 24 * k * tl, 3.8], [13, 2.4, 19 * k * tl, 3.5]];
+        else tc = [[-27, 3.2, -4, 5.4], [-24, 3, -27 * tl, 4.6], [-6, 2.8, -33 * tl, 4.2], [14, 2.6, -27 * tl, 3.8], [26, 2.4, -13 * tl, 3.5]];
         S.piece('tail');
         S.path('tail', tc, fur, 2.5);
         var wantCollar = Math.round(p.collar) === 1 && pose === 0;
@@ -76,7 +76,7 @@
         [-1, 1].forEach(function (s) {
           var id = s < 0 ? 'eyeL' : 'eyeR';
           if (S.deleted(id)) return;
-          var yE = hy + hr * 0.2, zE = s * hr * 0.46;
+          var yE = hy + hr * 0.3, zE = s * hr * 0.46;
           S.pivots[id] = [hx + 60, yE, zE];
           var eO = S.xf(id, [hx + 60, yE, zE]), e = S.hit(eO, [-1, 0, 0]), R = p.eye * hs * S.scaleOf(id);
           S.addon(id, e.p, R);

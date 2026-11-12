@@ -14,15 +14,16 @@ No build step and no dependencies: it is plain HTML, CSS and JavaScript, so it r
 │   ├── programs.js       # Slot registry: GENERATORS and BUNDLES (map regions)
 │   ├── worldmap.js       # Homepage world map
 │   ├── workshop.js       # Workshop 3D editor
-│   ├── guides.js         # Printing guides list and search
-│   └── app.js            # Router, viewer, printer map
+│   ├── guides.js         # Printing guides page: link list and search
+│   └── app.js            # Router (#/generator, #/workshop, #/map, #/guides), viewer, printer map
 ├── data/                 # Printer listings (verified) and OSM candidates
 ├── assets/thumbnails/    # Slot thumbnails; sprites/ holds the hologram hover tiles
 ├── programs/             # Generator pages; shared/ is the engine every generator uses
-├── tools/                # hologram.html and panel-thumbs.html (renderers), animals/, flexi/ and text-fonts/ (sources for those generators)
+├── tools/                # hologram.html and panel-thumbs.html (renderers); animals/, flexi/, text-fonts/, ring-fonts/ and gravity-walker/ (sources and checks for those generators)
 ├── scripts/              # Dev server, hologram / preview build scripts, scripts/ci (printability job)
 ├── ci/                   # printability-baseline.json (known print-check errors)
 ├── .github/workflows/    # printability.yml: one printability job per generator
+├── vendor/               # Self-hosted three.js, Leaflet, CSG bundle and fonts (no CDN is contacted)
 ├── docs/                 # Full documentation
 └── .nojekyll             # Tells Pages to serve files as-is
 ```
@@ -47,7 +48,7 @@ npm run serve -- --port 8080
 
 ## Generators
 
-100 generators in 20 groups (slots 1-102; 14 and 39 are unused), from seasonal gifts and fidgets to animals, flexi creatures, tabletop pieces, a Text Generator and a Fancy Ring. The full list is in [docs/slot-registry.md](docs/slot-registry.md). Every generator has Parametric, Color tool and Print tabs (most also a Sculpt tab), a live printability chip, and exports STL and a coloured OBJ zip.
+121 generators in 20 groups (slots 1-123; 14 and 39 are unused), from seasonal gifts and fidgets to animals, flexi creatures, tabletop pieces, desk organisers, toys and print-in-place mechanisms. The full list is in [docs/slot-registry.md](docs/slot-registry.md). Every generator has Parametric, Color tool and Print tabs (most also a Sculpt tab), a live printability chip, and exports STL and a coloured OBJ zip.
 
 ## Adding a generator
 

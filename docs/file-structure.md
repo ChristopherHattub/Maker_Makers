@@ -23,12 +23,13 @@
 │                            loaded on hover / tap / idle), base-tile.webp, manifest-v2.json
 │                            (obj-*.webp, sheet-*.webp and manifest.json are the older Gemini frames)
 ├── programs/                Generator pages, one per slot (ghost-builder.html, ...)
-│   └── shared/              Shared generator engine and styles (generator-core.js, export-utils.js, mesh-utils.js, print-check.js, generator.css)
+│   └── shared/              Shared generator engine and styles (generator-core.js, export-utils.js, mesh-utils.js, print-check.js, generator.css, plus fonts-text/ring/wall/pet.js: the big font outline tables that Text Generator, Stamp Maker, Spinner Ring, Wall Panel and Pet Bowl Housing load as plain scripts)
 ├── tools/
 │   ├── hologram.html        Renders a generator's real model as a 24-frame hologram atlas
 │   ├── panel-thumbs.html    Renders the full-colour side-panel previews (assets/thumbnails/panel/)
 │   ├── animals/             Sources, shared kit, builder, thumbnails and print check for the animals (slots 76-90)
 │   ├── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
+│   ├── gravity-walker/      walk-sim.mjs: the ramp-walking simulation for the Gravity Walker (slot 122)
 │   ├── text-fonts/          Builds the packed OFL font data for the Text Generator (slot 101)
 │   └── ring-fonts/          Trims the Text Generator's font outlines into the Spinner Ring page (build.mjs)
 ├── scripts/
@@ -44,10 +45,11 @@
 ├── ci/
 │   └── printability-baseline.json  Known print-check errors per generator, the ratchet for CI (see printability-ci.md)
 ├── .github/workflows/printability.yml  Per-generator printability check on GitHub Actions
+├── vendor/                  Self-hosted third-party code: three/ (r128), leaflet/, three-csg/, fonts/ (see architecture.md)
 ├── screenshots/             Reference screenshots from earlier reviews (not used by the site)
 ├── .claude/
 │   ├── launch.json          Preview-server config (runs dev-server.mjs on port 5173)
-│   └── skills/makermakers-generator/  Generator skill: SKILL.md, reference.md, check-mesh.mjs, thumbnail-template.svg
+│   └── skills/makermakers-generator/  Generator skill: SKILL.md, reference.md, check-mesh.mjs (watertight / manifold), check-overhang.mjs, thumbnail-template.svg
 ├── docs/                    This documentation (start at README.md)
 ├── CLAUDE.md, AGENTS.md     Agent entry point (AGENTS.md just points to CLAUDE.md)
 ├── .editorconfig            UTF-8, LF line endings, 2-space indent, final newline
@@ -64,8 +66,8 @@
 | Task | Files |
 | --- | --- |
 | Add or update a generator slot | `js/programs.js`, plus files in `programs/` and `assets/thumbnails/` (see the generator skill) |
-| Rebuild the Text Generator font data | `tools/text-fonts/build.mjs` (downloads the OFL fonts, rewrites the FONTDATA block in `programs/text-generator.html`; licences in `tools/text-fonts/licenses/`; see [text-generator.md](text-generator.md)) |
-| Rebuild the Spinner Ring font data | `node tools/ring-fonts/build.mjs` (copies the trimmed outlines from `programs/text-generator.html` into the FONTDATA block of `programs/spinner-ring.html`; see [spinner-ring.md](spinner-ring.md)) |
+| Rebuild the Text Generator font data | `tools/text-fonts/build.mjs` (downloads the OFL fonts, writes `programs/shared/fonts-text.js`; licences in `tools/text-fonts/licenses/`; see [text-generator.md](text-generator.md)) |
+| Rebuild the Spinner Ring font data | `node tools/ring-fonts/build.mjs` (copies the trimmed outlines from `programs/shared/fonts-text.js` into `programs/shared/fonts-ring.js`; see [spinner-ring.md](spinner-ring.md)) |
 | Re-render a hologram tile | `tools/hologram.html`, `scripts/build-holo.py`, `scripts/hologram-config.json` (see [hologram-tiles.md](hologram-tiles.md)) |
 | Change the homepage world map | `js/worldmap.js` |
 | Change the viewer or routing | `js/app.js` |

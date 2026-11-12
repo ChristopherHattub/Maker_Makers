@@ -29,4 +29,4 @@ Designs are entries in `PATTERNS` (call `add(convexPolygon)`; `R` is the pattern
 
 ## Open items
 
-No hologram tile or side-panel render yet. How a plate attaches to each console (adhesive, tape, snap fit) is not designed; the plate is a decorative cover only.
+Hologram tile and side-panel render done (12 Nov). How a plate attaches to each console (adhesive, tape, snap fit) is not designed; the plate is a decorative cover only.

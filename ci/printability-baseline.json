@@ -525,20 +525,6 @@
       "overhang"
     ]
   },
-  "flexi-snake": {
-    "defaults": [
-      "overhang"
-    ],
-    "Default snake": [
-      "overhang"
-    ],
-    "Garden snake": [
-      "overhang"
-    ],
-    "Straight (easy print)": [
-      "overhang"
-    ]
-  },
   "flexi-turtle": {
     "defaults": [
       "overhang"
