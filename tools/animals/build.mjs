@@ -23,7 +23,8 @@ const ANIMALS = [
   ['shark-trophy', 'MM-087', 'Shark Fin Trophy'],
   ['elephant-builder', 'MM-088', 'Elephant Builder'],
   ['monster-maker', 'MM-089', 'Alien & Monster Maker'],
-  ['horse-builder', 'MM-090', 'Horse Builder']
+  ['horse-builder', 'MM-090', 'Horse Builder'],
+  ['fox-wolf', 'MM-127', 'Fox & Wolf']
 ];
 const lib = readFileSync(join(here, '..', 'flexi', 'flexi-lib.js'), 'utf8');
 const kit = readFileSync(join(here, 'animal-kit.js'), 'utf8');

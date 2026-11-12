@@ -413,6 +413,11 @@
     "sat": 85,
     "light": 68
   },
+  "fox-wolf": {
+    "hue": 28,
+    "sat": 85,
+    "light": 66
+  },
   "dog-builder": {
     "hue": 30,
     "sat": 60,
