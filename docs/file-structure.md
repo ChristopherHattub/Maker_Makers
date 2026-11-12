@@ -29,6 +29,7 @@
 │   ├── panel-thumbs.html    Renders the full-colour side-panel previews (assets/thumbnails/panel/)
 │   ├── animals/             Sources, shared kit, builder, thumbnails and print check for the animals (slots 76-90)
 │   ├── flexi/               Sources, builder and clearance check for the flexi creatures (slots 91-100)
+│   ├── gravity-walker/      walk-sim.mjs: the ramp-walking simulation for the Gravity Walker (slot 122)
 │   ├── text-fonts/          Builds the packed OFL font data for the Text Generator (slot 101)
 │   └── ring-fonts/          Trims the Text Generator's font outlines into the Spinner Ring page (build.mjs)
 ├── scripts/
@@ -44,10 +45,11 @@
 ├── ci/
 │   └── printability-baseline.json  Known print-check errors per generator, the ratchet for CI (see printability-ci.md)
 ├── .github/workflows/printability.yml  Per-generator printability check on GitHub Actions
+├── vendor/                  Self-hosted third-party code: three/ (r128), leaflet/, three-csg/, fonts/ (see architecture.md)
 ├── screenshots/             Reference screenshots from earlier reviews (not used by the site)
 ├── .claude/
 │   ├── launch.json          Preview-server config (runs dev-server.mjs on port 5173)
-│   └── skills/makermakers-generator/  Generator skill: SKILL.md, reference.md, check-mesh.mjs, thumbnail-template.svg
+│   └── skills/makermakers-generator/  Generator skill: SKILL.md, reference.md, check-mesh.mjs (watertight / manifold), check-overhang.mjs, thumbnail-template.svg
 ├── docs/                    This documentation (start at README.md)
 ├── CLAUDE.md, AGENTS.md     Agent entry point (AGENTS.md just points to CLAUDE.md)
 ├── .editorconfig            UTF-8, LF line endings, 2-space indent, final newline

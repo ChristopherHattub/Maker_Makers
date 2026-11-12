@@ -53,13 +53,13 @@ There are no automated tests or linters for the site. Check by hand:
 3. Open a generator and check the viewer, the iframe, Save STL and Send to Workshop.
 4. Open the Workshop and add a shape and a generator.
 5. Open the printer map and check the markers, the directory and the status line.
-6. Submit a test idea, then check the queue and "Export Queue (.JSON)".
+6. Open Printing Guides from the header, search for a word, filter by topic chip and check that the links open.
 7. Resize the window to a phone width and check the layout.
 8. Check the browser console for errors.
 
 For a generator's geometry there is a script: `node .claude/skills/makermakers-generator/check-mesh.mjs programs/<name>.html ["Preset label"]` builds the model in Node and reports whether every solid is watertight and manifold.
 
-Network-dependent parts (Leaflet, three.js for generators and the Workshop, map tiles, Nominatim, Overpass) need an internet connection. Expect the map to show its fallback when offline.
+Leaflet, three.js, the Workshop CSG bundle and the fonts are self-hosted in `vendor/`, so only the printer map's tiles (Esri) and place search (Nominatim, Overpass) need an internet connection. Expect the map to show its fallback when offline.
 
 ## Editor settings
 

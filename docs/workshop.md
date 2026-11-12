@@ -25,7 +25,7 @@ Nothing is uploaded. Files are read in the browser. Autosave goes to `localStora
 
 ## How it is built
 
-- `js/workshop.js` loads three.js from the CDN on first visit (same versions as the generators) and holds the catalog, scene, history and STL code. `css/workshop.css` holds the editor and tile styles.
+- `js/workshop.js` loads the self-hosted three.js from `vendor/` (same version as the generators; the CSG bundle loads on first Merge / Cut) and holds the catalog, scene, history and STL code. `css/workshop.css` holds the editor and tile styles.
 - The homepage tile is `workshopTileHTML()` in `js/worldmap.js`; its position is `WORKSHOP` at the top of that file. It is not a generator and has no hologram sprite: its art is an animated SVG.
 - The scene is Z-up like a slicer, so exports need no axis change.
 
