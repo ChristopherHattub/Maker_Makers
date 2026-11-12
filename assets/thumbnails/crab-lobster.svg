@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#14407f"/><stop offset="0.6" stop-color="#0d2b59"/><stop offset="1" stop-color="#06152d"/></radialGradient>
+    <radialGradient id="plate" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#1b4c92"/><stop offset="1" stop-color="#081c3b"/></radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="mat" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffffff"/><stop offset="0.3" stop-color="#e3ecf9"/><stop offset="0.7" stop-color="#a9bcdc"/><stop offset="1" stop-color="#667fa8"/></radialGradient>
+    <radialGradient id="warm" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#ffe9cc"/><stop offset="0.3" stop-color="#fdba74"/><stop offset="0.7" stop-color="#e08a33"/><stop offset="1" stop-color="#9c5412"/></radialGradient>
+    <radialGradient id="green" cx="0.36" cy="0.28" r="0.9"><stop offset="0" stop-color="#e6ffef"/><stop offset="0.3" stop-color="#bbf7d0"/><stop offset="0.7" stop-color="#6fd39a"/><stop offset="1" stop-color="#2f8a5c"/></radialGradient>
+    <pattern id="gridMinor" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#00e5ff" stroke-opacity="0.05"/></pattern>
+    <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#00e5ff" stroke-opacity="0.12"/></pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect width="400" height="300" fill="url(#gridMinor)"/>
+  <rect width="400" height="300" fill="url(#gridMajor)"/>
+  <ellipse cx="200" cy="248" rx="128" ry="19" fill="url(#plate)" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <ellipse cx="200" cy="248" rx="104" ry="14" fill="none" stroke="#00e5ff" stroke-opacity="0.18"/>
+  <ellipse cx="200" cy="249" rx="82" ry="11" fill="url(#shadow)"/>
+  <g stroke="#00e5ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <!-- legs: stacked strokes -->
+    <g fill="none">
+      <g id="legL">
+        <path d="M130 200 L104 176 L72 222 L56 226" stroke="#00e5ff" stroke-width="9"/><path d="M130 200 L104 176 L72 222 L56 226" stroke="#5b7fb8" stroke-width="6"/><path d="M130 200 L104 176 L72 222 L56 226" stroke="#c9d8ee" stroke-width="3.6"/>
+        <path d="M134 214 L110 196 L88 236 L72 240" stroke="#00e5ff" stroke-width="9"/><path d="M134 214 L110 196 L88 236 L72 240" stroke="#5b7fb8" stroke-width="6"/><path d="M134 214 L110 196 L88 236 L72 240" stroke="#c9d8ee" stroke-width="3.6"/>
+      </g>
+      <g id="legR">
+        <path d="M270 200 L296 176 L328 222 L344 226" stroke="#00e5ff" stroke-width="9"/><path d="M270 200 L296 176 L328 222 L344 226" stroke="#5b7fb8" stroke-width="6"/><path d="M270 200 L296 176 L328 222 L344 226" stroke="#c9d8ee" stroke-width="3.6"/>
+        <path d="M266 214 L290 196 L312 236 L328 240" stroke="#00e5ff" stroke-width="9"/><path d="M266 214 L290 196 L312 236 L328 240" stroke="#5b7fb8" stroke-width="6"/><path d="M266 214 L290 196 L312 236 L328 240" stroke="#c9d8ee" stroke-width="3.6"/>
+      </g>
+    </g>
+    <!-- shell -->
+    <path d="M114 216 C112 168 156 142 200 142 C244 142 288 168 286 216 C286 234 248 244 200 244 C152 244 114 234 114 216 Z" fill="url(#warm)"/>
+    <path d="M142 170 Q170 154 196 154" fill="none" stroke="url(#gloss)" stroke-width="6"/>
+    <path d="M150 200 Q200 214 250 200" fill="none" stroke="#9c5412" stroke-opacity="0.55" stroke-width="1.5"/>
+    <!-- eye stalks -->
+    <path d="M176 150 L172 118" fill="none" stroke="#00e5ff" stroke-width="8"/><path d="M176 150 L172 118" fill="none" stroke="#c9d8ee" stroke-width="4.4"/>
+    <path d="M224 150 L228 118" fill="none" stroke="#00e5ff" stroke-width="8"/><path d="M224 150 L228 118" fill="none" stroke="#c9d8ee" stroke-width="4.4"/>
+    <circle cx="171" cy="110" r="10" fill="url(#mat)"/><circle cx="229" cy="110" r="10" fill="url(#mat)"/>
+    <circle cx="174" cy="112" r="4.4" fill="#0a2246" stroke="none"/><circle cx="226" cy="112" r="4.4" fill="#0a2246" stroke="none"/>
+    <!-- claw arms -->
+    <path d="M138 186 Q118 170 112 206" fill="none" stroke="#00e5ff" stroke-width="13"/><path d="M138 186 Q118 170 112 206" fill="none" stroke="#e08a33" stroke-width="9.4"/>
+    <path d="M262 186 Q282 170 288 206" fill="none" stroke="#00e5ff" stroke-width="13"/><path d="M262 186 Q282 170 288 206" fill="none" stroke="#e08a33" stroke-width="9.4"/>
+    <!-- left claw (palm, fixed finger, hinged finger) -->
+    <path d="M96 232 C88 206 112 196 126 208 C140 222 140 248 128 250 C116 252 102 246 96 232 Z" fill="url(#warm)"/>
+    <path d="M122 226 C142 232 156 250 150 262 C144 254 130 250 118 252 Z" fill="url(#warm)"/>
+    <path d="M100 236 C92 250 112 262 138 266 C124 258 114 252 112 246 Z" fill="url(#mat)"/>
+    <circle cx="112" cy="244" r="3.4" fill="#c084fc" stroke="#fff" stroke-width="1.3"/>
+    <!-- right claw -->
+    <path d="M304 232 C312 206 288 196 274 208 C260 222 260 248 272 250 C284 252 298 246 304 232 Z" fill="url(#warm)"/>
+    <path d="M278 226 C258 232 244 250 250 262 C256 254 270 250 282 252 Z" fill="url(#warm)"/>
+    <path d="M300 236 C308 250 288 262 262 266 C276 258 286 252 288 246 Z" fill="url(#mat)"/>
+    <circle cx="288" cy="244" r="3.4" fill="#c084fc" stroke="#fff" stroke-width="1.3"/>
+  </g>
+  <g fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="square">
+    <path d="M16 36V16H36M364 16H384V36M16 264V284H36M384 264V284H364"/>
+  </g>
+  <rect x="30" y="26" width="52" height="16" rx="3" fill="#06152d" fill-opacity="0.7" stroke="#00e5ff" stroke-opacity="0.5"/>
+  <text x="56" y="38" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#00e5ff" letter-spacing="1.5">MM-132</text>
+  <text x="200" y="285" text-anchor="middle" font-family="Courier New, monospace" font-size="12" fill="#eef7ff" fill-opacity="0.9" letter-spacing="3">CRAB &amp; LOBSTER</text>
+</svg>
