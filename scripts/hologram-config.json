@@ -6,6 +6,12 @@
   "pumpkin-plotter": {
     "hue": 28
   },
+  "bat-builder": {
+    "hue": 275,
+    "sat": 70,
+    "light": 72,
+    "fill": 1.05
+  },
   "spider": {
     "dark": true,
     "hue": 200
