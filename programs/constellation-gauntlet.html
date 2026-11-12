@@ -10,7 +10,7 @@
 </head>
 <body class="mm-gen">
   <script>
-    // Constellation Gauntlet: an armoured display gauntlet with a hand plate, a core gem and four orbiting gems.
+    // Constellation Gauntlet: a full wearable gauntlet (closed fingers, thumb and back of the hand, with a palm window to slide the hand in) or a solid display piece, with a hand plate, a core gem and four orbiting gems.
     // Everything here is original: the name, the five gems (Solis, Lunara, Vesper, Aurelia, Nova), the orrery-style
     // layout (one core gem and four satellites that orbit it) and the four style families.
     //
@@ -47,8 +47,6 @@
       var FORM_AMP = [0, 0.076, 0.04, 0.06, 0.05];
       var LAYOUT_NAMES = ['Orbit', 'Cross', 'Row', 'Crescent', 'Pentagon', 'Zigzag'];
       var CORE_CENTRED = [true, true, true, false, false, true];   // layouts that keep Solis on the middle of the plate (a raised core needs that)
-      var CURVE_NAMES = ['Flat', 'Shallow', 'Curved'];
-      var CURVE_R = [200, 38, 30];
 
       // Unit outline of each gem shape: radius at angle th (world angle, y up), minimum apothem 1 except the oval.
       function polyR(sides, clip) {
@@ -480,12 +478,21 @@
         var RMAX = 37.3;
         Lt.Hc = p.cuffH;
         if (wear) {
-          var wl = 2.6, ez = p.ease;
+          var wl = 3.6, ez = p.ease;
           Lt.G = { wall: wl, wx: p.wristW / 2 + ez + wl, wz: 0.66 * p.wristW / 2 + ez + wl, px: p.handW / 2 + ez + wl, pz: p.handT / 2 + ez + wl };
           Lt.Hp = p.palmH; Lt.yP = Lt.Hc + Lt.Hp / 2 - 1; Lt.zf = Lt.G.pz;
+          Lt.F = wearFingers(Lt);
+          Lt.G.px = Math.max(Lt.G.px, Lt.F.span / 2 + 0.6);   // the shield is as wide as the four finger tubes
           RMAX = Math.min(37.3, (Lt.Hp - 7) / 2 - 4.5, Lt.G.px - 6);
-        } else { Lt.Hp = PALM_H; Lt.yP = Lt.Hc + 41; Lt.zf = PALM_Z; }
-        Lt.yT = Lt.Hc + Lt.Hp; Lt.T = p.plateT;
+          Lt.Hv = Lt.Hc + Lt.Hp;   // the knuckle line: the cavity has its full size up to here, then each finger bore closes in on a 40 degree cone
+          var Rmin = Math.min.apply(null, Lt.F.Rin), pitch = 0, iz = Lt.G.pz - Lt.G.wall - 0.3, i2;
+          for (i2 = 1; i2 < 4; i2++) pitch = Math.max(pitch, Lt.F.cx[i2] - Lt.F.cx[i2 - 1]);
+          Lt.yb = Lt.Hv + Math.max(10, (Math.sqrt(pitch * pitch / 4 + iz * iz) + 1 - Rmin) / TENT);   // where the finger bores start
+          Lt.yT = Lt.yb + 2;
+          Lt.P = wearProfile(Lt);
+          Object.assign(Lt.F, wearCones(Lt));
+        } else { Lt.Hp = PALM_H; Lt.yP = Lt.Hc + 41; Lt.zf = PALM_Z; Lt.yT = Lt.Hc + Lt.Hp; }
+        Lt.T = p.plateT;
         var gems = [0, 1, 2, 3, 4].map(function (i) { return gemOf(p, i); });
         var kind = Math.round(p.gemLayout), rot = p.orbitTurn * DEG, plateFn = PLATE_FN[Math.round(p.plateShape)];
         var raised = p.core > 0 && gems[0].on && CORE_CENTRED[kind];
@@ -635,142 +642,353 @@
       }
 
       // ---------------------------------------------------------------------------------------------
-      // The wearable shell: a forearm clip cuff and a back-of-hand shield in one piece, open on the palm side (-z).
-      // Every ring is a C: an outer curve and an inner curve joined at the two edges of the opening. The opening widens
-      // going up, so the free edges only ever step back (they face up and need no supports).
+      // The wearable glove. A hollow hand-shaped shell: a forearm cuff, a palm, four enclosed finger tubes and a thumb tube.
+      // It is built as a signed distance field (negative inside) and turned into a mesh by surface nets, because a
+      // cavity that splits into four finger bores cannot be made from stacked rings. The field is made of a few simple parts:
+      //   outer = the palm and cuff prism (round top edge) joined to a tapered cone per finger and for the thumb
+      //   cavity = the same prism moved in, closed by a skirt cone round each finger bore (TENT), plus a bore inside each
+      //            finger, and one inside the thumb that closes under its own roof (ROOF)
+      //   window = a cut through the palm side (the hand slides in there): wide for the cuff and palm, then closing in an
+      //            arch (ARCH) so it needs no supports
+      // Every ceiling is a cone or an arch well under 50 degrees from vertical, so the glove prints standing on its cuff.
+      // The surface is smoothed (Taubin) and split where it pinches, so each closed surface is watertight and manifold.
       // ---------------------------------------------------------------------------------------------
-      function armWear(Lt) {
-        var p = Lt.p, G = Lt.G, Hc = Lt.Hc, yT = Lt.yT, Hw = 0.86 * Hc, flare = p.flare, form = Math.round(p.cuffForm);
-        var bands = Math.round(p.bands), wallIn = G.wall + FORM_AMP[form] * G.wx, M = 72;
-        var phiC = p.cuffOpen * DEG, phiH = Math.max(p.handOpen, p.cuffOpen) * DEG;
-        function halfX(y) {
+      var WF = 3.6;        // finger and thumb wall
+      var TENT = 0.5;      // the cavity ceiling closes in 0.5 mm per mm of height (27 degrees from vertical)
+      var ROOF = 0.55;     // the thumb bore closes under a roof that rises 0.55 mm per mm (29 degrees from vertical)
+      var ARCH = 0.8;      // the palm window closes in 0.8 mm per mm of height (39 degrees)
+      var CELL = 1.8;
+      var SMOOTH = 5;      // smoothing passes      // marching grid step, millimetres
+
+      function wearProfile(Lt) {
+        var p = Lt.p, G = Lt.G, Hc = Lt.Hc, Hw = 0.86 * Hc, flare = p.flare, form = Math.round(p.cuffForm), bands = Math.round(p.bands), P = {};
+        P.halfX = function (y) {
           if (y <= Hw) return lerp(G.wx + 4 + flare, G.wx, 1 - Math.pow(1 - y / Hw, 2));
           return lerp(G.wx, G.px, smooth((y - Hw) / (Hc + 0.5 * Lt.Hp - Hw)));
-        }
-        function halfZ(y) {   // the thickness changes slowly (under 12 degrees), so the inside of the back wall never overhangs
+        };
+        P.halfZ = function (y) {   // the thickness changes slowly, so the inside of the back wall never overhangs
           var base = lerp(G.wz, G.pz, smooth((y - 0.35 * Hc) / (0.65 * Hc + 2)));
           return y <= Hw ? base + (3 + 0.8 * flare) * Math.pow(1 - y / Hw, 2) : base;
-        }
-        function expo(y) { return lerp(2.6, 6, smooth((y - Hw) / (Hc + 4 - Hw))); }
-        function band(y) {
+        };
+        P.expo = function (y) { return lerp(2.6, 6, smooth((y - Hw) / (Hc + 4 - Hw))); };
+        P.band = function (y) {
           var b = 0, k;
           for (k = 0; k < bands; k++) { var yk = Math.round(Hc * 0.8 * (k + 1) / (bands + 1)); b = Math.max(b, clamp(2.7 - Math.abs(y - yk), 0, 2.2)); }
           return b;
-        }
-        function phi(y) { return lerp(phiC, phiH, smooth((y - (Hc - 8)) / 22)); }
-        function at(th, y, inset, withForm) {
-          var wx = halfX(y) - inset, wz = halfZ(y) - inset, e = 2 / expo(y), wgt = withForm ? clamp((Hc - 2 - y) / 10, 0, 1) : 0;
-          if (withForm) { var b = band(y); wx += b; wz += b; }
-          var c = Math.cos(th), s = Math.sin(th), f = 1 + wgt * (formFactor(form, th) - 1);
-          return [wx * Math.sign(c) * Math.pow(Math.abs(c), e) * f, wz * Math.sign(s) * Math.pow(Math.abs(s), e) * f];
-        }
-        function cRing(y, outerInset) {
-          var ph = phi(y), a0 = -Math.PI / 2 + ph, a1 = 1.5 * Math.PI - ph, O = [], I = [], j, th;
-          for (j = 0; j < M; j++) {
-            th = lerp(a0, a1, j / (M - 1));
-            O.push(at(th, y, outerInset, true));
-            I.push(at(th, y, wallIn, false));
-          }
-          var pts = O.concat(I.reverse());
-          return { ring: ring([0, y, 0], null, pts, 0), O: O, I: I };
-        }
-        var layers = [], y, ys = [0];
-        for (y = 1; y < Hc + 14; y += 1) ys.push(y);
-        for (y = Hc + 14; y < yT - 1; y += 3) ys.push(y);
-        ys.push(yT);
-        ys.forEach(function (yy, n) { layers.push(cRing(yy, n === 0 ? 0.8 : 0)); });
-        var a = [], i, j, k, A, B, O0, I0;
-        for (i = 0; i < layers.length - 1; i++) strip(a, layers[i].ring, layers[i + 1].ring, false);
-        function band3(L, bottom) {   // the flat end of the wall: a strip between the outer and inner curve
-          var Pn = L.ring.P, o, q;
-          for (j = 0; j < M - 1; j++) {
-            k = j + 1;
-            o = [Pn[j], Pn[k]]; q = [Pn[2 * M - 1 - j], Pn[2 * M - 1 - k]];
-            if (bottom) { tri(a, o[0], o[1], q[0], false); tri(a, o[1], q[1], q[0], false); }
-            else { tri(a, o[0], q[0], o[1], false); tri(a, o[1], q[0], q[1], false); }
-          }
-        }
-        band3(layers[0], true);
-        band3(layers[layers.length - 1], false);
-        Lt.dorsalZ = function (x, y) { var e = 2 / expo(y), r = Math.abs(x) / halfX(y); return r >= 1 ? 0 : halfZ(y) * Math.pow(1 - Math.pow(r, 2 / e), e / 2); };
-        return orient(a);
+        };
+        P.formW = function (y) { return clamp((Hc - 2 - y) / 10, 0, 1); };
+        P.form = form;
+        P.wallIn = G.wall + FORM_AMP[form] * G.wx;
+        P.phi = function (y) {
+          var phiC = p.cuffOpen * DEG, phiH = Math.max(p.handOpen, p.cuffOpen) * DEG;
+          return lerp(phiC, phiH, smooth((y - (Hc - 8)) / 22));
+        };
+        P.dorsalZ = function (x, y) { var r = Math.abs(x) / P.halfX(y), n = P.expo(y); return r >= 1 ? 0 : P.halfZ(y) * Math.pow(1 - Math.pow(r, n), 1 / n); };
+        return P;
       }
 
-      // A dorsal finger plate: a shallow arc (the back of the finger), standing up from the shield and leaning toward the hand.
-      // The ring is the arc between two radial cuts: outer curve then inner curve, so the section is a thin banana.
-      function plateLimb(o) {
-        var L = o.L, emb = 1.5, nSeg = o.nSeg, A = o.bead || 1.2, Lf = A / 0.32, Lu = 0.9, M = 11, w0 = o.w, Ro = o.R, Ri = o.R - o.t, tip = o.tip;
-        var sinS = Math.sin(o.sigma), cosS = Math.cos(o.sigma);
-        function alpha(s) { return o.curl * smooth((s - 0.3 * L) / (0.7 * L)); }
-        function dirAt(s) { var al = alpha(s); return [sinS * Math.cos(al), cosS * Math.cos(al), Math.sin(al)]; }
-        function bead(s) {
-          var b = 0, j2, sj;
-          for (j2 = 1; j2 < nSeg; j2++) {
-            sj = L * j2 / nSeg;
-            if (s >= sj - Lf && s <= sj) b = Math.max(b, A * (s - (sj - Lf)) / Lf);
-            else if (s > sj && s < sj + Lu) b = Math.max(b, A * (1 - (s - sj) / Lu));
+      // The fingers and the thumb as tapered cones with a shaped tip. c = { B, u, L, Ro, tip, nSeg, bead, emb, bore }
+      function makeCone(B, u, L, Ro, tip, nSeg, bead, emb, bore) {
+        var lean = Math.acos(Math.max(-1, Math.min(1, u[1]))), flank = Math.min(0.32, Math.tan(Math.max(6 * DEG, 46 * DEG - lean)));   // the lower flank of a ridge adds to the lean of the axis, so it is made gentler on a thumb
+        var Ld = tip === 0 ? Ro * 0.85 : (tip === 1 ? 1.9 * Ro * 0.85 : 3.0);
+        var c = { B: B, u: u, L: L, Ro: Ro, tip: tip, nSeg: nSeg, bead: bead, emb: emb, bore: bore, Ld: Ld, flank: flank };
+        c.re = Ro * (1 - 0.2 * (L - Ld) / L);
+        c.apex = tip === 1 ? L - 0.55 * Ld : L - WF - 0.3;
+        var pad = Ro + 3, e0 = -Math.max(emb, bore), q;
+        c.lo = [1e9, 1e9, 1e9]; c.hi = [-1e9, -1e9, -1e9];
+        [e0, L].forEach(function (sv) { for (q = 0; q < 3; q++) { var pv = B[q] + u[q] * sv; if (pv - pad < c.lo[q]) c.lo[q] = pv - pad; if (pv + pad > c.hi[q]) c.hi[q] = pv + pad; } });
+        return c;
+      }
+      function coneBead(c, s) {
+        var b = 0, j, sj, A = c.bead, Lf = A / c.flank, Lu = 0.9, span = c.L - c.Ld;
+        for (j = 1; j < c.nSeg; j++) {
+          sj = span * j / c.nSeg;
+          if (s >= sj - Lf && s <= sj) b = Math.max(b, A * (s - (sj - Lf)) / Lf);
+          else if (s > sj && s < sj + Lu) b = Math.max(b, A * (1 - (s - sj) / Lu));
+        }
+        return b;
+      }
+      function coneROut(c, s) {
+        if (s <= 0) return c.Ro;
+        var span = c.L - c.Ld;
+        if (s <= span) return c.Ro * (1 - 0.2 * s / c.L) + coneBead(c, s);
+        var u = Math.min(1, (s - span) / c.Ld);
+        if (c.tip === 0) return c.re * Math.sqrt(1 - u * u);
+        if (c.tip === 1) return c.re * (1 - u);
+        return c.re * (1 - 0.4 * u);
+      }
+      function coneRIn(c, s) {
+        var sh = c.Ro * (1 - 0.2 * (s < 0 ? 0 : (s > c.L ? c.L : s)) / c.L) - WF;
+        var cone = c.roof ? 1e3 : 0.8 * (c.apex - s);   // a leaning bore closes under its roof (see coneBore) instead
+        return sh < cone ? sh : cone;
+      }
+      function coneOut(c, x, y, z) {
+        var qx = x - c.B[0], qy = y - c.B[1], qz = z - c.B[2], u = c.u;
+        var s = qx * u[0] + qy * u[1] + qz * u[2];
+        var px = qx - s * u[0], py = qy - s * u[1], pz = qz - s * u[2];
+        var rho = Math.sqrt(px * px + py * py + pz * pz);
+        var d = rho - coneROut(c, s < 0 ? 0 : (s > c.L ? c.L : s));
+        if (s > c.L) d = Math.max(d, s - c.L);
+        if (s < -c.emb) d = Math.max(d, -s - c.emb);
+        return d;
+      }
+      function coneBore(c, x, y, z) {
+        var qx = x - c.B[0], qy = y - c.B[1], qz = z - c.B[2], u = c.u;
+        var s = qx * u[0] + qy * u[1] + qz * u[2];
+        var px = qx - s * u[0], py = qy - s * u[1], pz = qz - s * u[2];
+        var rho = Math.sqrt(px * px + py * py + pz * pz);
+        var d = rho - coneRIn(c, s);
+        if (s < -c.bore) d = Math.max(d, -s - c.bore);
+        if (c.roof) d = Math.max(d, Math.sqrt((x - c.roof[0]) * (x - c.roof[0]) + (z - c.roof[1]) * (z - c.roof[1])) - ROOF * (c.roof[2] - y));   // a leaning bore closes under a gentle roof, not along its own axis
+        return d;
+      }
+
+      // The field, one horizontal slice at a time: gloveField(Lt)(y) returns a function of (x, z).
+      function gloveField(Lt) {
+        var p = Lt.p, G = Lt.G, Hc = Lt.Hc, yT = Lt.yT, yb = Lt.yb, Hv = Lt.Hv, P = Lt.P, F = Lt.F, form = P.form, Rt = 4;
+        var cones = F.cones, thumb = F.thumb, sinH = Math.sin(Math.max(p.handOpen, p.cuffOpen) * DEG);
+        var yA = Hv + 36, wallIn = P.wallIn;
+        var phH = Math.max(p.handOpen, p.cuffOpen) * DEG, nA = P.expo(yA - 10), axA = P.halfX(yA - 10), azA = P.halfZ(yA - 10);
+        var rA = 1 / Math.pow(Math.pow(Math.sin(phH) / axA, nA) + Math.pow(Math.cos(phH) / azA, nA), 1 / nA);
+        var xe1 = rA * Math.sin(phH), y1 = yA - xe1 / ARCH;   // where the wide palm window starts to close in an arch
+        var far = 2 * CELL + 1;
+        function prismD(x, z, ax, az, n, scaleF) {
+          if (ax <= 0.2 || az <= 0.2) return 1e3;
+          var axa = x < 0 ? -x : x, aza = z < 0 ? -z : z;
+          if (axa > ax * 1.12 + far || aza > az * 1.12 + far) return 3 * CELL;   // well outside
+          if (axa < ax * 0.55 && aza < az * 0.55) return -3 * CELL;   // well inside
+          var rho = Math.sqrt(x * x + z * z);
+          if (rho < 1e-6) return -Math.min(ax, az);
+          var g = Math.pow(Math.abs(x) / ax, n) + Math.pow(Math.abs(z) / az, n);
+          if (scaleF) g /= Math.pow(scaleF(x, z), n);
+          return rho * (1 - Math.pow(g, -1 / n));
+        }
+        return function (y) {
+          var wx = P.halfX(y), wz = P.halfZ(y), n = P.expo(y), ins, b = 0, fw = 0, outerOn = y <= yT + Rt + 0.5;
+          if (y < Hc + 1) { b = P.band(y); fw = form ? P.formW(y) : 0; }
+          var oWx = wx + b, oWz = wz + b;
+          ins = wallIn;
+          var iWx = wx - ins, iWz = wz - ins, innerLive = y <= yb && iWx > 0.3 && iWz > 0.3, skirtOn = y > Hv && y < yb;
+          var scaleF = fw > 0 ? function (x, z) { return 1 + fw * (formFactor(form, Math.atan2(z, x)) - 1); } : null;
+          // the palm window: a wedge cut square to the wall (the clip opening angle), closing in an arch above y1
+          var tw = Math.tan(Math.min(P.phi(y), 89.9 * DEG)), tn = Math.sqrt(1 + tw * tw), xarch = y <= y1 ? 1e3 : xe1 - ARCH * (y - y1);
+          var fingerOn = y > yT - 16, boreOn = y >= yb - 6, thumbOn = y > thumb.y0 - 30 && y < thumb.y1 + 30;
+          return function (x, z) {
+            var d, ob = 1e3, dc;
+            if (outerOn) {
+              d = prismD(x, z, oWx, oWz, n, scaleF);
+              var a = d + Rt, bb = (y - yT) + Rt;
+              ob = (a > 0 && bb > 0) ? Math.sqrt(a * a + bb * bb) - Rt : Math.max(a, bb) - Rt;
+            }
+            var i, cn;
+            if (fingerOn) for (i = 0; i < cones.length; i++) { cn = cones[i]; if (x > cn.lo[0] && x < cn.hi[0] && z > cn.lo[2] && z < cn.hi[2]) { d = coneOut(cn, x, y, z); if (d < ob) ob = d; } }
+            var ax3 = x < 0 ? -x : x, win = Math.max((ax3 + z * tw) / tn, ax3 - xarch, z);
+            ob = Math.max(ob, -win);
+            if (thumbOn && x > thumb.lo[0] && x < thumb.hi[0] && z > thumb.lo[2] && z < thumb.hi[2]) { d = coneOut(thumb, x, y, z); if (d < ob) ob = d; }
+            var cav = innerLive ? prismD(x, z, iWx, iWz, n, null) : 1e3;
+            if (skirtOn && cav < 1e2) {   // above the knuckle line the cavity is cut back by a 40 degree cone round each finger bore, so no ceiling is flat
+              var sk = 1e3, rr;
+              for (i = 0; i < cones.length; i++) { cn = cones[i]; rr = Math.sqrt((x - cn.B[0]) * (x - cn.B[0]) + z * z) - (cn.Ro - WF + TENT * (yb - y)); if (rr < sk) sk = rr; }
+              if (sk > cav) cav = sk;
+            }
+            if (boreOn) for (i = 0; i < cones.length; i++) { cn = cones[i]; if (x > cn.lo[0] && x < cn.hi[0] && z > cn.lo[2] && z < cn.hi[2]) { d = coneBore(cn, x, y, z); if (d < cav) cav = d; } }
+            if (thumbOn && x > thumb.lo[0] && x < thumb.hi[0] && z > thumb.lo[2] && z < thumb.hi[2]) { d = coneBore(thumb, x, y, z); if (d < cav) cav = d; }
+            return Math.max(ob, -cav);
+          };
+        };
+      }
+
+      // Manifold repair by vertex splitting: around each vertex the triangles that touch edge to edge form fans; a vertex with
+      // more than one fan is a pinch, and every extra fan gets a copy of the vertex (same place), so each edge is used twice.
+      function splitPinched(V, TI) {
+        var nv = V.length / 3, inc = new Array(nv), t, u, v, nt = TI.length / 3;
+        for (v = 0; v < nv; v++) inc[v] = [];
+        for (t = 0; t < nt; t++) for (u = 0; u < 3; u++) inc[TI[t * 3 + u]].push(t);
+        for (v = 0; v < nv; v++) {
+          var L = inc[v];
+          if (L.length < 4) continue;
+          var outM = {}, inM = {}, par = {}, i, k, w, a, b, c;
+          var find = function (x) { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+          for (i = 0; i < L.length; i++) {
+            t = L[i]; par[t] = t;
+            a = TI[t * 3]; b = TI[t * 3 + 1]; c = TI[t * 3 + 2];
+            if (a === v) { (outM[b] = outM[b] || []).push(t); (inM[c] = inM[c] || []).push(t); }
+            else if (b === v) { (outM[c] = outM[c] || []).push(t); (inM[a] = inM[a] || []).push(t); }
+            else { (outM[a] = outM[a] || []).push(t); (inM[b] = inM[b] || []).push(t); }
           }
-          return b;
-        }
-        var Ld = tip === 0 ? w0 : (tip === 1 ? 1.9 * w0 : 3.0);
-        function wAt(s) {
-          var u = (s - (L - Ld)) / Ld;
-          if (u <= 0) return w0;
-          if (tip === 0) return w0 * Math.sqrt(Math.max(0, 1 - u * u));
-          if (tip === 1) return w0 * (1 - u);
-          return lerp(w0, 0.6 * w0, Math.min(1, u));
-        }
-        var keys = [-emb, 0], s, k, j;
-        for (j = 1; j < nSeg; j++) keys.push(L * j / nSeg - Lf, L * j / nSeg, L * j / nSeg + Lu);
-        for (s = 2; s < L - Ld - 0.5; s += 2) keys.push(s);
-        keys.push(L - Ld);
-        for (k = 1; k < 6; k++) keys.push(tip === 0 ? (L - Ld) + Ld * Math.sin(k * 15 * DEG) : (L - Ld) + Ld * k / 6);
-        if (tip === 2) keys.push(L);
-        keys.sort(function (x, y) { return x - y; });
-        var list = [];
-        keys.forEach(function (v) { if (v >= -emb - 1e-6 && v <= L + 1e-6 && (!list.length || v - list[list.length - 1] > 0.15)) list.push(v); });
-        var P = [o.x, o.y, o.z], t0 = dirAt(0), path = [];
-        list.forEach(function (s2) {
-          if (s2 <= 0) { path.push({ s: s2, c: [P[0] + t0[0] * s2, P[1] + t0[1] * s2, P[2] + t0[2] * s2] }); return; }
-          if (!path.some(function (q) { return q.s === 0; })) path.push({ s: 0, c: P.slice() });
-          var last = path[path.length - 1], m = dirAt((last.s + s2) / 2), d = s2 - last.s;
-          path.push({ s: s2, c: [last.c[0] + m[0] * d, last.c[1] + m[1] * d, last.c[2] + m[2] * d] });
-        });
-        var layers = [];
-        path.forEach(function (q) {
-          var w = wAt(q.s), beta = Math.asin(Math.min(0.97, w / Ro)), ro = Ro + (q.s <= L ? bead(q.s) : 0), O = [], I = [], th;
-          for (j = 0; j < M; j++) {
-            th = lerp(Math.PI / 2 - beta, Math.PI / 2 + beta, j / (M - 1));
-            O.push([ro * Math.cos(th), ro * Math.sin(th)]);
-            I.push([Ri * Math.cos(th), Ri * Math.sin(th)]);
+          for (w in outM) {
+            var A = outM[w], B = inM[w] || [];
+            A.sort(function (x, y) { return x - y; }); B.sort(function (x, y) { return x - y; });
+            for (k = 0; k < Math.min(A.length, B.length); k++) { var ra = find(A[k]), rb = find(B[k]); if (ra !== rb) par[ra] = rb; }
           }
-          layers.push(ring(q.c, dirAt(q.s), O.concat(I.reverse()), 0));
-        });
-        var a = [], i;
-        for (i = 0; i < layers.length - 1; i++) strip(a, layers[i], layers[i + 1], false);
-        function band3(R, bottom) {
-          var Pn = R.P;
-          for (j = 0; j < M - 1; j++) {
-            k = j + 1;
-            if (bottom) { tri(a, Pn[j], Pn[k], Pn[2 * M - 1 - j], false); tri(a, Pn[k], Pn[2 * M - 1 - k], Pn[2 * M - 1 - j], false); }
-            else { tri(a, Pn[j], Pn[2 * M - 1 - j], Pn[k], false); tri(a, Pn[k], Pn[2 * M - 1 - j], Pn[2 * M - 1 - k], false); }
+          var roots = {}, first = null, copy;
+          for (i = 0; i < L.length; i++) {
+            var r = find(L[i]);
+            if (first === null) first = r;
+            if (r === first) continue;
+            if (roots[r] === undefined) { roots[r] = V.length / 3; V.push(V[v * 3], V[v * 3 + 1], V[v * 3 + 2]); }
+            copy = roots[r];
+            for (u = 0; u < 3; u++) if (TI[L[i] * 3 + u] === v) TI[L[i] * 3 + u] = copy;
           }
         }
-        band3(layers[0], true);
-        var endR = layers[layers.length - 1];
-        if (tip === 2) band3(endR, false);
-        else {
-          var cs = [0, 0, 0], tE = dirAt(L);
-          endR.P.forEach(function (q) { cs[0] += q[0]; cs[1] += q[1]; cs[2] += q[2]; });
-          cs = [cs[0] / endR.P.length + tE[0] * 0.3, cs[1] / endR.P.length + tE[1] * 0.3, cs[2] / endR.P.length + tE[2] * 0.3];
-          for (j = 0; j < endR.P.length; j++) tri(a, endR.P[j], cs, endR.P[(j + 1) % endR.P.length], false);
+      }
+
+      // Surface nets on a regular grid. f(y) returns a function of (x, z); negative is solid. One vertex per cell the surface
+      // crosses (the mean of its edge crossings) and one quad per grid edge it crosses, so the mesh is closed and light. The
+      // plane y = 0 is a grid plane and is made exactly flat, so the glove stands on its cuff.
+      var CORN = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]];
+      var CEDGE = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+      function polygonise(slice, lo, hi, h) {
+        var nx = Math.ceil((hi[0] - lo[0]) / h) + 1, ny = Math.ceil((hi[1] - lo[1]) / h) + 1, nz = Math.ceil((hi[2] - lo[2]) / h) + 1;
+        var Fv = new Float32Array(nx * ny * nz), n = 0, i, j, k, g, x, y, v;
+        for (j = 0; j < ny; j++) {
+          y = lo[1] + j * h;
+          if (y < -0.5 * h) { for (i = 0; i < nx * nz; i++) Fv[n++] = h; continue; }
+          g = slice(y);
+          for (i = 0; i < nx; i++) {
+            x = lo[0] + i * h;
+            for (k = 0; k < nz; k++) { v = g(x, lo[2] + k * h); Fv[n++] = v === 0 ? 1e-5 : v; }
+          }
         }
-        return orient(a);
+        var cx = nx - 1, cy = ny - 1, cz = nz - 1, cell = new Int32Array(cx * cy * cz).fill(-1), V = [], m, e, c0, c1, f0, f1, tt, cnt, sx, sy, sz, mask;
+        function nid(a, b, c) { return (b * nx + a) * nz + c; }
+        for (j = 0; j < cy; j++) for (i = 0; i < cx; i++) for (k = 0; k < cz; k++) {
+          mask = 0;
+          for (m = 0; m < 8; m++) if (Fv[nid(i + CORN[m][0], j + CORN[m][1], k + CORN[m][2])] < 0) mask |= 1 << m;
+          if (mask === 0 || mask === 255) continue;
+          sx = 0; sy = 0; sz = 0; cnt = 0;
+          for (e = 0; e < 12; e++) {
+            c0 = CEDGE[e][0]; c1 = CEDGE[e][1];
+            if (j === 0 && !(CORN[c0][1] && CORN[c1][1])) continue;   // the row under the bed plane only uses its top face, so the bottom is flat and the wall is not pulled in
+            if (((mask >> c0) & 1) === ((mask >> c1) & 1)) continue;
+            f0 = Fv[nid(i + CORN[c0][0], j + CORN[c0][1], k + CORN[c0][2])]; f1 = Fv[nid(i + CORN[c1][0], j + CORN[c1][1], k + CORN[c1][2])];
+            tt = f0 / (f0 - f1);
+            sx += CORN[c0][0] + (CORN[c1][0] - CORN[c0][0]) * tt; sy += CORN[c0][1] + (CORN[c1][1] - CORN[c0][1]) * tt; sz += CORN[c0][2] + (CORN[c1][2] - CORN[c0][2]) * tt;
+            cnt++;
+          }
+          cell[(j * cx + i) * cz + k] = V.length / 3;
+          if (cnt === 0) V.push(lo[0] + (i + 0.5) * h, 0, lo[2] + (k + 0.5) * h);
+          else V.push(lo[0] + (i + sx / cnt) * h, j === 0 ? 0 : lo[1] + (j + sy / cnt) * h, lo[2] + (k + sz / cnt) * h);
+        }
+        var out = [], TI = [];
+        function cid(a, b, c) { return cell[(b * cx + a) * cz + c]; }
+        function quad(q0, q1, q2, q3, flip) {
+          if (flip) { var t = q1; q1 = q3; q3 = t; }
+          var d02 = Math.pow(V[q0 * 3] - V[q2 * 3], 2) + Math.pow(V[q0 * 3 + 1] - V[q2 * 3 + 1], 2) + Math.pow(V[q0 * 3 + 2] - V[q2 * 3 + 2], 2);
+          var d13 = Math.pow(V[q1 * 3] - V[q3 * 3], 2) + Math.pow(V[q1 * 3 + 1] - V[q3 * 3 + 1], 2) + Math.pow(V[q1 * 3 + 2] - V[q3 * 3 + 2], 2);
+          if (d02 <= d13) TI.push(q0, q1, q2, q0, q2, q3); else TI.push(q0, q1, q3, q1, q2, q3);
+        }
+        var a0, b0;
+        for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) for (k = 0; k < nz; k++) {
+          a0 = Fv[nid(i, j, k)] < 0;
+          if (i < nx - 1 && j > 0 && j < ny - 1 && k > 0 && k < nz - 1) {
+            b0 = Fv[nid(i + 1, j, k)] < 0;
+            if (a0 !== b0) quad(cid(i, j - 1, k - 1), cid(i, j, k - 1), cid(i, j, k), cid(i, j - 1, k), !a0);
+          }
+          if (j < ny - 1 && i > 0 && i < nx - 1 && k > 0 && k < nz - 1) {
+            b0 = Fv[nid(i, j + 1, k)] < 0;
+            if (a0 !== b0) quad(cid(i - 1, j, k - 1), cid(i - 1, j, k), cid(i, j, k), cid(i, j, k - 1), !a0);
+          }
+          if (k < nz - 1 && i > 0 && i < nx - 1 && j > 0 && j < ny - 1) {
+            b0 = Fv[nid(i, j, k + 1)] < 0;
+            if (a0 !== b0) quad(cid(i - 1, j - 1, k), cid(i, j - 1, k), cid(i, j, k), cid(i - 1, j, k), !a0);
+          }
+        }
+        // Surface nets can pinch where the surface is thinner than a cell (two sheets share a vertex or an edge). Give each sheet its own vertex.
+        splitPinched(V, TI);
+        // Taubin smoothing (shrink, then inflate) takes the grid ripple out of the surface; the bed plane stays flat
+        var nv = V.length / 3, nb = new Array(nv), it, w, u2, acc = new Float64Array(nv * 3), cntN = new Int32Array(nv), lam, flat = new Uint8Array(nv);
+        for (w = 0; w < nv; w++) { nb[w] = []; if (V[w * 3 + 1] <= 1e-9) flat[w] = 1; }
+        for (w = 0; w < TI.length; w += 3) {
+          for (u2 = 0; u2 < 3; u2++) { nb[TI[w + u2]].push(TI[w + (u2 + 1) % 3], TI[w + (u2 + 2) % 3]); }
+        }
+        for (w = 0; w < nv; w++) { var lst = nb[w].sort(function (p0, p1) { return p0 - p1; }), un = [], z0; for (z0 = 0; z0 < lst.length; z0++) if (!z0 || lst[z0] !== lst[z0 - 1]) un.push(lst[z0]); nb[w] = un; }
+        for (it = 0; it < SMOOTH * 2; it++) {
+          lam = it % 2 ? -0.53 : 0.5;
+          for (w = 0; w < nv; w++) {
+            var l2 = nb[w], q4, ax2 = 0, ay2 = 0, az2 = 0;
+            for (q4 = 0; q4 < l2.length; q4++) { ax2 += V[l2[q4] * 3]; ay2 += V[l2[q4] * 3 + 1]; az2 += V[l2[q4] * 3 + 2]; }
+            acc[w * 3] = ax2 / l2.length - V[w * 3]; acc[w * 3 + 1] = ay2 / l2.length - V[w * 3 + 1]; acc[w * 3 + 2] = az2 / l2.length - V[w * 3 + 2];
+          }
+          for (w = 0; w < nv; w++) { V[w * 3] += lam * acc[w * 3]; if (!flat[w]) V[w * 3 + 1] += lam * acc[w * 3 + 1]; V[w * 3 + 2] += lam * acc[w * 3 + 2]; }
+        }
+        for (w = 0; w < TI.length; w++) out.push(V[TI[w] * 3], V[TI[w] * 3 + 1], V[TI[w] * 3 + 2]);
+        return out;
+      }
+
+      // The finger and thumb layout for the wearable: sizes from the hand, positions across the knuckles.
+      function wearFingers(Lt) {
+        var p = Lt.p, wf = WF, fl = [0.97, 1.05, 1.0, 0.88], lens = [0.97, 1.08, 1.0, 0.8], Rin = [], i, x, span = 0, cx = [];
+        for (i = 0; i < 4; i++) Rin[i] = p.handW / 8 * fl[i] * 0.95 + p.ease / 2;
+        // centres: each finger's outer edge, then the shared wall between neighbours
+        x = 0;
+        for (i = 0; i < 4; i++) { x = i === 0 ? Rin[0] + wf : x + Rin[i - 1] + wf + Rin[i]; cx.push(x); }
+        span = cx[3] + Rin[3] + wf;
+        var mid = span / 2;
+        return { Rin: Rin, cx: cx.map(function (v) { return v - mid; }), span: span, lens: lens, wf: wf };
+      }
+      function wearCones(Lt) {
+        var p = Lt.p, F = Lt.F, tipS = Math.round(p.fTip), nSeg = Math.round(p.fSeg), cones = [], i;
+        var al = -p.fDrop * DEG;
+        for (i = 0; i < 4; i++) {
+          var sg = (i - 1.5) / 1.5 * p.fSplay * DEG, u = [Math.sin(sg) * Math.cos(al), Math.cos(sg) * Math.cos(al), Math.sin(al)];
+          var B = [F.cx[i], Lt.yb, 0], bore = 4;
+          cones.push(makeCone(B, u, p.fLen * F.lens[i], F.Rin[i] + WF, tipS, nSeg, 1.1 + (F.Rin[i] + WF) * 0.03, 8, bore));
+        }
+        // the thumb leaves the thumb-side wall and leans out and a little toward the palm
+        var ang = p.tAngle * DEG, tu = [-Math.sin(ang), Math.cos(ang) * 0.99, -0.12], tl = Math.hypot(tu[0], tu[1], tu[2]);
+        tu = [tu[0] / tl, tu[1] / tl, tu[2] / tl];
+        var Rt = p.handW / 8 * 1.0 * 0.95 + p.ease / 2 + WF, y0 = Lt.Hc + 0.3 * Lt.Hp + 6;
+        var B2 = [-(Lt.G.px - 10), y0, 1];
+        var th = makeCone(B2, tu, p.tLen, Rt, tipS === 1 ? 0 : tipS, 2, 1.4, 24, 24);   // a leaning spike would need a bore that cannot close under the roof, so the thumb takes a dome
+        th.y0 = y0; th.y1 = y0 + p.tLen * tu[1] + Rt;
+        var s0 = th.L * 0.72, sTop = th.L * 0.86, dy = (sTop - s0) * tu[1], hs = Math.hypot(tu[0], tu[2]) / tu[1];
+        th.roof = [B2[0] + tu[0] * s0, B2[2] + tu[2] * s0, B2[1] + tu[1] * s0 + dy * (1 + hs / ROOF)];
+        return { cones: cones, thumb: th };
+      }
+
+      // The glove takes about a second to mesh and only the Fit, Cuff and Fingers tabs change it, so the last result is kept
+      // and reused while a gem, plate or colour slider moves.
+      var gloveCache = { key: '', val: null };
+      function gloveKey(Lt) {
+        var p = Lt.p, parts = [], k;
+        for (k in p) if (!/^(g\d_|gemSel$|gemLayout$|orbit|plate|core$|studs$|metal$|accent$|scale$|hand$|build$)/.test(k)) parts.push(k + '=' + p[k]);
+        return parts.sort().join('|') + '|' + [Lt.G.px, Lt.G.pz, Lt.G.wz, Lt.Hc, Lt.Hv, Lt.yb, Lt.yT, Lt.F.span].join(',');
+      }
+      function gloveMeshes(Lt) {
+        var ck = gloveKey(Lt);
+        if (gloveCache.key === ck) return gloveCache.val;
+        var val = gloveMeshesBuild(Lt);
+        gloveCache = { key: ck, val: val };
+        return val;
+      }
+      function gloveMeshesBuild(Lt) {
+        var F = Lt.F, hi, lo, th = F.thumb, G = Lt.G, p = Lt.p, h = CELL, i;
+        var px = G.px + 2, span = Math.max(Lt.yT + 2 + p.fLen * 1.1 + 4, th.y1 + 6);
+        var reach = Math.sin(Math.max(p.fSplay, 0) * DEG) * p.fLen;
+        var xl = Math.min(-px - 2 - reach, th.B[0] + th.u[0] * th.L - th.Ro - 2), xh = px + 2 + reach;
+        var zr = Math.max(G.pz, G.wz) + 6, zlean = Math.sin(p.fDrop * DEG) * p.fLen + 12;
+        lo = [Math.floor(xl / h) * h, -h, Math.floor(-(zr + zlean) / h) * h];
+        hi = [xh + h, span, zr + 2 * h];
+        var tris = polygonise(gloveField(Lt), lo, hi, h);
+        // split into the parts the Color tool shows
+        var arm = [], fin = [], thm = [], n = tris.length, t, cx, cy, cz, s, rho, tc = Lt.F.thumb, j, isF;
+        for (t = 0; t < n; t += 9) {
+          cx = (tris[t] + tris[t + 3] + tris[t + 6]) / 3; cy = (tris[t + 1] + tris[t + 4] + tris[t + 7]) / 3; cz = (tris[t + 2] + tris[t + 5] + tris[t + 8]) / 3;
+          s = (cx - tc.B[0]) * tc.u[0] + (cy - tc.B[1]) * tc.u[1] + (cz - tc.B[2]) * tc.u[2];
+          var qx = cx - tc.B[0] - s * tc.u[0], qy = cy - tc.B[1] - s * tc.u[1], qz = cz - tc.B[2] - s * tc.u[2];
+          rho = Math.sqrt(qx * qx + qy * qy + qz * qz);
+          var dst = arm;
+          if (s > 4 && cx < -(G.px - 8) && rho < coneROut(tc, clamp(s, 0, tc.L)) + 1.2 && cy > Lt.Hc) dst = thm;
+          else if (cy > Lt.yT) dst = fin;
+          for (j = 0; j < 9; j++) dst.push(tris[t + j]);
+        }
+        return { arm: arm, fingers: fin, thumb: thm };
       }
 
       function buildModel(p) {
         var Lt = layout(p), S = Lt.S, body = {}, yT = Lt.yT, wear = Lt.wear;
-        body.arm = [wear ? armWear(Lt) : armShell(Lt)];
+        if (!wear) body.arm = [armShell(Lt)];
         body.plate = [plateShell(Lt)];
         var zTop1 = Lt.zf + Lt.T, zTop2 = zTop1 + (Lt.raised ? Lt.ht2 : 0);
         // settings
@@ -793,16 +1011,12 @@
         var lens = [0.97, 1.08, 1.0, 0.8], rads = [8.4, 9.0, 8.6, 7.4], fingers = [], x = -(PALM_X - 1.8), idx;
         var tipS = Math.round(p.fTip), nSeg = Math.round(p.fSeg), studs = [];
         if (wear) {
-          var px = Lt.G.px, gapF = 2.5, sumR = rads[0] + rads[1] + rads[2] + rads[3], k = (2 * (px - 4) - 3 * gapF) / (2 * sumR), Rc = CURVE_R[Math.round(p.fCurve)], xw = -(px - 4);
-          for (idx = 0; idx < 4; idx++) {
-            var w = rads[idx] * k, xc = xw + w, sgw = (idx - 1.5) / 1.5 * p.fSplay * DEG, zA = Lt.dorsalZ(xc, yT);
-            fingers.push(plateLimb({ x: xc, y: yT - 1.5, z: zA - Rc, sigma: sgw, curl: -p.fDrop * DEG, L: p.fLen * lens[idx], w: w, R: Rc, t: 2.4, nSeg: nSeg, tip: tipS, bead: 1.1 + rads[idx] * 0.03 }));
-            if (p.studs > 0) studs.push(stud(Math.round(p.studs), xc, yT - 12, Lt.dorsalZ(xc, yT - 12), 3.4, 1.2, true));
-            xw = xc + w + gapF;
-          }
-          body.fingers = fingers;
+          var gm = gloveMeshes(Lt);
+          body.arm = [gm.arm];
+          body.fingers = [gm.fingers];
+          body.thumb = [gm.thumb];
+          if (p.studs > 0) for (idx = 0; idx < 4; idx++) studs.push(stud(Math.round(p.studs), Lt.F.cx[idx], yT - 8, Lt.P.dorsalZ(Lt.F.cx[idx], yT - 8), 3.4, 1.2, true));
           body.knuckles = studs;
-          body.thumb = [];
         } else {
           for (idx = 0; idx < 4; idx++) {
             var r = rads[idx], cxf = x + r, sg = (idx - 1.5) / 1.5 * p.fSplay * DEG;
@@ -837,7 +1051,9 @@
         order.forEach(function (o) {
           var list = raw[o[0]];
           if (!list || !list.length) return;
-          Lt.meshes.push({ name: o[0], positions: join(list.map(fixArr)), color: o[2] ? accent : metal });
+          var mesh = { name: o[0], positions: join(list.map(fixArr)), color: o[2] ? accent : metal };
+          if (Lt.wear && (o[0] === 'arm' || o[0] === 'fingers' || o[0] === 'thumb')) mesh.smoothGroup = 'glove';   // one closed surface, split so each part can be painted
+          Lt.meshes.push(mesh);
         });
         Lt.gemMeshes = [];
         for (var i = 0; i < 5; i++) {
@@ -921,7 +1137,7 @@
         build: 0, wristW: 62, handW: 84, handT: 30, ease: 1.5, cuffOpen: 55, handOpen: 72, palmH: 90,
         cuffH: 50, flare: 6, cuffForm: 0, bands: 2,
         plateShape: 0, plateR: 33, plateT: 3.5, core: 0, gemLayout: 0, orbit: 1, orbitR: 24, orbitTurn: 0,
-        fLen: 62, fSeg: 3, fTip: 0, fSplay: 3, fCurve: 1, fDrop: 8, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
+        fLen: 52, fSeg: 3, fTip: 0, fSplay: 3, fDrop: 8, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
       };
       function gemKeys(i, v) { var o = {}; Object.keys(v).forEach(function (k) { o['g' + i + '_' + k] = v[k]; }); return o; }
       [0, 1, 2, 3, 4].forEach(function (i) { Object.assign(DEFAULTS, gemKeys(i, gemDefault(i))); });
@@ -933,11 +1149,11 @@
         return o;
       }
       var STYLES = [
-        { label: 'Orrery', icon: STYLE_ICONS[0], values: Object.assign({ cuffForm: 0, bands: 2, plateShape: 0, core: 0, gemLayout: 0, orbit: 1, fTip: 0, fCurve: 1, studs: 0, metal: 0, accent: 0 }, gemsAll({ shape: 0, cut: 0, set: 0, turn: 0 })) },
-        { label: 'Shardcrown', icon: STYLE_ICONS[1], values: Object.assign({ cuffForm: 1, bands: 1, plateShape: 3, core: 0, gemLayout: 4, orbitR: 20, orbit: 0, fTip: 1, fCurve: 0, studs: 2, fCurl: 12, fDrop: 6, metal: 3, accent: 1 },
+        { label: 'Orrery', icon: STYLE_ICONS[0], values: Object.assign({ cuffForm: 0, bands: 2, plateShape: 0, core: 0, gemLayout: 0, orbit: 1, fTip: 0, studs: 0, metal: 0, accent: 0 }, gemsAll({ shape: 0, cut: 0, set: 0, turn: 0 })) },
+        { label: 'Shardcrown', icon: STYLE_ICONS[1], values: Object.assign({ cuffForm: 1, bands: 1, plateShape: 3, core: 0, gemLayout: 4, orbitR: 20, orbit: 0, fTip: 1, studs: 2, fCurl: 12, fDrop: 6, metal: 3, accent: 1 },
           gemsAll({ shape: 2, cut: 3, set: 2, turn: 0 }, { 0: { shape: 2, height: 0.8, size: 6 }, 1: { shape: 4, size: 3.1 }, 2: { shape: 4, size: 3.1 }, 3: { shape: 4, size: 3.1 }, 4: { shape: 4, size: 3.1 } })) },
-        { label: 'Bloomguard', icon: STYLE_ICONS[2], values: Object.assign({ cuffForm: 3, bands: 0, plateShape: 4, core: 0, gemLayout: 3, orbit: 1, fTip: 0, fCurve: 2, studs: 1, fCurl: 6, fDrop: 10, metal: 2, accent: 0 }, gemsAll({ shape: 1, cut: 1, set: 3, turn: 0 }, { 0: { shape: 0, size: 5.6 }, 1: { size: 3.0 }, 2: { size: 3.0 }, 3: { size: 3.0 }, 4: { size: 3.0 } })) },
-        { label: 'Cogwork', icon: STYLE_ICONS[3], values: Object.assign({ cuffForm: 4, bands: 3, plateShape: 1, core: 0, gemLayout: 1, orbit: 1, fTip: 2, fCurve: 0, studs: 1, fCurl: 0, fDrop: 4, metal: 1, accent: 2 }, gemsAll({ shape: 3, cut: 2, set: 4, turn: 0 }, { 0: { shape: 2, size: 5.0 }, 1: { size: 2.8 }, 2: { size: 2.8 }, 3: { size: 2.8 }, 4: { size: 2.8 } })) }
+        { label: 'Bloomguard', icon: STYLE_ICONS[2], values: Object.assign({ cuffForm: 3, bands: 0, plateShape: 4, core: 0, gemLayout: 3, orbit: 1, fTip: 0, studs: 1, fCurl: 6, fDrop: 10, metal: 2, accent: 0 }, gemsAll({ shape: 1, cut: 1, set: 3, turn: 0 }, { 0: { shape: 0, size: 5.6 }, 1: { size: 3.0 }, 2: { size: 3.0 }, 3: { size: 3.0 }, 4: { size: 3.0 } })) },
+        { label: 'Cogwork', icon: STYLE_ICONS[3], values: Object.assign({ cuffForm: 4, bands: 3, plateShape: 1, core: 0, gemLayout: 1, orbit: 1, fTip: 2, studs: 1, fCurl: 0, fDrop: 4, metal: 1, accent: 2 }, gemsAll({ shape: 3, cut: 2, set: 4, turn: 0 }, { 0: { shape: 2, size: 5.0 }, 1: { size: 2.8 }, 2: { size: 2.8 }, 3: { size: 2.8 }, 4: { size: 2.8 } })) }
       ];
 
       function gemParams() {
@@ -1051,7 +1267,7 @@
         { tab: 'fit', group: 'Your hand (millimetres, measured flat)', key: 'palmH', label: 'Wrist to knuckles', unit: ' mm', min: 70, max: 105, step: 1, value: DEFAULTS.palmH, showIf: wearOnly },
         { tab: 'fit', group: 'Comfort', key: 'ease', label: 'Room around the hand (each side)', unit: ' mm', min: 0, max: 4, step: 0.5, value: DEFAULTS.ease, showIf: wearOnly },
         { tab: 'fit', group: 'Comfort', key: 'cuffOpen', label: 'Cuff opening (half angle; smaller grips harder, bigger goes on easier)', unit: '°', min: 35, max: 70, step: 1, value: DEFAULTS.cuffOpen, showIf: wearOnly },
-        { tab: 'fit', group: 'Comfort', key: 'handOpen', label: 'Hand shield opening (half angle)', unit: '°', min: 55, max: 90, step: 1, value: DEFAULTS.handOpen, showIf: wearOnly },
+        { tab: 'fit', group: 'Comfort', key: 'handOpen', label: 'Palm window width (half angle)', unit: '°', min: 55, max: 90, step: 1, value: DEFAULTS.handOpen, showIf: wearOnly },
 
         { tab: 'cuff', group: 'Cuff', key: 'cuffH', label: 'Forearm cuff height', unit: ' mm', min: 34, max: 80, step: 1, value: DEFAULTS.cuffH },
         { tab: 'cuff', group: 'Cuff', key: 'flare', label: 'Base flare (wider foot)', unit: ' mm', min: 0, max: 12, step: 1, value: DEFAULTS.flare },
@@ -1063,15 +1279,14 @@
         { tab: 'plate', group: 'Plate', key: 'plateT', label: 'Thickness', unit: ' mm', min: 3, max: 6, step: 0.5, value: DEFAULTS.plateT },
         { tab: 'plate', group: 'Plate', key: 'core', label: 'Core (Orbit, Cross, Row and Zigzag layouts)', min: 0, max: 1, step: 1, value: 0, options: ['Flat', 'Raised'], showIf: function (p) { return CORE_CENTRED[Math.round(p.gemLayout)]; } },
 
-        { tab: 'fingers', group: 'Fingers', key: 'fLen', label: 'Finger length', unit: ' mm', min: 40, max: 80, step: 1, value: DEFAULTS.fLen },
-        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour plates per finger', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
+        { tab: 'fingers', group: 'Fingers', key: 'fLen', label: 'Finger length (above the knuckle plate)', unit: ' mm', min: 40, max: 80, step: 1, value: DEFAULTS.fLen },
+        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour ridges per finger', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
         { tab: 'fingers', group: 'Fingers', key: 'fTip', label: 'Fingertip', min: 0, max: 2, step: 1, value: 0, format: function (v) { return TIP_NAMES[v]; } },
         { tab: 'fingers', group: 'Fingers', key: 'fSplay', label: 'Spread', unit: '°', min: 0, max: 8, step: 1, value: DEFAULTS.fSplay },
-        { tab: 'fingers', group: 'Fingers', key: 'fCurve', label: 'Finger plate curve', min: 0, max: 2, step: 1, value: DEFAULTS.fCurve, format: function (v) { return CURVE_NAMES[v]; }, showIf: wearOnly },
-        { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the hand (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
+        { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the palm (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
         { tab: 'fingers', group: 'Fingers', key: 'fCurl', label: 'Curl forward (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fCurl, showIf: displayOnly },
-        { tab: 'fingers', group: 'Thumb', key: 'tLen', label: 'Thumb length', unit: ' mm', min: 28, max: 55, step: 1, value: DEFAULTS.tLen, showIf: displayOnly },
-        { tab: 'fingers', group: 'Thumb', key: 'tAngle', label: 'Thumb angle out (over 50 needs supports)', unit: '°', min: 20, max: 55, step: 1, value: DEFAULTS.tAngle, showIf: displayOnly },
+        { tab: 'fingers', group: 'Thumb', key: 'tLen', label: 'Thumb length', unit: ' mm', min: 28, max: 55, step: 1, value: DEFAULTS.tLen },
+        { tab: 'fingers', group: 'Thumb', key: 'tAngle', label: 'Thumb angle out (over 50 needs supports)', unit: '°', min: 20, max: 55, step: 1, value: DEFAULTS.tAngle },
         { tab: 'fingers', group: 'Knuckles', key: 'studs', label: 'Knuckle studs', min: 0, max: 2, step: 1, value: 0, format: function (v) { return STUD_NAMES[v]; } },
 
         { tab: 'gems', group: 'Positions', key: 'gemLayout', label: 'Gem layout', min: 0, max: 5, step: 1, value: DEFAULTS.gemLayout,
@@ -1126,10 +1341,10 @@
               box.appendChild(cards);
               box.appendChild(api.takeParams());
             } },
-          { id: 'fit', label: 'Fit', hint: 'Your hand size, and how snugly the wearable shell grips' },
+          { id: 'fit', label: 'Fit', hint: 'Your hand size, how snugly the glove grips, and the palm window your hand slides in through' },
           { id: 'cuff', label: 'Cuff', hint: 'The forearm cuff: height, flare, surface and raised bands' },
           { id: 'plate', label: 'Plate', hint: 'The hand plate: outline, size, thickness and core' },
-          { id: 'fingers', label: 'Fingers', hint: 'Finger plates, knuckle studs and (on the display piece) the thumb' },
+          { id: 'fingers', label: 'Fingers', hint: 'Finger tubes, thumb and knuckle studs' },
           { id: 'gems', label: 'Gems', hint: 'Where the gems sit, then each gem\'s shape, cut, size, colour and setting',
             mount: function (box, api) {
               var note = document.createElement('p');
@@ -1180,6 +1395,11 @@
           Lt.meshes.forEach(function (m) { for (var k = 2; k < m.positions.length; k += 3) if (m.positions[k] > zMax) zMax = m.positions[k]; });
           gems.forEach(function (g) { var w = g.size * 2 + 4; xs.push(w); total += w; });
           x = -total / 2;
+          if (Lt.wear) {   // the glove prints as one piece
+            var gl = out.filter(function (m) { return m.smoothGroup === 'glove'; });
+            out = out.filter(function (m) { return m.smoothGroup !== 'glove'; });
+            out.unshift({ name: 'arm', positions: join(gl.map(function (m) { return m.positions; })), color: gl[0].color });
+          }
           var maxR = 0;
           gems.forEach(function (g) { maxR = Math.max(maxR, g.size); });
           gems.forEach(function (g, n) {
