@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-138 Character Creator // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+  <script src="shared/fonts-pet.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    // Character Creator: a tabletop-style mini built like a video-game character. Name, race, class, pose, companion and base.
+    // Every piece is its own closed shell that overlaps its neighbours; the engine supplies the layout, Color tool and exports.
+    (function () {
+      'use strict';
+      // -----------------------------------------------------------------------
+      // Geometry kit. Every primitive is its own closed shell (rings of points skinned pole to pole), so the whole
+      // figure is a pile of watertight solids that overlap where they join; slicers union overlapping shells.
+      // Y up, millimetres, the figure faces +z. Triangles go into plain arrays (9 numbers each).
+      // -----------------------------------------------------------------------
+      var TAU = Math.PI * 2;
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function vmul(a, s) { return [a[0] * s, a[1] * s, a[2] * s]; }
+      function vlen(a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); }
+      function vnorm(a) { var l = vlen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+      function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+      function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+      function vmix(a, b, t) { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+      function rad(d) { return d * Math.PI / 180; }
+
+      // A frame is { o, x, y, z }: local (u, v, w) -> o + u*x + v*y + w*z.
+      function frame(o, dir, hint) {
+        var ey = vnorm(dir), h = hint || [0, 0, 1];
+        if (Math.abs(vdot(ey, vnorm(h))) > 0.97) h = [1, 0, 0];
+        var ex = vnorm(vcross(ey, h)), ez = vcross(ex, ey);
+        return { o: o, x: ex, y: ey, z: ez };
+      }
+      var IDENT = { o: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
+      function at(F, u, v, w) {
+        return [F.o[0] + F.x[0] * u + F.y[0] * v + F.z[0] * w, F.o[1] + F.x[1] * u + F.y[1] * v + F.z[1] * w, F.o[2] + F.x[2] * u + F.y[2] * v + F.z[2] * w];
+      }
+      function spinY(F, deg) {   // turn a frame about the world Y axis (the figure's yaw)
+        var c = Math.cos(rad(deg)), s = Math.sin(rad(deg));
+        function r(p) { return [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c]; }
+        return { o: r(F.o), x: r(F.x), y: r(F.y), z: r(F.z) };
+      }
+
+      function triArea2(a, b, c) { var u = vsub(b, a), v = vsub(c, a), n = vcross(u, v); return n[0] * n[0] + n[1] * n[1] + n[2] * n[2]; }
+      function pushTri(out, a, b, c) {
+        if (triArea2(a, b, c) < 1e-14) return;
+        out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+      // Signed volume of the triangles added since `from`; a negative one means the shell came out inside-out (mirrored frames).
+      function orientFrom(out, from) {
+        var vol = 0, i;
+        for (i = from; i < out.length; i += 9) {
+          vol += out[i] * (out[i + 4] * out[i + 8] - out[i + 5] * out[i + 7]) - out[i + 1] * (out[i + 3] * out[i + 8] - out[i + 5] * out[i + 6]) + out[i + 2] * (out[i + 3] * out[i + 7] - out[i + 4] * out[i + 6]);
+        }
+        if (vol >= 0) return;
+        for (i = from; i < out.length; i += 9) {
+          var t0 = out[i + 3], t1 = out[i + 4], t2 = out[i + 5];
+          out[i + 3] = out[i + 6]; out[i + 4] = out[i + 7]; out[i + 5] = out[i + 8];
+          out[i + 6] = t0; out[i + 7] = t1; out[i + 8] = t2;
+        }
+      }
+      // Skin a list of rings (each an array of seg points; a pole is a ring whose points are all equal).
+      function skin(out, rings) {
+        var from = out.length, k, i, n = rings[0].length;
+        for (k = 0; k + 1 < rings.length; k++) {
+          var A = rings[k], B = rings[k + 1];
+          for (i = 0; i < n; i++) {
+            var j = (i + 1) % n;
+            pushTri(out, A[i], A[j], B[j]);
+            pushTri(out, A[i], B[j], B[i]);
+          }
+        }
+        orientFrom(out, from);
+      }
+      function poleRing(p, n) { var r = [], i; for (i = 0; i < n; i++) r.push(p); return r; }
+      function sgnpow(v, e) { return (v < 0 ? -1 : 1) * Math.pow(Math.abs(v), e); }
+
+      // Superellipsoid (e = 1 ellipsoid, lower = boxier), semi-axes rx, ry, rz in frame F. Poles on the frame's y axis.
+      function blob(out, F, rx, ry, rz, e, nu, nv) {
+        nu = nu || 18; nv = nv || 10; e = e || 1;
+        var rings = [], j, i;
+        for (j = 0; j <= nv; j++) {
+          var v = -Math.PI / 2 + Math.PI * j / nv;
+          if (j === 0) { rings.push(poleRing(at(F, 0, -ry, 0), nu)); continue; }
+          if (j === nv) { rings.push(poleRing(at(F, 0, ry, 0), nu)); continue; }
+          var ring = [];
+          for (i = 0; i < nu; i++) {
+            var u = TAU * i / nu, cv = sgnpow(Math.cos(v), e);
+            ring.push(at(F, rx * cv * sgnpow(Math.cos(u), e), ry * sgnpow(Math.sin(v), e), rz * cv * sgnpow(Math.sin(u), e)));
+          }
+          rings.push(ring);
+        }
+        skin(out, rings);
+      }
+      function ball(out, p, r, nu, nv) { blob(out, { o: p, x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, r, r, r, 1, nu || 12, nv || 7); }
+
+      // Swept tube along a path. rN is the radius along the frame's x (width), rB along its z (thickness); rB may be omitted.
+      // cap0 / cap1: 0 flat, otherwise the length of a rounded dome as a fraction of the radius (1 = hemisphere).
+      function tube(out, pts, rN, rB, seg, cap0, cap1, side) {
+        seg = seg || 10;
+        var n = pts.length, i, k, tans = [], frames = [], rings = [];
+        for (i = 0; i < n; i++) {
+          var a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+          tans.push(vnorm(vsub(b, a)));
+        }
+        var nrm = vnorm(vcross(tans[0], side || [0, 0, 1]));
+        if (vlen(vcross(tans[0], side || [0, 0, 1])) < 1e-3) nrm = vnorm(vcross(tans[0], [1, 0, 0]));
+        for (i = 0; i < n; i++) {
+          var t = tans[i];
+          nrm = vsub(nrm, vmul(t, vdot(nrm, t)));
+          if (vlen(nrm) < 1e-6) nrm = vcross(t, [1, 0, 0]);
+          nrm = vnorm(nrm);
+          frames.push({ n: nrm, b: vcross(t, nrm) });
+        }
+        function ringAt(c, f, a, b, scale) {
+          var r = [], j;
+          for (j = 0; j < seg; j++) {
+            var th = TAU * j / seg, cs = Math.cos(th) * a * scale, sn = Math.sin(th) * b * scale;
+            r.push([c[0] + f.n[0] * cs + f.b[0] * sn, c[1] + f.n[1] * cs + f.b[1] * sn, c[2] + f.n[2] * cs + f.b[2] * sn]);
+          }
+          return r;
+        }
+        function samp(arr, i) { if (!Array.isArray(arr)) return arr; if (arr.length === n) return arr[i]; var t = (n < 2 ? 0 : i / (n - 1)) * (arr.length - 1), k0 = Math.min(arr.length - 2, Math.floor(t)); return arr.length < 2 ? arr[0] : lerp(arr[k0], arr[k0 + 1], t - k0); }
+        function rn(i) { return samp(rN, i); }
+        function rb(i) { return rB ? samp(rB, i) : rn(i); }
+        var domeSteps = [0.5, 1.0, 1.4];
+        if (cap0) {
+          rings.push(poleRing(vsub(pts[0], vmul(tans[0], (rn(0) + rb(0)) / 2 * cap0)), seg));
+          for (k = domeSteps.length - 1; k >= 0; k--) {
+            var ph = domeSteps[k];
+            rings.push(ringAt(vsub(pts[0], vmul(tans[0], (rn(0) + rb(0)) / 2 * cap0 * Math.sin(ph))), frames[0], rn(0), rb(0), Math.cos(ph)));
+          }
+        } else rings.push(poleRing(pts[0], seg));
+        for (i = 0; i < n; i++) rings.push(ringAt(pts[i], frames[i], rn(i), rb(i), 1));
+        if (cap1) {
+          var L = n - 1;
+          for (k = 0; k < domeSteps.length; k++) {
+            var ph2 = domeSteps[k];
+            rings.push(ringAt(vadd(pts[L], vmul(tans[L], (rn(L) + rb(L)) / 2 * cap1 * Math.sin(ph2))), frames[L], rn(L), rb(L), Math.cos(ph2)));
+          }
+          rings.push(poleRing(vadd(pts[L], vmul(tans[L], (rn(L) + rb(L)) / 2 * cap1)), seg));
+        } else rings.push(poleRing(pts[L = n - 1], seg));
+        skin(out, rings);
+      }
+      // Smooth a polyline with Catmull-Rom so bent tubes (tails, horns, capes) have no kinks.
+      function curve(pts, per) {
+        per = per || 4;
+        var out = [], i, j;
+        for (i = 0; i + 1 < pts.length; i++) {
+          var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+          for (j = 0; j < per; j++) {
+            var t = j / per, t2 = t * t, t3 = t2 * t, q = [];
+            for (var d = 0; d < 3; d++) q.push(0.5 * ((2 * p1[d]) + (-p0[d] + p2[d]) * t + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * t2 + (-p0[d] + 3 * p1[d] - 3 * p2[d] + p3[d]) * t3));
+            out.push(q);
+          }
+        }
+        out.push(pts[pts.length - 1]);
+        return out;
+      }
+      function ramp(a, b, n) { var r = [], i; for (i = 0; i < n; i++) r.push(lerp(a, b, n < 2 ? 0 : i / (n - 1))); return r; }
+      function bell(a, mid, b, n) {   // radii that swell in the middle
+        var r = [], i; for (i = 0; i < n; i++) { var t = n < 2 ? 0 : i / (n - 1); r.push(t < 0.5 ? lerp(a, mid, t * 2) : lerp(mid, b, (t - 0.5) * 2)); }
+        return r;
+      }
+      // A limb: tube from a to b with a swelling middle.
+      function limb(out, a, b, ra, rb, mid, seg, cap0, cap1) {
+        var m = vmix(a, b, 0.5);
+        tube(out, [a, m, b], [ra, mid || (ra + rb) / 2 * 1.06, rb], null, seg || 9, cap0 === undefined ? 1 : cap0, cap1 === undefined ? 1 : cap1);
+      }
+      // Revolve a profile [[r, y], ...] (bottom to top) about the frame's y axis. r = 0 at an end makes a pole, otherwise a flat cap.
+      function lathe(out, F, prof, seg) {
+        seg = seg || 20;
+        var rings = [], i, j, m = prof.length;
+        if (prof[0][0] > 1e-6) rings.push(poleRing(at(F, 0, prof[0][1], 0), seg));
+        for (i = 0; i < m; i++) {
+          if (prof[i][0] < 1e-6) { rings.push(poleRing(at(F, 0, prof[i][1], 0), seg)); continue; }
+          var r = [];
+          for (j = 0; j < seg; j++) { var a = TAU * j / seg; r.push(at(F, prof[i][0] * Math.cos(a), prof[i][1], prof[i][0] * Math.sin(a))); }
+          rings.push(r);
+        }
+        if (prof[m - 1][0] > 1e-6) rings.push(poleRing(at(F, 0, prof[m - 1][1], 0), seg));
+        skin(out, rings);
+      }
+      // A bent cone: a tube that tapers from r0 to r1 along a path (hats, horns, ears, tails).
+      function taper(out, pts, r0, r1, seg, cap1, flat) {
+        var n = pts.length, rs = ramp(r0, r1, n), rb = flat ? rs.map(function (r) { return r * flat; }) : null;
+        tube(out, pts, rs, rb, seg || 8, 0, cap1 === undefined ? 1 : cap1);
+      }
+
+
+      // -----------------------------------------------------------------------
+      // Data: palette colours, races, classes, poses. All names are generic fantasy terms; every shape is original.
+      // -----------------------------------------------------------------------
+      var C = { skin: '#f3c9a5', moss: '#7fb069', steel: '#9aa5b1', blue: '#5b7cfa', red: '#e0566a', brown: '#a0714f', gold: '#f2c14e', dark: '#475569' };
+
+      // h: height multiplier, bulk: body thickness, head: head scale, ears, tusks, snout, tail, horns, beard (default), foot: foot scale.
+      var RACES = [
+        { id: 'human', name: 'Human', h: 1, bulk: 1, head: 1, ears: 'round', skin: C.skin, blurb: 'Adaptable and ordinary in the best way. Balanced build, round ears.' },
+        { id: 'elf', name: 'Elf', h: 1.07, bulk: 0.86, head: 0.97, ears: 'long', skin: C.skin, blurb: 'Tall and slender with long pointed ears.' },
+        { id: 'dwarf', name: 'Dwarf', h: 0.84, bulk: 1.36, head: 1.08, ears: 'round', skin: C.skin, beard: 'long', blurb: 'Short, broad and sturdy, with a big nose and a beard to match.' },
+        { id: 'halfling', name: 'Halfling', h: 0.72, bulk: 1.04, head: 1.2, ears: 'small', skin: C.skin, foot: 1.5, blurb: 'Small and cheerful with an oversized head and big bare feet.' },
+        { id: 'orc', name: 'Orc', h: 1.12, bulk: 1.32, head: 1, ears: 'point', skin: C.moss, tusks: true, blurb: 'Huge shoulders, a heavy jaw and two tusks.' },
+        { id: 'drake', name: 'Drakeling', h: 1.05, bulk: 1.12, head: 1, ears: 'none', skin: C.blue, snout: true, tail: true, horns: true, blurb: 'Scaled and snouted, with swept-back horns and a tail that props the figure up.' }
+      ];
+
+      // gear: head (headgear), body (outfit style), cape, W / O (weapon and off-hand items), extra, colours.
+      var CLASSES = [
+        { id: 'barbarian', name: 'Barbarian', blurb: 'Bare-chested, horned helm, great axe.', head: 'horns', body: 'bare', cape: 'fur', W: 'axe', O: 'fist', hair: 'Long', col: { outfit: C.brown, cape: C.dark, armor: C.steel, hair: C.brown } },
+        { id: 'bard', name: 'Bard', blurb: 'Feathered hat, rapier, a lute slung on the back.', head: 'bardhat', body: 'tunic', cape: 'short', W: 'rapier', O: 'fist', extra: 'lute', hair: 'Short', col: { outfit: C.red, cape: C.blue, armor: C.steel, hair: C.brown } },
+        { id: 'cleric', name: 'Cleric', blurb: 'Mace, round shield with a sun, a holy symbol.', head: 'circlet', body: 'robe', cape: 0, W: 'mace', O: 'roundshield', extra: 'symbol', hair: 'Short', col: { outfit: C.skin, cape: C.gold, armor: C.steel, hair: C.brown } },
+        { id: 'druid', name: 'Druid', blurb: 'Antler crown, leafy poncho, a forked staff.', head: 'antlers', body: 'tunic', cape: 'poncho', W: 'forkstaff', O: 'fist', hair: 'Long', col: { outfit: C.moss, cape: C.moss, armor: C.steel, hair: C.brown } },
+        { id: 'fighter', name: 'Fighter', blurb: 'Crested helm, breastplate, sword and shield.', head: 'helm', body: 'armor', cape: 0, W: 'sword', O: 'kiteshield', hair: 'Short', col: { outfit: C.blue, cape: C.red, armor: C.steel, hair: C.brown } },
+        { id: 'monk', name: 'Monk', blurb: 'Headband, wrapped fists, a plain bo staff.', head: 'band', body: 'bare', cape: 0, W: 'bostaff', O: 'fist', hair: 'Topknot', col: { outfit: C.gold, cape: C.gold, armor: C.steel, hair: C.dark } },
+        { id: 'paladin', name: 'Paladin', blurb: 'Winged helm, long cape, sword and cross shield.', head: 'winged', body: 'armor', cape: 'long', W: 'sword', O: 'crossshield', hair: 'Short', col: { outfit: C.gold, cape: C.blue, armor: C.steel, hair: C.gold } },
+        { id: 'ranger', name: 'Ranger', blurb: 'Hooded cloak, longbow, a quiver of arrows.', head: 'hood', body: 'tunic', cape: 'poncho', W: 'knife', O: 'bow', extra: 'quiver', hair: 'Short', col: { outfit: C.moss, cape: C.moss, armor: C.steel, hair: C.brown } },
+        { id: 'rogue', name: 'Rogue', blurb: 'Deep hood, a dagger in each hand, short cloak.', head: 'hood', body: 'tunic', cape: 'short', W: 'dagger', O: 'dagger', extra: 'pouch', hair: 'Short', col: { outfit: C.dark, cape: C.dark, armor: C.steel, hair: C.dark } },
+        { id: 'sorcerer', name: 'Sorcerer', blurb: 'Wild hair, a floating orb of raw magic.', head: 'none', body: 'tunic', cape: 'short', W: 'orb', O: 'fist', hair: 'Mohawk', col: { outfit: C.red, cape: C.gold, armor: C.steel, hair: C.red } },
+        { id: 'warlock', name: 'Warlock', blurb: 'Horned hood, a pact tome and a horned staff.', head: 'hornhood', body: 'robe', cape: 'poncho', W: 'hornstaff', O: 'tome', hair: 'Short', col: { outfit: C.dark, cape: C.dark, armor: C.steel, hair: C.dark } },
+        { id: 'wizard', name: 'Wizard', blurb: 'Pointed hat, long robe, a crystal staff.', head: 'wizhat', body: 'robe', cape: 0, W: 'crystalstaff', O: 'fist', hair: 'Long', beard: 'long', col: { outfit: C.blue, cape: C.blue, armor: C.steel, hair: C.steel } }
+      ];
+
+      // Poses for a 32 mm human, weapon side +x (mirrored when left-handed). Positions are the joints (mm, feet at y = 0).
+      // P pelvis, C chest, N neck, Hd head; WL / OL = weapon-side / off-side leg { k knee, a ankle, yaw of the foot };
+      // Wr / Or = raised weapon / off arm { e elbow, h hand, d item direction }; Ws = the weapon arm when a staff is planted on the bed.
+      // Rules that keep a pose support-free: a raised forearm climbs at 55 degrees or more, an elbow tucks against the torso,
+      // hands that hang low are fused to the hip, a shield, a bow or a planted staff that reaches the bed.
+      var POSES = [
+        { id: 'heroic', name: 'Heroic stand', plant: true,
+          P: [0, 15.6, 0], C: [0, 21.8, 0.2], N: [0, 26.4, 0.4], Hd: [0, 29.4, 0.6], yaw: 10,
+          WL: { k: [2.7, 8.7, 1.3], a: [4.0, 2.3, 0.9], yaw: 12 }, OL: { k: [-2.5, 8.7, 0.9], a: [-3.6, 2.3, 0.4], yaw: -10 },
+          Wr: { e: [4.2, 20.6, 1.1], h: [5.7, 23.8, 3.0], d: [0.1, 1, 0.12] }, Ws: { e: [5.4, 20.0, 0.9], h: [6.6, 17.0, 3.0], d: [0, 1, 0.03] },
+          Or: { e: [-4.2, 20.6, 1.0], h: [-5.6, 23.4, 2.8], d: [-0.1, 1, 0.4] }, shield: [-7.2, 3.0, 18] },
+        { id: 'ready', name: 'Battle ready', plant: true,
+          P: [0, 14.8, -0.4], C: [0, 21.0, 0.9], N: [0, 25.5, 1.8], Hd: [0, 28.4, 2.4], yaw: 5,
+          WL: { k: [2.9, 8.3, 3.4], a: [3.5, 2.3, 4.3], yaw: 8 }, OL: { k: [-2.8, 8.3, -1.4], a: [-3.8, 2.3, -3.4], yaw: -25 },
+          Wr: { e: [4.2, 19.4, 0.9], h: [5.4, 22.8, 2.8], d: [0.08, 1, 0.55] }, Ws: { e: [5.2, 19.6, 0.9], h: [6.3, 17.2, 3.4], d: [0, 1, 0.1] },
+          Or: { e: [-4.2, 19.6, 0.7], h: [-5.6, 22.6, 2.6], d: [-0.1, 1, 0.5] }, shield: [-7.2, 4.4, 24] },
+        { id: 'attack', name: 'Lunge strike', plant: false,
+          P: [0, 13.4, 0.6], C: [0, 19.6, 1.3], N: [0, 24.0, 2.1], Hd: [0, 27.0, 2.7], yaw: 8,
+          WL: { k: [3.0, 7.2, 5.6], a: [3.6, 2.3, 6.4], yaw: 5 }, OL: { k: [-3.2, 8.2, -3.0], a: [-4.0, 2.3, -6.6], yaw: -30 },
+          Wr: { e: [4.4, 18.6, 0.2], h: [5.7, 21.8, 1.5], d: [0.15, 1, 0.85] }, Ws: { e: [4.4, 18.6, 0.2], h: [5.7, 21.8, 1.5], d: [0.15, 1, 0.85] },
+          Or: { e: [-4.3, 18.6, 0.4], h: [-5.5, 21.6, 1.7], d: [-0.1, 1, 0.6] }, shield: [-7.4, 6.2, 28] },
+        { id: 'casting', name: 'Casting', plant: false,
+          P: [0, 15.6, 0], C: [0, 21.8, 0], N: [0, 26.4, 0.2], Hd: [0, 29.6, 0.5], yaw: 0,
+          WL: { k: [3.0, 8.6, 0.8], a: [4.4, 2.3, 0.4], yaw: 12 }, OL: { k: [-3.0, 8.6, 0.8], a: [-4.4, 2.3, 0.4], yaw: -12 },
+          Wr: { e: [4.3, 20.4, 0.5], h: [7.2, 24.6, 1.0], d: [0.3, 1, 0.1] }, Ws: { e: [4.3, 20.4, 0.5], h: [7.2, 24.6, 1.0], d: [0.3, 1, 0.1] },
+          Or: { e: [-4.3, 20.4, 0.5], h: [-7.2, 24.6, 1.0], d: [-0.3, 1, 0.1] }, shield: [-7.2, 3.0, 14] },
+        { id: 'triumph', name: 'Triumph', plant: false,
+          P: [0, 15.8, 0], C: [0, 21.8, 0], N: [0, 26.4, 0.2], Hd: [0, 29.6, 0.4], yaw: 0,
+          WL: { k: [3.6, 8.6, 0.7], a: [5.2, 2.3, 0.4], yaw: 15 }, OL: { k: [-3.6, 8.6, 0.7], a: [-5.2, 2.3, 0.4], yaw: -15 },
+          Wr: { e: [5.6, 29.4, 0.2], h: [6.0, 33.6, 0.4], d: [0.2, 1, 0.06] }, Ws: { e: [5.6, 29.4, 0.2], h: [6.0, 33.6, 0.4], d: [0.2, 1, 0.06] },
+          Or: { e: [-4.3, 20.4, 0.5], h: [-6.0, 23.6, 2.2], d: [-0.1, 1, 0.4] }, shield: [-7.4, 3.2, 10] },
+        { id: 'sneak', name: 'Sneaking', plant: false,
+          P: [0, 12.8, -0.8], C: [0, 18.6, 1.6], N: [0, 22.6, 3.2], Hd: [0, 25.4, 4.2], yaw: 0,
+          WL: { k: [2.9, 7.6, 4.0], a: [3.6, 2.3, 3.2], yaw: 8 }, OL: { k: [-2.9, 7.4, 2.4], a: [-3.8, 2.3, -1.0], yaw: -18 },
+          Wr: { e: [4.0, 15.8, -0.4], h: [5.0, 19.2, 1.4], d: [0.08, 0.9, 0.6] }, Ws: { e: [4.0, 15.8, -0.4], h: [5.0, 19.2, 1.4], d: [0.08, 0.9, 0.6] },
+          Or: { e: [-4.0, 15.8, -0.4], h: [-5.0, 19.2, 1.6], d: [-0.08, 0.9, 0.6] }, shield: [-7.2, 5.2, 18] }
+      ];
+
+      // ---- Lettering support copied from Pet Bowl Housing / Text Generator (SIL OFL 1.1 outlines, shared/fonts-pet.js)
+      function v3(p, y) { return [p[0], y, -p[1]]; }
+      function tri(out, a, b, c) { out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      function quad(out, a0, b0, b1, a1) { tri(out, a0, b0, b1); tri(out, a0, b1, a1); }
+
+      function area2(poly) {
+        var s = 0, i, a, b;
+        for (i = 0; i < poly.length; i++) { a = poly[i]; b = poly[(i + 1) % poly.length]; s += a[0] * b[1] - b[0] * a[1]; }
+        return s / 2;
+      }
+      function bbox(poly) {
+        var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, i;
+        for (i = 0; i < poly.length; i++) {
+          x0 = Math.min(x0, poly[i][0]); x1 = Math.max(x1, poly[i][0]);
+          y0 = Math.min(y0, poly[i][1]); y1 = Math.max(y1, poly[i][1]);
+        }
+        return [x0, y0, x1, y1];
+      }
+      function inPoly(pt, poly) {
+        var inside = false, i, j, a, b;
+        for (i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          a = poly[i]; b = poly[j];
+          if ((a[1] > pt[1]) !== (b[1] > pt[1]) && pt[0] < (b[0] - a[0]) * (pt[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+        }
+        return inside;
+      }
+
+      // A loop counts as inside when most of its vertices and edge midpoints are (corners may touch the outline).
+      function mostlyInside(loop, poly) {
+        var inside = 0, total = 0, i, a, b;
+        for (i = 0; i < loop.length; i++) {
+          a = loop[i]; b = loop[(i + 1) % loop.length];
+          total += 2;
+          if (inPoly(a, poly)) inside++;
+          if (inPoly([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], poly)) inside++;
+        }
+        return inside * 2 > total;
+      }
+
+      // Remove repeated and collinear points so triangulation never meets zero-area slivers.
+      function cleanLoop(pts) {
+        var out = [], i, prev, cur, next, n, changed = true, guard = 0;
+        for (i = 0; i < pts.length; i++) {
+          if (!out.length || Math.abs(pts[i][0] - out[out.length - 1][0]) + Math.abs(pts[i][1] - out[out.length - 1][1]) > 1e-4) out.push(pts[i]);
+        }
+        if (out.length > 1 && Math.abs(out[0][0] - out[out.length - 1][0]) + Math.abs(out[0][1] - out[out.length - 1][1]) <= 1e-4) out.pop();
+        while (changed && guard++ < 4) {
+          changed = false;
+          for (i = 0; i < out.length && out.length > 3; i++) {
+            n = out.length; prev = out[(i + n - 1) % n]; cur = out[i]; next = out[(i + 1) % n];
+            var cr = (cur[0] - prev[0]) * (next[1] - cur[1]) - (cur[1] - prev[1]) * (next[0] - cur[0]);
+            var dt = (cur[0] - prev[0]) * (next[0] - cur[0]) + (cur[1] - prev[1]) * (next[1] - cur[1]);
+            if (Math.abs(cr) < 1e-5 && dt > 0) { out.splice(i, 1); i--; changed = true; }
+          }
+        }
+        return out;
+      }
+
+      // -----------------------------------------------------------------------
+      // Triangulation: holes are bridged into the outline, then ears are clipped.
+      // outer is CCW, holes are CW. Returns { pts, tris } with indices into pts.
+      // -----------------------------------------------------------------------
+      function triangulate(outer, holes) {
+        var pts = outer.slice(), poly, i, k;
+        var holeStart = [];
+        holes.forEach(function (h) { holeStart.push(pts.length); for (i = 0; i < h.length; i++) pts.push(h[i]); });
+        poly = []; for (i = 0; i < outer.length; i++) poly.push(i);
+
+        var order = holes.map(function (h, hi) {
+          var mx = -Infinity, mi = 0;
+          for (var j = 0; j < h.length; j++) if (h[j][0] > mx) { mx = h[j][0]; mi = j; }
+          return { hi: hi, mi: mi, mx: mx };
+        }).sort(function (a, b) { return b.mx - a.mx; });
+
+        order.forEach(function (o) {
+          var h = holes[o.hi], base = holeStart[o.hi], M = h[o.mi], mi = base + o.mi;
+          var best = Infinity, bi = -1, ix = 0, a, b, ia, ib, t, x, pi;
+          for (i = 0; i < poly.length; i++) {
+            ia = poly[i]; ib = poly[(i + 1) % poly.length]; a = pts[ia]; b = pts[ib];
+            if ((a[1] <= M[1] && b[1] >= M[1] && a[1] !== b[1]) || (b[1] <= M[1] && a[1] >= M[1] && a[1] !== b[1])) {
+              t = (M[1] - a[1]) / (b[1] - a[1]); x = a[0] + t * (b[0] - a[0]);
+              if (x >= M[0] - 1e-9 && x - M[0] < best) { best = x - M[0]; ix = x; bi = a[0] > b[0] ? i : (i + 1) % poly.length; }
+            }
+          }
+          if (bi < 0) { bi = 0; ix = pts[poly[0]][0]; }
+          var P = pts[poly[bi]], bestAng = Infinity;
+          // reflex vertices inside triangle (M, I, P) block the view: take the one with the flattest angle
+          for (i = 0; i < poly.length; i++) {
+            var q = pts[poly[i]];
+            if (q === P) continue;
+            if (q[0] >= Math.min(M[0], P[0]) && q[0] <= Math.max(ix, P[0]) && pointInTri(M[0], M[1], ix, M[1], P[0], P[1], q[0], q[1])) {
+              var ang = Math.abs(q[1] - M[1]) / Math.max(1e-9, q[0] - M[0]);
+              if (ang < bestAng || (ang === bestAng && q[0] < pts[poly[bi]][0])) { bestAng = ang; bi = i; }
+            }
+          }
+          // the bridge vertex may already appear twice (earlier bridges): use the occurrence whose corner faces the hole
+          var occ = [], np2 = poly.length;
+          for (i = 0; i < np2; i++) if (poly[i] === poly[bi]) occ.push(i);
+          if (occ.length > 1) {
+            for (k = 0; k < occ.length; k++) {
+              if (inCone(pts[poly[(occ[k] + np2 - 1) % np2]], pts[poly[occ[k]]], pts[poly[(occ[k] + 1) % np2]], M)) { bi = occ[k]; break; }
+            }
+          }
+          pi = poly[bi];
+          var ring = [];
+          for (k = 0; k <= h.length; k++) ring.push(base + (o.mi + k) % h.length);
+          ring.push(pi);
+          poly = poly.slice(0, bi + 1).concat(ring, poly.slice(bi + 1));
+        });
+
+        var tris = [], list = poly.slice(), guard = 0, n, found, ia2, ib2, ic2, A, B, C, j2;
+        while (list.length > 3 && guard++ < 100000) {
+          n = list.length; found = -1;
+          for (i = 0; i < n && found < 0; i++) {
+            ia2 = list[(i + n - 1) % n]; ib2 = list[i]; ic2 = list[(i + 1) % n];
+            A = pts[ia2]; B = pts[ib2]; C = pts[ic2];
+            if ((B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]) <= 1e-9) continue;
+            var ok = true;
+            for (j2 = 0; j2 < n; j2++) {
+              var id = list[j2];
+              if (id === ia2 || id === ib2 || id === ic2) continue;
+              var Q = pts[id];
+              if ((Q[0] === A[0] && Q[1] === A[1]) || (Q[0] === B[0] && Q[1] === B[1]) || (Q[0] === C[0] && Q[1] === C[1])) continue;
+              if (pointInTri(A[0], A[1], B[0], B[1], C[0], C[1], Q[0], Q[1])) { ok = false; break; }
+            }
+            if (ok) found = i;
+          }
+          if (found < 0) found = 0; // degenerate input: clip anyway so the loop ends
+          n = list.length;
+          ia2 = list[(found + n - 1) % n]; ib2 = list[found]; ic2 = list[(found + 1) % n];
+          A = pts[ia2]; B = pts[ib2]; C = pts[ic2];
+          if (Math.abs((B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])) > 1e-9) tris.push(ia2, ib2, ic2);
+          list.splice(found, 1);
+        }
+        if (list.length === 3) {
+          A = pts[list[0]]; B = pts[list[1]]; C = pts[list[2]];
+          if (Math.abs((B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])) > 1e-9) tris.push(list[0], list[1], list[2]);
+        }
+        return { pts: pts, tris: tris };
+      }
+      function cross3(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+      // Is target t inside the interior wedge at corner c of a CCW polygon (prev p, next n)?
+      function inCone(p, c, n, t) {
+        if (cross3(p, c, n) >= 0) return cross3(c, n, t) >= 0 && cross3(c, t, p) >= 0;
+        return cross3(c, n, t) >= 0 || cross3(c, t, p) >= 0;
+      }
+      function pointInTri(ax, ay, bx, by, cx, cy, px, py) {
+        var d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+        var d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
+        var d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay);
+        var neg = d1 < -1e-9 || d2 < -1e-9 || d3 < -1e-9, pos = d1 > 1e-9 || d2 > 1e-9 || d3 > 1e-9;
+        return !(neg && pos);
+      }
+
+      // A shape = { outer (CCW), holes (CW), pts, tris } with triangles cached.
+      function makeShape(outer, holes) {
+        var s = { outer: outer, holes: holes };
+        var t = triangulate(outer, holes);
+        s.pts = t.pts; s.tris = t.tris;
+        s.box = bbox(outer);
+        return s;
+      }
+
+      // Closed prism of a shape between y0 and y1, moved by (dx, dy) in the plan.
+      function extrude(out, s, dx, dy, y0, y1) {
+        var loops = [s.outer].concat(s.holes), li, i, a, b, n, L;
+        for (li = 0; li < loops.length; li++) {
+          L = loops[li]; n = L.length;
+          for (i = 0; i < n; i++) {
+            a = L[i]; b = L[(i + 1) % n];
+            quad(out, v3([a[0] + dx, a[1] + dy], y0), v3([b[0] + dx, b[1] + dy], y0), v3([b[0] + dx, b[1] + dy], y1), v3([a[0] + dx, a[1] + dy], y1));
+          }
+        }
+        var P = s.pts, T = s.tris, p0, p1, p2;
+        for (i = 0; i < T.length; i += 3) {
+          p0 = P[T[i]]; p1 = P[T[i + 1]]; p2 = P[T[i + 2]];
+          var q0 = [p0[0] + dx, p0[1] + dy], q1 = [p1[0] + dx, p1[1] + dy], q2 = [p2[0] + dx, p2[1] + dy];
+          tri(out, v3(q0, y1), v3(q1, y1), v3(q2, y1));
+          tri(out, v3(q0, y0), v3(q2, y0), v3(q1, y0));
+        }
+      }
+
+
+      var parsedGlyphs = {};
+      function glyphContours(fontId, ch) {
+        var key = fontId + '|' + ch;
+        if (parsedGlyphs[key] !== undefined) return parsedGlyphs[key];
+        var g = FONTDATA[fontId].g[ch], res = null;
+        if (g) {
+          res = { adv: g[0], loops: [] };
+          var cur = null, x = 0, y = 0, m, re = /([mlqz])|(-?\d+)/g, tok = [], op = null, nums = [];
+          function flush() {
+            if (op === 'm') { cur = [{ t: 'm', x: nums[0], y: nums[1] }]; x = nums[0]; y = nums[1]; res.loops.push(cur); }
+            else if (op === 'l') { x += nums[0]; y += nums[1]; cur.push({ t: 'l', x: x, y: y }); }
+            else if (op === 'q') { cur.push({ t: 'q', cx: x + nums[0], cy: y + nums[1], x: x + nums[2], y: y + nums[3] }); x += nums[2]; y += nums[3]; }
+            nums = [];
+          }
+          while ((m = re.exec(g[1])) !== null) {
+            if (m[1]) { flush(); op = m[1]; if (op === 'z') op = null; } else nums.push(parseInt(m[2], 10));
+          }
+          flush();
+        }
+        parsedGlyphs[key] = res;
+        return res;
+      }
+
+      var shapeCache = {};
+      function glyphShapes(fontId, ch, scale, bold) {
+        var key = fontId + '|' + ch + '|' + scale.toFixed(4) + '|' + bold.toFixed(3);
+        if (shapeCache[key]) return shapeCache[key];
+        var gd = glyphContours(fontId, ch), res = { adv: gd ? gd.adv * scale : 0, shapes: [], key: key };
+        if (gd) {
+          var loops = gd.loops.map(function (segs) {
+            var pts = [], i, s, prev, q, n, t, len;
+            for (i = 0; i < segs.length; i++) {
+              s = segs[i];
+              if (s.t === 'q') {
+                prev = segs[i - 1];
+                len = (Math.abs(s.cx - prev.x) + Math.abs(s.cy - prev.y) + Math.abs(s.x - s.cx) + Math.abs(s.y - s.cy)) * scale;
+                n = clamp(Math.ceil(len / 1.1), 2, 9);
+                for (q = 1; q <= n; q++) {
+                  t = q / n;
+                  pts.push([((1 - t) * (1 - t) * prev.x + 2 * (1 - t) * t * s.cx + t * t * s.x) * scale,
+                            ((1 - t) * (1 - t) * prev.y + 2 * (1 - t) * t * s.cy + t * t * s.y) * scale]);
+                }
+              } else pts.push([s.x * scale, s.y * scale]);
+            }
+            return cleanLoop(pts);
+          }).filter(function (L) { return L.length >= 3 && Math.abs(area2(L)) > 1e-4; });
+          if (loops.length) {
+            var big = loops.reduce(function (a, b) { return Math.abs(area2(b)) > Math.abs(area2(a)) ? b : a; });
+            var sgn = area2(big) > 0 ? 1 : -1;
+            var outers = [], holes = [];
+            loops.forEach(function (L) {
+              var a = area2(L);
+              if (a * sgn > 0) outers.push(a > 0 ? L : L.slice().reverse());
+              else holes.push(a < 0 ? L : L.slice().reverse());
+            });
+            var groups = outers.map(function (o) { return { outer: o, holes: [], area: Math.abs(area2(o)) }; });
+            holes.forEach(function (h) {
+              var host = null;
+              groups.forEach(function (g) { if (mostlyInside(h, g.outer) && (!host || g.area < host.area)) host = g; });
+              if (host) host.holes.push(h); else groups.push({ outer: h.slice().reverse(), holes: [], area: 0 });
+            });
+            groups.forEach(function (g) {
+              // holes come out CCW from the sort above; the shape wants them CW
+              var hs = g.holes.map(function (h) { return area2(h) > 0 ? h.slice().reverse() : h; });
+              // pixel-style fonts let a counter touch the outline at a corner: pull those corners in a hair
+              hs = hs.map(function (h) {
+                var cx = 0, cy = 0;
+                h.forEach(function (q) { cx += q[0]; cy += q[1]; });
+                cx /= h.length; cy /= h.length;
+                return h.map(function (q) {
+                  for (var o = 0; o < g.outer.length; o++) {
+                    if (Math.abs(g.outer[o][0] - q[0]) < 1e-3 && Math.abs(g.outer[o][1] - q[1]) < 1e-3) {
+                      var dx = cx - q[0], dy = cy - q[1], dl = Math.sqrt(dx * dx + dy * dy) || 1;
+                      return [q[0] + dx / dl * 0.02, q[1] + dy / dl * 0.02];
+                    }
+                  }
+                  return q;
+                });
+              });
+              var sh = makeShape(g.outer, hs);
+              res.shapes.push(sh);
+            });
+          }
+        }
+        shapeCache[key] = res;
+        return res;
+      }
+
+      // -----------------------------------------------------------------------
+      // Name plate: letters from open-licence (SIL OFL 1.1) outlines on a sloped plate (ramp in front, or a board behind).
+      // The plate leans at most 45 degrees from flat, so the letters (which stand along the plate normal) never overhang.
+
+      // -----------------------------------------------------------------------
+      // The figure. Meshes are kept per colour role so the Color tab can paint each one.
+      // -----------------------------------------------------------------------
+      var ROLES = ['eyes', 'skin', 'hair', 'outfit', 'trim', 'armor', 'cape', 'metal', 'wood', 'gold', 'magic', 'shield', 'horn'];
+      function newRoles() { var m = {}; ROLES.forEach(function (r) { m[r] = []; }); return m; }
+      var HAIRS = ['Auto', 'Bald', 'Short', 'Long', 'Topknot', 'Mohawk'];
+      var BEARDS = ['Auto', 'None', 'Short', 'Long'];
+      var HEAD_COVERS = { helm: 1, winged: 1, horns: 1, wizhat: 1, hood: 1, hornhood: 1, bardhat: 1 };
+
+      function yawFrame(o, deg) {
+        var c = Math.cos(rad(deg)), s = Math.sin(rad(deg));
+        return { o: o, x: [c, 0, -s], y: [0, 1, 0], z: [s, 0, c] };
+      }
+      function scaledFrame(F, k) { return { o: F.o, x: vmul(F.x, k), y: vmul(F.y, k), z: vmul(F.z, k) }; }
+      function sub(F, u, v, w) { return { o: at(F, u, v, w), x: F.x, y: F.y, z: F.z }; }
+
+      // Shorter legs read as a sturdier mini: squash the leg joints and lower everything above the hips by the same amount.
+      var LEG_SQUASH = 0.84;
+      function squashPose(src) {
+        var q = JSON.parse(JSON.stringify(src)), d = src.P[1] - (2.3 + (src.P[1] - 2.3) * LEG_SQUASH);
+        function sq(v) { return [v[0], 2.3 + (v[1] - 2.3) * LEG_SQUASH, v[2]]; }
+        function dn(v) { return [v[0], v[1] - d, v[2]]; }
+        q.P = sq(src.P); q.C = dn(src.C); q.N = dn(src.N); q.Hd = dn(src.Hd);
+        ['WL', 'OL'].forEach(function (k) { q[k].k = sq(src[k].k); q[k].a = src[k].a.slice(); });
+        ['Wr', 'Ws', 'Or'].forEach(function (k) { q[k].e = dn(src[k].e); q[k].h = dn(src[k].h); });
+        return q;
+      }
+      // Builds one hero (race, class, pose) into the role meshes. Returns the ground contacts [x, z, r] for sizing the base.
+      function buildFigure(p, M) {
+        var race = RACES[p.race], cls = CLASSES[p.cls], pose = squashPose(POSES[p.pose]);
+        var s = race.h * p.height / 30.4, sb = Math.pow(race.bulk * p.build / 100, 0.85), bw = race.bulk * p.build / 100;
+        var hs = race.head * p.headSize / 100;
+        var S = 0.55 + 0.45 * s;                   // held items grow a little less than the body does
+        var ground = [];
+        function J(v) { return vmul(v, s); }
+        var P = J(pose.P), Cc = J(pose.C), N = J(pose.N), Hd = J(pose.Hd);
+        var bare = cls.body === 'bare', robeLong = cls.body === 'robe', robeShort = cls.body === 'robe-short';
+        var torsoRole = bare ? 'skin' : 'outfit';
+        var armRole = bare ? 'skin' : 'outfit';
+        var legRole = cls.id === 'monk' ? 'outfit' : 'trim';
+        var footRole = race.foot ? 'skin' : 'trim';
+
+        // ---- torso
+        var Pm = vmix(P, Cc, 0.45); Pm[2] += 0.2 * s;
+        tube(M[torsoRole], [P, Pm, Cc, vadd(N, [0, -0.6 * s, 0])], [3.3 * sb * s, 2.85 * sb * s, 3.7 * sb * s, 1.8 * sb * s], [2.4 * sb * s, 2.15 * sb * s, 2.5 * sb * s, 1.6 * sb * s], 14, 1, 0);
+        tube(M.skin, [vadd(N, [0, -1.0 * s, 0]), vadd(N, [0, 0.9 * s, 0.1 * s])], 1.15 * sb * s, null, 10, 0, 0);
+        if (bare) {   // wrapped waist and a belt knot
+          blob(M.trim, { o: vadd(P, [0, 1.3 * s, 0.1 * s]), x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, 3.3 * sb * s, 0.7 * s, 2.45 * sb * s, 0.9, 16, 6);
+        } else if (cls.body !== 'robe') {
+          blob(M.trim, { o: vadd(P, [0, 1.5 * s, 0.1 * s]), x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, 3.25 * sb * s, 0.6 * s, 2.4 * sb * s, 0.9, 16, 6);
+        }
+        if (cls.body === 'armor') {
+          blob(M.armor, { o: vadd(Cc, [0, -0.5 * s, 0.35 * s]), x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, 3.85 * sb * s, 3.3 * s, 2.65 * sb * s, 0.85, 18, 10);
+        }
+
+        if (cls.body === 'tunic' || cls.body === 'armor' || bare && cls.id !== 'monk') {
+          lathe(M[bare ? 'trim' : 'outfit'], { o: vadd(P, [0, 0.4 * s, 0]), x: [s, 0, 0], y: [0, s, 0], z: [0, 0, 0.82 * s] }, [[3.3 * sb, 2.4], [3.9 * sb, 0.3], [3.4 * sb, -2.0]], 20);
+        }
+
+        // ---- legs
+        var legs = [{ sx: 1, L: pose.WL }, { sx: -1, L: pose.OL }];
+        legs.forEach(function (lg) {
+          var hip = vadd(P, [lg.sx * 2.0 * sb * s, -0.5 * s, 0]), knee = J(lg.L.k), ank = J(lg.L.a);
+          if (!robeLong) {
+            if (lg.sx === 1) ball(M[legRole], vadd(P, [0, -1.5 * s, 0]), 2.5 * sb * s, 12, 7);
+            limb(M[legRole], hip, knee, 2.2 * sb * s, 1.75 * sb * s, 2.2 * sb * s, 9, 1, 1);
+            limb(M[legRole], knee, ank, 1.7 * sb * s, 1.35 * sb * s, 1.62 * sb * s, 9, 0, 1);
+          }
+          var fk = race.foot || 1, fw = [Math.sin(rad(lg.L.yaw)), 0, Math.cos(rad(lg.L.yaw))];
+          var ry = 1.35 * s * Math.min(fk, 1.15), fc = [ank[0] + fw[0] * 1.0 * s * fk, ry, ank[2] + fw[2] * 1.0 * s * fk];
+          blob(M[footRole], frame(fc, [0, 1, 0], fw), 1.55 * s * Math.sqrt(fk) * Math.sqrt(sb), ry, 2.8 * s * fk, 0.6, 14, 8);
+          ground.push([fc[0], fc[2], 2.4 * s * fk]);
+          if (race.foot) limb(M.skin, vadd(ank, [0, 0.8 * s, 0]), vadd(ank, [0, -0.4 * s, 0]), 1.3 * s, 1.3 * s, 1.3 * s, 8, 1, 1);
+        });
+        if (robeLong || robeShort) {   // a robe: one swept skirt from the hips down to the hem (or the knees)
+          var ankMid = vmix(J(pose.WL.a), J(pose.OL.a), 0.5), kneeMid = vmix(J(pose.WL.k), J(pose.OL.k), 0.5);
+          var spreadX = Math.abs(pose.WL.a[0] - pose.OL.a[0]) / 2 * s, spreadZ = Math.abs(pose.WL.a[2] - pose.OL.a[2]) / 2 * s;
+          if (robeLong) {
+            var hemY = 0.2, hem = [ankMid[0], hemY, ankMid[2]];
+            var topP = vadd(P, [0, 2.0 * s, 0]), pts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(function (i) { return vmix(topP, hem, i / 12); });
+            var rn = [], rbb = [], i0;
+            for (i0 = 0; i0 < pts.length; i0++) {
+              var t0 = i0 / (pts.length - 1);
+              rn.push(lerp(3.5 * sb * s, Math.max(4.9 * s, spreadX + 2.2 * s), Math.pow(t0, 0.85)));
+              rbb.push(lerp(2.5 * sb * s, Math.max(4.2 * s, spreadZ + 2.4 * s), Math.pow(t0, 0.85)));
+            }
+            tube(M.outfit, pts, rn, rbb, 18, 0, 0);
+            ground.push([hem[0], hem[2], Math.max(4.9 * s, spreadX + 2.2 * s)]);
+          } else {
+            var hem2 = vadd(vmix(P, kneeMid, 0.9), [0, -1.0 * s, 0]);
+            tube(M.outfit, curve([vadd(P, [0, 2.0 * s, 0]), vmix(P, hem2, 0.5), hem2], 4), ramp(3.4 * sb * s, 4.7 * sb * s, 9), null, 16, 0, 0);
+          }
+        }
+
+        // a forward-leaning head (lunge, sneak) gets a sloped throat under the chin so the chin never hangs over air
+        if (Hd[2] - Cc[2] > 2.2 * s) {
+          tube(M.skin, [[Hd[0], N[1] - 3.2 * s, Cc[2] + 1.0 * s], [Hd[0], Hd[1] - 2.6 * s, Hd[2] + 0.6 * s]], [2.3 * sb * s, 2.0 * sb * s], [1.9 * sb * s, 1.8 * sb * s], 10, 0, 0);
+        }
+
+        // ---- head and face (all in a head frame that carries the yaw and the head scale)
+        var HF = scaledFrame(yawFrame(Hd, pose.yaw), hs * s);
+        function hp(u, v, w) { return at(HF, u, v, w); }
+        var hsc = hs * s;
+        blob(M.skin, HF, 2.95, 3.25, 3.05, 0.96, 20, 12);
+        [-1, 1].forEach(function (sx) { blob(M.skin, sub(HF, sx * 1.05, 0.85, 2.72), 1.0, 0.3, 0.5, 1, 9, 5); });   // brows
+        [-1, 1].forEach(function (sx) { ball(M.eyes, at(HF, sx * 1.05, 0.15, race.snout ? 2.55 : 2.85), 0.42 * hsc, 8, 5); });
+        if (!race.snout) blob(M.skin, sub(HF, 0, -0.45, 3.05), race.id === 'dwarf' ? 0.95 : 0.6, race.id === 'dwarf' ? 0.9 : 0.55, 0.75, 1, 10, 6);   // nose
+        if (race.id === 'orc') {
+          blob(M.skin, sub(HF, 0, -1.9, 0.5), 2.55, 1.35, 2.1, 0.9, 14, 8);                 // heavy jaw
+          [-1, 1].forEach(function (sx) { taper(M.horn, [hp(sx * 1.35, -2.3, 2.6), hp(sx * 1.5, -0.2, 2.9)], 0.62 * hsc, 0.2 * hsc, 7, 0.5); });
+        }
+        if (race.snout) {
+          blob(M.skin, sub(HF, 0, -1.4, 2.6), 1.5, 1.6, 1.6, 0.9, 14, 8);
+          [-1, 1].forEach(function (sx) { blob(M.skin, sub(HF, sx * 0.5, -0.9, 4.6), 0.3, 0.3, 0.3, 1, 6, 4); });
+        }
+        [-1, 1].forEach(function (sx) {
+          var ear = race.ears;
+          if (ear === 'round') blob(M.skin, sub(HF, sx * 2.95, -0.1, -0.2), 0.45, 0.85, 0.75, 1, 9, 6);
+          else if (ear === 'small') taper(M.skin, [hp(sx * 2.8, -0.2, -0.1), hp(sx * 3.6, 0.9, -0.3)], 0.75 * hsc, 0.3 * hsc, 7, 0.6);
+          else if (ear === 'long') tube(M.skin, curve([hp(sx * 2.8, 0.0, -0.1), hp(sx * 4.2, 1.2, -0.5), hp(sx * 6.0, 2.9, -0.9)], 3), [0.85 * hsc, 0.65 * hsc, 0.34 * hsc], [0.5 * hsc, 0.42 * hsc, 0.3 * hsc], 7, 1, 0.6, [0, 0, 1]);
+          else if (ear === 'point') tube(M.skin, curve([hp(sx * 2.8, 0.1, -0.2), hp(sx * 4.0, 1.3, -0.7), hp(sx * 4.7, 2.8, -1.3)], 3), [0.9 * hsc, 0.65 * hsc, 0.4 * hsc], [0.6 * hsc, 0.45 * hsc, 0.3 * hsc], 7, 1, 0.6, [0, 0, 1]);
+          else if (ear === 'none') blob(M.skin, sub(HF, sx * 3.0, -0.2, -0.8), 0.3, 1.3, 0.9, 1, 8, 5);
+          if (race.horns) tube(M.horn, curve([hp(sx * 1.5, 2.5, -0.8), hp(sx * 2.2, 4.4, -1.6), hp(sx * 2.5, 6.0, -3.4)], 3), [0.75 * hsc, 0.55 * hsc, 0.3 * hsc], null, 8, 0, 0.5);
+        });
+
+        // ---- hair and beard
+        var hairStyle = HAIRS[p.hair] === 'Auto' ? cls.hair : HAIRS[p.hair];
+        if (race.snout || race.id === 'orc' && HAIRS[p.hair] === 'Auto') { if (HAIRS[p.hair] === 'Auto') hairStyle = race.snout ? 'Bald' : 'Mohawk'; }
+        var covered = !!HEAD_COVERS[cls.head];
+        if (hairStyle === 'Short' && !covered) blob(M.hair, sub(HF, 0, 0.95, -0.6), 3.2, 3.0, 3.4, 0.95, 18, 10);
+        else if (hairStyle === 'Topknot' && !covered) {
+          blob(M.hair, sub(HF, 0, 0.8, -0.6), 3.1, 2.8, 3.3, 0.95, 18, 10);
+          taper(M.hair, [hp(0, 2.5, -0.6), hp(0, 3.7, -0.6)], 1.15 * hsc, 0.8 * hsc, 8, 0);
+          blob(M.hair, sub(HF, 0, 4.4, -0.6), 1.45, 1.25, 1.45, 1, 12, 7);
+        } else if (hairStyle === 'Mohawk' && !covered) {
+          tube(M.hair, curve([hp(0, 2.2, 2.0), hp(0, 4.2, 0.6), hp(0, 3.9, -1.6), hp(0, 1.4, -3.2)], 4), [1.0 * hsc, 1.5 * hsc, 1.4 * hsc, 0.9 * hsc], [0.62 * hsc, 0.75 * hsc, 0.75 * hsc, 0.55 * hsc], 8, 1, 1, [1, 0, 0]);
+        } else if (hairStyle === 'Long') {
+          if (!covered) blob(M.hair, sub(HF, 0, 0.95, -0.6), 3.2, 3.0, 3.4, 0.95, 18, 10);
+          var back = Cc[2] - 2.1 * sb * s;
+          tube(M.hair, curve([hp(0, 0.6, -2.9), hp(0, -2.6, -3.5), [Hd[0], N[1] - 3.2 * s, back - 0.6 * s], [Hd[0], N[1] - 5.6 * s, back + 0.2 * s]], 4), [2.55 * hsc, 2.65 * hsc, 2.5 * s, 2.0 * s], [1.0 * hsc, 1.2 * hsc, 1.0 * s, 0.9 * s], 12, 1, 0.8);
+        }
+        var beardStyle = BEARDS[p.beard] === 'Auto' ? (cls.beard || race.beard || 'None') : BEARDS[p.beard];
+        if (race.snout) beardStyle = 'None';
+        if (beardStyle === 'Short') blob(M.hair, sub(HF, 0, -2.2, 1.9), 2.1, 1.7, 1.5, 0.9, 14, 8);
+        else if (beardStyle === 'Long') {
+          blob(M.hair, sub(HF, 0, -1.9, 1.7), 2.4, 1.9, 1.7, 0.9, 14, 8);
+          tube(M.hair, curve([hp(0, -2.2, 2.1), [Hd[0], N[1] - 2.6 * s, Cc[2] + 2.5 * sb * s], [Hd[0], N[1] - 5.6 * s, Cc[2] + 2.2 * sb * s], [Hd[0], N[1] - 8.2 * s, Cc[2] + 1.0 * sb * s]], 4), [2.1 * hsc, 2.2 * hsc, 1.7 * s, 0.9 * s], [1.3 * hsc, 1.4 * hsc, 1.0 * s, 0.6 * s], 12, 1, 0.8);
+        }
+
+        // ---- headgear
+        var hg = cls.head;
+        function cap(role, v, w, rx, ry, rz) { blob(M[role], sub(HF, 0, v, w), rx, ry, rz, 0.9, 18, 10); }
+        if (hg === 'helm' || hg === 'winged') {
+          cap('armor', 0.8, -0.5, 3.3, 3.15, 3.45);
+          tube(M.armor, [hp(0, 1.9, 3.2), hp(0, -0.8, 3.4)], 0.45 * hsc, null, 7, 1, 1);
+          if (hg === 'helm') tube(M.cape, curve([hp(0, 2.8, 2.2), hp(0, 4.5, 0.4), hp(0, 3.9, -2.0), hp(0, 1.6, -3.4)], 4), [0.7 * hsc, 1.0 * hsc, 1.0 * hsc, 0.7 * hsc], [0.55 * hsc, 0.65 * hsc, 0.65 * hsc, 0.5 * hsc], 8, 1, 1, [1, 0, 0]);
+          else [-1, 1].forEach(function (sx) {
+            tube(M.gold, curve([hp(sx * 3.1, 1.0, -0.3), hp(sx * 4.6, 3.0, -0.9), hp(sx * 5.3, 5.6, -1.4)], 3), [1.5 * hsc, 1.2 * hsc, 0.6 * hsc], [0.65 * hsc, 0.55 * hsc, 0.4 * hsc], 8, 0.8, 0.6, [0, 0, 1]);
+          });
+        } else if (hg === 'horns') {
+          cap('armor', 1.4, -0.4, 3.25, 2.4, 3.4);
+          [-1, 1].forEach(function (sx) {
+            tube(M.horn, curve([hp(sx * 2.8, 1.4, -0.2), hp(sx * 4.4, 2.8, -0.2), hp(sx * 5.5, 4.8, -0.3), hp(sx * 5.3, 7.2, 0.3)], 3), [0.95 * hsc, 0.8 * hsc, 0.55 * hsc, 0.25 * hsc], null, 8, 0.8, 0.6);
+          });
+        } else if (hg === 'wizhat') {
+          lathe(M.cape, sub(HF, 0, 1.8, -0.1), [[3.1, 0], [5.7, 2.5], [5.9, 3.1], [3.0, 1.4]], 22);
+          tube(M.cape, curve([hp(0, 2.5, -0.1), hp(0, 5.7, -0.3), hp(0, 8.9, -1.2), hp(0, 11.6, -2.8)], 4), [3.25 * hsc, 2.5 * hsc, 1.5 * hsc, 0.45 * hsc], null, 16, 0, 0.7);
+          lathe(M.gold, sub(HF, 0, 3.8, -0.15), [[2.95, 0], [3.15, 0], [3.15, 0.55], [2.95, 0.55]].map(function (q, qi) { return qi === 0 || qi === 3 ? [q[0] - 0.2, q[1]] : q; }), 22);
+        } else if (hg === 'hood' || hg === 'hornhood') {
+          blob(M.cape, sub(HF, 0, 0.5, -1.0), 3.75, 3.75, 4.0, 0.9, 20, 10);
+          tube(M.cape, curve([hp(0, 2.8, -1.4), hp(0, 5.0, -2.2), hp(0, 6.8, -3.2)], 3), [2.1 * hsc, 1.2 * hsc, 0.4 * hsc], null, 10, 0, 0.8);
+          if (hg === 'hornhood') [-1, 1].forEach(function (sx) {
+            tube(M.horn, curve([hp(sx * 2.4, 2.4, -1.4), hp(sx * 3.8, 4.4, -1.6), hp(sx * 4.2, 6.6, -1.9), hp(sx * 3.4, 8.6, -1.6)], 3), [0.8 * hsc, 0.65 * hsc, 0.45 * hsc, 0.2 * hsc], null, 8, 0.8, 0.5);
+          });
+        } else if (hg === 'bardhat') {
+          cap('cape', 1.5, -0.3, 3.3, 1.95, 3.4);
+          lathe(M.cape, sub(HF, 0, 1.2, -0.2), [[3.0, 0], [4.6, 1.5], [4.7, 2.0], [3.0, 1.2]], 20);
+          tube(M.gold, [hp(2.0, 3.0, -0.9), hp(3.0, 5.4, -1.5), hp(3.5, 8.2, -2.3)], [0.7 * hsc, 0.9 * hsc, 0.3 * hsc], [0.5 * hsc, 0.5 * hsc, 0.3 * hsc], 8, 0.8, 0.6, [0, 0, 1]);
+        } else if (hg === 'circlet') {
+          lathe(M.gold, sub(HF, 0, 1.45, 0), [[2.65, -0.4], [3.12, -0.4], [3.12, 0.4], [2.65, 0.4]], 22);
+          blob(M.magic, sub(HF, 0, 1.5, 3.15), 0.5, 0.55, 0.4, 1, 8, 5);
+        } else if (hg === 'band') {
+          lathe(M.cape, sub(HF, 0, 1.35, 0), [[2.65, -0.45], [3.12, -0.45], [3.12, 0.45], [2.65, 0.45]], 22);
+        } else if (hg === 'antlers') {
+          [-1, 1].forEach(function (sx) {
+            tube(M.horn, curve([hp(sx * 1.7, 2.7, -0.7), hp(sx * 2.9, 5.2, -1.0), hp(sx * 3.4, 7.8, -1.3)], 3), [0.62 * hsc, 0.5 * hsc, 0.24 * hsc], null, 7, 0.7, 0.6);
+            tube(M.horn, [hp(sx * 2.5, 4.3, -0.9), hp(sx * 4.4, 6.3, -0.8)], [0.46 * hsc, 0.2 * hsc], null, 6, 0.5, 0.6);
+          });
+          lathe(M.cape, sub(HF, 0, 1.45, 0), [[2.65, -0.35], [3.12, -0.35], [3.12, 0.35], [2.65, 0.35]], 22);
+        }
+
+        // ---- cape, poncho, fur mantle
+        var back = function (dy) { return Cc[2] - dy * sb * s; };
+        if (cls.cape === 'long') {
+          tube(M.cape, curve([[0, N[1] - 0.2 * s, N[2] - 1.5 * sb * s], [0, Cc[1] - 0.6 * s, back(3.0)], [0, P[1] - 2.8 * s, back(4.0)], [0, -0.4, back(5.8)]], 4), [3.3 * sb * s, 4.5 * sb * s, 5.0 * s, 5.3 * s], [0.8 * s, 0.85 * s, 0.85 * s, 0.85 * s], 16, 0.6, 0);
+          ground.push([0, back(5.8), 5.3 * s]);
+        } else if (cls.cape === 'short') {
+          tube(M.cape, curve([[0, N[1] - 0.2 * s, N[2] - 1.5 * sb * s], [0, Cc[1] - 2.0 * s, back(3.0)], [0, P[1] + 1.6 * s, back(2.2)]], 4), [3.2 * sb * s, 4.1 * sb * s, 3.6 * sb * s], [0.8 * s, 0.85 * s, 0.8 * s], 14, 0.6, 0.6);
+        } else if (cls.cape === 'poncho') {
+          lathe(M.cape, { o: [N[0], N[1] - 0.2 * s, N[2] - 0.1 * s], x: [s, 0, 0], y: [0, s, 0], z: [0, 0, 0.8 * s] }, [[3.4 * sb, -5.0], [4.9 * sb, -3.4], [4.7 * sb, -1.8], [3.5 * sb, -0.3], [2.1 * sb, 0.7], [0, 0.9]], 22);
+        } else if (cls.cape === 'fur') {
+          [-1, 1].forEach(function (sx) {
+            var S0 = vadd(Cc, [sx * 4.0 * bw * s, 3.4 * s, 0]);
+            ball(M.cape, vadd(S0, [sx * 0.2 * s, 0.5 * s, 0]), 2.3 * sb * s, 12, 7);
+            ball(M.cape, vadd(S0, [sx * -2.0 * s, 0.7 * s, -0.5 * s]), 1.9 * sb * s, 11, 6);
+            ball(M.cape, vadd(S0, [sx * 1.4 * s, -0.6 * s, -0.4 * s]), 1.7 * sb * s, 11, 6);
+          });
+          blob(M.cape, { o: [Cc[0], N[1] - 1.2 * s, N[2] - 1.0 * s], x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, 3.9 * sb * s, 1.6 * s, 2.5 * sb * s, 1, 14, 8);
+        }
+        if (cls.extra === 'symbol') {
+          lathe(M.gold, frame(vadd(Cc, [0, 0.4 * s, 2.15 * sb * s]), [0, 0, 1], [0, 1, 0]), [[1.45 * s, 0], [1.45 * s, 0.7 * s]], 18);
+        } else if (cls.extra === 'pouch') {
+          blob(M.trim, { o: vadd(P, [3.4 * sb * s, 0.2 * s, -0.8 * s]), x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, 1.2 * s, 1.4 * s, 1.1 * s, 0.9, 10, 7);
+        } else if (cls.extra === 'quiver') {
+          var qb = [-1.6 * sb * s, P[1] + 1.2 * s, back(1.8)], qt = [-3.0 * sb * s, Cc[1] + 3.6 * s, back(2.6)];
+          tube(M.trim, [qb, qt], [1.25 * s, 1.5 * s], null, 10, 1, 0);
+          [-0.7, 0.2, 1.0].forEach(function (o) {
+            tube(M.wood, [vadd(qt, [o * s, -0.5 * s, 0.1 * s * o]), vadd(qt, [o * 1.4 * s - 0.5 * s, 3.6 * s, -0.5 * s])], 0.5 * s, null, 6, 0, 0.6);
+          });
+          [-0.7, 0.2, 1.0].forEach(function (o) { ball(M.cape, vadd(qt, [o * 1.4 * s - 0.5 * s, 3.9 * s, -0.5 * s]), 0.75 * s, 7, 5); });
+        } else if (cls.extra === 'lute') {
+          var LF = frame([0.8 * s, Cc[1] - 1.0 * s, back(3.4)], [0.28, 1, -0.15], [0, 0, 1]);
+          blob(M.wood, scaledFrame(LF, s), 3.4, 4.3, 1.9, 1, 16, 9);
+          tube(M.wood, [at(LF, 0, 3.4 * s, 0), at(LF, 0, 9.0 * s, 0)], [0.8 * s, 0.7 * s], [0.5 * s, 0.5 * s], 8, 0, 0.6);
+          blob(M.gold, sub(scaledFrame(LF, s), 0, 10.0, 0), 0.95, 1.4, 0.8, 1, 8, 6);
+          blob(M.trim, sub(scaledFrame(LF, s), 0, -0.4, 1.7), 1.0, 1.0, 0.4, 1, 10, 5);
+        }
+
+        // ---- arms and what the hands hold
+        var shieldItem = { kiteshield: 1, crossshield: 1, roundshield: 1 }[cls.O];
+        var plantedOff = shieldItem || cls.O === 'bow';
+        var heldW = cls.W, wArm = pose.Wr;
+        if ((heldW === 'crystalstaff' || heldW === 'forkstaff' || heldW === 'hornstaff' || heldW === 'bostaff') && pose.plant) wArm = pose.Ws;
+        var wPlanted = (heldW === 'crystalstaff' || heldW === 'forkstaff' || heldW === 'hornstaff' || heldW === 'bostaff') && pose.plant;
+        var raisedOff = cls.O === 'dagger' || pose.id === 'casting' || pose.id === 'triumph';
+        var Sw = vadd(Cc, [4.1 * bw * s, 3.4 * s, 0]), So = vadd(Cc, [-4.1 * bw * s, 3.4 * s, 0]);
+        var armR = 1.55 * sb * s;
+        function arm(role, sh, E, H, bracer, sx) {
+          if (H[1] > E[1] + 1) tube(M[role], [vadd(E, [0, -0.7 * s, 0]), [sx * 2.0 * sb * s, E[1] - 4.0 * s, E[2] * 0.7 + P[2] * 0.3]], [armR * 0.7, armR * 0.95], null, 8, 1, 0);   // gusset: props the elbow against the hip
+          ball(M[role], sh, armR * 1.12, 12, 7);
+          limb(M[role], sh, E, armR, armR * 0.9, armR * 1.05, 9, 1, 1);
+          limb(M[role], E, H, armR * 0.88, armR * 0.74, armR * 0.86, 9, 0, 0);
+          if (bracer) limb(M.trim, vmix(E, H, 0.4), vmix(E, H, 0.92), armR * 1.0, armR * 0.9, armR * 1.0, 9, 0, 0);
+          ball(M.skin, H, 1.2 * Math.sqrt(sb) * s, 12, 7);
+        }
+        var Ew = J(wArm.e), Hw = J(wArm.h), dW = vnorm(wArm.d);
+        Ew[0] *= Math.max(1, 0.55 + 0.45 * bw); Hw[0] *= Math.max(1, 0.55 + 0.45 * bw);
+        arm(armRole, Sw, Ew, Hw, bare, 1);
+        // off arm
+        var Eo, Ho, dO = [0, 1, 0.2], offItem = cls.O;
+        if (plantedOff) {
+          var sx = pose.shield[0] * s * (0.55 + 0.45 * bw), sz = pose.shield[1] * s, syaw = pose.shield[2];
+          var top = (cls.O === 'bow' ? 0 : -0.6 + (cls.O === 'roundshield' ? 14.8 : 16.6) * S);
+          if (cls.O === 'bow') Ho = [sx + 0.2 * s, So[1] - 11.4 * s, sz - 0.4 * s]; else Ho = [sx + 0.6 * s, top - 3.2 * S, sz - 1.0 * s];
+          Eo = vadd(vmix(So, Ho, 0.5), [-0.9 * s, 0, -1.2 * s]);
+          M._planted = { type: cls.O, x: sx, z: sz, yaw: syaw, hand: Ho };
+        } else if (offItem === 'tome') {
+          Ho = [-3.0 * bw * s, Cc[1] - 1.2 * s, Cc[2] + 3.0 * sb * s]; Eo = [-5.1 * bw * s, Cc[1] - 4.2 * s, Cc[2] + 0.6 * s];
+        } else if (raisedOff) {
+          Eo = J(pose.Or.e); Ho = J(pose.Or.h); dO = vnorm(pose.Or.d); Eo[0] *= Math.max(1, 0.55 + 0.45 * bw); Ho[0] *= Math.max(1, 0.55 + 0.45 * bw);
+        } else {
+          Ho = [-3.3 * sb * s, P[1] + 0.6 * s, P[2] + 1.3 * sb * s]; Eo = [-5.3 * bw * s, P[1] + 4.4 * s, P[2] - 0.2 * s];
+        }
+        arm(armRole, So, Eo, Ho, bare, -1);
+        return { ground: ground, s: s, S: S, sb: sb, bw: bw, hs: hs, Hw: Hw, dW: dW, Ho: Ho, dO: dO, Ew: Ew, Eo: Eo, wPlanted: wPlanted, shieldItem: shieldItem, plantedOff: plantedOff, P: P, Cc: Cc, N: N, Hd: Hd, HF: HF, cls: cls, pose: pose, race: race };
+      }
+
+
+      // -----------------------------------------------------------------------
+      // Held items. Each is a few closed shells; blades are flat prisms of a silhouette.
+      // -----------------------------------------------------------------------
+      // A flat shape given as (x, y) points, thickness along local z from z0 to z1, placed in frame F.
+      function prism(out, F, pts, z0, z1) {
+        var uv = pts.map(function (q) { return [q[0], -q[1]]; });
+        if (area2(uv) < 0) uv.reverse();
+        var shape = makeShape(cleanLoop(uv), []);
+        var tmp = [], i, from = out.length;
+        extrude(tmp, shape, 0, 0, z0, z1);
+        for (i = 0; i < tmp.length; i += 3) {
+          var q = at(F, tmp[i], tmp[i + 2], tmp[i + 1]);
+          out.push(q[0], q[1], q[2]);
+        }
+        orientFrom(out, from);
+      }
+      function itemFrame(hand, dir, S) { return scaledFrame(frame(hand, dir, [0, 0, 1]), S); }
+
+      function swordItem(M, hand, dir, S, o) {
+        var F = itemFrame(hand, dir, S), len = (o && o.len) || 1, wide = (o && o.wide) || 1;
+        var L = function (u, v, w) { return at(F, u, v, w); };
+        tube(M.wood, [L(0, -2.5, 0), L(0, 0.8, 0)], 0.78 * S, null, 8, 1, 0.8);
+        blob(M.gold, sub(F, 0, -3.0, 0), 1.0, 1.0, 1.0, 1, 10, 6);
+        blob(M.gold, sub(F, 0, 1.25, 0), 2.7 * wide, 0.6, 0.85, 0.7, 12, 6);
+        prism(M.metal, F, [[-1.25 * wide, 1.7], [1.25 * wide, 1.7], [1.1 * wide, 12.4 * len], [0, 15.8 * len], [-1.1 * wide, 12.4 * len]], -0.7, 0.7);
+      }
+      function daggerItem(M, hand, dir, S) {
+        var F = itemFrame(hand, dir, S), L = function (u, v, w) { return at(F, u, v, w); };
+        tube(M.wood, [L(0, -1.8, 0), L(0, 0.5, 0)], 0.7 * S, null, 8, 1, 0.8);
+        blob(M.gold, sub(F, 0, 0.8, 0), 1.7, 0.45, 0.75, 0.7, 10, 6);
+        prism(M.metal, F, [[-0.95, 1.2], [0.95, 1.2], [0.85, 6.6], [0, 8.8], [-0.85, 6.6]], -0.6, 0.6);
+      }
+      function rapierItem(M, hand, dir, S) {
+        var F = itemFrame(hand, dir, S), L = function (u, v, w) { return at(F, u, v, w); };
+        tube(M.wood, [L(0, -2.0, 0), L(0, 0.6, 0)], 0.68 * S, null, 8, 1, 0.8);
+        blob(M.gold, sub(F, 0, -2.5, 0), 0.85, 0.85, 0.85, 1, 9, 5);
+        lathe(M.gold, F, [[0.8, 0.2], [1.8, 0.9], [2.1, 1.7], [0.8, 1.4]], 14);
+        prism(M.metal, F, [[-0.7, 1.7], [0.7, 1.7], [0.6, 15.2], [0, 17.4], [-0.6, 15.2]], -0.6, 0.6);
+      }
+      function axeItem(M, hand, dir, S) {
+        var F = itemFrame(hand, dir, S), L = function (u, v, w) { return at(F, u, v, w); };
+        tube(M.wood, [L(0, -4.5, 0), L(0, 11.8, 0)], 0.88 * S, null, 9, 1, 0.8);
+        prism(M.metal, F, [[0.5, 5.2], [3.6, 8.2], [5.9, 11.6], [4.1, 13.0], [0.5, 11.2]], -0.85, 0.85);
+        taper(M.metal, [L(0, 11.2, 0), L(0, 15.2, 0)], 0.95 * S, 0.2 * S, 8, 0.4);
+      }
+      function maceItem(M, hand, dir, S) {
+        var F = itemFrame(hand, dir, S), L = function (u, v, w) { return at(F, u, v, w); };
+        tube(M.wood, [L(0, -3.2, 0), L(0, 7.4, 0)], 0.8 * S, null, 8, 1, 0.8);
+        lathe(M.metal, F, [[0.85, 6.6], [1.7, 7.7], [2.3, 9.3], [2.3, 10.8], [1.5, 12.0], [0, 12.7]], 14);
+        taper(M.metal, [L(0, 12.2, 0), L(0, 14.6, 0)], 0.7 * S, 0.15 * S, 7, 0.3);
+      }
+      function staffItem(M, hand, dir, S, planted, top, ground) {
+        var d = vnorm(dir), bot, up = 22 * S;
+        if (planted && d[1] > 0.5) { var t = (hand[1] + 0.5) / d[1]; bot = vsub(hand, vmul(d, t)); ground.push([bot[0], bot[2], 1.4 * S]); }
+        else bot = vsub(hand, vmul(d, 2.6 * S));
+        var tp = vadd(hand, vmul(d, up));
+        tube(M.wood, [bot, hand, tp], [0.85 * S, 0.85 * S, 0.8 * S], null, 9, 1, 0.8);
+        var F = scaledFrame(frame(tp, d, [0, 0, 1]), S);
+        var ex = F.x;
+        if (top === 'crystal') {
+          lathe(M.gold, F, [[0.8, -0.3], [1.9, 1.7], [1.6, 2.4]], 12);
+          lathe(M.magic, F, [[0, 1.9], [1.55, 3.5], [1.55, 6.0], [0, 8.0]], 6);
+        } else if (top === 'fork') {
+          [-1, 1].forEach(function (sx) {
+            tube(M.wood, curve([vsub(tp, vmul(d, 1.8 * S)), vadd(tp, vadd(vmul(d, 1.4 * S), vmul(ex, sx * 1.0 * S))), vadd(tp, vadd(vmul(d, 4.0 * S), vmul(ex, sx * 2.5 * S))), vadd(tp, vadd(vmul(d, 6.6 * S), vmul(ex, sx * 3.0 * S)))], 3), ramp(0.8 * S, 0.34 * S, 10), null, 8, 0, 0.7);
+          });
+          tube(M.wood, [vsub(tp, vmul(d, 1.0 * S)), vadd(tp, vmul(d, 4.4 * S))], [0.5 * S, 0.3 * S], null, 6, 0, 0.7);
+        } else if (top === 'horn') {
+          [-1, 1].forEach(function (sx) {
+            tube(M.horn, curve([vsub(tp, vmul(d, 1.4 * S)), vadd(tp, vadd(vmul(d, 1.6 * S), vmul(ex, sx * 1.7 * S))), vadd(tp, vadd(vmul(d, 4.6 * S), vmul(ex, sx * 2.9 * S))), vadd(tp, vadd(vmul(d, 7.4 * S), vmul(ex, sx * 1.9 * S)))], 3), ramp(0.95 * S, 0.22 * S, 10), null, 8, 0, 0.7);
+          });
+          tube(M.wood, [tp, vadd(tp, vmul(d, 2.6 * S))], 0.55 * S, null, 6, 0, 0);
+          blob(M.magic, sub(F, 0, 3.6, 0), 1.1, 1.1, 1.1, 1, 10, 6);
+        } else {
+          blob(M.gold, sub(F, 0, 0.2, 0), 1.05, 1.05, 1.05, 1, 9, 6);
+        }
+      }
+      function orbItem(M, hand, S) {
+        tube(M.magic, [vadd(hand, [0, 0.4 * S, 0]), vadd(hand, [0, 3.4 * S, 0])], [1.0 * S, 0.7 * S], null, 9, 0, 0);
+        blob(M.magic, { o: vadd(hand, [0, 5.0 * S, 0]), x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }, 2.15 * S, 2.15 * S, 2.15 * S, 1, 16, 9);
+      }
+      function bowItem(M, hand, S, ground) {
+        var hl = hand[1] + 0.5, pts = [], i, t;
+        var bul = 4.2 * S, ca = Math.cos(rad(38)), sa = Math.sin(rad(38));
+        for (i = 0; i <= 8; i++) { t = -1 + i / 4; var dz = 0.2 * S + bul * (1 - t * t) - bul; pts.push([hand[0] - dz * sa * -1, hand[1] + t * hl, hand[2] + dz * ca]); }
+        var rs = pts.map(function (q, i2) { var tt = Math.abs(-1 + i2 / 4); return lerp(0.95 * S, 0.5 * S, tt * tt); });
+        tube(M.wood, pts, rs, null, 8, 0.8, 0.8);
+        var tipB = pts[0], tipT = pts[pts.length - 1];
+        tube(M.trim, [tipB, tipT], 0.5 * S, null, 6, 0, 0);
+        ground.push([tipB[0], tipB[2], 1.6 * S]);
+      }
+      function tomeItem(M, f) {
+        var ctr = [-1.0 * f.s, f.Cc[1] - 0.1 * f.s, f.Cc[2] + 2.55 * f.sb * f.s];
+        var F = scaledFrame(frame(ctr, [0, 1, 0.3], [0, 0, 1]), f.S);
+        blob(M.trim, F, 2.8, 3.4, 1.0, 0.35, 14, 8);
+        blob(M.gold, sub(F, 2.7, 0, 0.2), 0.55, 1.2, 0.7, 1, 8, 5);
+        blob(M.magic, sub(F, 0, 0.3, 0.95), 0.9, 0.9, 0.3, 1, 10, 5);
+      }
+      function shieldItem(M, pl, S, cls, ground) {
+        var F = scaledFrame(yawFrame([pl.x, -0.6, pl.z], pl.yaw), S);
+        if (pl.type === 'roundshield') {
+          var DF = frame([pl.x, -0.6 + 7.5 * S, pl.z], vmul(yawFrame([0, 0, 0], pl.yaw).z, 1), [0, 1, 0]);
+          lathe(M.shield, DF, [[7.4 * S, -0.85 * S], [7.4 * S, 0.85 * S]], 30);
+          lathe(M.gold, DF, [[3.6 * S, 0.6 * S], [3.6 * S, 1.5 * S]], 22);
+          blob(M.metal, sub(DF, 0, 1.4 * S, 0), 1.3 * S, 1.3 * S, 1.3 * S, 1, 12, 7);
+          ground.push([pl.x, pl.z, 7.4 * S]);
+          return;
+        }
+        var kite = [[-0.9, 0], [0.9, 0], [3.2, 5.6], [4.7, 11.0], [4.5, 16.6], [-4.5, 16.6], [-4.7, 11.0], [-3.2, 5.6]];
+        prism(M.shield, F, kite, -0.85, 0.85);
+        if (pl.type === 'crossshield') {
+          prism(M.gold, F, [[-0.8, 5.0], [0.8, 5.0], [0.8, 15.2], [-0.8, 15.2]], 0.6, 1.5);
+          prism(M.gold, F, [[-3.2, 10.0], [3.2, 10.0], [3.2, 11.8], [-3.2, 11.8]], 0.6, 1.5);
+        } else {
+          blob(M.metal, sub(F, 0, 10.6, 0.95), 1.5, 1.5, 0.9, 1, 12, 7);
+          prism(M.gold, F, [[-4.5, 15.4], [4.5, 15.4], [4.5, 16.6], [-4.5, 16.6]], 0.6, 1.2);
+        }
+        ground.push([pl.x, pl.z, 4.6 * S]);
+      }
+
+      function buildItems(f, M, ground) {
+        var cls = f.cls, S = f.S, s = f.s, W = cls.W, O = cls.O;
+        if (W === 'sword') swordItem(M, f.Hw, f.dW, S, { len: cls.id === 'paladin' ? 1.1 : 1, wide: cls.id === 'paladin' ? 1.15 : 1 });
+        else if (W === 'dagger' || W === 'knife') daggerItem(M, f.Hw, f.dW, S);
+        else if (W === 'rapier') rapierItem(M, f.Hw, f.dW, S);
+        else if (W === 'axe') axeItem(M, f.Hw, f.dW, S);
+        else if (W === 'mace') maceItem(M, f.Hw, f.dW, S);
+        else if (W === 'crystalstaff') staffItem(M, f.Hw, f.dW, S, f.wPlanted, 'crystal', ground);
+        else if (W === 'forkstaff') staffItem(M, f.Hw, f.dW, S, f.wPlanted, 'fork', ground);
+        else if (W === 'hornstaff') staffItem(M, f.Hw, f.dW, S, f.wPlanted, 'horn', ground);
+        else if (W === 'bostaff') staffItem(M, f.Hw, f.dW, S, f.wPlanted, 'plain', ground);
+        else if (W === 'orb') orbItem(M, f.Hw, S);
+        if (O === 'dagger') daggerItem(M, f.Ho, f.dO, S);
+        else if (O === 'tome') tomeItem(M, f);
+        else if (O === 'bow') bowItem(M, f.Ho, S, ground);
+        else if (f.shieldItem) shieldItem(M, M._planted, S, cls, ground);
+      }
+
+
+      // -----------------------------------------------------------------------
+      // Companions: five creatures, three poses each. Built at the origin facing +z, then moved onto the base.
+      // Quadrupeds get a hidden block under the belly, so the body never bridges over air.
+      // -----------------------------------------------------------------------
+      var COMPANIONS = [
+        { id: 'wolf', name: 'Wolf', poses: ['Sitting', 'Standing', 'Howling'], color: C.steel, r: 10.5 },
+        { id: 'cat', name: 'Cat', poses: ['Sitting', 'Walking', 'Pouncing'], color: C.gold, r: 8.5 },
+        { id: 'raven', name: 'Raven', poses: ['Perched', 'Wings up', 'Cawing'], color: C.dark, r: 6.8 },
+        { id: 'drake', name: 'Baby dragon', poses: ['Sitting', 'Prowling', 'Roaring'], color: C.moss, r: 10.5 },
+        { id: 'slime', name: 'Slime', poses: ['Idle', 'Hopping', 'Splat'], color: C.blue, r: 6.4 }
+      ];
+
+      function buildCompanion(type, pose, k, M) {
+        var F = scaledFrame(IDENT, k);
+        function P3(u, v, w) { return at(F, u, v, w); }
+        function bl(role, u, v, w, rx, ry, rz, e, nu, nv, dir) {
+          blob(M[role], dir ? scaledFrame(frame(P3(u, v, w), dir, [0, 0, 1]), k) : sub(F, u, v, w), rx, ry, rz, e || 1, nu || 14, nv || 8);
+        }
+        function lm(role, a, b, r0, r1) { limb(M[role], P3(a[0], a[1], a[2]), P3(b[0], b[1], b[2]), r0 * k, r1 * k, (r0 + r1) / 2 * 1.08 * k, 8, 1, 1); }
+        function tb(role, pts, r0, r1, c0, c1, flat, side) {
+          var q = curve(pts.map(function (p) { return P3(p[0], p[1], p[2]); }), 3), n = q.length;
+          var rs = ramp(r0 * k, r1 * k, n);
+          tube(M[role], q, rs, flat ? rs.map(function (r) { return r * flat; }) : null, 8, c0 === undefined ? 1 : c0, c1 === undefined ? 0.7 : c1, side);
+        }
+        function ear(role, x, y, z, x2, y2, z2, r) { tb(role, [[x, y, z], [x2, y2, z2]], r, r * 0.25, 0.6, 0.6); }
+
+        if (type === 0 || type === 1 || type === 3) {   // wolf, cat, baby dragon share a quadruped / sitter plan
+          var role = 'pet', eyes = 'petDetail';
+          var cat = type === 1, dragon = type === 3, wolf = type === 0;
+          var bulk = dragon ? 1.12 : cat ? 0.82 : 1;
+          if (pose === 0 || (pose === 2 && !cat)) {            // sitting, or howling / roaring from a sit
+            var tiltD = pose === 2 && dragon ? [0, 1, 0.22] : [0, 1, 0.55];
+            bl(role, 0, 5.7 * bulk, -1.0, 2.4 * bulk, 4.7 * bulk, 2.4 * bulk, 1, 14, 9, tiltD);
+            [-1, 1].forEach(function (sx) {
+              bl(role, sx * 2.1 * bulk, 2.1, -2.4, 1.7 * bulk, 2.1, 2.7, 0.8, 12, 8);
+              lm(role, [sx * 1.3, 6.6, 2.2], [sx * 1.35, 0.9, 3.1], 1.0 * bulk, 0.85 * bulk);
+              bl(role, sx * 1.35, 0.75, 3.9, 0.95, 0.75, 1.4, 0.8, 10, 6);
+            });
+            bl(role, 0, 2.2, -0.2, 1.6, 2.4, 3.2, 0.6, 12, 7);
+            var hy = pose === 2 ? (dragon ? 12.2 : 13.0) : 11.4, hz = pose === 2 ? (dragon ? 3.2 : 1.7) : 3.0;
+            tb(role, [[0, 7.8, 1.0], [0, (7.8 + hy) / 2, (1.0 + hz) / 2 - 0.2], [0, hy - 0.4, hz - 0.6]], 1.95 * bulk, 1.5 * bulk, 0, 0);
+            bl(role, 0, hy, hz, (dragon ? 2.0 : 1.55), (dragon ? 1.8 : 1.5), (dragon ? 2.1 : 1.8), 1, 14, 9);
+            var sn = (dragon ? 1.7 : cat ? 0.9 : 2.1);
+            if (pose === 2) {
+              tb(role, [[0, hy + 0.3, hz + 1.0], [0, hy + 0.3 + sn * 1.5, hz + 1.0 + sn * 0.6]], 1.0, 0.7, 0.4, 0.8);
+              if (dragon) tb(eyes, [[0, hy - 0.6, hz + 1.4], [0, hy - 0.9, hz + 3.0]], 0.6, 0.4, 0.4, 0.4);
+              ball(M[eyes], P3(0, hy + 0.3 + sn * 1.5, hz + 1.0 + sn * 0.6 + 0.2), 0.5 * k, 8, 5);
+            } else {
+              tb(role, [[0, hy - 0.2, hz + 1.1], [0, hy - 0.4, hz + 1.1 + sn]], 1.0, 0.75, 0.4, 0.8);
+              ball(M[eyes], P3(0, hy - 0.2, hz + 1.5 + sn), 0.55 * k, 8, 5);
+            }
+            if (cat || wolf) { ear(role, -1.05, hy + 1.2, hz - 0.3, -1.25, hy + (cat ? 3.4 : 3.0), hz - 0.9, 0.85); ear(role, 1.05, hy + 1.2, hz - 0.3, 1.25, hy + (cat ? 3.4 : 3.0), hz - 0.9, 0.85); }
+            else { tb('horn', [[-0.9, hy + 1.4, hz - 0.4], [-1.5, hy + 3.4, hz - 1.4]], 0.6, 0.2, 0.5, 0.5); tb('horn', [[0.9, hy + 1.4, hz - 0.4], [1.5, hy + 3.4, hz - 1.4]], 0.6, 0.2, 0.5, 0.5); }
+            if (cat) tb(role, [[0, 1.4, -3.9], [2.6, 0.9, -4.9], [4.4, 0.9, -2.9], [4.7, 0.9, -0.4]], 0.9, 0.55, 0.8, 0.8);
+            else if (dragon) tb(role, [[0, 1.5, -3.8], [1.5, 1.0, -6.4], [3.6, 1.0, -8.0], [6.2, 0.9, -8.2]], 1.5, 0.55, 0.8, 0.8);
+            else tb(role, [[0, 1.4, -3.8], [1.2, 0.9, -6.0], [3.2, 0.9, -7.2]], 1.0, 0.6, 0.8, 0.8);
+            if (dragon) [-1, 1].forEach(function (sx) {
+              var up = pose === 2 ? 1.5 : 1;
+              tb(role, [[sx * 1.4, 8.4, -1.4], [sx * (2.8 + up), 11.4 + up, -2.8], [sx * (3.8 + 2.4 * up), 14.6 + 2 * up, -3.8]], 1.45, 0.8, 0.8, 0.6, 0.38, [0, 0, 1]);
+            });
+          } else if (cat && pose === 2) {                         // pouncing: low in front, tail up
+            bl(role, 0, 3.8, -0.4, 2.2, 2.4, 4.4, 1, 14, 8);
+            bl(role, 0, 1.8, 0, 1.5, 1.9, 3.6, 0.6, 12, 7);
+            [-1, 1].forEach(function (sx) {
+              bl(role, sx * 2.2, 1.6, -3.1, 1.5, 1.7, 2.1, 0.8, 11, 7);
+              tb(role, [[sx * 1.3, 2.3, 2.6], [sx * 1.3, 1.0, 4.6], [sx * 1.3, 0.9, 6.8]], 0.95, 0.85, 0.8, 0.8);
+              bl(role, sx * 1.3, 0.7, 7.4, 0.95, 0.7, 1.2, 0.8, 10, 6);
+            });
+            tb(role, [[0, 4.2, 3.2], [0, 4.7, 4.6]], 1.7, 1.5, 0, 0);
+            bl(role, 0, 4.7, 5.3, 1.5, 1.45, 1.75, 1, 14, 8);
+            tb(role, [[0, 4.4, 6.2], [0, 4.3, 7.0]], 0.9, 0.7, 0.4, 0.8);
+            ball(M[eyes], P3(0, 4.3, 7.3), 0.5 * k, 8, 5);
+            ear(role, -1.0, 6.0, 4.9, -1.2, 8.2, 4.4, 0.85); ear(role, 1.0, 6.0, 4.9, 1.2, 8.2, 4.4, 0.85);
+            tb(role, [[0, 4.4, -4.2], [0, 7.2, -5.6], [0, 10.4, -6.6]], 0.85, 0.55, 0.8, 0.8);
+          } else {                                                  // standing / walking / prowling on four legs
+            var by = cat ? 5.1 : 6.0, bl2 = cat ? 4.5 : 5.2;
+            bl(role, 0, by, 0, 2.3 * bulk, 2.4 * bulk, bl2, 0.9, 16, 9);
+            bl(role, 0, by * 0.5, 0, 1.5, by * 0.5 + 0.3, bl2 * 0.85, 0.6, 12, 7);
+            [-1, 1].forEach(function (sx) {
+              [1, -1].forEach(function (fz) {
+                var z0 = fz * bl2 * 0.62;
+                lm(role, [sx * 1.4, by - 0.9, z0], [sx * 1.5, 0.9, z0 + 0.2], 1.05 * bulk, 0.85 * bulk);
+                bl(role, sx * 1.5, 0.7, z0 + 0.9, 0.95, 0.7, 1.4, 0.8, 10, 6);
+              });
+            });
+            var nz = bl2 * 0.8, hy2 = by + (dragon ? 3.0 : 2.5), hz2 = nz + 2.6;
+            tb(role, [[0, by + 1.2, nz - 1.0], [0, hy2 - 0.6, hz2 - 1.5]], 1.9 * bulk, 1.5 * bulk, 0, 0);
+            bl(role, 0, hy2, hz2, dragon ? 2.0 : 1.65, dragon ? 1.8 : 1.55, dragon ? 2.2 : 2.0, 1, 14, 9);
+            var sn2 = dragon ? 1.7 : cat ? 0.9 : 2.1;
+            tb(role, [[0, hy2 - 0.2, hz2 + 1.2], [0, hy2 - 0.45, hz2 + 1.2 + sn2]], 1.0, 0.75, 0.4, 0.8);
+            ball(M[eyes], P3(0, hy2 - 0.3, hz2 + 1.6 + sn2), 0.55 * k, 8, 5);
+            if (dragon) { tb('horn', [[-0.9, hy2 + 1.4, hz2 - 0.4], [-1.5, hy2 + 3.4, hz2 - 1.4]], 0.6, 0.2, 0.5, 0.5); tb('horn', [[0.9, hy2 + 1.4, hz2 - 0.4], [1.5, hy2 + 3.4, hz2 - 1.4]], 0.6, 0.2, 0.5, 0.5); }
+            else { ear(role, -1.0, hy2 + 1.2, hz2 - 0.3, -1.2, hy2 + (cat ? 3.4 : 3.0), hz2 - 0.8, 0.85); ear(role, 1.0, hy2 + 1.2, hz2 - 0.3, 1.2, hy2 + (cat ? 3.4 : 3.0), hz2 - 0.8, 0.85); }
+            if (cat) tb(role, [[0, by + 0.8, -bl2 + 0.2], [0, by + 3.6, -bl2 - 1.0], [0, by + 6.0, -bl2 - 0.8], [0, by + 8.0, -bl2 + 0.2]], 0.85, 0.5, 0.8, 0.8);
+            else tb(role, [[0, by + 0.8, -bl2 + 0.4], [0, by - 0.8, -bl2 - 2.4], [0, 2.8, -bl2 - 3.6], [0, 0.5, -bl2 - 3.9]], dragon ? 1.4 : 1.0, 0.5, 0.8, 0.8);
+            if (dragon) [-1, 1].forEach(function (sx) {
+              tb(role, [[sx * 1.5, by + 1.6, -1.0], [sx * 3.4, by + 4.4, -2.0], [sx * 4.8, by + 7.4, -3.0]], 1.4, 0.8, 0.8, 0.6, 0.38, [0, 0, 1]);
+            });
+          }
+        } else if (type === 2) {                                  // raven
+          var rr = 'pet';
+          var cawing = pose === 2, tilt = [0, 1, cawing ? 0.35 : 0.55];
+          bl(rr, 0, 6.4, 0, 1.95, 2.9, 1.75, 1, 14, 9, tilt);
+          [-1, 1].forEach(function (sx) {
+            lm(rr, [sx * 0.9, 5.2, 0.4], [sx * 1.0, 0.8, 0.7], 0.72, 0.62);
+            bl(rr, sx * 1.0, 0.45, 1.5, 1.0, 0.45, 1.6, 0.8, 9, 5);
+          });
+          bl(rr, 0, 2.6, 0.2, 1.1, 2.3, 1.3, 0.6, 10, 6);
+          tb(rr, [[0, 4.8, -1.7], [0, 2.4, -3.6], [0, 0.7, -5.0]], 1.6, 0.9, 0.6, 0.3, 0.38, [0, 0, 1]);
+          var hy3 = cawing ? 10.4 : 9.7, hz3 = cawing ? 1.7 : 1.0;
+          bl(rr, 0, hy3, hz3, 1.45, 1.4, 1.7, 1, 12, 8);
+          if (cawing) { tb('petDetail', [[0, hy3 + 0.3, hz3 + 1.3], [0, hy3 + 2.0, hz3 + 3.0]], 0.8, 0.2, 0.4, 0.4); tb('petDetail', [[0, hy3 - 0.5, hz3 + 1.3], [0, hy3 - 0.3, hz3 + 3.0]], 0.7, 0.2, 0.4, 0.4); }
+          else tb('petDetail', [[0, hy3 - 0.1, hz3 + 1.2], [0, hy3 - 0.5, hz3 + 3.4]], 0.85, 0.2, 0.4, 0.4);
+          [-1, 1].forEach(function (sx) {
+            if (pose === 1) [[1.4, 7.0, 3.4, 11.4, 5.0, 15.4], [1.4, 6.6, 4.4, 10.4, 7.0, 13.6], [1.2, 7.6, 2.4, 12.0, 3.2, 16.4]].forEach(function (w) { tb(rr, [[sx * w[0], w[1], -0.2], [sx * w[2], w[3], -0.5], [sx * w[4], w[5], -0.8]], 1.4, 0.6, 0.8, 0.5, 0.4, [0, 0, 1]); });
+            else bl(rr, sx * 1.75, 5.9, -0.4, 0.6, 2.5, 1.35, 1, 9, 6, tilt);
+          });
+        } else {                                                  // slime
+          var sp = [
+            [[4.4, 0], [5.0, 1.0], [4.8, 2.6], [4.0, 4.2], [2.5, 5.5], [0, 6.2]],
+            [[3.4, 0], [3.8, 1.3], [3.5, 3.7], [2.8, 6.0], [1.7, 8.0], [0, 9.0]],
+            [[5.8, 0], [6.2, 0.9], [5.4, 2.1], [3.4, 3.0], [0, 3.4]]
+          ][pose];
+          lathe(M.pet, F, sp.map(function (q) { return [q[0] * k, q[1] * k]; }), 22);
+          var ey = pose === 1 ? 5.4 : pose === 2 ? 2.0 : 3.8, er = pose === 1 ? 3.0 : pose === 2 ? 4.2 : 4.6;
+          [-1, 1].forEach(function (sx) { ball(M.petDetail, P3(sx * 1.5, ey, er * 0.94), 0.8 * k, 9, 6); });
+          tb('petDetail', [[-0.9, ey - 1.5, er * 0.95 + 0.1], [0, ey - 1.8, er * 0.95 + 0.25], [0.9, ey - 1.5, er * 0.95 + 0.1]], 0.35, 0.35, 0.4, 0.4);
+          if (pose === 2) [-1, 1].forEach(function (sx) { ball(M.pet, P3(sx * 6.0, 0.9, 1.0), 1.3 * k, 10, 6); });
+        }
+      }
+
+
+      // -----------------------------------------------------------------------
+      // Base, name plaque and lettering
+      // -----------------------------------------------------------------------
+      var BASE_SHAPES = ['Round', 'Rounded square', 'Hexagon', 'Octagon'];
+      var BASE_TOPS = ['Smooth', 'Cobblestones', 'Rubble', 'Grass tufts'];
+      var nameState = { text: 'Aldric', font: 'block' };
+      var NAME_FONTS = Object.keys(FONTDATA);
+      var look = {};            // role -> chosen colour (empty = the race / class default)
+
+      function rng(seed) {
+        var a = seed >>> 0;
+        return function () {
+          a = (a + 0x6D2B79F5) >>> 0;
+          var t = a;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      function hull(pts) {
+        var p = pts.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }), lo = [], up = [], i;
+        function cr(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+        for (i = 0; i < p.length; i++) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p[i]) <= 1e-9) lo.pop(); lo.push(p[i]); }
+        for (i = p.length - 1; i >= 0; i--) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p[i]) <= 1e-9) up.pop(); up.push(p[i]); }
+        lo.pop(); up.pop();
+        return lo.concat(up);
+      }
+      function shapePts(shape, cx, cz, R) {
+        var pts = [], i, k, n;
+        if (shape === 0) { for (i = 0; i < 56; i++) pts.push([cx + R * Math.cos(i / 56 * TAU), cz + R * Math.sin(i / 56 * TAU)]); }
+        else if (shape === 1) {
+          var h = R * 0.92, rc = 2.6;
+          [[1, 1], [-1, 1], [-1, -1], [1, -1]].forEach(function (c, ci) {
+            for (k = 0; k <= 5; k++) { var a = (ci * 90 + k * 18) * Math.PI / 180 + 0; pts.push([cx + c[0] * (h - rc) + rc * Math.cos(a - (c[0] < 0 ? 0 : 0)), cz + c[1] * (h - rc) + rc * Math.sin(a)]); }
+          });
+        } else { n = shape === 2 ? 6 : 8; for (i = 0; i < n; i++) pts.push([cx + R * (shape === 2 ? 1.06 : 1.03) * Math.cos(i / n * TAU + (shape === 2 ? 0 : Math.PI / 8)), cz + R * (shape === 2 ? 1.06 : 1.03) * Math.sin(i / n * TAU + (shape === 2 ? 0 : Math.PI / 8))]); }
+        return pts;
+      }
+      function polyCentroid(poly) { var x = 0, z = 0; poly.forEach(function (q) { x += q[0]; z += q[1]; }); return [x / poly.length, z / poly.length]; }
+      function insetPoly(poly, d) {
+        var c = polyCentroid(poly), n = poly.length, out = [], i;
+        for (i = 0; i < n; i++) {
+          var a = poly[(i + n - 1) % n], b = poly[i], e = poly[(i + 1) % n];
+          function nrm(p, q) { var dx = q[0] - p[0], dz = q[1] - p[1], l = Math.sqrt(dx * dx + dz * dz) || 1, nx = dz / l, nz = -dx / l; if (nx * ((p[0] + q[0]) / 2 - c[0]) + nz * ((p[1] + q[1]) / 2 - c[1]) < 0) { nx = -nx; nz = -nz; } return [nx, nz]; }
+          var n1 = nrm(a, b), n2 = nrm(b, e), bx = n1[0] + n2[0], bz = n1[1] + n2[1], bl = Math.sqrt(bx * bx + bz * bz) || 1;
+          bx /= bl; bz /= bl;
+          var k = d / Math.max(0.45, bx * n1[0] + bz * n1[1]);
+          out.push([b[0] - bx * k, b[1] - bz * k]);
+        }
+        return out;
+      }
+      // A convex outline as a chamfered slab from y0 to y1 (bevel chB at the bed, chT on the top edge), closed.
+      function slab(out, poly, y0, y1, chB, chT) {
+        var c = polyCentroid(poly), n = poly.length;
+        var r0 = insetPoly(poly, chB), r3 = insetPoly(poly, chT);
+        function ringAt(pl, y) { return pl.map(function (q) { return [q[0], y, q[1]]; }); }
+        skin(out, [poleRing([c[0], y0, c[1]], n), ringAt(r0, y0), ringAt(poly, y0 + chB), ringAt(poly, y1 - chT), ringAt(r3, y1), poleRing([c[0], y1, c[1]], n)]);
+      }
+      function frontZ(poly, x) {
+        var best = -Infinity, i, n = poly.length;
+        for (i = 0; i < n; i++) {
+          var a = poly[i], b = poly[(i + 1) % n];
+          if ((a[0] - x) * (b[0] - x) <= 0 && a[0] !== b[0]) best = Math.max(best, a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]));
+        }
+        return best;
+      }
+
+      function nameLines() {
+        var t = String(nameState.text || '').replace(/\r/g, '').split('\n').slice(0, 2);
+        while (t.length > 1 && !t[t.length - 1].trim()) t.pop();
+        return t.join('').trim() ? t : [];
+      }
+      function nameLayout(capH, spacing) {
+        var font = FONTDATA[nameState.font] || FONTDATA[NAME_FONTS[0]], lines = nameLines();
+        if (!lines.length) return null;
+        var scale = capH / font.cap, placed = [], widths = [], pitch = capH * 1.35;
+        lines.forEach(function (text, li) {
+          var x = 0, items = [], chars = Array.from(text), ci;
+          for (ci = 0; ci < chars.length; ci++) {
+            var ch = chars[ci], gs = glyphShapes(nameState.font, ch, scale, 0);
+            if (!gs.shapes.length && ch !== ' ' && !font.g[ch]) gs = glyphShapes(nameState.font, '?', scale, 0);
+            items.push({ gs: gs, x: x, y: -li * pitch });
+            x += gs.adv + spacing;
+          }
+          widths.push(x - spacing); placed.push(items);
+        });
+        var maxW = Math.max.apply(null, widths), inst = [], x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        placed.forEach(function (items, i) {
+          var off = (maxW - widths[i]) / 2;
+          items.forEach(function (it) {
+            it.x += off;
+            it.gs.shapes.forEach(function (sh) { x0 = Math.min(x0, sh.box[0] + it.x); x1 = Math.max(x1, sh.box[2] + it.x); y0 = Math.min(y0, sh.box[1] + it.y); y1 = Math.max(y1, sh.box[3] + it.y); });
+            inst.push(it);
+          });
+        });
+        if (!isFinite(x0)) return null;
+        var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        inst.forEach(function (it) { it.x -= cx; it.y -= cy; });
+        return { inst: inst, W: x1 - x0, H: y1 - y0 };
+      }
+
+      var NAME_SYL = {
+        human: [['Al', 'Bran', 'Cor', 'Dar', 'Edr', 'Fen', 'Gar', 'Hal', 'Ivo', 'Jor', 'Kel', 'Lor', 'Mar', 'Ned', 'Per', 'Ros', 'Tam', 'Wyn'], ['ic', 'a', 'en', 'win', 'ard', 'is', 'ric', 'ton', 'bert', 'ana', 'elle', 'ia', 'or']],
+        elf: [['Ael', 'Cael', 'Elar', 'Fae', 'Ili', 'Lia', 'Mir', 'Nae', 'Syl', 'Thae', 'Vael', 'Yar', 'Ara', 'Eri'], ['andor', 'wen', 'iel', 'thas', 'ynn', 'ara', 'rion', 'lith', 'ael']],
+        dwarf: [['Bar', 'Dor', 'Gim', 'Thor', 'Bru', 'Dur', 'Kaz', 'Mor', 'Nor', 'Rur', 'Tho', 'Bal', 'Gar', 'Hag'], ['in', 'ri', 'grim', 'dak', 'li', 'gar', 'nur', 'din', 'ek', 'bur']],
+        halfling: [['Pip', 'Merry', 'Rosie', 'Tob', 'Fin', 'Bil', 'Lil', 'Sam', 'Dilly', 'Pod', 'Hob', 'Nim', 'Wil'], ['bo', 'kin', 'by', 'wick', 'ton', 'ley', 'top', 'fort', 'bit']],
+        orc: [['Gor', 'Mak', 'Ug', 'Zug', 'Gru', 'Bol', 'Kra', 'Thrak', 'Nug', 'Ruk', 'Dra', 'Shar'], ['gash', 'tusk', 'nak', 'mok', 'gul', 'thar', 'bash', 'rok', 'dum']],
+        drake: [['Vor', 'Sar', 'Kyr', 'Ixa', 'Zer', 'Thra', 'Nax', 'Ryx', 'Ash', 'Em'], ['ath', 'ax', 'ion', 'yss', 'ark', 'orn', 'ix', 'ael', 'th']]
+      };
+      function rollName(raceIdx) {
+        var set = NAME_SYL[RACES[raceIdx].id], a = set[0][Math.floor(Math.random() * set[0].length)], b = set[1][Math.floor(Math.random() * set[1].length)];
+        var nm = a + b;
+        return nm.length > 9 ? a : nm;
+      }
+
+      // -----------------------------------------------------------------------
+      // build()
+      // -----------------------------------------------------------------------
+      function mapRoles(M, fn, flip) {
+        Object.keys(M).forEach(function (r) {
+          var a = M[r], i;
+          if (!Array.isArray(a)) return;
+          for (i = 0; i < a.length; i += 3) { var q = fn(a[i], a[i + 1], a[i + 2]); a[i] = q[0]; a[i + 1] = q[1]; a[i + 2] = q[2]; }
+          if (flip) for (i = 0; i < a.length; i += 9) {
+            var t0 = a[i + 3], t1 = a[i + 4], t2 = a[i + 5];
+            a[i + 3] = a[i + 6]; a[i + 4] = a[i + 7]; a[i + 5] = a[i + 8]; a[i + 6] = t0; a[i + 7] = t1; a[i + 8] = t2;
+          }
+        });
+      }
+      function shiftRoles(M, dx, dy, dz) { mapRoles(M, function (x, y, z) { return [x + dx, y + dy, z + dz]; }, false); }
+
+      function groundScatter(poly, style, hb, seed, M) {
+        var r = rng(seed), ins = insetPoly(poly, 1.3), x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        poly.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); });
+        var step = style === 1 ? 3.7 : style === 2 ? 3.2 : 3.4, gx, gz, row = 0;
+        for (gz = z0; gz <= z1; gz += step * 0.87, row++) {
+          for (gx = x0 + (row % 2 ? step / 2 : 0); gx <= x1; gx += step) {
+            var px = gx + (r() - 0.5) * step * 0.35, pz = gz + (r() - 0.5) * step * 0.35;
+            if (!inPoly([px, pz], ins)) continue;
+            if (style === 1) {
+              var sx = 1.45 + r() * 0.5, sz = 1.35 + r() * 0.5;
+              blob(M.ground, { o: [px, hb - 0.2, pz], x: [Math.cos(r() * 3), 0, Math.sin(r() * 3)], y: [0, 1, 0], z: [-Math.sin(r() * 3), 0, Math.cos(r() * 3)] }, sx, 0.85, sz, 0.8, 10, 6);
+            } else if (style === 2) {
+              var sz2 = 0.9 + r() * 1.5, ang = r() * TAU;
+              blob(M.ground, { o: [px, hb - 0.3, pz], x: [Math.cos(ang), 0, Math.sin(ang)], y: [0, 1, 0], z: [-Math.sin(ang), 0, Math.cos(ang)] }, sz2 * 1.15, sz2 * 0.7 + 0.2, sz2, 0.7, 8, 5);
+            } else {
+              var nb = 3, bi;
+              for (bi = 0; bi < nb; bi++) {
+                var a2 = r() * TAU, lean = 0.4 + r() * 0.5, len = 2.6 + r() * 1.6;
+                var bx2 = px + (r() - 0.5) * 0.6, bz2 = pz + (r() - 0.5) * 0.6;
+                taper(M.ground, [[bx2, hb - 0.4, bz2], [bx2 + Math.cos(a2) * lean * 0.5, hb + len * 0.55, bz2 + Math.sin(a2) * lean * 0.5], [bx2 + Math.cos(a2) * lean * 1.4, hb + len, bz2 + Math.sin(a2) * lean * 1.4]], 0.62, 0.05, 5, 0);
+              }
+            }
+          }
+        }
+      }
+
+      function build(p, api0) {
+        var race = RACES[p.race], cls = CLASSES[p.cls], pose = POSES[p.pose];
+        var MF = newRoles(), ground = [];
+        var f = buildFigure(p, MF);
+        ground = f.ground.slice();
+        buildItems(f, MF, ground);
+        delete MF._planted;
+        // weapon hand: the poses are authored with the weapon on +x; "Right-handed" mirrors that so it sits on the character's right
+        var right = p.hand === 0, turn = p.turn;
+        var ct = Math.cos(rad(turn)), st = Math.sin(rad(turn));
+        function figX(x, y, z) { if (right) x = -x; return [x * ct + z * st, y, -x * st + z * ct]; }
+        mapRoles(MF, figX, right);
+        var g2 = ground.map(function (g) { var q = figX(g[0], 0, g[1]); return [q[0], q[2], g[2]]; });
+        var Rf = 0;
+        g2.forEach(function (g) { Rf = Math.max(Rf, Math.sqrt(g[0] * g[0] + g[1] * g[1]) + g[2]); });
+        Rf = Math.max(Rf, 5);
+
+        // companion
+        var MC = null, Rc = 0, hasComp = p.comp > 0;
+        if (hasComp) {
+          MC = { pet: [], petDetail: [], horn: [] };
+          var kk = p.compSize / 100;
+          buildCompanion(p.comp - 1, p.compPose, kk, MC);
+          var tc = Math.cos(rad(p.compTurn)), ts = Math.sin(rad(p.compTurn));
+          mapRoles(MC, function (x, y, z) { return [x * tc + z * ts, y, -x * ts + z * tc]; }, false);
+          Rc = COMPANIONS[p.comp - 1].r * kk;
+        }
+        var baseR = Math.max(p.baseD / 2, Rf + 1.0), cR = Math.max(Rc + 1.0, 6);
+        var fx = 0, fz = 0, cx = 0, cz = 0;
+        if (hasComp) {
+          var sep = Math.max(Rf * 0.9 + Rc * 0.9, 4) + 1.0, axis = p.compSide === 2 ? [0, 1] : [1, 0], sg = p.compSide === 0 ? -1 : 1;
+          if (p.compSide === 2) sg = 1;
+          cx = axis[0] * sg * sep / 2; cz = axis[1] * sg * sep / 2; fx = -cx; fz = -cz;
+        }
+        var hb = p.baseH;
+        var pts = shapePts(p.baseShape, fx, fz, baseR);
+        if (hasComp) pts = pts.concat(shapePts(p.baseShape, cx, cz, cR));
+        var outline = hull(pts);
+        var MB = { base: [], ground: [], plaque: [], name: [] };
+        slab(MB.base, outline, 0, hb, 0.6, 0.6);
+        if (p.baseTop > 0) groundScatter(outline, p.baseTop, hb, 7 + p.baseShape * 13, MB);
+
+        shiftRoles(MF, fx, hb - 0.5, fz);
+        if (hasComp) shiftRoles(MC, cx, hb - 0.5, cz);
+
+        // name plaque on the front of the base, with raised lettering
+        var plateOn = p.plate === 1 && nameLines().length > 0;
+        if (plateOn) {
+          var capH = p.nameSize, lay = nameLayout(capH, capH * 0.08), maxW = Math.max(2 * baseR * 1.15, 26);
+          if (lay && lay.W + 4.4 > maxW) { var k2 = (maxW - 4.4) / lay.W; capH *= k2; lay = nameLayout(capH, capH * 0.08); }
+          if (lay) {
+            var pw = Math.max(lay.W + 4.4, 14), pd = Math.max(lay.H + 3.6, 6.4), top = hb - 0.5;
+            var xs = [], xi;
+            for (xi = -pw / 2; xi <= pw / 2; xi += pw / 8) xs.push(xi);
+            var zf = Infinity;
+            xs.forEach(function (xx) { var fz2 = frontZ(outline, xx); if (isFinite(fz2)) zf = Math.min(zf, fz2); });
+            if (!isFinite(zf)) zf = baseR;
+            var zb = zf - 1.2, zc = zb + pd / 2;
+            slab(MB.plaque, roundedRect(0, zc, pw, pd, 1.6), 0, top, 0.5, 0.4);
+            lay.inst.forEach(function (it) {
+              it.gs.shapes.forEach(function (sh) { extrude(MB.name, sh, it.x, it.y - zc, top - 0.4, top + 0.9); });
+            });
+          }
+        }
+
+        // assemble the output meshes with their default colours
+        function pick(role, def) { return look[role] || def; }
+        var col = cls.col;
+        var defs = {
+          eyes: C.dark, skin: pick('skin', race.skin), hair: pick('hair', col.hair), outfit: pick('outfit', col.outfit), trim: pick('trim', C.brown), armor: pick('armor', col.armor),
+          cape: pick('cape', col.cape), metal: pick('metal', C.steel), wood: pick('trim', C.brown), gold: pick('gold', C.gold), magic: pick('magic', C.blue), shield: pick('shield', col.cape),
+          horn: pick('horn', C.skin), pet: pick('pet', hasComp ? COMPANIONS[p.comp - 1].color : C.steel), petDetail: C.dark, base: pick('base', C.dark),
+          ground: pick('ground', p.baseTop === 3 ? C.moss : C.steel), plaque: pick('base', C.dark), name: pick('name', C.gold)
+        };
+        var res = [];
+        function emit(name, arr) { if (arr && arr.length) res.push({ name: name, positions: new Float32Array(arr), color: defs[name], smoothGroup: name }); }
+        ROLES.forEach(function (r) { emit(r, MF[r]); });
+        if (MC) { emit('pet', MC.pet); emit('petDetail', MC.petDetail); if (MC.horn.length) res.push({ name: 'horn', positions: new Float32Array(MC.horn), color: defs.horn, smoothGroup: 'horn' }); }
+        emit('base', MB.base); emit('ground', MB.ground); emit('plaque', MB.plaque); emit('name', MB.name);
+        return res;
+      }
+      function roundedRect(cx, cz, w, d, r) {
+        var pts = [], k, corners = [[1, 1, 0], [-1, 1, 90], [-1, -1, 180], [1, -1, 270]];
+        corners.forEach(function (c) {
+          for (k = 0; k <= 6; k++) { var a = (c[2] + k * 15) * Math.PI / 180; pts.push([cx + c[0] * (w / 2 - r) + r * Math.cos(a) * 1, cz + c[1] * (d / 2 - r) + r * Math.sin(a) * 1]); }
+        });
+        // corners above were generated in angle order about each centre; sort into one convex loop
+        return hull(pts);
+      }
+
+
+      // -----------------------------------------------------------------------
+      // Config: parameters, presets and the character-creator tabs
+      // -----------------------------------------------------------------------
+      var PAL = [
+        { name: 'Peach Skin', color: C.skin }, { name: 'Moss Green', color: C.moss }, { name: 'Steel Grey', color: C.steel }, { name: 'Royal Blue', color: C.blue },
+        { name: 'Crimson Red', color: C.red }, { name: 'Leather Brown', color: C.brown }, { name: 'Sunny Gold', color: C.gold }, { name: 'Shadow Black', color: C.dark }
+      ];
+      function hidden() { return false; }
+      var DEFAULTS = { race: 0, cls: 4, pose: 0, comp: 0, compPose: 0, hair: 0, beard: 0, height: 32, build: 100, headSize: 100, hand: 0, turn: 0, compSide: 0, compSize: 100, compTurn: 0, baseShape: 0, baseTop: 0, baseD: 25, baseH: 3, plate: 1, nameSize: 3.6 };
+      function pv(over) { var o = {}; Object.keys(DEFAULTS).forEach(function (k) { o[k] = DEFAULTS[k]; }); Object.keys(over || {}).forEach(function (k) { o[k] = over[k]; }); return o; }
+
+      var parameters = [
+        { key: 'race', label: 'Race', min: 0, max: RACES.length - 1, step: 1, value: DEFAULTS.race, options: RACES.map(function (r) { return r.name; }), showIf: hidden },
+        { key: 'cls', label: 'Class', min: 0, max: CLASSES.length - 1, step: 1, value: DEFAULTS.cls, options: CLASSES.map(function (r) { return r.name; }), showIf: hidden },
+        { key: 'pose', label: 'Pose', min: 0, max: POSES.length - 1, step: 1, value: DEFAULTS.pose, options: POSES.map(function (r) { return r.name; }), showIf: hidden },
+        { key: 'comp', label: 'Companion', min: 0, max: COMPANIONS.length, step: 1, value: 0, options: ['None'].concat(COMPANIONS.map(function (r) { return r.name; })), showIf: hidden },
+        { key: 'compPose', label: 'Companion pose', min: 0, max: 2, step: 1, value: 0, options: ['Pose 1', 'Pose 2', 'Pose 3'], showIf: hidden },
+        { tab: 'hero', group: 'Look', key: 'height', label: 'Figure height (a human is this tall, mm)', unit: ' mm', min: 22, max: 60, step: 1, value: 32 },
+        { tab: 'hero', group: 'Look', key: 'build', label: 'Build (slim to stocky)', unit: '%', min: 80, max: 125, step: 1, value: 100 },
+        { tab: 'hero', group: 'Look', key: 'headSize', label: 'Head size (heroic to cute)', unit: '%', min: 85, max: 140, step: 1, value: 100 },
+        { tab: 'hero', group: 'Look', key: 'hair', label: 'Hair style', min: 0, max: HAIRS.length - 1, step: 1, value: 0, options: HAIRS },
+        { tab: 'hero', group: 'Look', key: 'beard', label: 'Beard', min: 0, max: BEARDS.length - 1, step: 1, value: 0, options: BEARDS },
+        { tab: 'pose', group: 'Stance', key: 'hand', label: 'Weapon hand', min: 0, max: 1, step: 1, value: 0, options: ['Right-handed', 'Left-handed'] },
+        { tab: 'pose', group: 'Stance', key: 'turn', label: 'Turn the figure on its base', unit: '°', min: -60, max: 60, step: 1, value: 0 },
+        { tab: 'companion', group: 'Placement', key: 'compSide', label: 'Companion stands', min: 0, max: 2, step: 1, value: 0, options: ['To the left', 'To the right', 'In front'] },
+        { tab: 'companion', group: 'Placement', key: 'compSize', label: 'Companion size', unit: '%', min: 70, max: 150, step: 1, value: 100 },
+        { tab: 'companion', group: 'Placement', key: 'compTurn', label: 'Companion turn', unit: '°', min: -135, max: 135, step: 1, value: 0 },
+        { tab: 'base', group: 'Base', key: 'baseShape', label: 'Base shape', min: 0, max: BASE_SHAPES.length - 1, step: 1, value: 0, options: BASE_SHAPES },
+        { tab: 'base', group: 'Base', key: 'baseTop', label: 'Ground', min: 0, max: BASE_TOPS.length - 1, step: 1, value: 0, options: BASE_TOPS },
+        { tab: 'base', group: 'Base', key: 'baseD', label: 'Base width (grows to fit the pose)', unit: ' mm', min: 20, max: 50, step: 1, value: 25 },
+        { tab: 'base', group: 'Base', key: 'baseH', label: 'Base thickness', unit: ' mm', min: 2, max: 6, step: 0.5, value: 3 },
+        { tab: 'base', group: 'Name plate', key: 'plate', label: 'Name plate', min: 0, max: 1, step: 1, value: 1, options: ['Off', 'On'] },
+        { tab: 'base', group: 'Name plate', key: 'nameSize', label: 'Letter height (under 3 mm is hard to print)', unit: ' mm', min: 2.4, max: 6, step: 0.2, value: 3.6, showIf: function (p) { return p.plate === 1; } }
+      ];
+
+      var presets = [
+        { label: 'Default hero (Human Fighter)', values: pv({}) },
+        { label: 'Elf Wizard, casting', values: pv({ race: 1, cls: 11, pose: 3 }) },
+        { label: 'Dwarf Fighter with a wolf', values: pv({ race: 2, cls: 4, pose: 1, comp: 1, compPose: 1, baseTop: 1 }) },
+        { label: 'Orc Barbarian, battle ready', values: pv({ race: 4, cls: 0, pose: 1, baseTop: 2 }) },
+        { label: 'Halfling Rogue with a cat', values: pv({ race: 3, cls: 8, pose: 5, comp: 2, compPose: 1, compSide: 1, baseTop: 3 }) },
+        { label: 'Human Cleric with a raven', values: pv({ race: 0, cls: 2, pose: 0, comp: 3, compPose: 1, baseShape: 2 }) },
+        { label: 'Drakeling Sorcerer with a baby dragon', values: pv({ race: 5, cls: 9, pose: 3, comp: 4, compPose: 2, baseShape: 3 }) },
+        { label: 'Elf Ranger with a wolf', values: pv({ race: 1, cls: 7, pose: 1, comp: 1, compPose: 2, baseTop: 3 }) },
+        { label: 'Human Paladin, triumph', values: pv({ race: 0, cls: 6, pose: 4, baseTop: 1 }) },
+        { label: 'Human Bard with a cat', values: pv({ race: 0, cls: 1, pose: 4, comp: 2, compPose: 0, compSide: 1 }) },
+        { label: 'Human Warlock with a raven', values: pv({ race: 0, cls: 10, pose: 3, comp: 3, compPose: 2 }) },
+        { label: 'Halfling Druid with a slime', values: pv({ race: 3, cls: 3, pose: 0, comp: 5, compPose: 0, baseTop: 3 }) },
+        { label: 'Dwarf Monk, ready', values: pv({ race: 2, cls: 5, pose: 1 }) }
+      ];
+
+      function h(tag, attrs, text) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]); else node.setAttribute(k, attrs[k]);
+        });
+        if (text) node.textContent = text;
+        return node;
+      }
+      var refreshers = [];
+      function chipGrid(container, api, key, labels) {
+        var wrap = h('div', { class: 'mm-chips' }), btns = labels.map(function (lb, i) {
+          var b = h('button', { class: 'mm-chip', type: 'button', 'aria-pressed': 'false' }, lb);
+          b.addEventListener('click', function () { var o = {}; o[key] = i; api.setParams(o); refresh(); });
+          wrap.appendChild(b);
+          return b;
+        });
+        function refresh() { btns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(api.params[key] === i)); }); }
+        refreshers.push(refresh); container.appendChild(wrap); refresh();
+        return refresh;
+      }
+      function colorRow(container, api, label, roles) {
+        container.appendChild(h('p', { class: 'mm-note' }, label));
+        var wrap = h('div', { class: 'mm-chips' }), btns = [];
+        var auto = h('button', { class: 'mm-chip', type: 'button', 'aria-pressed': 'false', title: 'Use the race and class colour' }, 'Auto');
+        auto.addEventListener('click', function () { roles.forEach(function (r) { delete look[r]; }); api.rebuild(); refresh(); });
+        wrap.appendChild(auto);
+        PAL.forEach(function (pc) {
+          var b = h('button', { class: 'mm-swatch', type: 'button', title: pc.name, 'aria-label': pc.name, 'aria-pressed': 'false', style: 'min-width:2.2rem;padding:0.3rem 0.45rem' });
+          b.appendChild(h('span', { class: 'mm-swatch-dot', style: 'background:' + pc.color }));
+          b.addEventListener('click', function () { roles.forEach(function (r) { look[r] = pc.color; }); api.rebuild(); refresh(); });
+          btns.push([b, pc.color]); wrap.appendChild(b);
+        });
+        function refresh() {
+          var cur = look[roles[0]];
+          auto.setAttribute('aria-pressed', String(!cur));
+          btns.forEach(function (x) { x[0].setAttribute('aria-pressed', String(cur === x[1])); });
+        }
+        refreshers.push(refresh); container.appendChild(wrap); refresh();
+      }
+      var blurbs = {};
+      function note(container, id, text) { var n = h('p', { class: 'mm-note' }, text); blurbs[id] = n; container.appendChild(n); return n; }
+      var lastSig = '';
+      function syncUi(api) {
+        var p = api.params, sig = [p.race, p.cls, p.pose, p.comp, p.compPose].join(',');
+        if (sig === lastSig) return;
+        lastSig = sig;
+        refreshers.forEach(function (fn) { fn(); });
+        if (blurbs.race) blurbs.race.textContent = RACES[p.race].blurb;
+        if (blurbs.cls) blurbs.cls.textContent = CLASSES[p.cls].blurb;
+        if (blurbs.comp) blurbs.comp.textContent = p.comp ? 'Pick a pose below. The companion stands on the same base.' : 'No companion. Pick one to add a pet to the base.';
+      }
+      var apiRef = null;
+
+      window.MM_GENERATOR = {
+        code: 'MM-138',
+        category: 'TABLETOP // MINIATURES',
+        title: 'Character Creator',
+        fileName: 'CharacterMini',
+        tabsFirst: true,
+        sculpt: false,
+        minFrame: 50,
+        openGroups: ['Look'],
+        palette: PAL,
+        defaultColor: C.steel,
+        partNames: {
+          eyes: 'Eyes', skin: 'Skin', hair: 'Hair and beard', outfit: 'Clothes', trim: 'Boots and belt', armor: 'Armor', cape: 'Cloak, hat and plume', metal: 'Blades and metal', wood: 'Handles and staffs',
+          gold: 'Gold trim', magic: 'Magic', shield: 'Shield', horn: 'Horns and tusks', pet: 'Companion', petDetail: 'Companion eyes and beak', base: 'Base', ground: 'Ground cover', plaque: 'Name plate', name: 'Name letters'
+        },
+        parameters: parameters,
+        presets: presets,
+        testState: nameState,
+        onFrame: function () { if (apiRef) syncUi(apiRef); },
+        build: build,
+        tabs: [
+          {
+            id: 'hero', label: 'Hero', hint: 'Name your hero, then pick a race and a class',
+            mount: function (container, api) {
+              apiRef = api;
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Name'));
+              var row = h('div', { class: 'mm-export-row' });
+              var inp = h('input', { type: 'text', maxlength: '24', placeholder: 'Hero name', spellcheck: 'false', autocomplete: 'off', style: 'flex:1;min-width:0' });
+              inp.value = nameState.text;
+              inp.addEventListener('input', function () { nameState.text = inp.value; api.rebuild(); });
+              var roll = h('button', { class: 'mm-btn', type: 'button' }, 'Roll a name');
+              roll.addEventListener('click', function () { nameState.text = rollName(api.params.race); inp.value = nameState.text; api.rebuild(); });
+              row.appendChild(inp); row.appendChild(roll); container.appendChild(row);
+              var fsel = h('select', { 'aria-label': 'Name font' });
+              NAME_FONTS.forEach(function (k) { fsel.appendChild(h('option', { value: k }, FONTDATA[k].label)); });
+              fsel.value = nameState.font;
+              fsel.addEventListener('change', function () { nameState.font = fsel.value; api.rebuild(); });
+              container.appendChild(h('div', { class: 'mm-slider' })).appendChild(fsel);
+              container.appendChild(h('p', { class: 'mm-note' }, 'The name is raised on a plate at the front of the base (Base tab turns it off). Letters need a bold font to print well at this size.'));
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Race'));
+              chipGrid(container, api, 'race', RACES.map(function (r) { return r.name; }));
+              note(container, 'race', RACES[api.params.race].blurb);
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Class'));
+              chipGrid(container, api, 'cls', CLASSES.map(function (r) { return r.name; }));
+              note(container, 'cls', CLASSES[api.params.cls].blurb);
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Colours'));
+              colorRow(container, api, 'Skin', ['skin', 'horn']);
+              colorRow(container, api, 'Hair and beard', ['hair']);
+              colorRow(container, api, 'Clothes', ['outfit']);
+              colorRow(container, api, 'Cloak, hat and plume', ['cape']);
+              colorRow(container, api, 'Armor and blades', ['armor', 'metal']);
+              colorRow(container, api, 'Boots, belt and wood', ['trim']);
+              colorRow(container, api, 'Shield', ['shield']);
+              container.appendChild(h('p', { class: 'mm-note' }, 'Every part can still be repainted one by one in the Color tool tab.'));
+              lastSig = ''; syncUi(api);
+              setTimeout(function () { api.centerCamera('iso'); }, 60);
+            }
+          },
+          {
+            id: 'pose', label: 'Pose', hint: 'Choose a stance for the hero',
+            mount: function (container, api) {
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Pose'));
+              chipGrid(container, api, 'pose', POSES.map(function (r) { return r.name; }));
+              container.appendChild(h('p', { class: 'mm-note' }, 'Every pose prints with no supports: raised arms climb steeply, hands rest on the hip or on a planted shield, bow or staff, and the feet are flat on the base.'));
+              container.appendChild(h('p', { class: 'mm-note' }, 'Staffs and bows touch the base in Heroic stand and Battle ready (a bow always does); in the other poses they are held up in the hand.'));
+            }
+          },
+          {
+            id: 'companion', label: 'Companion', hint: 'Add a pet or familiar to the base',
+            mount: function (container, api) {
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Companion'));
+              chipGrid(container, api, 'comp', ['None'].concat(COMPANIONS.map(function (r) { return r.name; })));
+              note(container, 'comp', 'No companion. Pick one to add a pet to the base.');
+              container.appendChild(h('h3', { class: 'mm-group-title' }, 'Companion pose'));
+              var wrap = h('div', { class: 'mm-chips' }), bs = [0, 1, 2].map(function (i) {
+                var b = h('button', { class: 'mm-chip', type: 'button', 'aria-pressed': 'false' }, 'Pose ' + (i + 1));
+                b.addEventListener('click', function () { api.setParams({ compPose: i }); syncNow(); });
+                wrap.appendChild(b); return b;
+              });
+              function syncNow() {
+                var c = api.params.comp;
+                bs.forEach(function (b, i) { b.textContent = c ? COMPANIONS[c - 1].poses[i] : 'Pose ' + (i + 1); b.setAttribute('aria-pressed', String(api.params.compPose === i)); });
+              }
+              refreshers.push(syncNow); container.appendChild(wrap); syncNow();
+              container.appendChild(h('p', { class: 'mm-note' }, 'The base stretches to fit the companion. A hidden block under the belly of the animals means no supports.'));
+            }
+          },
+          { id: 'base', label: 'Base', hint: 'Shape the base, the ground and the name plate', mount: function (container) { container.appendChild(h('p', { class: 'mm-note' }, 'The base is at least as wide as you ask, and grows to hold the feet, shield, staff and companion. 25 mm is a common size for 28 to 32 mm minis.')); } }
+        ]
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/sculpt.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

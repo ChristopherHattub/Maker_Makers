@@ -955,5 +955,11 @@
   "yaw": 24,
   "elev": 34,
   "fill": 0.82
+ },
+ "character-creator": {
+  "colors": {},
+  "yaw": 28,
+  "elev": 22,
+  "fill": 0.8
  }
 }

@@ -34,6 +34,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
 | 129 | Built: Bee & Beetle Bugs (bee, ladybug, stag beetle, dragonfly; no supports). |
 | 132 | Built: Crab & Lobster (print-in-place pincers, no supports). |
+| 138 | Built: Character Creator (tabletop mini: name, race, class, pose, companion, base). |
 | 124+ | Free (check open PRs first). Any number works. |
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
@@ -165,6 +166,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
 | 129 | Bee & Beetle Bugs | animals | `bee-beetle-bugs.html` (bug picker: honey bee, ladybug, stag beetle, dragonfly; flat, raised or folded wings, patterns, antennae, legs; unprinted) |
 | 132 | Crab & Lobster | animals | `crab-lobster.html` (crab or lobster with print-in-place pincers on a post hinge, 2-5 legs per side, eye stalks, five shell textures) |
+| 138 | Character Creator | tabletop | `character-creator.html` (a tabletop miniature built like a video-game character: name, 6 races, 12 classes, 6 poses, 5 companions with 3 poses each, 4 base shapes with ground cover and a name plaque; sculpt tab off) |
 
 ## Groups (BUNDLES)
 

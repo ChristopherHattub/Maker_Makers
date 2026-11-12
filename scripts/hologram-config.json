@@ -532,5 +532,11 @@
     "light": 74,
     "stand": false,
     "fill": 1.2
+  },
+  "character-creator": {
+    "hue": 205,
+    "sat": 70,
+    "light": 72,
+    "stand": false
   }
 }

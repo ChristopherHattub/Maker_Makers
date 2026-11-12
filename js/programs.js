@@ -1104,6 +1104,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/crab-lobster.svg',
     programUrl: 'programs/crab-lobster.html',
     description: 'A claw-forward crab or lobster that prints with no supports and a pincer that really moves: each claw rests on the bed and its pincer swings on a print-in-place hinge with a clearance you set. Pick crab or lobster, claw size and pose (guarding, spread, pinching together, arms wide), a matching pair or a big-claw fiddler, 2 to 5 legs per side, eye stalk length, and a smooth, ribbed, bumpy, plated or spiky shell. Unprinted: the hinge clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 138,
+    title: 'Character Creator',
+    bundle: 'tabletop',
+    category: 'TABLETOP // MINIATURES',
+    thumbnailUrl: 'assets/thumbnails/character-creator.svg',
+    programUrl: 'programs/character-creator.html',
+    description: 'Build a tabletop mini like a video-game character: name it (the name is raised on a plate on the base), pick a race (Human, Elf, Dwarf, Halfling, Orc, Drakeling) and a class (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard), then a pose (six, all support-free), hair, beard, build, height, weapon hand and colours. Add a companion (wolf, cat, raven, baby dragon or slime, three poses each) on a round, square, hexagon or octagon base with optional cobblestone, rubble or grass ground. About 28 to 32 mm tall by default and scalable. Unprinted. Paint parts in the Color tool and export .STL or .OBJ.'
   }
 ];
 
