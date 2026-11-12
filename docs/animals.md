@@ -1,4 +1,6 @@
-# Animal generators (slots 76-90)
+# Animal generators (slots 76-90, plus Frog & Toad, slot 125)
+
+Slot 125 ([frog-toad.md](frog-toad.md)) is built by the same kit and `build.mjs`; it sets `S.reach = 1.0` and adds its lily pad as a separate shell.
 
 Fifteen generators in the `animals` group: Dino Builder, Dragon Maker, Cat Sculptor, Dog Builder, Articulated Snake, Flexi Fish, Turtle & Tortoise, Owl Stacker, Penguin Pals, Octopus & Squid, Mushroom Critters, Shark Fin Trophy, Elephant Builder, Alien & Monster Maker, Horse Builder.
 

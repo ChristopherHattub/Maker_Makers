@@ -21,5 +21,6 @@ const r = pcWin.MM_PRINT_CHECK.check(entries, {});
 let lo = 1e9, hi = -1e9;
 entries.forEach((e) => { for (let i = 1; i < e.positions.length; i += 3) { lo = Math.min(lo, e.positions[i]); hi = Math.max(hi, e.positions[i]); } });
 console.log('y range', lo.toFixed(2), hi.toFixed(2), 'entries', entries.map((e) => e.name).join(','));
-(r.issues || []).forEach((i) => console.log(i.severity, i.kind, i.message, (i.spots || []).slice(0, 4).map((s) => JSON.stringify(s)).join(' ')));
+(r.issues || []).forEach((i) => console.log(i.severity, i.kind, i.message, (i.spots || []).slice(0, 8).map((s) => JSON.stringify(s)).join(' ')));
+(r.spots || []).forEach((q) => console.log('spot x', q.x.toFixed(1), 'y', q.y.toFixed(1), 'z', q.z.toFixed(1), 'area', q.area.toFixed(1)));
 if (!(r.issues || []).length) console.log('no supports needed');

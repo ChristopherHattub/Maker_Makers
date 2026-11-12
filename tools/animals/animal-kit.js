@@ -534,7 +534,7 @@
       };
       // Which piece is at a point of the finished model? Used by the Select tool.
       Sculpt.prototype.pieceAt = function (pt) {
-        var sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, x = (pt.x + sh[0]) / k, y = pt.y / k, z = (pt.z + sh[1]) / k, best = null, bd = 1e9, i;
+        var sh = (this.st && this.st.shift) || [0, 0], k = this.outScale, x = (pt.x + sh[0]) / k, y = pt.y / k - (this.yOff || 0), z = (pt.z + sh[1]) / k, best = null, bd = 1e9, i;
         var small = this.addons.slice().sort(function (u, v) { return u.r - v.r; }); // a pupil sits inside its eye: the smaller one wins
         for (i = 0; i < small.length; i++) {
           var a = small[i];
@@ -569,7 +569,8 @@
           any = true;
         });
         if (!any) return null;
-        return { lo: [lo[0] * k - sh[0], lo[1] * k, lo[2] * k - sh[1]], hi: [hi[0] * k - sh[0], hi[1] * k, hi[2] * k - sh[1]] };
+        var yo = this.yOff || 0;
+        return { lo: [lo[0] * k - sh[0], (lo[1] + yo) * k, lo[2] * k - sh[1]], hi: [hi[0] * k - sh[0], (hi[1] + yo) * k, hi[2] * k - sh[1]] };
       };
       // cfg.sculpt for a generator built with Sculpt. pieces: [{ id, label }].
       function sculptModule(pieces) {
