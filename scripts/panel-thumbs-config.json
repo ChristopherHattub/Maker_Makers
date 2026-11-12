@@ -924,5 +924,20 @@
   },
   "yaw": 30,
   "elev": 25
+ },
+ "spirograph-plate": {
+  "colors": {
+   "plate": "#f1f5f9",
+   "rim": "#334155",
+   "lug": "#334155",
+   "curve1": "#c084fc",
+   "curve2": "#fda4af",
+   "curve3": "#93c5fd",
+   "curve4": "#fde047",
+   "curve5": "#a7f3d0",
+   "curve6": "#fdba74"
+  },
+  "yaw": 0,
+  "elev": 52
  }
 }
