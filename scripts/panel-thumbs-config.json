@@ -678,6 +678,22 @@
   "yaw": 58,
   "elev": 16
  },
+ "giraffe-zebra-stacker": {
+  "colors": {
+   "base": "#9ccc8b",
+   "rings": "#f4c05a",
+   "head": "#f4c05a",
+   "ears": "#f4c05a",
+   "pattern": "#8b5a2b",
+   "horns": "#8b5a2b",
+   "mane": "#8b5a2b",
+   "eyes": "#f5efe0",
+   "pupils": "#2f3440",
+   "nose": "#2f3440"
+  },
+  "yaw": 32,
+  "elev": 14
+ },
  "penguin-pals": {
   "yaw": 58,
   "elev": 16

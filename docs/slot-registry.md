@@ -32,7 +32,8 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 121 | Built: Zoetrope. |
 | 122 | Built: Gravity Walker (print-in-place rear legs, with a ramp). |
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
-| 124+ | Free (check open PRs first). Any number works. |
+| 130 | Built: Giraffe & Zebra Stackers (ring-stacker kit with stamps, no supports). |
+| 124+ | Free (check open PRs first; slots 124-136 are being built in parallel). Any number works. |
 
 Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
@@ -161,6 +162,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 121 | Zoetrope | toys | `zoetrope.html` (spinning slotted drum, print-in-place pin, printable picture strip) |
 | 122 | Gravity Walker | toys | `gravity-walker.html` (walks down a ramp: body foot plus two print-in-place rear legs, printable ramp; unprinted) |
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
+| 130 | Giraffe & Zebra Stackers | toys | `giraffe-zebra-stacker.html` (keyed rod, 3-12 stackable neck rings with spot or stripe stamps, giraffe/zebra/baby head, horns or mane; prints as a flat kit; unprinted) |
 
 ## Groups (BUNDLES)
 
