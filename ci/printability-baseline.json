@@ -179,6 +179,26 @@
       "overhang"
     ]
   },
+  "constellation-gauntlet": {
+    "defaults": [
+      "overhang"
+    ],
+    "Default Orrery": [
+      "overhang"
+    ],
+    "Orrery style": [
+      "overhang"
+    ],
+    "Shardcrown style": [
+      "overhang"
+    ],
+    "Bloomguard style": [
+      "overhang"
+    ],
+    "Cogwork style": [
+      "overhang"
+    ]
+  },
   "conversation-hearts": {
     "defaults": [
       "overhang"

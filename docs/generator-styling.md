@@ -94,6 +94,7 @@ These are read by the engine but only a few generators use them. Reach for them 
 | `customStage` | Makes the renderer transparent (no navy background, no plate or grid) so the generator draws its own backdrop with `onStage`. Used by Gift Box 2.0, Snowman 2.0 (Ornament Stacker) and Pottery Wheel. |
 | `onStage(env)` | Called once after the scene exists. `env` has `THREE`, `scene`, `camera`, `renderer`, `controls`, `hemi`, `key`, `rim`, `plateMesh`, `grid`, `container` and `modelGroup`. |
 | `onFrame()` | Called every animation frame before the render, for turntables and other live effects. |
+| `onTab(tabId, api)` | Called at the end of every tab switch (including the first tab at start-up, before `onStage` has run). The Constellation Gauntlet flies the camera to the part the tab edits. `showIf` also works on parameters that belong to a generator tab (`tab: '<id>'`). |
 | `targetHeight` | Camera framing height in mm for an empty model (default 40). |
 
 ### Parameters

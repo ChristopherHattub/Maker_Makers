@@ -422,7 +422,16 @@
         if (!group) { group = { name: name, items: [] }; groups.push(group); }
         group.items.push(p);
       });
-      groups.forEach(function (g) { t.body.appendChild(accordion(g.name, el('div', {}, g.items.map(sliderFor)), true)); });
+      groups.forEach(function (g) {
+        var nodes = g.items.map(function (p) {
+          var node = sliderFor(p);
+          if (typeof p.showIf === 'function') showIfRefs.push({ node: node, p: p });
+          return node;
+        });
+        var acc = accordion(g.name, el('div', {}, nodes), true);
+        if (g.items.every(function (p) { return typeof p.showIf === 'function'; })) showIfGroups.push({ node: acc, items: g.items });
+        t.body.appendChild(acc);
+      });
     });
   }
 
@@ -1801,6 +1810,7 @@
     renderPartList();
     rebuildWire();
     if (printOn() && (tab === 'print' || wasPrint)) centerCamera('iso');
+    if (typeof cfg.onTab === 'function') cfg.onTab(tab, api);   // e.g. a camera swoop to the part this tab edits
   }
 
   var toastTimer = null;
