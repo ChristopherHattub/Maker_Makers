@@ -474,7 +474,7 @@
       }
 
       function layout(p) {
-        var wear = Math.round(p.build) === 0, S = wear ? 1 : p.scale / 100, Lt = { S: S, p: p, wear: wear, art: wear && Math.round(p.fArt) === 1 };
+        var wear = Math.round(p.build) === 0, S = wear ? 1 : p.scale / 100, Lt = { S: S, p: p, wear: wear, art: wear && Math.round(p.fArt) >= 1, hinge: wear && Math.round(p.fArt) === 2 };
         var RMAX = 37.3;
         Lt.Hc = p.cuffH;
         if (wear) {
@@ -661,7 +661,15 @@
       var SMOOTH = 5;      // smoothing passes
       var HOLE = 1.1;      // radius of the cord groove cut into the palm side of the finger bore (2.2 mm wide, for 1 mm elastic cord)
       var HOLE_IN = 0.55;  // its centre sits this far into the wall from the bore surface
-      var SEG_CELL = 0.8;  // grid step for the loose finger segments, millimetres
+      var SEG_CELL = 0.8; 
+      // Print-in-place finger hinges (fArt 2): sizes in millimetres. The cap is the first section, fixed on the glove stub.
+      var GAP = 0.5;       // clearance between the parts of a hinge, and between sections
+      var CAP = 9;         // length of the fixed cap that carries the first hinge
+      var HCELL = 0.65;    // grid step for the hinge sections
+      var TACKS_ON = true; // snap-off tacks that hold a section to the one below until the first bend
+      var HG = { xt: 2.6, xl0: 3.1, xl1: 5.9, xn: 6.4, rb: 3.4, rl: 4.2, rs: 5.8, rn: 4.7, pin: 1.45, pocket: 2.2, px0: 1.4, pk0: 1.0, tack: 0.6 };
+      var TACK_DEG = [0, 40, 90, 140, 180, -45, -135];
+       // grid step for the loose finger segments, millimetres
 
       function wearProfile(Lt) {
         var p = Lt.p, G = Lt.G, Hc = Lt.Hc, Hw = 0.86 * Hc, flare = p.flare, form = Math.round(p.cuffForm), bands = Math.round(p.bands), P = {};
@@ -969,17 +977,20 @@
         for (i = 0; i < 4; i++) {
           var sg = (i - 1.5) / 1.5 * p.fSplay * DEG, u = [Math.sin(sg) * Math.cos(al), Math.cos(sg) * Math.cos(al), Math.sin(al)];
           var B = [F.cx[i], Lt.yb, 0], bore = 4;
-          var c = makeCone(B, u, p.fLen * F.lens[i], F.Rin[i] + WF, tipS, nSeg, 1.1 + (F.Rin[i] + WF) * 0.03, 8, bore);
+          var Rc = F.Rin[i] + WF, Lc = p.fLen * F.lens[i], Ldc = tipS === 0 ? Rc * 0.85 : (tipS === 1 ? 1.9 * Rc * 0.85 : 3.0);
+          var nS = Lt.hinge ? Math.max(2, Math.min(nSeg, Math.floor((Lc - Ldc) / 15))) : nSeg;   // a hinged section needs about 15 mm for its two hinge halves
+          var c = makeCone(B, u, Lc, Rc, tipS, nS, 1.1 + Rc * 0.03, 8, bore);
           var dv = [-u[2] * u[0], -u[2] * u[1], 1 - u[2] * u[2]], dl = Math.hypot(dv[0], dv[1], dv[2]);   // the back-of-finger direction, square to the axis
           c.dv = [dv[0] / dl, dv[1] / dl, dv[2] / dl];
           c.ex = [u[1] * c.dv[2] - u[2] * c.dv[1], u[2] * c.dv[0] - u[0] * c.dv[2], u[0] * c.dv[1] - u[1] * c.dv[0]];   // across the finger: the hinge direction
           full.push(c);
           if (Lt.art) {
             var span = c.L - c.Ld, jn = [], j;
-            for (j = 1; j < nSeg; j++) jn.push(span * j / nSeg);
+            for (j = 1; j < nS; j++) jn.push(span * j / nS);
             c.joints = jn;
             var stub = Object.assign({}, c);
-            stub.cut = jn[0]; stub.cord = true;
+            stub.cut = Lt.hinge ? jn[0] - CAP : jn[0];
+            stub.cord = !Lt.hinge;
             cones.push(stub);
           } else cones.push(c);
         }
@@ -1016,32 +1027,130 @@
         }
         return polygonise(slice, [-R0, -h, -R0], [R0, len + h, R0], h);
       }
-      // Each finger's loose segments, in order from the knuckle: { fi, m, s0, len, a }.
+      // Print-in-place hinge sections (fArt 2). Between two sections a pin hinge sits on the palm side, with its axis (x) on the
+      // palm-side edge of the finger, so the back of the joint opens as it bends. The lower section A carries two lugs (a disc
+      // and a 45 degree gusset, so nothing overhangs more than 45 degrees), a slot between them, and a diamond pin standing
+      // out of each lug. The upper section B carries a tongue (a disc) that sits in the slot, with a diamond pocket round each
+      // pin and a notch (a circle with a 45 degree roof) that clears the lugs. Every gap is GAP wide. A section floats
+      // above the one below, so small tacks (TACK) bridge the gaps; they snap at the first bend. The mesh is made in a local
+      // frame: y along the finger from the lowest feature, y = YB the flat face against the section below, z the back of the
+      // finger (the palm is -z), x across.
+      function hingeField(c, r, clipL, clipR) {
+        var len = r.len, YB = r.YB, yTop = YB + len, ypt = yTop + GAP / 2, ypb = YB - GAP / 2, Rt = r.Rt, Rb = r.Rb, hasT = r.hasTop, hasB = r.hasBot;
+        var xc = c.Ro - WF / 2 - 0.3, h = HCELL, k, T = HG, tk = [], rTop = coneROut(c, r.s0 + len) - 1.8, KS = 0.84;   // KS: the roofs and gussets are 50 degrees from horizontal, a margin on the 45 degrees the surface smoothing can wobble
+        for (k = 0; k < TACK_DEG.length; k++) tk.push([rTop * Math.cos(TACK_DEG[k] * DEG), rTop * Math.sin(TACK_DEG[k] * DEG)]);
+        var tk0 = yTop - 0.3, tk1 = yTop + GAP + 0.2, bk0 = ypb - T.rs - 0.2, bk1 = ypb - 1.55 * T.rb + 0.3;
+        function slice(y) {
+          var s = r.s0 + (y - YB), sc = s < 0 ? 0 : (s > c.L ? c.L : s), ro = coneROut(c, sc), ri = coneRIn(c, sc);
+          var dyt = y - ypt, dyb = y - ypb, tkOn = TACKS_ON && hasT && y >= tk0 - 0.1 && y <= tk1 + 0.1, bkOn = TACKS_ON && hasB && y >= bk0 - 0.1 && y <= bk1 + 0.1;
+          var gus = hasT && dyt <= -0.646 * T.rl;
+          return function (x, z) {
+            var ax = x < 0 ? -x : x, rho = Math.sqrt(x * x + z * z), d = rho - ro, zt = z + Rt, zb = z + Rb, q;
+            if (YB - y > d) d = YB - y;
+            if (y - yTop > d) d = y - yTop;
+            if (clipL && -x - xc > d) d = -x - xc;
+            if (clipR && x - xc > d) d = x - xc;
+            if (hasT && ax >= T.xl0 - 0.6 && ax <= T.xl1 + 0.6) {   // the two lugs: a disc, and a gusset at 45 degrees down to the wall
+              q = Math.sqrt(dyt * dyt + zt * zt) - T.rl;
+              if (gus) { var gs = Math.max((-1.3 * T.rl - zt - KS * dyt) / 1.3, zt - T.rl, (-dyt - 7.5) / 1.3); if (gs < q) q = gs; }
+              q = Math.max(q, T.xl0 - ax, ax - T.xl1);
+              if (q < d) d = q;
+            }
+            if (hasB && ax <= T.xt + 0.6) {   // the tongue
+              q = Math.sqrt(dyb * dyb + zb * zb) - T.rb;
+              if (dyb < 0) { var tp = (-dyb * KS + (zb < 0 ? -zb : zb) - 1.3 * T.rb) / 1.3; if (tp < q) q = tp; }   // a pointed bottom, so it needs no support
+              q = Math.max(q, ax - T.xt);
+              if (q < d) d = q;
+            }
+            var cav = rho - ri;
+            if (hasT && ax <= T.xl0 + 0.6) {   // the slot between the lugs
+              q = Math.max(Math.sqrt(dyt * dyt + zt * zt) - T.rs, ax - T.xl0);
+              if (q < cav) cav = q;
+            }
+            if (hasB) {
+              if (ax >= T.xt - 0.6 && ax <= T.xn + 0.6) {   // the notch: a circle with a 45 degree roof
+                q = Math.sqrt(dyb * dyb + zb * zb) - T.rn;
+                if (dyb >= 0) { var rf = (dyb * KS + (zb < 0 ? -zb : zb) - 1.3 * T.rn) / 1.3; if (rf < q) q = rf; }
+                q = Math.max(q, T.xt - ax, ax - T.xn);
+                if (q < cav) cav = q;
+              }
+              if (ax >= T.pk0 - 0.6 && ax <= T.xt + 0.9) {   // the pocket round the pin
+                q = Math.sqrt(dyb * dyb + zb * zb) - T.pocket;   // round, so the diamond pin turns in it; a 50 degree roof above
+                if (dyb >= 0) { var pr = (dyb * KS + (zb < 0 ? -zb : zb) - 1.3 * T.pocket) / 1.3; if (pr < q) q = pr; }
+                q = Math.max(q, T.pk0 - ax, ax - (T.xt + 0.3));
+                if (q < cav) cav = q;
+              }
+            }
+            if (-cav > d) d = -cav;
+            if (hasT && ax >= T.px0 - 0.6 && ax <= T.xl0 + 0.9) {   // the pins
+              q = Math.max(((dyt < 0 ? -dyt : dyt) * KS + (zt < 0 ? -zt : zt) - T.pin) / 1.3, T.px0 - ax, ax - (T.xl0 + 0.3));
+              if (q < d) d = q;
+            }
+            if (tkOn) for (k = 0; k < tk.length; k++) {
+              q = Math.max(Math.sqrt((x - tk[k][0]) * (x - tk[k][0]) + (z - tk[k][1]) * (z - tk[k][1])) - T.tack, tk0 - y, y - tk1);
+              if (q < d) d = q;
+            }
+            if (bkOn) { q = Math.max(Math.sqrt(x * x + zb * zb) - T.tack, bk0 - y, y - bk1); if (q < d) d = q; }
+            return d;
+          };
+        }
+        return slice;
+      }
+      function hingeMesh(c, r, clipL, clipR) {
+        var rx = c.Ro + c.bead + 1.5, rzTop = Math.max(r.Rt, r.Rb) + HG.rl + 1.5;
+        return polygonise(hingeField(c, r, clipL, clipR), [-rx, -HCELL, -rzTop], [rx, r.YB + r.len + GAP / 2 + HG.rl + 1.5, rx], HCELL);
+      }
+      // Each finger's loose segments, in order from the knuckle. Strung: { fi, m, j, s0, len, YB: 0, a }. Hinged: the same, plus
+      // the fixed cap first (m 0, cap), and the pivot radii Rt and Rb of the joint above and below.
       function segsBuild(Lt) {
         var out = [];
         Lt.F.full.forEach(function (c, fi) {
           var jn = c.joints;
-          jn.forEach(function (s0, m) {
-            var s1 = m + 1 < jn.length ? jn[m + 1] : c.L;
-            out.push({ fi: fi, m: m, s0: s0, len: s1 - s0, a: segMesh(c, s0, s1, fi > 0, fi < 3) });
+          if (!Lt.hinge) {
+            jn.forEach(function (s0, m) {
+              var s1 = m + 1 < jn.length ? jn[m + 1] : c.L;
+              out.push({ fi: fi, m: m, j: m, s0: s0, len: s1 - s0, YB: 0, a: segMesh(c, s0, s1, fi > 0, fi < 3) });
+            });
+            return;
+          }
+          var list = [{ s0: jn[0] - CAP, len: CAP - GAP / 2, hasBot: false, hasTop: true, cap: true }], m;
+          for (m = 0; m < jn.length; m++) {
+            var a0 = jn[m] + GAP / 2, a1 = m + 1 < jn.length ? jn[m + 1] - GAP / 2 : c.L;
+            list.push({ s0: a0, len: a1 - a0, hasBot: true, hasTop: m + 1 < jn.length });
+          }
+          list.forEach(function (r, k) {
+            r.fi = fi; r.m = k; r.j = k - 1;
+            r.Rt = r.hasTop ? coneROut(c, jn[k]) : 0;
+            r.Rb = r.hasBot ? coneROut(c, jn[k - 1]) : 0;
+            r.YB = (r.hasBot ? GAP / 2 + HG.rs + 0.2 : 0) + 1.2;
+            r.a = hingeMesh(c, r, fi > 0, fi < 3);
+            out.push(r);
           });
         });
         return out;
       }
-      // Put the segments on the fingers. Every joint turns the next segment about the palm-side edge of the joint face, by
-      // pose degrees, toward the palm: the back of the joint opens and the cord on the palm side barely moves.
-      function placeSegs(F, segs, pose) {
+      // Put the sections on the fingers. Every joint turns everything beyond it about the palm-side edge of the joint, by pose
+      // degrees, toward the palm: the back of the joint opens. g is the gap between sections (0 for the strung build).
+      function placeSegs(F, segs, pose, g) {
         var out = [], th = pose * DEG, ct = Math.cos(th), st = Math.sin(th);
+        function add(a, b, k, m) { return [0, 1, 2].map(function (i) { return a[i] + b[i] * k + (m ? m[i] : 0); }); }
         F.full.forEach(function (c, fi) {
-          var O = [0, 1, 2].map(function (k) { return c.B[k] + c.u[k] * c.joints[0]; }), uu = c.u, dd = c.dv, ex = c.ex;
+          var uu = c.u, dd = c.dv, ex = c.ex, J = [0, 1, 2].map(function (k) { return c.B[k] + c.u[k] * c.joints[0]; });
           segs.forEach(function (r) {
             if (r.fi !== fi) return;
-            var R = coneROut(c, r.s0), nu = [0, 1, 2].map(function (k) { return uu[k] * ct - dd[k] * st; }), nd = [0, 1, 2].map(function (k) { return uu[k] * st + dd[k] * ct; });
-            var O2 = [0, 1, 2].map(function (k) { return O[k] - R * dd[k] + R * nd[k]; });
-            var a = new Float32Array(r.a);
-            mapPts(a, function (x, y, z) { return [O2[0] + ex[0] * x + nu[0] * y + nd[0] * z, O2[1] + ex[1] * x + nu[1] * y + nd[1] * z, O2[2] + ex[2] * x + nu[2] * y + nd[2] * z]; });
+            var nu = uu, nd = dd, O;
+            if (r.cap) O = [0, 1, 2].map(function (k) { return c.B[k] + c.u[k] * r.s0; });
+            else {
+              var R = coneROut(c, c.joints[r.j]);
+              nu = [0, 1, 2].map(function (k) { return uu[k] * ct - dd[k] * st; });
+              nd = [0, 1, 2].map(function (k) { return uu[k] * st + dd[k] * ct; });
+              J = [0, 1, 2].map(function (k) { return J[k] - R * dd[k] + R * nd[k]; });
+              O = [0, 1, 2].map(function (k) { return J[k] + nu[k] * g / 2; });
+            }
+            var a = new Float32Array(r.a), yb = r.YB;
+            mapPts(a, function (x, y, z) { return [O[0] + ex[0] * x + nu[0] * (y - yb) + nd[0] * z, O[1] + ex[1] * x + nu[1] * (y - yb) + nd[1] * z, O[2] + ex[2] * x + nu[2] * (y - yb) + nd[2] * z]; });
             out.push(a);
-            O = [0, 1, 2].map(function (k) { return O2[k] + nu[k] * r.len; });
+            J = [0, 1, 2].map(function (k) { return O[k] + nu[k] * (r.len + g / 2); });
             uu = nu; dd = nd;
           });
         });
@@ -1116,7 +1225,7 @@
           body.arm = [gm.arm];
           body.fingers = [gm.fingers];
           body.thumb = [gm.thumb];
-          if (gm.segs.length) { body.segments = placeSegs(Lt.F, gm.segs, p.fPose || 0); Lt.segs = gm.segs; }
+          if (gm.segs.length) { body.segments = placeSegs(Lt.F, gm.segs, p.fPose || 0, Lt.hinge ? GAP : 0); Lt.segs = gm.segs; }
           if (p.studs > 0) for (idx = 0; idx < 4; idx++) studs.push(stud(Math.round(p.studs), Lt.F.cx[idx], yT - 8, Lt.P.dorsalZ(Lt.F.cx[idx], yT - 8), 3.4, 1.2, true));
           body.knuckles = studs;
         } else {
@@ -1158,6 +1267,7 @@
           if (Lt.wear && (o[0] === 'arm' || o[0] === 'fingers' || o[0] === 'thumb')) mesh.smoothGroup = 'glove';   // one closed surface, split so each part can be painted
           Lt.meshes.push(mesh);
         });
+        if (Lt.hinge && Lt.segs) Lt.segPrint = join(placeSegs(Lt.F, Lt.segs, 0, GAP).map(fixArr));   // the hinged sections print in place, straight
         Lt.gemMeshes = [];
         for (var i = 0; i < 5; i++) {
           if (!Lt.gemsDisp[i]) continue;
@@ -1240,7 +1350,7 @@
         build: 0, wristW: 62, handW: 84, handT: 30, ease: 1.5, cuffOpen: 55, handOpen: 72, palmH: 90,
         cuffH: 50, flare: 6, cuffForm: 0, bands: 2,
         plateShape: 0, plateR: 33, plateT: 3.5, core: 0, gemLayout: 0, orbit: 1, orbitR: 24, orbitTurn: 0,
-        fLen: 52, fSeg: 3, fTip: 0, fSplay: 3, fDrop: 8, fArt: 1, fPose: 0, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
+        fLen: 52, fSeg: 3, fTip: 0, fSplay: 3, fDrop: 8, fArt: 2, fPose: 0, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
       };
       function gemKeys(i, v) { var o = {}; Object.keys(v).forEach(function (k) { o['g' + i + '_' + k] = v[k]; }); return o; }
       [0, 1, 2, 3, 4].forEach(function (i) { Object.assign(DEFAULTS, gemKeys(i, gemDefault(i))); });
@@ -1357,7 +1467,7 @@
       ];
       function wearOnly(p) { return Math.round(p.build) === 0; }
       function displayOnly(p) { return Math.round(p.build) !== 0; }
-      function artOn(p) { return Math.round(p.build) === 0 && Math.round(p.fArt) === 1; }
+      function artOn(p) { return Math.round(p.build) === 0 && Math.round(p.fArt) >= 1; }
       var PARAMS = [
         { tab: 'style', group: 'Look', key: 'metal', label: 'Main metal', min: 0, max: 3, step: 1, value: DEFAULTS.metal, format: function (v) { return METALS[v].name; } },
         { tab: 'style', group: 'Look', key: 'accent', label: 'Accent metal (settings, links, studs)', min: 0, max: 3, step: 1, value: DEFAULTS.accent, format: function (v) { return METALS[v].name; } },
@@ -1384,9 +1494,9 @@
         { tab: 'plate', group: 'Plate', key: 'core', label: 'Core (Orbit, Cross, Row and Zigzag layouts)', min: 0, max: 1, step: 1, value: 0, options: ['Flat', 'Raised'], showIf: function (p) { return CORE_CENTRED[Math.round(p.gemLayout)]; } },
 
         { tab: 'fingers', group: 'Fingers', key: 'fLen', label: 'Finger length (above the knuckle plate)', unit: ' mm', min: 40, max: 80, step: 1, value: DEFAULTS.fLen },
-        { tab: 'fingers', group: 'Fingers', key: 'fArt', label: 'Finger joints', min: 0, max: 1, step: 1, value: DEFAULTS.fArt, options: ['Rigid', 'Bendable (strung)'], showIf: wearOnly },
+        { tab: 'fingers', group: 'Fingers', key: 'fArt', label: 'Finger joints', min: 0, max: 2, step: 1, value: DEFAULTS.fArt, options: ['Rigid', 'Strung (cord)', 'Hinged (print in place)'], showIf: wearOnly },
         { tab: 'fingers', group: 'Fingers', key: 'fPose', label: 'Bend the fingers (preview only, the print stays straight)', unit: '°', min: 0, max: 70, step: 5, value: 0, showIf: artOn },
-        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour ridges per finger (bendable: the first section stays fixed, the rest are loose)', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
+        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour ridges per finger (jointed fingers: the sections; hinged needs about 15 mm each)', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
         { tab: 'fingers', group: 'Fingers', key: 'fTip', label: 'Fingertip', min: 0, max: 2, step: 1, value: 0, format: function (v) { return TIP_NAMES[v]; } },
         { tab: 'fingers', group: 'Fingers', key: 'fSplay', label: 'Spread', unit: '°', min: 0, max: 8, step: 1, value: DEFAULTS.fSplay },
         { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the palm (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
@@ -1450,7 +1560,7 @@
           { id: 'fit', label: 'Fit', hint: 'Your hand size, how snugly the glove grips, and the palm window your hand slides in through' },
           { id: 'cuff', label: 'Cuff', hint: 'The forearm cuff: height, flare, surface and raised bands' },
           { id: 'plate', label: 'Plate', hint: 'The hand plate: outline, size, thickness and core' },
-          { id: 'fingers', label: 'Fingers', hint: 'Finger tubes, thumb and knuckle studs. Bendable fingers are loose segments strung on elastic cord' },
+          { id: 'fingers', label: 'Fingers', hint: 'Finger tubes, thumb and knuckle studs. Jointed fingers are either print-in-place pin hinges or loose segments strung on elastic cord' },
           { id: 'gems', label: 'Gems', hint: 'Where the gems sit, then each gem\'s shape, cut, size, colour and setting',
             mount: function (box, api) {
               var note = document.createElement('p');
@@ -1510,7 +1620,8 @@
           gems.forEach(function (g) { maxR = Math.max(maxR, g.size); });
           zEnd = zMax + 8 + 2 * maxR;
           out = out.filter(function (m) { return m.name !== 'segments'; });
-          if (Lt.wear && Lt.segs) {   // the loose finger segments stand on their flat ends in rows behind the gems: one row per section, one column per finger
+          if (Lt.hinge && Lt.segPrint) out.push({ name: 'segments', positions: Lt.segPrint, color: Lt.meshes.filter(function (m) { return m.name === 'segments'; })[0].color });
+          else if (Lt.wear && Lt.segs) {   // the loose finger segments stand on their flat ends in rows behind the gems: one row per section, one column per finger
             var left = Lt.p.hand > 0, rows = {}, rowW = 0, parts = [], colorSeg = (Lt.meshes.filter(function (m) { return m.name === 'segments'; })[0] || {}).color || Lt.meshes[0].color;
             Lt.segs.forEach(function (r) { (rows[r.m] = rows[r.m] || []).push(r); });
             var c0 = Lt.F.full, z = zEnd + 6;

@@ -35,7 +35,7 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 129 | Built: Bee & Beetle Bugs (bee, ladybug, stag beetle, dragonfly; no supports). |
 | 132 | Built: Crab & Lobster (print-in-place pincers, no supports). |
 | 124-135 | Other numbers are with open threads (check open PRs first). |
-| 136 | Built: Constellation Gauntlet (full wearable glove gauntlet with palm window, bendable strung fingers, six gem layouts, camera swoop editor). |
+| 136 | Built: Constellation Gauntlet (full wearable glove gauntlet with palm window, print-in-place hinged fingers, six gem layouts, camera swoop editor). |
 | 137+ | Free (check open PRs first). Any number works. |
 
 
@@ -168,7 +168,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
 | 129 | Bee & Beetle Bugs | animals | `bee-beetle-bugs.html` (bug picker: honey bee, ladybug, stag beetle, dragonfly; flat, raised or folded wings, patterns, antennae, legs; unprinted) |
 | 132 | Crab & Lobster | animals | `crab-lobster.html` (crab or lobster with print-in-place pincers on a post hinge, 2-5 legs per side, eye stalks, five shell textures) |
-| 136 | Constellation Gauntlet | jewelry | `constellation-gauntlet.html` (full wearable glove gauntlet, bendable fingers, six gem layouts; unprinted) |
+| 136 | Constellation Gauntlet | jewelry | `constellation-gauntlet.html` (full wearable glove gauntlet, hinged fingers, six gem layouts; unprinted) |
 
 ## Groups (BUNDLES)
 
