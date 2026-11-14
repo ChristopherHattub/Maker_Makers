@@ -705,7 +705,7 @@
             D[c0] = b0;
           }
           var top = ly * A;
-          for (ib2 = 0; ib2 < A; ib2++) { var allow = D[ib2] - h * self.reach * 0.92 * 0.82; if (allow > F[top + ib2]) F[top + ib2] = allow; }
+          for (ib2 = 0; ib2 < A; ib2++) { var allow = D[ib2] - h * (self.reachFn ? self.reachFn(x0 + (ib2 % nx) * h, ly * h) : self.reach) * 0.92 * 0.82; if (allow > F[top + ib2]) F[top + ib2] = allow; }
         }
         // Drop specks: keep only solid connected to the bed through cell faces.
         var keep = new Uint8Array(N), st = new Int32Array(N), sp = 0, cc;
