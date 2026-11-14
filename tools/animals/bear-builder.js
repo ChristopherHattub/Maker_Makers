@@ -36,22 +36,27 @@
             S.path('arms', [[-1, 47, s * 11 * k, 6.5], [4, 41.5, s * 18.5 * k, 6.3], [10, 34, s * 17.5 * k, 6], [14.5, 28.5, s * 10 * k, 5.6]], sp.limbs, 3);
           });
         } else if (pose === 3) { // on all fours: a long chunky body on four stout legs, head carried low and forward
-          hx = 25; hy = 40 + (hs - 1) * 6; shoulderY = 38;
+          var T = {"nx":3,"ny":0.45,"reach":1.35,"hx":29,"hy":36,"bx":-1,"by":18.8,"bry":9.5,"bz":11.1,"fz":5.6,"fry":12.5,"hlx":-10.2,"flx":16.7,"cy":25,"hmx":10,"hmy":35,"lr":9,"fr":8.2,"lz":13.1,"fz2":10.2,"cx":30,"rx":18.3,"ry":11.4,"reach2":0.72};
+          hx = T.hx; hy = T.hy + (hs - 1) * 6; shoulderY = 38;
           k = Math.max(k, 0.95); // a slimmer body opens the belly arches too wide to print without a bridge
           S.ell('body', [-3, 30, 0], [23 * k, 16.5, 16.5 * k], fur, 6);
-          S.ell('body', [17, 11, 0], [7, 12, 4], fur, 3); // fills the slots between the legs
-          S.ell('body', [-10, 11, 0], [7, 12, 4], fur, 3);
-          S.ell('body', [-1, 20, 0], [13, 11, 11 * k], fur, 4); // belly between the legs
-          S.ell('body', [10, 35, 0], [15, 16, 15 * k], fur, 7); // shoulder hump
-          S.ell('body', [30, 25, 0], [15, 19, 13 * k], fur, 5); // chest, under the chin
+          S.ell('body', [T.flx, 11, 0], [7, T.fry, T.fz], fur, 3); // fills the slots between the legs
+          S.ell('body', [T.hlx, 11, 0], [7, T.fry, T.fz], fur, 3);
+          S.ell('body', [T.bx, T.by, 0], [13, T.bry, T.bz * k], fur, 4); // belly between the legs
+          S.ell('body', [T.hmx, T.hmy, 0], [15, 16, 15 * k], fur, 7); // shoulder hump
+          S.ell('body', [T.cx, T.cy, 0], [15, 19, 13 * k], fur, 5); // chest, under the chin
           S.ell('body', [-25 * k, 35, 0], [4.8, 4.8, 4.8], fur, 3); // tail
           [-1, 1].forEach(function (s) {
             S.piece(s < 0 ? 'armL' : 'armR');
-            S.path('arms', [[16, 28, s * 10 * k, 8.6], [17, 14, s * 10.5 * k, 8.2], [18, 6.6, s * 10.5 * k, 7.6]], sp.limbs, 3);
-            S.ell('arms', [24, 4.4, s * 10.5 * k], [8.2, 4.8, 6.6], sp.limbs, 2);
+            S.path('arms', [[T.flx - 1, 28, s * T.fz2 * k, T.fr + 0.4], [T.flx, 14, s * (T.fz2 + 0.5) * k, T.fr], [T.flx + 1, 6.6, s * (T.fz2 + 0.5) * k, T.fr - 0.6]], sp.limbs, 3);
+            S.ell('arms', [T.flx + 7, 4.4, s * (T.fz2 + 0.5) * k], [8.2, 4.8, 6.6], sp.limbs, 2);
+            S.paint('pads', [T.flx + 14.6, 4.8, s * (T.fz2 + 0.5) * k], [2.8, 3.2, 4.2], sp.pads);
+            for (i = -1; i <= 1; i++) S.paint('pads', [T.flx + 13.8, 6.8, s * (T.fz2 + 0.5) * k + i * 3.6], [2.4, 1.9, 1.7], sp.pads);
             S.piece(s < 0 ? 'legL' : 'legR');
-            S.path('legs', [[-9, 28, s * 11.5 * k, 9.6], [-10, 14, s * 12 * k, 9], [-10, 6.8, s * 12 * k, 8.2]], sp.limbs, 3);
-            S.ell('legs', [-3, 4.6, s * 12 * k], [9.5, 4.8, 7.2], sp.limbs, 2);
+            S.path('legs', [[T.hlx + 1, 28, s * (T.lz - 0.5) * k, T.lr + 0.6], [T.hlx, 14, s * T.lz * k, T.lr], [T.hlx, 6.8, s * T.lz * k, T.lr - 0.8]], sp.limbs, 3);
+            S.ell('legs', [T.hlx + 7, 4.6, s * T.lz * k], [9.5, 4.8, 7.2], sp.limbs, 2);
+            S.paint('pads', [T.hlx + 15.8, 4.8, s * T.lz * k], [2.8, 3.2, 4.4], sp.pads);
+            for (i = -1; i <= 1; i++) S.paint('pads', [T.hlx + 15, 6.8, s * T.lz * k + i * 3.8], [2.4, 1.9, 1.7], sp.pads);
           });
         } else { // sitting (also the waving pose)
           hx = 4; hy = 58 + (hs - 1) * 8; shoulderY = 43;
@@ -82,7 +87,8 @@
           else S.paint('arms', [0, shoulderY - 3, 0], [17, 4.4, 26 * k], sp.limbs);
         }
         // ---- head ----
-        var sn = p.snout * sp.snout, mcx = hx + ha * 0.84 + (sn - 1) * 2, mcy = hy - hb * 0.26, ma = ha * 0.6 * sn + 1, mb = hb * 0.42, mc = hc * 0.56;
+        var sn = p.snout * sp.snout; if (pose === 3) sn = Math.min(sn, 1.05); // a longer snout would hang too far past the chest on all fours
+        var mcx = hx + ha * 0.84 + (sn - 1) * 2, mcy = hy - hb * 0.26, ma = ha * 0.6 * sn + 1, mb = hb * 0.42, mc = hc * 0.56;
         var nrx = 4, nry = 3.5 * sp.noseK, nrz = 4.8 * sp.noseK;
         if (sp.noseK > 1.5) { nry = 6; nrz = 4.2; }
         var shellHead = false; // on all fours the head is built from self-limiting lofts, so it can reach forward and still print
@@ -95,8 +101,7 @@
           S.ell('muzzle', [mcx, mcy, 0], [ma, mb, mc], sp.light, 4);
           S.ell('muzzle', [mcx - 1, mcy - mb * 0.5, 0], [ma * 0.9, mb * 0.8, mc * 0.86], sp.light, 3); // lower jaw
           S.piece('nose', 'muzzle');
-          if (pose === 3) S.ell('nose', [mcx + ma - 5, mcy + mb * 0.62, 0], [nrx + 1, nry, nrz], sp.nose, 1.6); // the lower muzzle is trimmed on all fours, so the nose sits higher
-          else S.ell('nose', [mcx + ma - 1.6, mcy + mb * 0.3, 0], [nrx, nry, nrz], sp.nose, 1.6);
+          S.ell('nose', [mcx + ma - (pose === 3 ? T.nx : 1.6), mcy + mb * (pose === 3 ? T.ny : 0.3), 0], [nrx, nry, nrz], sp.nose, 1.6);
           function mzx(y, z) { return mcx + ma * Math.sqrt(Math.max(0.04, 1 - Math.pow((y - mcy) / mb, 2) - Math.pow(z / mc, 2))) - 0.3; }
           var my1 = mcy - mb * 0.1, my2 = mcy - mb * 0.62;
           S.piece('muzzle', 'head');
@@ -128,7 +133,8 @@
           S.plate('scarf', [[-4.2, sy + 3], [4.2, sy + 3], [5, sy - 14], [-0.5, sy - 18], [-4.8, sy - 13]], [fxx - 3.4, 0, 5.4 * k], [0, 0, 1], 3.4, '#be123c', 2.2, 1.2);
         }
         // ---- ears are rigid shells added after run() ----
-        S.reach = pose === 3 ? 0.72 : 1.15;
+        S.reach = pose === 3 ? T.reach : 1.15;
+        if (pose === 3) S.reachFn = function (x, y) { return x > T.rx && y > T.ry ? T.reach : T.reach2; }; // gentle everywhere except the head, which has to reach out over the chest
         S.run();
         // eyes and nose sit on the finished surface
         if (shellHead) {
@@ -161,7 +167,7 @@
           var cy = hy + hb * Math.cos(phi) * 0.97 + onHat, cz = s * hc * Math.sin(phi) * 0.97 + s * onHat, cx = hx - ha * 0.12, c = [cx, cy, cz], R = earStyle === 3 ? Math.min(ER, 9 * p.earSize * hs) : ER; // pointed plates stay a sensible size on the big-eared koala
           var anc = [hx - ha * 0.12, hy + hb * 0.2, s * hc * 0.42], tris, inner;
           if (earStyle === 3) { // pointed ear: a rounded triangle plate
-            var W = R * 1.05, H = R * 2.3 + (hat && sp.earK > 1.3 ? R * 0.5 : 0), by = c[1] - R * (pose === 3 ? 1.9 : 1.6) - (hat && sp.earK > 1.3 ? R * 0.9 : 0), ec = pose === 3 ? [0.05, 1.3] : [0.3, 1.1]; // on all fours the head sits closer to the shoulders, so the plate's base needs to sit lower
+            var W = R * 1.05, H = R * 2.3 + (hat && pose !== 3 && sp.earK > 1.3 ? R * 0.5 : 0), by = c[1] - R * (pose === 3 ? 1.9 : 1.6) - (hat && pose !== 3 && sp.earK > 1.3 ? R * 0.9 : 0), ec = pose === 3 ? [0.05, 1.3] : [0.3, 1.1]; // on all fours the head sits closer to the shoulders, so the plate's base needs to sit lower
             tris = vslab([[-0.9 * W * s, by], [ec[0] * W * s, by], [0.9 * W * s, by + ec[1] * W], [0.55 * W * s, by + H * 0.78], [0.1 * W * s, by + H], [-0.35 * W * s, by + H * 0.82], [-0.85 * W * s, by + H * 0.4]], [c[0] - 1.5, 0, c[2]], [0, 0, 1], R * 0.8, 1);
             inner = vslab([[-0.5 * W * s, by + R * 0.9], [0.4 * W * s, by + R * 0.9], [0.4 * W * s, by + H * 0.55], [0.05 * W * s, by + H * 0.88], [-0.4 * W * s, by + H * 0.55]], [c[0] + R * 0.1, 0, c[2]], [0, 0, 1], R * 0.8, 0.6);
           } else {
@@ -244,7 +250,7 @@
         { group: 'Bear', key: 'patch', label: 'Belly patch (not on all fours)', unit: '', min: 0, max: 3, step: 1, value: 1, options: ['None', 'Oval', 'Heart', 'Round'], showIf: function (q) { return q.pose !== 3; } },
         { group: 'Bear', key: 'patchSize', label: 'Belly patch size', unit: '×', min: 0.6, max: 1.2, step: 0.05, value: 1, showIf: function (q) { return q.patch > 0 && q.pose !== 3; } },
         { group: 'Head', key: 'headSize', label: 'Head size', unit: '×', min: 0.85, max: 1.25, step: 0.05, value: 1 },
-        { group: 'Head', key: 'snout', label: 'Snout (short ↔ long)', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 },
+        { group: 'Head', key: 'snout', label: 'Snout (short ↔ long, capped on all fours)', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 },
         { group: 'Head', key: 'ears', label: 'Ear shape', unit: '', min: 0, max: 3, step: 1, value: 0, options: ['Round', 'Small', 'Big fluffy', 'Pointy'] },
         { group: 'Head', key: 'earSize', label: 'Ear size', unit: '×', min: 0.7, max: 1.4, step: 0.05, value: 1 },
         { group: 'Head', key: 'eye', label: 'Eye size', unit: ' mm', min: 2, max: 4.4, step: 0.1, value: 3 },
