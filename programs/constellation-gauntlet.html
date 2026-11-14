@@ -1499,7 +1499,7 @@
         { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour ridges per finger (jointed fingers: the sections; hinged needs about 15 mm each)', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
         { tab: 'fingers', group: 'Fingers', key: 'fTip', label: 'Fingertip', min: 0, max: 2, step: 1, value: 0, format: function (v) { return TIP_NAMES[v]; } },
         { tab: 'fingers', group: 'Fingers', key: 'fSplay', label: 'Spread', unit: '°', min: 0, max: 8, step: 1, value: DEFAULTS.fSplay },
-        { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the palm (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
+        { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the palm (over 20 needs supports)', unit: '°', min: 0, max: 22, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
         { tab: 'fingers', group: 'Fingers', key: 'fCurl', label: 'Curl forward (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fCurl, showIf: displayOnly },
         { tab: 'fingers', group: 'Thumb', key: 'tLen', label: 'Thumb length', unit: ' mm', min: 28, max: 55, step: 1, value: DEFAULTS.tLen },
         { tab: 'fingers', group: 'Thumb', key: 'tAngle', label: 'Thumb angle out (over 50 needs supports)', unit: '°', min: 20, max: 55, step: 1, value: DEFAULTS.tAngle },

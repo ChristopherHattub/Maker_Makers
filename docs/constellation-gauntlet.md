@@ -84,7 +84,7 @@ The body is designed to print with no supports. The voxel print check (`check-ge
 
 - Plate, bezels and links are bevels whose outline moves in at `KSLOPE` (1.3 mm per mm of height, about 38 degrees from vertical). For polygon outlines the inset is multiplied by `q` (1 / cos of the angle to the side's normal) so a flat side is offset by the same normal distance as a corner.
 - Rays, petals and cogs on a bezel die away over the lower 45% of its height so their sides are as steep as the cone.
-- Spike studs tilt up 40 degrees (55 on the wearable); fingers lean at most 25 degrees.
+- Spike studs tilt up 40 degrees (55 on the wearable); fingers lean at most 22 degrees.
 - The fingers and thumb have ridge beads (gentle lower flank, at most 18 degrees and gentler on the leaning thumb, steep upper flank).
 - The skirt cones, the thumb roof and the window arch are all 39 degrees or gentler.
 
@@ -121,5 +121,5 @@ The bezels are sized from the gems (`bezelExtent`). Raising the core adds a 1.8 
 - Measure the hand flat, across the widest part. The default hand is 84 mm wide, 30 mm thick and 62 mm at the wrist. If the clip is too tight, raise the cuff opening or the ease. If the fingers feel tight, raise the ease; each finger tube is sized from the hand width, not from your finger widths.
 - The thumb tip is always a dome (a spike would need a bore that cannot close under the roof without a flat ceiling), so a spike fingertip style spikes the four fingers only.
 - A few unusual gem shape and setting mixes, slider extremes (a very wide hand, a very narrow wrist, a thumb angle at the ends of its range, a finger lean over 20 degrees) and the Cross, Row and Crescent layouts at large gem sizes show larger overhang chips (up to about 140 mm2 at the widest hand with the narrowest wrist). The Row layout at the largest gems shrinks them a lot to fit.
-- Over 25 degrees of finger lean or curl, over 50 degrees of thumb angle (display piece) and a plate thicker than 6 mm are outside the support-free range; their slider labels say so.
+- Over 20 degrees of finger lean (the slider stops at 22; a hinged finger leaning more leaves a sliver in the glove that is not manifold), over 25 degrees of display curl, over 50 degrees of thumb angle (display piece) and a plate thicker than 6 mm are outside the support-free range; their slider labels say so.
 - The Gems tab's choice buttons all use the same small gem icon (the gem names carry the difference).
