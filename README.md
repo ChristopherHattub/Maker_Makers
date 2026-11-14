@@ -48,7 +48,7 @@ npm run serve -- --port 8080
 
 ## Generators
 
-121 generators in 20 groups (slots 1-123; 14 and 39 are unused), from seasonal gifts and fidgets to animals, flexi creatures, tabletop pieces, desk organisers, toys and print-in-place mechanisms. The full list is in [docs/slot-registry.md](docs/slot-registry.md). Every generator has Parametric, Color tool and Print tabs (most also a Sculpt tab), a live printability chip, and exports STL and a coloured OBJ zip.
+124 generators in 20 groups (slots 1-139; 14 and 39 are unused), from seasonal gifts and fidgets to animals, flexi creatures, tabletop pieces, desk organisers, toys and print-in-place mechanisms. The full list is in [docs/slot-registry.md](docs/slot-registry.md). Every generator has Parametric, Color tool and Print tabs (most also a Sculpt tab), a live printability chip, and exports STL and a coloured OBJ zip.
 
 ## Adding a generator
 

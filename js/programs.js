@@ -1113,6 +1113,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/bear-builder.svg',
     programUrl: 'programs/bear-builder.html',
     description: 'A chunky, cuddly bear that prints with no supports. Pick a brown, polar, panda or koala bear, sit it, stand it, have it wave or put it on all fours, then choose round, small, big fluffy or pointy ears, a belly patch (oval, heart or round), a scarf and a beanie or party hat. Tune size, chunkiness, head, snout, ears and eyes. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 139,
+    title: 'Accordion Lampshade',
+    bundle: 'decor',
+    category: 'HOME // LIGHTING',
+    thumbnailUrl: 'assets/thumbnails/accordion-lampshade.svg',
+    programUrl: 'programs/accordion-lampshade.html',
+    description: 'A diamond-pleated drum lampshade printed in spiral vase mode, a three-arm spider that hangs it on a lamp harp, and a finial that screws onto the harp stud. Set the width, height, pleat count and depth, rows of diamonds, waist, empire taper and twist; the spider pegs size themselves to the rim pockets, for a US 1/4-27 or M10 stud. Pick a faceted gem, pleated orb, teardrop or spire finial with a plain or printed thread. The Print tab exports the shade and the small parts as two plates, each with recommended slicer settings. The default shade and spider are print-tested; the finials are not. Export .STL.'
   }
 ];
 

@@ -959,5 +959,14 @@
   "yaw": 24,
   "elev": 34,
   "fill": 0.82
+ },
+ "accordion-lampshade": {
+  "colors": {
+   "shade": "#f4f1ea",
+   "spider": "#c9a55a",
+   "finial": "#c9a55a"
+  },
+  "yaw": 20,
+  "elev": 22
  }
 }
