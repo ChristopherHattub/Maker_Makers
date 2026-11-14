@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MM-139 Accordion Lampshade // Maker Makers</title>
+  <link rel="stylesheet" href="shared/generator.css">
+  <script src="../vendor/three/three.min.js"></script>
+  <script src="../vendor/three/OrbitControls.js"></script>
+</head>
+<body class="mm-gen">
+  <script>
+    (function () {
+      'use strict';
+      // Accordion Lampshade: a diamond-pleated (Yoshimura) drum shade printed in spiral vase mode, a three-arm spider
+      // that hangs it on a lamp harp, and a finial that screws onto the harp stud. The pegs on the spider drop into
+      // three of the outer pockets at the top rim; the pockets narrow as they go down, so the pegs wedge in.
+      // The viewport shows the kit assembled; the Print tab offers two plates (printMeshes): the shade alone, which is
+      // a closed solid for the slicer's vase mode, and the spider (flipped, pegs up) with the finial beside it.
+      // Y up, millimetres. Tested print (P1S, 0.65 mm vase wall): 30 pleats, 248 x 228 mm, 3.6 mm pegs.
+      var TAU = Math.PI * 2, DEG = Math.PI / 180;
+      var VASE_WALL = 0.65;     // normal thickness of a vase-mode wall (outer wall line width), used for the peg fit
+      var SHOW_WALL = 1.2;      // radial wall of the shade shown in the viewport
+      var INSET_FRAC = 0.46;    // peg centre sits this fraction of the pleat depth inside the outer points (tested: 11 of 24 mm)
+      var STUDS = [
+        { name: '1/4"-27 (US harp)', hole: 7.2, major: 6.35, pitch: 25.4 / 27, tap: 5.9 },
+        { name: 'M10 x 1 (UK / EU)', hole: 10.4, major: 10.0, pitch: 1.0, tap: 9.4 }
+      ];
+      var STYLES = ['None', 'Faceted gem', 'Pleated orb', 'Teardrop', 'Spire'];
+      var PLATES = ['Shade', 'Spider + finial'];
+      var plate = 0, lastInfo = null, refreshPanel = null;
+
+      function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+      function tri(o, a, b, c) { o.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); }
+      function concat(list) {
+        var n = 0, i, out, at = 0;
+        for (i = 0; i < list.length; i++) n += list[i].length;
+        out = new Float32Array(n);
+        for (i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+        return out;
+      }
+      // Flip a closed shell inside out when its signed volume is negative.
+      function orient(arr) {
+        var pos = arr instanceof Float32Array ? arr : new Float32Array(arr), v = 0, i, t;
+        for (i = 0; i < pos.length; i += 9) {
+          v += pos[i] * (pos[i + 4] * pos[i + 8] - pos[i + 5] * pos[i + 7])
+             - pos[i + 1] * (pos[i + 3] * pos[i + 8] - pos[i + 5] * pos[i + 6])
+             + pos[i + 2] * (pos[i + 3] * pos[i + 7] - pos[i + 4] * pos[i + 6]);
+        }
+        if (v < 0) {
+          for (i = 0; i < pos.length; i += 9) {
+            for (t = 0; t < 3; t++) { var s = pos[i + 3 + t]; pos[i + 3 + t] = pos[i + 6 + t]; pos[i + 6 + t] = s; }
+          }
+        }
+        return pos;
+      }
+      function transform(pos, fn) {
+        var out = new Float32Array(pos.length), i, q;
+        for (i = 0; i < pos.length; i += 3) { q = fn(pos[i], pos[i + 1], pos[i + 2]); out[i] = q[0]; out[i + 1] = q[1]; out[i + 2] = q[2]; }
+        return out;
+      }
+      function minY(pos) { var m = Infinity; for (var i = 1; i < pos.length; i += 3) if (pos[i] < m) m = pos[i]; return m; }
+
+      // ---------------------------------------------------------------------
+      // Shade: a lattice of levels, each with 2N points alternating outer / inner radius, offset by one point from the
+      // level below, so every band is a ring of diamonds. Quads fold along the diagonal that joins two outer points.
+      // ---------------------------------------------------------------------
+      function shadeDims(p) {
+        var N = Math.round(p.pleats / 3) * 3, K = Math.round(p.bands), ro = p.diam / 2;
+        return { N: N, K: K, M: 2 * N, ro: ro, ri: ro - p.depth, H: p.height, bandH: p.height / K,
+          top: p.topPct / 100, waist: p.waist / 100, twist: p.twist * DEG, flip: Math.round(p.folds) === 1 };
+      }
+      function lattice(d, inset) {
+        var L = [], k, m, row, y, outer, r, th, s, pulse;
+        for (k = 0; k <= d.K; k++) {
+          row = []; y = d.H * k / d.K;
+          s = 1 + (d.top - 1) * (k / d.K);
+          pulse = 1 - ((d.K - k) % 2 ? d.waist : 0);
+          for (m = 0; m < d.M; m++) {
+            outer = (m + k) % 2 === 0;
+            r = ((outer ? d.ro : d.ri) * pulse * s) - inset;
+            th = m * Math.PI / d.N + d.twist * (k / d.K);
+            row.push([r * Math.cos(th), y, r * Math.sin(th)]);
+          }
+          L.push(row);
+        }
+        return L;
+      }
+      // Faces of one quad, wound outward on the outer surface.
+      function quadTris(d, k, m) {
+        var m1 = (m + 1) % d.M, a = [k, m], b = [k, m1], c = [k + 1, m1], e = [k + 1, m];
+        if (((m + k) % 2 === 0) === !d.flip) return [[a, c, b], [a, e, c]];
+        return [[a, e, b], [b, e, c]];
+      }
+      function shadeSurface(o, L, d, inward) {
+        for (var k = 0; k < d.K; k++) {
+          for (var m = 0; m < d.M; m++) {
+            quadTris(d, k, m).forEach(function (t) {
+              var A = L[t[0][0]][t[0][1]], B = L[t[1][0]][t[1][1]], C = L[t[2][0]][t[2][1]];
+              if (inward) tri(o, A, C, B); else tri(o, A, B, C);
+            });
+          }
+        }
+      }
+      // Viewport shade: an open pleated wall with a little thickness, so you can see the spider inside.
+      function shadeShell(d) {
+        var O = lattice(d, 0), I = lattice(d, SHOW_WALL), o = [], m, m1, K = d.K;
+        shadeSurface(o, O, d, false);
+        shadeSurface(o, I, d, true);
+        for (m = 0; m < d.M; m++) {
+          m1 = (m + 1) % d.M;
+          tri(o, O[0][m], O[0][m1], I[0][m]); tri(o, O[0][m1], I[0][m1], I[0][m]);
+          tri(o, O[K][m], I[K][m], O[K][m1]); tri(o, O[K][m1], I[K][m], I[K][m1]);
+        }
+        return orient(o);
+      }
+      // Printed shade: the closed solid the slicer turns into one spiral wall (vase mode, no bottom layers, no top).
+      function shadeSolid(d) {
+        var O = lattice(d, 0), o = [], m, m1, K = d.K, c0 = [0, 0, 0], c1 = [0, d.H, 0];
+        shadeSurface(o, O, d, false);
+        for (m = 0; m < d.M; m++) {
+          m1 = (m + 1) % d.M;
+          tri(o, c0, O[0][m], O[0][m1]);
+          tri(o, c1, O[K][m1], O[K][m]);
+        }
+        return orient(o);
+      }
+      // Steepest facet lean from vertical, over the side walls (vase mode stays clean below about 35 degrees).
+      function maxLean(d) {
+        var L = lattice(d, 0), worst = 0, k, m;
+        for (k = 0; k < d.K; k++) {
+          for (m = 0; m < d.M; m++) {
+            quadTris(d, k, m).forEach(function (t) {
+              var A = L[t[0][0]][t[0][1]], B = L[t[1][0]][t[1][1]], C = L[t[2][0]][t[2][1]];
+              var ux = B[0] - A[0], uy = B[1] - A[1], uz = B[2] - A[2], vx = C[0] - A[0], vy = C[1] - A[1], vz = C[2] - A[2];
+              var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, n = Math.hypot(nx, ny, nz);
+              if (n > 1e-9) worst = Math.max(worst, Math.asin(Math.min(1, Math.abs(ny) / n)) / DEG);
+            });
+          }
+        }
+        return worst;
+      }
+
+      // ---------------------------------------------------------------------
+      // Spider fit: the pegs sit in three outer pockets of the top rim, 120 degrees apart. The peg size comes from the
+      // pocket: the distance from the peg centre to the pocket's sides, less the vase wall and the chosen gap. Then the
+      // pocket is sliced every 0.25 mm going down to find how deep the round-tipped peg sinks before it wedges.
+      // ---------------------------------------------------------------------
+      function segDist(px, pz, ax, az, bx, bz) {
+        var dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 > 0 ? clamp(((px - ax) * dx + (pz - az) * dz) / l2, 0, 1) : 0;
+        return Math.hypot(px - ax - t * dx, pz - az - t * dz);
+      }
+      function fitInfo(p, d) {
+        var L = lattice(d, 0), K = d.K, m0 = K % 2, O = L[K][m0];
+        var I1 = L[K][(m0 + d.M - 1) % d.M], I2 = L[K][(m0 + 1) % d.M];
+        var rTop = Math.hypot(O[0], O[2]), depthTop = rTop - Math.hypot(I1[0], I1[2]);
+        var rc = rTop - INSET_FRAC * depthTop, ux = O[0] / rTop, uz = O[2] / rTop, cx = ux * rc, cz = uz * rc;
+        var rim = Math.min(segDist(cx, cz, O[0], O[2], I1[0], I1[2]), segDist(cx, cz, O[0], O[2], I2[0], I2[2]));
+        var pegR = clamp(rim - VASE_WALL - p.pegGap, 1.5, 6);
+        // Slice the top band around the pocket.
+        var tris = [], j, k = K - 1;
+        for (j = -2; j <= 1; j++) {
+          quadTris(d, k, (m0 + j + d.M) % d.M).forEach(function (t) {
+            tris.push([L[t[0][0]][t[0][1]], L[t[1][0]][t[1][1]], L[t[2][0]][t[2][1]]]);
+          });
+        }
+        var step = 0.25, n = Math.floor((d.bandH - 0.5) / step), dist = [], i;
+        for (i = 0; i <= n; i++) {
+          var y = d.H - Math.max(0.05, i * step), best = Infinity;
+          tris.forEach(function (T) {
+            var pts = [], a, b, f;
+            for (a = 0; a < 3; a++) {
+              b = (a + 1) % 3;
+              if ((T[a][1] - y) * (T[b][1] - y) < 0) {
+                f = (y - T[a][1]) / (T[b][1] - T[a][1]);
+                pts.push([T[a][0] + f * (T[b][0] - T[a][0]), T[a][2] + f * (T[b][2] - T[a][2])]);
+              }
+            }
+            if (pts.length === 2) best = Math.min(best, segDist(cx, cz, pts[0][0], pts[0][1], pts[1][0], pts[1][1]));
+          });
+          dist.push(best);
+        }
+        // Deepest tip position where every slice the peg passes through still has room.
+        var tip = 0, fell = true, ti, di, ok, rho, ctr;
+        for (ti = 0; ti <= n; ti++) {
+          ok = true; ctr = ti * step - pegR;
+          for (di = 0; di <= ti; di++) {
+            rho = di * step <= ctr ? pegR : Math.sqrt(Math.max(0, pegR * pegR - Math.pow(di * step - ctr, 2)));
+            if (dist[di] < rho + VASE_WALL - 1e-6) { ok = false; break; }
+          }
+          if (!ok) { fell = false; break; }
+          tip = ti * step;
+        }
+        return { pegR: pegR, rc: rc, angle: Math.atan2(O[2], O[0]), tip: tip, fell: fell, rimRoom: rim, depthTop: depthTop };
+      }
+
+      // ---------------------------------------------------------------------
+      // Solids of revolution. prof: [{ r, y, tag }] from one pole (r = 0) to the other; rFn(point, theta) may reshape a
+      // ring (facets, pleats, thread). revolveLoop: a closed (r, y) loop that never reaches the axis (the spider hub).
+      // ---------------------------------------------------------------------
+      function revolve(prof, seg, cx, cz, rFn) {
+        var n = prof.length, rings = [], o = [], i, j, row, th, r;
+        for (i = 1; i < n - 1; i++) {
+          row = [];
+          for (j = 0; j < seg; j++) {
+            th = j / seg * TAU;
+            r = rFn ? rFn(prof[i], th) : prof[i].r;
+            row.push([cx + r * Math.cos(th), prof[i].y, cz + r * Math.sin(th)]);
+          }
+          rings.push(row);
+        }
+        var p0 = [cx, prof[0].y, cz], p1 = [cx, prof[n - 1].y, cz], last = rings[rings.length - 1];
+        for (j = 0; j < seg; j++) {
+          var j1 = (j + 1) % seg;
+          tri(o, p0, rings[0][j1], rings[0][j]);
+          tri(o, p1, last[j], last[j1]);
+          for (i = 0; i < rings.length - 1; i++) {
+            tri(o, rings[i][j], rings[i][j1], rings[i + 1][j1]);
+            tri(o, rings[i][j], rings[i + 1][j1], rings[i + 1][j]);
+          }
+        }
+        return orient(o);
+      }
+      function revolveLoop(loop, seg) {
+        var rings = [], o = [], i, j, n = loop.length;
+        for (i = 0; i < n; i++) {
+          rings.push([]);
+          for (j = 0; j < seg; j++) { var th = j / seg * TAU; rings[i].push([loop[i][0] * Math.cos(th), loop[i][1], loop[i][0] * Math.sin(th)]); }
+        }
+        for (i = 0; i < n; i++) {
+          var a = rings[i], b = rings[(i + 1) % n];
+          for (j = 0; j < seg; j++) { var j1 = (j + 1) % seg; tri(o, a[j], a[j1], b[j1]); tri(o, a[j], b[j1], b[j]); }
+        }
+        return orient(o);
+      }
+      // A box along the x axis from x0 to x1, width w, from y0 to y1, turned by ang about the y axis.
+      function arm(x0, x1, w, y0, y1, ang) {
+        var c = Math.cos(ang), s = Math.sin(ang), h = w / 2, P = [], o = [];
+        [[x0, -h], [x1, -h], [x1, h], [x0, h]].forEach(function (q) {
+          P.push([q[0] * c - q[1] * s, y0, q[0] * s + q[1] * c]);
+        });
+        [[x0, -h], [x1, -h], [x1, h], [x0, h]].forEach(function (q) {
+          P.push([q[0] * c - q[1] * s, y1, q[0] * s + q[1] * c]);
+        });
+        [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]]
+          .forEach(function (f) { tri(o, P[f[0]], P[f[1]], P[f[2]]); });
+        return orient(o);
+      }
+
+      // ---------------------------------------------------------------------
+      // Spider, as used: y = 0 is the underside of the hub and arms, the pegs hang below to -pegLen.
+      // ---------------------------------------------------------------------
+      function spider(p, fit) {
+        var stud = STUDS[Math.round(p.stud)], hubR = Math.max(p.hubD / 2, stud.hole / 2 + 4), t = p.armT;
+        var parts = [revolveLoop([[stud.hole / 2, 0], [hubR, 0], [hubR, t], [stud.hole / 2, t]], 64)];
+        for (var k = 0; k < 3; k++) {
+          var ang = fit.angle + k * TAU / 3, px = fit.rc * Math.cos(ang), pz = fit.rc * Math.sin(ang), pr = fit.pegR, seg = 32, prof = [], i;
+          parts.push(arm(hubR - 2, fit.rc, p.armW, 0, t, ang));
+          prof.push({ r: 0, y: -p.pegLen - pr });
+          for (i = 1; i <= 8; i++) {
+            var a = -Math.PI / 2 + i / 8 * Math.PI / 2;
+            prof.push({ r: pr * Math.cos(a), y: -p.pegLen + pr * Math.sin(a) });
+          }
+          prof.push({ r: pr, y: t }, { r: 0, y: t });
+          parts.push(revolve(prof, seg, px, pz));
+        }
+        return concat(parts);
+      }
+
+      // ---------------------------------------------------------------------
+      // Finial: stands on a flat collar that sits on the hub. The bore is either plain (the steel stud cuts its own
+      // thread as you screw it on) or a printed thread. The bore ends in a 45-degree cone so it prints without support.
+      // Every style widens upward at 45 degrees or less.
+      // ---------------------------------------------------------------------
+      function finialDims(p) {
+        var stud = STUDS[Math.round(p.stud)], printed = Math.round(p.thread) === 1;
+        var boreR = printed ? stud.major / 2 + 0.2 : stud.tap / 2;
+        var Rb = Math.max(8, boreR + 3.5), H = Math.max(p.finH, p.boreDepth + boreR + 8), W = Math.max(p.finW, 2 * Rb + 4);
+        return { stud: stud, printed: printed, boreR: boreR, Rb: Rb, H: H, R: W / 2, D: clamp(p.boreDepth, 6, H - boreR - 6) };
+      }
+      function polyR(r, th, n, off) {
+        var sec = TAU / n, a = ((th - off) % sec + sec) % sec - sec / 2;
+        return r * Math.cos(sec / 2) / Math.cos(a);
+      }
+      function finial(p) {
+        var style = Math.round(p.finStyle);
+        if (style === 0) return null;
+        var f = finialDims(p), prof = [], i, n, u, y, r, collar = 3, lift = f.R - f.Rb, yb = collar + lift;
+        // Bore: pole at the cone tip, cone down to the bore wall, bore wall down to the bed.
+        prof.push({ r: 0, y: f.D + f.boreR, tag: 'cone' });
+        prof.push({ r: f.boreR, y: f.D, tag: 'bore' });
+        n = f.printed ? Math.ceil(f.D / (f.stud.pitch / 10)) : 2;
+        for (i = n - 1; i >= 0; i--) prof.push({ r: f.boreR, y: f.D * i / n, tag: 'bore' });
+        // Outer: collar, then a 45-degree flare out to full width, then the style's upper body to the top pole.
+        prof.push({ r: f.Rb, y: 0, tag: 'out' }, { r: f.Rb, y: collar, tag: 'out' });
+        var body = Math.max(6, f.H - yb);
+        if (style === 1) {          // Faceted gem: 8 flat facets, short girdle, pointed crown
+          prof.push({ r: f.R, y: yb, tag: 'out' }, { r: f.R, y: yb + Math.min(3, body * 0.15), tag: 'out' });
+          prof.push({ r: f.R * 0.42, y: yb + body * 0.78, tag: 'out' }, { r: 0, y: yb + body, tag: 'out' });
+        } else if (style === 2) {   // Pleated orb: round top, diamond pleats like the shade
+          prof.push({ r: f.R, y: yb, tag: 'pleat' });
+          for (i = 1; i < 30; i++) { u = i / 30; prof.push({ r: f.R * Math.pow(Math.cos(u * Math.PI / 2), 0.55), y: yb + body * u, tag: 'pleat' }); }
+          prof.push({ r: 0, y: yb + body, tag: 'out' });
+        } else if (style === 3) {   // Teardrop: swells out gently above the collar, rounds over and draws up to a point
+          var r0 = Math.max(f.Rb + 1, f.R * 0.75), y0 = collar + (r0 - f.Rb), b2 = Math.max(6, f.H - y0);
+          prof.push({ r: r0, y: y0, tag: 'out' });
+          for (i = 1; i < 32; i++) {
+            u = i / 32;
+            r = u < 0.3 ? r0 + (f.R - r0) * Math.sin(u / 0.3 * Math.PI / 2) : f.R * Math.pow(Math.cos((u - 0.3) / 0.7 * Math.PI / 2), 0.9);
+            prof.push({ r: r, y: y0 + b2 * u, tag: 'out' });
+          }
+          prof.push({ r: 0, y: y0 + b2, tag: 'out' });
+        } else {                    // Spire: square obelisk on a stepped base
+          prof.push({ r: f.R, y: yb, tag: 'out' }, { r: f.R, y: yb + body * 0.12, tag: 'out' });
+          prof.push({ r: f.R * 0.72, y: yb + body * 0.12 + f.R * 0.28, tag: 'sq' }, { r: f.R * 0.6, y: yb + body * 0.8, tag: 'sq' });
+          prof.push({ r: 0, y: yb + body, tag: 'sq' });
+        }
+        // revolve() wants the profile from one pole to the other: bore cone pole first, top pole last (already).
+        var seg = 48;
+        return revolve(prof, seg, 0, 0, function (pt, th) {
+          if (pt.tag === 'bore' && f.printed) {
+            var ph = (pt.y / f.stud.pitch - th / TAU) % 1; ph = ph < 0 ? ph + 1 : ph;
+            var tw = 1 - Math.abs(ph * 2 - 1);           // triangle wave 0..1
+            return f.boreR - 0.55 * f.stud.pitch * tw;     // crests of the internal thread reach in
+          }
+          if (pt.tag === 'out' && style === 1 && pt.y > 0.01) return polyR(pt.r, th, 8, 0);
+          if (pt.tag === 'sq') return polyR(pt.r, th, 4, Math.PI / 4);
+          if (pt.tag === 'pleat') {
+            // Same lattice as the shade: point (column, row) is out when column + row is even; bilinear in between.
+            var cpos = th / TAU * 12, cj = Math.floor(cpos), cf = cpos - cj;
+            var u2 = (pt.y - yb) / body * 3, k = Math.floor(u2), kf = u2 - k;
+            var v0 = (cj + k) % 2 === 0 ? 1 : 0, v1 = 1 - v0;
+            var wv = (v0 * (1 - cf) + v1 * cf) * (1 - kf) + (v1 * (1 - cf) + v0 * cf) * kf;
+            return pt.r * (1 - 0.2 * (1 - wv));
+          }
+          return pt.r;
+        });
+      }
+
+      // ---------------------------------------------------------------------
+      // Assembled model and print plates
+      // ---------------------------------------------------------------------
+      function parts(p) {
+        var d = shadeDims(p), fit = fitInfo(p, d);
+        var sp = spider(p, fit), ySp = d.H - fit.tip + p.pegLen;
+        var fin = finial(p);
+        lastInfo = { d: d, fit: fit, lean: maxLean(d), ySp: ySp, p: p, fin: fin ? finialDims(p) : null };
+        return { d: d, fit: fit, shade: shadeSolid(d), shell: shadeShell(d), spider: sp, finial: fin, ySp: ySp };
+      }
+      function build(p) {
+        var r = parts(p), out = [{ name: 'shade', positions: r.shell }];
+        out.push({ name: 'spider', positions: transform(r.spider, function (x, y, z) { return [x, y + r.ySp, z]; }) });
+        if (r.finial) out.push({ name: 'finial', positions: transform(r.finial, function (x, y, z) { return [x, y + r.ySp + p.armT, z]; }), smoothGroup: 'finial' });
+        if (refreshPanel) refreshPanel();
+        return out;
+      }
+      function printMeshes(p) {
+        var r = parts(p);
+        if (plate === 0) return [{ name: 'shade', positions: r.shade }];
+        // Spider flipped (pegs up, flat face on the bed); finial stands between two arms.
+        var sp = transform(r.spider, function (x, y, z) { return [x, -y, -z]; }), lift = -minY(sp);
+        var out = [{ name: 'spider', positions: transform(sp, function (x, y, z) { return [x, y + lift, z]; }) }];
+        if (r.finial) {
+          var f = finialDims(p), a = -(r.fit.angle + Math.PI / 3), rad = Math.max(p.hubD / 2, 12) + f.R + 12;
+          out.push({ name: 'finial', positions: transform(r.finial, function (x, y, z) { return [x + rad * Math.cos(a), y, z + rad * Math.sin(a)]; }), smoothGroup: 'finial' });
+        }
+        return out;
+      }
+
+      // ---------------------------------------------------------------------
+      // Print tab: plate picker, fit report, and the recommended slicer settings for each plate.
+      // ---------------------------------------------------------------------
+      function printPanel(box, api) {
+        function h(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; }
+        var tog = h('div', 'mm-toggle'), btns = PLATES.map(function (name, i) {
+          var b = h('button', 'mm-toggle-btn', name); b.type = 'button';
+          b.onclick = function () {
+            plate = i;
+            var fn = document.getElementById('mm-file-name');
+            if (fn) fn.value = i === 0 ? 'Accordion_Shade' : 'Accordion_Shade_Spider_Finial';
+            paint(); api.rebuild(); if (api.centerCamera) api.centerCamera('iso');
+          };
+          tog.appendChild(b); return b;
+        });
+        var fitBox = h('div', ''), setBox = h('div', '');
+        box.appendChild(h('div', 'mm-group-title', 'Print plate'));
+        box.appendChild(h('p', 'mm-note', 'The shade and the small parts need different slicer settings, so they export as two files. Pick a plate, then Export .STL.'));
+        box.appendChild(tog); box.appendChild(fitBox); box.appendChild(setBox);
+        function lines(target, title, list) {
+          target.appendChild(h('div', 'mm-group-title', title));
+          list.forEach(function (t) { target.appendChild(h('p', 'mm-note', t)); });
+        }
+        function paint() {
+          btns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(i === plate)); });
+          fitBox.innerHTML = ''; setBox.innerHTML = '';
+          var I = lastInfo;
+          if (!I) return;
+          var d = I.d, f = I.fit, warn = [];
+          var below = f.tip - I.p.pegLen;
+          var fitLines = [
+            'Shade: ' + Math.round(d.ro * 2) + ' mm across x ' + Math.round(d.H) + ' mm tall, ' + d.N + ' pleats, steepest facet ' + I.lean.toFixed(0) + '° from vertical.',
+            'Spider pegs: ' + (f.pegR * 2).toFixed(1) + ' mm across, sized from the rim pockets (' + (f.rimRoom * 2).toFixed(1) + ' mm of room before the wall).',
+            f.fell ? 'The pegs are too thin for these pockets and slide to the bottom of the top band. Lower Peg gap or deepen the pleats.'
+              : 'The pegs wedge ' + f.tip.toFixed(0) + ' mm into the pockets; the arms sit ' + (below > 0 ? below.toFixed(0) + ' mm below' : (-below).toFixed(0) + ' mm above') + ' the rim.'
+          ];
+          if (I.lean > 35) warn.push('Facets lean more than 35°: vase mode may sag. Add rows or make the pleats shallower.');
+          if (f.pegR < 2.4) warn.push('The pegs are thin (under 4.8 mm). Deeper pleats or fewer pleats give the spider a stronger grip.');
+          if (d.ro * 2 > 250) warn.push('Wider than 250 mm: this needs a printer bed bigger than 256 mm.');
+          lines(fitBox, 'Fit check', fitLines.concat(warn));
+          if (plate === 0) {
+            lines(setBox, 'Recommended settings: shade (Bambu Studio)', [
+              'Spiral vase: ON (Others). Bottom shell layers: 0, so the bottom stays open; the top is open in vase mode anyway.',
+              'Layer height 0.2 mm. Outer wall line width 0.6 to 0.7 mm (0.4 nozzle): one wall only, the pleats make it stiff.',
+              'Outer wall speed about 60 to 80 mm/s so the diamond points stay sharp; first layer 30 mm/s.',
+              'Brim 5 mm, outer only. Center the shade on the plate; at full size it nearly fills a 256 mm bed.',
+              'PLA or PETG, dried. With PLA use LED bulbs only (about 15 W or less). Lower the nozzle 5 to 10 °C if corners blob.',
+              'Fit test first: in Bambu Studio cut off the top 35 mm (Cut tool) and print that ring to try the spider, keeping the same line width.'
+            ]);
+          } else {
+            var F = I.fin;
+            lines(setBox, 'Recommended settings: spider + finial', [
+              'Normal mode (Spiral vase OFF). Layer height 0.2 mm' + (F && F.printed ? ', or 0.12 mm for a cleaner printed thread' : '') + '. No supports.',
+              'Spider: prints flat face down, pegs up. 4 walls, 40% infill, same filament as the shade.',
+              F ? 'Finial: stands on its collar. 4 walls, 25% infill. ' + (F.printed ? 'Printed ' + F.stud.name + ' thread: screw it on gently the first time.'
+                : 'Plain ' + F.boreR.toFixed(2) * 2 + ' mm hole: the steel stud cuts its own thread as you twist the finial on (PLA or PETG).') : 'No finial (style None): use your lamp\'s own finial.',
+              'Assembly: drop the spider into the top of the shade, pegs down, turning it until all three pegs fall into pockets. Lower the shade onto the harp so the stud goes through the hub, then screw the finial on.',
+              'The pegs hold by friction. If the shade rattles, lower Peg gap, or put a small dab of hot glue on each peg.'
+            ]);
+          }
+        }
+        refreshPanel = paint;
+        paint();
+      }
+
+      // ---------------------------------------------------------------------
+      // Parameters
+      // ---------------------------------------------------------------------
+      function choice(group, key, label, names, value, showIf) {
+        var c = { group: group, key: key, label: label, unit: '', min: 0, max: names.length - 1, step: 1, value: value,
+          format: function (v) { return names[Math.round(v)]; } };
+        if (showIf) c.showIf = showIf;
+        return c;
+      }
+      function slider(group, key, label, unit, min, max, step, value, showIf) {
+        var s = { group: group, key: key, label: label, unit: unit, min: min, max: max, step: step, value: value };
+        if (showIf) s.showIf = showIf;
+        return s;
+      }
+      var hasFinial = function (q) { return Math.round(q.finStyle) > 0; };
+      var DEFAULTS = { diam: 248, height: 228, pleats: 30, depth: 24, bands: 5, waist: 3, topPct: 100, twist: 0, folds: 0,
+        stud: 0, pegGap: 0.05, hubD: 26, armW: 6, armT: 5, pegLen: 10,
+        finStyle: 1, finH: 42, finW: 28, thread: 0, boreDepth: 12 };
+      var PARAMS = [
+        slider('Shade', 'diam', 'Width across the points (250 fits a 256 bed)', ' mm', 120, 300, 1, DEFAULTS.diam),
+        slider('Shade', 'height', 'Height', ' mm', 90, 300, 1, DEFAULTS.height),
+        slider('Shade', 'pleats', 'Pleats around (steps of 3, one per spider arm)', '', 18, 48, 3, DEFAULTS.pleats),
+        slider('Shade', 'depth', 'Pleat depth (deeper = stronger grip for the spider)', ' mm', 12, 40, 1, DEFAULTS.depth),
+        slider('Shade', 'bands', 'Rows of diamonds (more rows = gentler slopes)', '', 2, 9, 1, DEFAULTS.bands),
+        slider('Shade', 'waist', 'Waist pinch between rows', '%', 0, 8, 0.5, DEFAULTS.waist),
+        slider('Shade', 'topPct', 'Top width (100 = drum, lower = empire)', '%', 65, 100, 1, DEFAULTS.topPct),
+        slider('Shade', 'twist', 'Twist from bottom to top', '°', 0, 30, 1, DEFAULTS.twist),
+        choice('Shade', 'folds', 'Folds', ['Ridges out', 'Valleys out'], DEFAULTS.folds),
+        choice('Spider', 'stud', 'Harp stud', STUDS.map(function (s) { return s.name; }), DEFAULTS.stud),
+        slider('Spider', 'pegGap', 'Peg gap (0.05 = the tested snug fit, more = looser)', ' mm', 0, 0.6, 0.05, DEFAULTS.pegGap),
+        slider('Spider', 'pegLen', 'Peg length', ' mm', 6, 16, 1, DEFAULTS.pegLen),
+        slider('Spider', 'hubD', 'Hub width', ' mm', 20, 40, 1, DEFAULTS.hubD),
+        slider('Spider', 'armW', 'Arm width', ' mm', 5, 10, 0.5, DEFAULTS.armW),
+        slider('Spider', 'armT', 'Arm and hub thickness', ' mm', 4, 8, 0.5, DEFAULTS.armT),
+        choice('Finial', 'finStyle', 'Finial style', STYLES, DEFAULTS.finStyle),
+        slider('Finial', 'finH', 'Finial height', ' mm', 28, 70, 1, DEFAULTS.finH, hasFinial),
+        slider('Finial', 'finW', 'Finial width', ' mm', 20, 44, 1, DEFAULTS.finW, hasFinial),
+        choice('Finial', 'thread', 'Stud hole', ['Plain (stud cuts it)', 'Printed thread'], DEFAULTS.thread, hasFinial),
+        slider('Finial', 'boreDepth', 'Hole depth (stud length above the hub)', ' mm', 6, 20, 0.5, DEFAULTS.boreDepth, hasFinial)
+      ];
+      function presetOf(label, v) {
+        var values = {}, k;
+        for (k in DEFAULTS) values[k] = DEFAULTS[k];
+        for (k in (v || {})) values[k] = v[k];
+        return { label: label, values: values };
+      }
+
+      window.MM_GENERATOR = {
+        code: 'MM-139',
+        category: 'HOME // LIGHTING',
+        title: 'Accordion Lampshade',
+        fileName: 'Accordion_Shade',
+        palette: [
+          { name: 'Lamp White', color: '#f4f1ea' }, { name: 'Silk Pearl', color: '#e6e0f3' },
+          { name: 'Sky Glow', color: '#bfe3f2' }, { name: 'Blush', color: '#f6c6c9' },
+          { name: 'Sage', color: '#b9cfb4' }, { name: 'Honey Amber', color: '#e9b872' },
+          { name: 'Brass', color: '#c9a55a' }, { name: 'Charcoal', color: '#3b3f4a' }
+        ],
+        partNames: { shade: 'Shade', spider: 'Spider', finial: 'Finial' },
+        creaseShading: 30,
+        openGroups: ['Shade'],
+        parameters: PARAMS,
+        presets: [
+          presetOf('Default accordion drum (tested print)'),
+          presetOf('Tall column', { diam: 190, height: 280, pleats: 24, depth: 22, bands: 7 }),
+          presetOf('Wide and low', { diam: 250, height: 150, pleats: 36, depth: 20, bands: 3, finStyle: 2 }),
+          presetOf('Empire taper', { topPct: 76, bands: 6, finStyle: 4 }),
+          presetOf('Twisted pleats', { twist: 18, bands: 6, finStyle: 3 }),
+          presetOf('Bedside mini', { diam: 170, height: 150, pleats: 24, depth: 20, bands: 4, finH: 34, finW: 24 }),
+          presetOf('Euro harp (M10)', { stud: 1, finStyle: 2 })
+        ],
+        build: build,
+        printMeshes: printMeshes,
+        printPanel: printPanel
+      };
+    })();
+  </script>
+  <script src="shared/export-utils.js"></script>
+  <script src="shared/mesh-utils.js"></script>
+  <script src="shared/generator-core.js"></script>
+</body>
+</html>

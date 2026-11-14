@@ -34,9 +34,10 @@ Snapshot of `GENERATORS` in [`js/programs.js`](../js/programs.js), the source of
 | 123 | Built: Bird Feeder (three-part kit, no supports). |
 | 129 | Built: Bee & Beetle Bugs (bee, ladybug, stag beetle, dragonfly; no supports). |
 | 132 | Built: Crab & Lobster (print-in-place pincers, no supports). |
+| 139 | Built: Accordion Lampshade (vase-mode shade, harp spider, finial; two print plates). |
 | 124+ | Free (check open PRs first). Any number works. |
 
-Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
+Total built: 124 generators in 20 groups (the `BUNDLES` list in `js/programs.js`). Each generator's `code` in its config (`MM-00N`) matches its slot number.
 
 ## Built generators
 
@@ -165,6 +166,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | 123 | Bird Feeder | garden | `bird-feeder.html` (hanging gazebo kit: tray with posts, seed hopper with arched ports, cone roof; prints as three flat parts) |
 | 129 | Bee & Beetle Bugs | animals | `bee-beetle-bugs.html` (bug picker: honey bee, ladybug, stag beetle, dragonfly; flat, raised or folded wings, patterns, antennae, legs; unprinted) |
 | 132 | Crab & Lobster | animals | `crab-lobster.html` (crab or lobster with print-in-place pincers on a post hinge, 2-5 legs per side, eye stalks, five shell textures) |
+| 139 | Accordion Lampshade | decor | `accordion-lampshade.html` (diamond-pleat vase-mode shade, three-arm harp spider with self-sizing pegs, four finial styles; shade and small parts export as two plates with slicer settings) |
 
 ## Groups (BUNDLES)
 
@@ -182,7 +184,7 @@ Total built: 121 generators in 20 groups (the `BUNDLES` list in `js/programs.js`
 | fidgets | Fidgets & Clickers | 10 |
 | personal | Personalised | 2 |
 | pottery | Pottery | 1 |
-| decor | Home & Decor | 6 |
+| decor | Home & Decor | 8 |
 | organization | Organisation | 4 |
 | organization | Organisation | 3 |
 | toys | Toys & Games | 1 |
