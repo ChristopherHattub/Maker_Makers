@@ -474,7 +474,7 @@
       }
 
       function layout(p) {
-        var wear = Math.round(p.build) === 0, S = wear ? 1 : p.scale / 100, Lt = { S: S, p: p, wear: wear };
+        var wear = Math.round(p.build) === 0, S = wear ? 1 : p.scale / 100, Lt = { S: S, p: p, wear: wear, art: wear && Math.round(p.fArt) === 1 };
         var RMAX = 37.3;
         Lt.Hc = p.cuffH;
         if (wear) {
@@ -658,7 +658,10 @@
       var ROOF = 0.55;     // the thumb bore closes under a roof that rises 0.55 mm per mm (29 degrees from vertical)
       var ARCH = 0.8;      // the palm window closes in 0.8 mm per mm of height (39 degrees)
       var CELL = 1.8;
-      var SMOOTH = 5;      // smoothing passes      // marching grid step, millimetres
+      var SMOOTH = 5;      // smoothing passes
+      var HOLE = 1.1;      // radius of the cord groove cut into the palm side of the finger bore (2.2 mm wide, for 1 mm elastic cord)
+      var HOLE_IN = 0.55;  // its centre sits this far into the wall from the bore surface
+      var SEG_CELL = 0.8;  // grid step for the loose finger segments, millimetres
 
       function wearProfile(Lt) {
         var p = Lt.p, G = Lt.G, Hc = Lt.Hc, Hw = 0.86 * Hc, flare = p.flare, form = Math.round(p.cuffForm), bands = Math.round(p.bands), P = {};
@@ -719,7 +722,7 @@
       }
       function coneRIn(c, s) {
         var sh = c.Ro * (1 - 0.2 * (s < 0 ? 0 : (s > c.L ? c.L : s)) / c.L) - WF;
-        var cone = c.roof ? 1e3 : 0.8 * (c.apex - s);   // a leaning bore closes under its roof (see coneBore) instead
+        var cone = (c.roof || c.cut !== undefined) ? 1e3 : 0.8 * (c.apex - s);   // a leaning bore closes under its roof (see coneBore) instead
         return sh < cone ? sh : cone;
       }
       function coneOut(c, x, y, z) {
@@ -729,6 +732,7 @@
         var rho = Math.sqrt(px * px + py * py + pz * pz);
         var d = rho - coneROut(c, s < 0 ? 0 : (s > c.L ? c.L : s));
         if (s > c.L) d = Math.max(d, s - c.L);
+        if (c.cut !== undefined && s > c.cut) d = Math.max(d, s - c.cut);   // an articulated finger keeps only its first segment as a stub in the glove
         if (s < -c.emb) d = Math.max(d, -s - c.emb);
         return d;
       }
@@ -739,6 +743,11 @@
         var rho = Math.sqrt(px * px + py * py + pz * pz);
         var d = rho - coneRIn(c, s);
         if (s < -c.bore) d = Math.max(d, -s - c.bore);
+        if (c.cord) {   // the cord groove runs up the palm side of the bore wall, parallel to the cone, and opens into the glove cavity below
+          var sx = qx * c.ex[0] + qy * c.ex[1] + qz * c.ex[2], sd = qx * c.dv[0] + qy * c.dv[1] + qz * c.dv[2], sc = s < 0 ? 0 : s;
+          var hz = sd + c.Ro * (1 - 0.2 * sc / c.L) - WF + HOLE_IN, dh = Math.max(Math.sqrt(sx * sx + hz * hz) - HOLE, -s - 9);
+          if (dh < d) d = dh;
+        }
         if (c.roof) d = Math.max(d, Math.sqrt((x - c.roof[0]) * (x - c.roof[0]) + (z - c.roof[1]) * (z - c.roof[1])) - ROOF * (c.roof[2] - y));   // a leaning bore closes under a gentle roof, not along its own axis
         return d;
       }
@@ -772,7 +781,7 @@
           var scaleF = fw > 0 ? function (x, z) { return 1 + fw * (formFactor(form, Math.atan2(z, x)) - 1); } : null;
           // the palm window: a wedge cut square to the wall (the clip opening angle), closing in an arch above y1
           var tw = Math.tan(Math.min(P.phi(y), 89.9 * DEG)), tn = Math.sqrt(1 + tw * tw), xarch = y <= y1 ? 1e3 : xe1 - ARCH * (y - y1);
-          var fingerOn = y > yT - 16, boreOn = y >= yb - 6, thumbOn = y > thumb.y0 - 30 && y < thumb.y1 + 30;
+          var fingerOn = y > yT - 16, boreOn = y >= yb - 11, thumbOn = y > thumb.y0 - 30 && y < thumb.y1 + 30;
           return function (x, z) {
             var d, ob = 1e3, dc;
             if (outerOn) {
@@ -819,6 +828,33 @@
           for (w in outM) {
             var A = outM[w], B = inM[w] || [];
             A.sort(function (x, y) { return x - y; }); B.sort(function (x, y) { return x - y; });
+            if (A.length > 1 && A.length === B.length) {   // two sheets touch along this edge: pair each triangle with the next one found turning round the edge in the direction of its normal
+              var wi = +w, ex = V[wi * 3] - V[v * 3], ey = V[wi * 3 + 1] - V[v * 3 + 1], ez = V[wi * 3 + 2] - V[v * 3 + 2], el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
+              ex /= el; ey /= el; ez /= el;
+              var r1 = Math.abs(ex) < 0.9 ? [1, 0, 0] : [0, 1, 0], d1 = r1[0] * ex + r1[1] * ey + r1[2] * ez;
+              r1 = [r1[0] - d1 * ex, r1[1] - d1 * ey, r1[2] - d1 * ez];
+              var r1l = Math.sqrt(r1[0] * r1[0] + r1[1] * r1[1] + r1[2] * r1[2]);
+              r1 = [r1[0] / r1l, r1[1] / r1l, r1[2] / r1l];
+              var r2 = [ey * r1[2] - ez * r1[1], ez * r1[0] - ex * r1[2], ex * r1[1] - ey * r1[0]];
+              var ang = function (tt) {
+                var o = TI[tt * 3] !== v && TI[tt * 3] !== wi ? TI[tt * 3] : (TI[tt * 3 + 1] !== v && TI[tt * 3 + 1] !== wi ? TI[tt * 3 + 1] : TI[tt * 3 + 2]);
+                var cx = V[o * 3] - V[v * 3], cy = V[o * 3 + 1] - V[v * 3 + 1], cz = V[o * 3 + 2] - V[v * 3 + 2];
+                return Math.atan2(cx * r2[0] + cy * r2[1] + cz * r2[2], cx * r1[0] + cy * r1[1] + cz * r1[2]);
+              };
+              var used = {};
+              for (k = 0; k < A.length; k++) {
+                var pa = ang(A[k]), best = -1, bd = 1e9, q;
+                for (q = 0; q < B.length; q++) {
+                  if (used[q]) continue;
+                  var dd = ang(B[q]) - pa;
+                  while (dd <= 0) dd += 2 * Math.PI;
+                  if (dd < bd) { bd = dd; best = q; }
+                }
+                used[best] = 1;
+                var rA = find(A[k]), rB = find(B[best]); if (rA !== rB) par[rA] = rB;
+              }
+              continue;
+            }
             for (k = 0; k < Math.min(A.length, B.length); k++) { var ra = find(A[k]), rb = find(B[k]); if (ra !== rb) par[ra] = rb; }
           }
           var roots = {}, first = null, copy;
@@ -928,12 +964,24 @@
         return { Rin: Rin, cx: cx.map(function (v) { return v - mid; }), span: span, lens: lens, wf: wf };
       }
       function wearCones(Lt) {
-        var p = Lt.p, F = Lt.F, tipS = Math.round(p.fTip), nSeg = Math.round(p.fSeg), cones = [], i;
+        var p = Lt.p, F = Lt.F, tipS = Math.round(p.fTip), nSeg = Math.round(p.fSeg), cones = [], full = [], i;
         var al = -p.fDrop * DEG;
         for (i = 0; i < 4; i++) {
           var sg = (i - 1.5) / 1.5 * p.fSplay * DEG, u = [Math.sin(sg) * Math.cos(al), Math.cos(sg) * Math.cos(al), Math.sin(al)];
           var B = [F.cx[i], Lt.yb, 0], bore = 4;
-          cones.push(makeCone(B, u, p.fLen * F.lens[i], F.Rin[i] + WF, tipS, nSeg, 1.1 + (F.Rin[i] + WF) * 0.03, 8, bore));
+          var c = makeCone(B, u, p.fLen * F.lens[i], F.Rin[i] + WF, tipS, nSeg, 1.1 + (F.Rin[i] + WF) * 0.03, 8, bore);
+          var dv = [-u[2] * u[0], -u[2] * u[1], 1 - u[2] * u[2]], dl = Math.hypot(dv[0], dv[1], dv[2]);   // the back-of-finger direction, square to the axis
+          c.dv = [dv[0] / dl, dv[1] / dl, dv[2] / dl];
+          c.ex = [u[1] * c.dv[2] - u[2] * c.dv[1], u[2] * c.dv[0] - u[0] * c.dv[2], u[0] * c.dv[1] - u[1] * c.dv[0]];   // across the finger: the hinge direction
+          full.push(c);
+          if (Lt.art) {
+            var span = c.L - c.Ld, jn = [], j;
+            for (j = 1; j < nSeg; j++) jn.push(span * j / nSeg);
+            c.joints = jn;
+            var stub = Object.assign({}, c);
+            stub.cut = jn[0]; stub.cord = true;
+            cones.push(stub);
+          } else cones.push(c);
         }
         // the thumb leaves the thumb-side wall and leans out and a little toward the palm
         var ang = p.tAngle * DEG, tu = [-Math.sin(ang), Math.cos(ang) * 0.99, -0.12], tl = Math.hypot(tu[0], tu[1], tu[2]);
@@ -944,7 +992,60 @@
         th.y0 = y0; th.y1 = y0 + p.tLen * tu[1] + Rt;
         var s0 = th.L * 0.72, sTop = th.L * 0.86, dy = (sTop - s0) * tu[1], hs = Math.hypot(tu[0], tu[2]) / tu[1];
         th.roof = [B2[0] + tu[0] * s0, B2[2] + tu[2] * s0, B2[1] + tu[1] * s0 + dy * (1 + hs / ROOF)];
-        return { cones: cones, thumb: th };
+        return { cones: cones, full: full, thumb: th };
+      }
+
+      // Articulated fingers. Past the stub that stays in the glove, each finger is a few loose tube segments strung on
+      // elastic cord that runs up a groove in the palm side of the bore wall. A segment is meshed on its own, standing on its flat
+      // proximal end (y = 0 is the bed, y runs along the finger axis, z is the back of the finger, x runs across), so the same
+      // mesh is the print piece and, moved by placeSegs, the segment on the finger.
+      function segMesh(c, s0, s1, clipL, clipR) {
+        var len = s1 - s0, R0 = c.Ro + c.bead + 1.5, xc = c.Ro - WF / 2 - 0.3, h = SEG_CELL;   // xc: the flat face against the next finger, 0.6 mm off the shared wall
+        function slice(y) {
+          var s = s0 + y, sc = s < 0 ? 0 : (s > c.L ? c.L : s);
+          var ro = coneROut(c, sc), ri = coneRIn(c, sc), rh = c.Ro * (1 - 0.2 * sc / c.L) - WF + HOLE_IN, yb = -y - 2 * h, yt = y - len;
+          return function (x, z) {
+            var rho = Math.sqrt(x * x + z * z), d = rho - ro, hz = z + rh, cav = rho - ri, dh = Math.sqrt(x * x + hz * hz) - HOLE;
+            if (yb > d) d = yb;
+            if (yt > d) d = yt;
+            if (clipL && -x - xc > d) d = -x - xc;
+            if (clipR && x - xc > d) d = x - xc;
+            if (dh < cav) cav = dh;
+            return d > -cav ? d : -cav;
+          };
+        }
+        return polygonise(slice, [-R0, -h, -R0], [R0, len + h, R0], h);
+      }
+      // Each finger's loose segments, in order from the knuckle: { fi, m, s0, len, a }.
+      function segsBuild(Lt) {
+        var out = [];
+        Lt.F.full.forEach(function (c, fi) {
+          var jn = c.joints;
+          jn.forEach(function (s0, m) {
+            var s1 = m + 1 < jn.length ? jn[m + 1] : c.L;
+            out.push({ fi: fi, m: m, s0: s0, len: s1 - s0, a: segMesh(c, s0, s1, fi > 0, fi < 3) });
+          });
+        });
+        return out;
+      }
+      // Put the segments on the fingers. Every joint turns the next segment about the palm-side edge of the joint face, by
+      // pose degrees, toward the palm: the back of the joint opens and the cord on the palm side barely moves.
+      function placeSegs(F, segs, pose) {
+        var out = [], th = pose * DEG, ct = Math.cos(th), st = Math.sin(th);
+        F.full.forEach(function (c, fi) {
+          var O = [0, 1, 2].map(function (k) { return c.B[k] + c.u[k] * c.joints[0]; }), uu = c.u, dd = c.dv, ex = c.ex;
+          segs.forEach(function (r) {
+            if (r.fi !== fi) return;
+            var R = coneROut(c, r.s0), nu = [0, 1, 2].map(function (k) { return uu[k] * ct - dd[k] * st; }), nd = [0, 1, 2].map(function (k) { return uu[k] * st + dd[k] * ct; });
+            var O2 = [0, 1, 2].map(function (k) { return O[k] - R * dd[k] + R * nd[k]; });
+            var a = new Float32Array(r.a);
+            mapPts(a, function (x, y, z) { return [O2[0] + ex[0] * x + nu[0] * y + nd[0] * z, O2[1] + ex[1] * x + nu[1] * y + nd[1] * z, O2[2] + ex[2] * x + nu[2] * y + nd[2] * z]; });
+            out.push(a);
+            O = [0, 1, 2].map(function (k) { return O2[k] + nu[k] * r.len; });
+            uu = nu; dd = nd;
+          });
+        });
+        return out;
       }
 
       // The glove takes about a second to mesh and only the Fit, Cuff and Fingers tabs change it, so the last result is kept
@@ -952,7 +1053,7 @@
       var gloveCache = { key: '', val: null };
       function gloveKey(Lt) {
         var p = Lt.p, parts = [], k;
-        for (k in p) if (!/^(g\d_|gemSel$|gemLayout$|orbit|plate|core$|studs$|metal$|accent$|scale$|hand$|build$)/.test(k)) parts.push(k + '=' + p[k]);
+        for (k in p) if (!/^(g\d_|gemSel$|gemLayout$|orbit|plate|core$|studs$|metal$|accent$|scale$|hand$|build$|fPose$)/.test(k)) parts.push(k + '=' + p[k]);
         return parts.sort().join('|') + '|' + [Lt.G.px, Lt.G.pz, Lt.G.wz, Lt.Hc, Lt.Hv, Lt.yb, Lt.yT, Lt.F.span].join(',');
       }
       function gloveMeshes(Lt) {
@@ -964,10 +1065,10 @@
       }
       function gloveMeshesBuild(Lt) {
         var F = Lt.F, hi, lo, th = F.thumb, G = Lt.G, p = Lt.p, h = CELL, i;
-        var px = G.px + 2, span = Math.max(Lt.yT + 2 + p.fLen * 1.1 + 4, th.y1 + 6);
+        var px = Math.max(G.px, G.wx + 4 + p.flare) + 2, span = Math.max(Lt.yT + 2 + p.fLen * 1.1 + 4, th.y1 + 6);
         var reach = Math.sin(Math.max(p.fSplay, 0) * DEG) * p.fLen;
         var xl = Math.min(-px - 2 - reach, th.B[0] + th.u[0] * th.L - th.Ro - 2), xh = px + 2 + reach;
-        var zr = Math.max(G.pz, G.wz) + 6, zlean = Math.sin(p.fDrop * DEG) * p.fLen + 12;
+        var zr = Math.max(G.pz, G.wz + 3 + 0.8 * p.flare) + 6, zlean = Math.sin(p.fDrop * DEG) * p.fLen + 12;
         lo = [Math.floor(xl / h) * h, -h, Math.floor(-(zr + zlean) / h) * h];
         hi = [xh + h, span, zr + 2 * h];
         var tris = polygonise(gloveField(Lt), lo, hi, h);
@@ -983,7 +1084,7 @@
           else if (cy > Lt.yT) dst = fin;
           for (j = 0; j < 9; j++) dst.push(tris[t + j]);
         }
-        return { arm: arm, fingers: fin, thumb: thm };
+        return { arm: arm, fingers: fin, thumb: thm, segs: Lt.art ? segsBuild(Lt) : [] };
       }
 
       function buildModel(p) {
@@ -1015,6 +1116,7 @@
           body.arm = [gm.arm];
           body.fingers = [gm.fingers];
           body.thumb = [gm.thumb];
+          if (gm.segs.length) { body.segments = placeSegs(Lt.F, gm.segs, p.fPose || 0); Lt.segs = gm.segs; }
           if (p.studs > 0) for (idx = 0; idx < 4; idx++) studs.push(stud(Math.round(p.studs), Lt.F.cx[idx], yT - 8, Lt.P.dorsalZ(Lt.F.cx[idx], yT - 8), 3.4, 1.2, true));
           body.knuckles = studs;
         } else {
@@ -1035,11 +1137,12 @@
       // Final placement: shift so the body is centred on the origin and rests on y = 0, then scale and (for a left hand) mirror.
       function finish(Lt) {
         var p = Lt.p, S = Lt.S, left = p.hand > 0, lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9], names = {};
-        var order = [['arm', 'Cuff & palm', 0], ['plate', 'Hand plate', 0], ['orbit', 'Orbit arcs', 1], ['settings', 'Gem settings', 1], ['fingers', 'Fingers', 0], ['knuckles', 'Knuckle studs', 1], ['thumb', 'Thumb', 0]];
+        var order = [['arm', 'Cuff & palm', 0], ['plate', 'Hand plate', 0], ['orbit', 'Orbit arcs', 1], ['settings', 'Gem settings', 1], ['fingers', 'Fingers', 0], ['segments', 'Finger segments', 0], ['knuckles', 'Knuckle studs', 1], ['thumb', 'Thumb', 0]];
         var raw = {};
         Object.keys(Lt.body).forEach(function (key) {
           var list = Lt.body[key];
           raw[key] = list;
+          if (key === 'segments') return;   // posed segments must not move the model
           list.forEach(function (a) { for (var i = 0; i < a.length; i += 3) for (var k = 0; k < 3; k++) { if (a[i + k] < lo[k]) lo[k] = a[i + k]; if (a[i + k] > hi[k]) hi[k] = a[i + k]; } });
         });
         var sx = -(lo[0] + hi[0]) / 2, sy = -lo[1], sz = -(lo[2] + hi[2]) / 2;
@@ -1137,7 +1240,7 @@
         build: 0, wristW: 62, handW: 84, handT: 30, ease: 1.5, cuffOpen: 55, handOpen: 72, palmH: 90,
         cuffH: 50, flare: 6, cuffForm: 0, bands: 2,
         plateShape: 0, plateR: 33, plateT: 3.5, core: 0, gemLayout: 0, orbit: 1, orbitR: 24, orbitTurn: 0,
-        fLen: 52, fSeg: 3, fTip: 0, fSplay: 3, fDrop: 8, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
+        fLen: 52, fSeg: 3, fTip: 0, fSplay: 3, fDrop: 8, fArt: 1, fPose: 0, fCurl: 8, tLen: 40, tAngle: 38, studs: 0, gemSel: 0
       };
       function gemKeys(i, v) { var o = {}; Object.keys(v).forEach(function (k) { o['g' + i + '_' + k] = v[k]; }); return o; }
       [0, 1, 2, 3, 4].forEach(function (i) { Object.assign(DEFAULTS, gemKeys(i, gemDefault(i))); });
@@ -1254,6 +1357,7 @@
       ];
       function wearOnly(p) { return Math.round(p.build) === 0; }
       function displayOnly(p) { return Math.round(p.build) !== 0; }
+      function artOn(p) { return Math.round(p.build) === 0 && Math.round(p.fArt) === 1; }
       var PARAMS = [
         { tab: 'style', group: 'Look', key: 'metal', label: 'Main metal', min: 0, max: 3, step: 1, value: DEFAULTS.metal, format: function (v) { return METALS[v].name; } },
         { tab: 'style', group: 'Look', key: 'accent', label: 'Accent metal (settings, links, studs)', min: 0, max: 3, step: 1, value: DEFAULTS.accent, format: function (v) { return METALS[v].name; } },
@@ -1280,7 +1384,9 @@
         { tab: 'plate', group: 'Plate', key: 'core', label: 'Core (Orbit, Cross, Row and Zigzag layouts)', min: 0, max: 1, step: 1, value: 0, options: ['Flat', 'Raised'], showIf: function (p) { return CORE_CENTRED[Math.round(p.gemLayout)]; } },
 
         { tab: 'fingers', group: 'Fingers', key: 'fLen', label: 'Finger length (above the knuckle plate)', unit: ' mm', min: 40, max: 80, step: 1, value: DEFAULTS.fLen },
-        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour ridges per finger', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
+        { tab: 'fingers', group: 'Fingers', key: 'fArt', label: 'Finger joints', min: 0, max: 1, step: 1, value: DEFAULTS.fArt, options: ['Rigid', 'Bendable (strung)'], showIf: wearOnly },
+        { tab: 'fingers', group: 'Fingers', key: 'fPose', label: 'Bend the fingers (preview only, the print stays straight)', unit: '°', min: 0, max: 70, step: 5, value: 0, showIf: artOn },
+        { tab: 'fingers', group: 'Fingers', key: 'fSeg', label: 'Armour ridges per finger (bendable: the first section stays fixed, the rest are loose)', min: 2, max: 4, step: 1, value: DEFAULTS.fSeg },
         { tab: 'fingers', group: 'Fingers', key: 'fTip', label: 'Fingertip', min: 0, max: 2, step: 1, value: 0, format: function (v) { return TIP_NAMES[v]; } },
         { tab: 'fingers', group: 'Fingers', key: 'fSplay', label: 'Spread', unit: '°', min: 0, max: 8, step: 1, value: DEFAULTS.fSplay },
         { tab: 'fingers', group: 'Fingers', key: 'fDrop', label: 'Lean toward the palm (over 25 needs supports)', unit: '°', min: 0, max: 25, step: 1, value: DEFAULTS.fDrop, showIf: wearOnly },
@@ -1318,7 +1424,7 @@
         ],
         defaultColor: '#d4a437',
         partNames: {
-          arm: 'Cuff & shield', plate: 'Hand plate', orbit: 'Gem links', settings: 'Gem settings', fingers: 'Fingers',
+          arm: 'Cuff & shield', plate: 'Hand plate', orbit: 'Gem links', settings: 'Gem settings', fingers: 'Fingers', segments: 'Finger segments',
           knuckles: 'Knuckle studs', thumb: 'Thumb', gem0: 'Solis (core gem)', gem1: 'Lunara gem', gem2: 'Vesper gem', gem3: 'Aurelia gem', gem4: 'Nova gem'
         },
         tabs: [
@@ -1344,7 +1450,7 @@
           { id: 'fit', label: 'Fit', hint: 'Your hand size, how snugly the glove grips, and the palm window your hand slides in through' },
           { id: 'cuff', label: 'Cuff', hint: 'The forearm cuff: height, flare, surface and raised bands' },
           { id: 'plate', label: 'Plate', hint: 'The hand plate: outline, size, thickness and core' },
-          { id: 'fingers', label: 'Fingers', hint: 'Finger tubes, thumb and knuckle studs' },
+          { id: 'fingers', label: 'Fingers', hint: 'Finger tubes, thumb and knuckle studs. Bendable fingers are loose segments strung on elastic cord' },
           { id: 'gems', label: 'Gems', hint: 'Where the gems sit, then each gem\'s shape, cut, size, colour and setting',
             mount: function (box, api) {
               var note = document.createElement('p');
@@ -1400,8 +1506,27 @@
             out = out.filter(function (m) { return m.smoothGroup !== 'glove'; });
             out.unshift({ name: 'arm', positions: join(gl.map(function (m) { return m.positions; })), color: gl[0].color });
           }
-          var maxR = 0;
+          var maxR = 0, zEnd;
           gems.forEach(function (g) { maxR = Math.max(maxR, g.size); });
+          zEnd = zMax + 8 + 2 * maxR;
+          out = out.filter(function (m) { return m.name !== 'segments'; });
+          if (Lt.wear && Lt.segs) {   // the loose finger segments stand on their flat ends in rows behind the gems: one row per section, one column per finger
+            var left = Lt.p.hand > 0, rows = {}, rowW = 0, parts = [], colorSeg = (Lt.meshes.filter(function (m) { return m.name === 'segments'; })[0] || {}).color || Lt.meshes[0].color;
+            Lt.segs.forEach(function (r) { (rows[r.m] = rows[r.m] || []).push(r); });
+            var c0 = Lt.F.full, z = zEnd + 6;
+            Object.keys(rows).forEach(function (k) {
+              var rowD = 0;
+              rows[k].forEach(function (r) {
+                var c = c0[r.fi], a = new Float32Array(r.a), wd = c.Ro + c.bead + 1.5, xp = (left ? -1 : 1) * (r.fi - 1.5) * 2 * (Math.max.apply(null, c0.map(function (q) { return q.Ro + q.bead; })) + 2);
+                mapPts(a, function (px, py, pz) { return [(left ? -px : px) + xp, py, pz + z + wd]; });
+                if (left) flipAll(a);
+                parts.push(a);
+                rowD = Math.max(rowD, 2 * wd);
+              });
+              z += rowD + 3;
+            });
+            if (parts.length) out.push({ name: 'segments', positions: join(parts), color: colorSeg });
+          }
           gems.forEach(function (g, n) {
             var a = new Float32Array(g.print.a), cx = x + xs[n] / 2, cz = zMax + 8 + maxR;
             mapPts(a, function (px, py, pz) { return [px * S + cx, (py + g.print.D) * S, pz * S + cz]; });
