@@ -1104,6 +1104,15 @@ const GENERATORS = [
     thumbnailUrl: 'assets/thumbnails/crab-lobster.svg',
     programUrl: 'programs/crab-lobster.html',
     description: 'A claw-forward crab or lobster that prints with no supports and a pincer that really moves: each claw rests on the bed and its pincer swings on a print-in-place hinge with a clearance you set. Pick crab or lobster, claw size and pose (guarding, spread, pinching together, arms wide), a matching pair or a big-claw fiddler, 2 to 5 legs per side, eye stalk length, and a smooth, ribbed, bumpy, plated or spiky shell. Unprinted: the hinge clearance is untested on a real printer. Paint parts in the Color tool and export .STL.'
+  },
+  {
+    slot: 139,
+    title: 'Accordion Lampshade',
+    bundle: 'decor',
+    category: 'HOME // LIGHTING',
+    thumbnailUrl: 'assets/thumbnails/accordion-lampshade.svg',
+    programUrl: 'programs/accordion-lampshade.html',
+    description: 'A diamond-pleated drum lampshade printed in spiral vase mode, a three-arm spider that hangs it on a lamp harp, and a finial that screws onto the harp stud. Set the width, height, pleat count and depth, rows of diamonds, waist, empire taper and twist; the spider pegs size themselves to the rim pockets, for a US 1/4-27 or M10 stud. Pick a faceted gem, pleated orb, teardrop or spire finial with a plain or printed thread. The Print tab exports the shade and the small parts as two plates, each with recommended slicer settings. The default shade and spider are print-tested; the finials are not. Export .STL.'
   }
 ];
 

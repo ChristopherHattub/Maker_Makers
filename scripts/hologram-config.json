@@ -532,5 +532,10 @@
     "light": 74,
     "stand": false,
     "fill": 1.2
+  },
+  "accordion-lampshade": {
+    "hue": 38,
+    "sat": 85,
+    "light": 72
   }
 }
