@@ -537,5 +537,10 @@
     "hue": 46,
     "sat": 70,
     "light": 78
+  },
+  "accordion-lampshade": {
+    "hue": 38,
+    "sat": 85,
+    "light": 72
   }
 }
